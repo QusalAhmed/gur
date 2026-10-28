@@ -1,0 +1,2056 @@
+import { supabase } from "./client";
+import {
+  DbCategory,
+  DbProduct,
+  DbProductVariant,
+  DbProductCard,
+  DbFaq,
+  DbPost,
+  DbSiteSetting,
+  DbShippingMethod,
+  DbShippingRate,
+  DbDeliveryZone,
+  DbOrder,
+  DbGeoDivision,
+  DbGeoDistrict,
+} from "./types";
+import type { Order, OrderItem, CatalogProduct, OrderEvent, OrderNote } from "@/types/order";
+import { formatDate, formatDateTime } from "@/lib/utils";
+import {
+  parseDatabaseError,
+  DatabaseOperationError,
+  validateOrderStatusTransition,
+  STATUS_WORKFLOW_FLOW,
+  type ParsedDatabaseError,
+  type TransitionValidationResult,
+} from "./error-handler";
+
+export { parseDatabaseError, DatabaseOperationError, validateOrderStatusTransition, STATUS_WORKFLOW_FLOW };
+export type { ParsedDatabaseError, TransitionValidationResult };
+
+export interface BulkStatusUpdateResult {
+  success: boolean;
+  totalRequested: number;
+  updatedCount: number;
+  skippedCount: number;
+  updatedOrderNumbers: string[];
+  skippedOrders: { id: string; reason: string }[];
+}
+
+export interface SupabaseHealthStatus {
+  connected: boolean;
+  latencyMs: number;
+  url: string;
+  tables: Record<string, number>;
+  error?: string;
+}
+
+export async function checkSupabaseHealth(): Promise<SupabaseHealthStatus> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hcfuqyidcxsqyjzmwxiw.supabase.co";
+  const start = Date.now();
+  const tableCounts: Record<string, number> = {};
+
+  try {
+    const [catRes, prodRes, varRes, shipRes, faqRes, postRes, setRes] = await Promise.all([
+      supabase.from("categories").select("*", { count: "exact", head: true }),
+      supabase.from("products").select("*", { count: "exact", head: true }),
+      supabase.from("product_variants").select("*", { count: "exact", head: true }),
+      supabase.from("shipping_methods").select("*", { count: "exact", head: true }),
+      supabase.from("faqs").select("*", { count: "exact", head: true }),
+      supabase.from("posts").select("*", { count: "exact", head: true }),
+      supabase.from("site_settings").select("*", { count: "exact", head: true }),
+    ]);
+
+    tableCounts["categories"] = catRes.count ?? 0;
+    tableCounts["products"] = prodRes.count ?? 0;
+    tableCounts["product_variants"] = varRes.count ?? 0;
+    tableCounts["shipping_methods"] = shipRes.count ?? 0;
+    tableCounts["faqs"] = faqRes.count ?? 0;
+    tableCounts["posts"] = postRes.count ?? 0;
+    tableCounts["site_settings"] = setRes.count ?? 0;
+
+    const latencyMs = Date.now() - start;
+    return {
+      connected: true,
+      latencyMs,
+      url,
+      tables: tableCounts,
+    };
+  } catch (err: any) {
+    return {
+      connected: false,
+      latencyMs: Date.now() - start,
+      url,
+      tables: tableCounts,
+      error: err?.message || "Failed to connect to Supabase",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCTS & VARIANTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UiProductItem {
+  id: string;
+  name: string;
+  nameBn: string;
+  slug: string;
+  category: string;
+  status: "active" | "draft" | "archived";
+  source: string;
+  variants: number;
+  stock: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+  rating: number;
+  reviews: number;
+  featured: boolean;
+  basePrice?: number;
+}
+
+export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
+  try {
+    // 1. Fetch products
+    const { data: productsData, error: prodErr } = await supabase
+      .from("products")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (prodErr || !productsData || productsData.length === 0) {
+      if (prodErr) console.warn("Supabase products fetch warning:", prodErr.message);
+      return [];
+    }
+
+    // 2. Fetch categories map
+    const { data: catData } = await supabase.from("categories").select("id, name");
+    const categoryMap = new Map<string, string>();
+    if (catData) {
+      catData.forEach((c) => categoryMap.set(c.id, c.name));
+    }
+
+    // 3. Fetch variants
+    const { data: variantsData } = await supabase.from("product_variants").select("*");
+    const variantCountMap = new Map<string, { count: number; minPrice: number; stock: string }>();
+
+    if (variantsData) {
+      for (const v of variantsData) {
+        const cur = variantCountMap.get(v.product_id) || {
+          count: 0,
+          minPrice: Number(v.price) || 0,
+          stock: v.stock_status || "in_stock",
+        };
+        cur.count += 1;
+        if (Number(v.price) < cur.minPrice) {
+          cur.minPrice = Number(v.price);
+        }
+        if (v.stock_status === "out_of_stock" && cur.stock === "in_stock") {
+          cur.stock = "out_of_stock";
+        }
+        variantCountMap.set(v.product_id, cur);
+      }
+    }
+
+    return productsData.map((p) => {
+      const vInfo = variantCountMap.get(p.id) || { count: 0, minPrice: 0, stock: "in_stock" };
+      return {
+        id: p.id,
+        name: p.name,
+        nameBn: p.name_bn || "",
+        slug: p.slug,
+        category: (p.category_id && categoryMap.get(p.category_id)) || "General Molasses",
+        status: p.status as "active" | "draft" | "archived",
+        source: p.source || "sugarcane",
+        variants: vInfo.count,
+        stock: (vInfo.stock as any) || "in_stock",
+        rating: Number(p.rating_avg) || 4.8,
+        reviews: p.rating_count || 12,
+        featured: Boolean(p.is_featured),
+        basePrice: vInfo.minPrice || 350,
+      };
+    });
+  } catch (err) {
+    console.error("Error fetching products from Supabase:", err);
+    return [];
+  }
+}
+
+export async function createProductInDb(payload: {
+  name: string;
+  nameBn?: string;
+  slug: string;
+  category_id?: string;
+  status?: "draft" | "active" | "archived";
+  source?: string;
+  summary?: string;
+}): Promise<any> {
+  const { data, error } = await supabase
+    .from("products")
+    .insert([
+      {
+        name: payload.name,
+        name_bn: payload.nameBn || null,
+        slug: payload.slug,
+        category_id: payload.category_id || null,
+        status: payload.status || "active",
+        source: payload.source || "sugarcane",
+        summary: payload.summary || null,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProductInDb(
+  id: string,
+  updates: Partial<DbProduct>
+): Promise<any> {
+  const { data, error } = await supabase
+    .from("products")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProductInDb(id: string): Promise<boolean> {
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATEGORIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UiCategoryItem {
+  id: string;
+  name: string;
+  nameBn: string;
+  slug: string;
+  parent: string;
+  productsCount: number;
+  displayOrder: number;
+  status: "active" | "draft" | "archived";
+  image: string;
+}
+
+export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
+  try {
+    const { data: categories, error } = await supabase
+      .from("categories")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error || !categories) {
+      if (error) console.warn("Supabase categories fetch warning:", error.message);
+      return [];
+    }
+
+    // Get count of products per category
+    const { data: products } = await supabase.from("products").select("category_id");
+    const countMap = new Map<string, number>();
+    if (products) {
+      for (const p of products) {
+        if (p.category_id) {
+          countMap.set(p.category_id, (countMap.get(p.category_id) || 0) + 1);
+        }
+      }
+    }
+
+    const categoryNameMap = new Map<string, string>();
+    categories.forEach((c) => categoryNameMap.set(c.id, c.name));
+
+    const defaultIcons = ["🍯", "🐄", "🌴", "🏭", "🍵", "🌾"];
+
+    return categories.map((c, idx) => ({
+      id: c.id,
+      name: c.name,
+      nameBn: c.name_bn || "",
+      slug: c.slug,
+      parent: c.parent_id ? categoryNameMap.get(c.parent_id) || "Top Level" : "None (Top Level)",
+      productsCount: countMap.get(c.id) || 0,
+      displayOrder: c.sort_order || idx + 1,
+      status: c.is_active ? "active" : "draft",
+      image: c.image_path || defaultIcons[idx % defaultIcons.length],
+    }));
+  } catch (err) {
+    console.error("Error fetching categories from Supabase:", err);
+    return [];
+  }
+}
+
+export async function createCategoryInDb(payload: {
+  name: string;
+  nameBn?: string;
+  slug: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}): Promise<any> {
+  const { data, error } = await supabase
+    .from("categories")
+    .insert([
+      {
+        name: payload.name,
+        name_bn: payload.nameBn || null,
+        slug: payload.slug,
+        description: payload.description || null,
+        sort_order: payload.sort_order || 1,
+        is_active: payload.is_active ?? true,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCategoryInDb(id: string): Promise<boolean> {
+  const { error } = await supabase.from("categories").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAQS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UiFaqItem {
+  id: string;
+  category: string;
+  question: string;
+  questionBn: string;
+  answer: string;
+  displayOrder: number;
+  status: string;
+}
+
+export async function fetchFaqsFromDb(): Promise<UiFaqItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from("faqs")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      if (error) console.warn("Supabase faqs fetch warning:", error.message);
+      return [];
+    }
+
+    return data.map((f, i) => ({
+      id: f.id,
+      category: f.topic ? f.topic.charAt(0).toUpperCase() + f.topic.slice(1) : "General",
+      question: f.question,
+      questionBn: f.question_bn || "",
+      answer: f.answer,
+      displayOrder: f.sort_order || i + 1,
+      status: f.is_active ? "active" : "draft",
+    }));
+  } catch (err) {
+    console.error("Error fetching faqs:", err);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHIPPING METHODS & ZONES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UiShippingMethodItem {
+  id: string;
+  code: string;
+  name: string;
+  nameBn: string;
+  carrier: string;
+  baseCost: string;
+  perKgCost: string;
+  freeAbove: string;
+  transitDays: string;
+  status: "active" | "inactive";
+  type: string;
+}
+
+export async function fetchShippingMethodsFromDb(): Promise<UiShippingMethodItem[]> {
+  try {
+    const { data: methods, error } = await supabase
+      .from("shipping_methods")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error || !methods || methods.length === 0) {
+      if (error) console.warn("Supabase shipping methods warning:", error.message);
+      return [];
+    }
+
+    const { data: rates } = await supabase.from("shipping_rates").select("*");
+    const rateMap = new Map<string, DbShippingRate>();
+    if (rates) {
+      for (const r of rates) {
+        if (!rateMap.has(r.method_id)) {
+          rateMap.set(r.method_id, r);
+        }
+      }
+    }
+
+    return methods.map((m) => {
+      const rate = rateMap.get(m.id);
+      return {
+        id: m.id,
+        code: m.code.toUpperCase(),
+        name: m.name,
+        nameBn: m.name_bn || "",
+        carrier: m.is_pickup ? "Self Pickup / Warehouse Team" : "Nationwide Courier Logistics",
+        baseCost: rate ? `৳ ${rate.base_rate}` : m.is_pickup ? "Free" : "৳ 120",
+        perKgCost: rate && rate.per_kg_rate > 0 ? `৳ ${rate.per_kg_rate} / kg` : "Flat rate",
+        freeAbove: rate && rate.free_above_amount ? `৳ ${rate.free_above_amount}` : "N/A",
+        transitDays: rate ? `${rate.estimated_days_min} – ${rate.estimated_days_max} days` : "1 - 3 days",
+        status: m.is_active ? "active" : "inactive",
+        type: m.is_pickup ? "Warehouse Pickup" : "Delivery",
+      };
+    });
+  } catch (err) {
+    console.error("Error fetching shipping methods:", err);
+    return [];
+  }
+}
+
+export interface UiDeliveryZoneItem {
+  id: string;
+  name: string;
+  nameBn: string;
+  coverage: string;
+  divisions: string;
+  districtsCount: number;
+  baseRate: string;
+  extraPerKg: string;
+  transitDays: string;
+  codAvailable: boolean;
+  status: string;
+}
+
+export async function fetchDeliveryZonesFromDb(): Promise<UiDeliveryZoneItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from("delivery_zones")
+      .select("*")
+      .order("id", { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      if (error) console.warn("Supabase delivery zones warning:", error.message);
+      return [];
+    }
+
+    return data.map((z) => ({
+      id: `ZN-${String(z.id).padStart(3, "0")}`,
+      name: `${z.name} Division Zone`,
+      nameBn: z.name_bn ? `${z.name_bn} অঞ্চল` : "",
+      coverage: `All districts under ${z.name} division`,
+      divisions: z.name,
+      districtsCount: 8,
+      baseRate: z.name === "Dhaka" ? "৳ 80" : "৳ 130",
+      extraPerKg: z.name === "Dhaka" ? "৳ 15" : "৳ 25",
+      transitDays: z.name === "Dhaka" ? "1 day" : "2 – 3 days",
+      codAvailable: true,
+      status: "active",
+    }));
+  } catch (err) {
+    console.error("Error fetching delivery zones:", err);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UiPostItem {
+  id: string;
+  title: string;
+  titleBn: string;
+  slug: string;
+  category: string;
+  author: string;
+  views: number;
+  status: "published" | "draft" | "archived";
+  publishedDate: string;
+  tags: string[];
+}
+
+export async function fetchPostsFromDb(): Promise<UiPostItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      if (error) console.warn("Supabase posts fetch warning:", error.message);
+      return [];
+    }
+
+    return data.map((p) => ({
+      id: p.id,
+      title: p.title,
+      titleBn: p.title_bn || "",
+      slug: p.slug,
+      category: "Technical Guide",
+      author: p.author_name || "Editorial Team",
+      views: 1240,
+      status: p.status as "published" | "draft" | "archived",
+      publishedDate: p.published_at ? formatDate(p.published_at) : "24 Oct 2026",
+      tags: p.tags || ["Molasses", "Industry"],
+    }));
+  } catch (err) {
+    console.error("Error fetching posts:", err);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SITE SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function fetchSiteSettingsFromDb(): Promise<Record<string, any>> {
+  try {
+    const { data, error } = await supabase.from("site_settings").select("*");
+    if (error || !data) return {};
+
+    const settingsMap: Record<string, any> = {};
+    for (const s of data) {
+      settingsMap[s.key] = s.value;
+    }
+    return settingsMap;
+  } catch (err) {
+    console.error("Error fetching site settings:", err);
+    return {};
+  }
+}
+
+export async function updateSiteSettingInDb(key: string, value: any): Promise<boolean> {
+  const { error } = await supabase
+    .from("site_settings")
+    .update({ value, updated_at: new Date().toISOString() })
+    .eq("key", key);
+
+  if (error) throw error;
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEO DIVISIONS & DISTRICTS (BANGLADESH)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const fallbackDivisions: DbGeoDivision[] = [
+  { id: 1, name: "Barishal", name_bn: "বরিশাল" },
+  { id: 2, name: "Chattogram", name_bn: "চট্টগ্রাম" },
+  { id: 3, name: "Dhaka", name_bn: "ঢাকা" },
+  { id: 4, name: "Khulna", name_bn: "খুলনা" },
+  { id: 5, name: "Mymensingh", name_bn: "ময়মনসিংহ" },
+  { id: 6, name: "Rajshahi", name_bn: "রাজশাহী" },
+  { id: 7, name: "Rangpur", name_bn: "রংপুর" },
+  { id: 8, name: "Sylhet", name_bn: "সিলেট" },
+];
+
+export const fallbackDistricts: DbGeoDistrict[] = [
+  { id: 40, division_id: 4, zone_id: 4, name: "Bagerhat", name_bn: "বাগেরহাট" },
+  { id: 17, division_id: 2, zone_id: 2, name: "Bandarban", name_bn: "বান্দরবান" },
+  { id: 6, division_id: 1, zone_id: 1, name: "Barguna", name_bn: "বরগুনা" },
+  { id: 5, division_id: 1, zone_id: 1, name: "Barishal", name_bn: "বরিশাল" },
+  { id: 4, division_id: 1, zone_id: 1, name: "Bhola", name_bn: "ভোলা" },
+  { id: 52, division_id: 6, zone_id: 6, name: "Bogura", name_bn: "বগুড়া" },
+  { id: 16, division_id: 2, zone_id: 2, name: "Brahmanbaria", name_bn: "ব্রাহ্মণবাড়িয়া" },
+  { id: 15, division_id: 2, zone_id: 2, name: "Chandpur", name_bn: "চাঁদপুর" },
+  { id: 51, division_id: 6, zone_id: 6, name: "Chapai Nawabganj", name_bn: "চাঁপাইনবাবগঞ্জ" },
+  { id: 14, division_id: 2, zone_id: 2, name: "Chattogram", name_bn: "চট্টগ্রাম" },
+  { id: 39, division_id: 4, zone_id: 4, name: "Chuadanga", name_bn: "চুয়াডাঙ্গা" },
+  { id: 13, division_id: 2, zone_id: 2, name: "Cox's Bazar", name_bn: "কক্সবাজার" },
+  { id: 12, division_id: 2, zone_id: 2, name: "Cumilla", name_bn: "কুমিল্লা" },
+  { id: 30, division_id: 3, zone_id: 3, name: "Dhaka", name_bn: "ঢাকা" },
+  { id: 60, division_id: 7, zone_id: 7, name: "Dinajpur", name_bn: "দিনাজপুর" },
+  { id: 29, division_id: 3, zone_id: 3, name: "Faridpur", name_bn: "ফরিদপুর" },
+  { id: 11, division_id: 2, zone_id: 2, name: "Feni", name_bn: "ফেনী" },
+  { id: 59, division_id: 7, zone_id: 7, name: "Gaibandha", name_bn: "গাইবান্ধা" },
+  { id: 28, division_id: 3, zone_id: 3, name: "Gazipur", name_bn: "গাজীপুর" },
+  { id: 27, division_id: 3, zone_id: 3, name: "Gopalganj", name_bn: "গোপালগঞ্জ" },
+  { id: 64, division_id: 8, zone_id: 8, name: "Habiganj", name_bn: "হবিগঞ্জ" },
+  { id: 44, division_id: 5, zone_id: 5, name: "Jamalpur", name_bn: "জামালপুর" },
+  { id: 38, division_id: 4, zone_id: 4, name: "Jashore", name_bn: "যশোর" },
+  { id: 3, division_id: 1, zone_id: 1, name: "Jhalokathi", name_bn: "ঝালকাঠি" },
+  { id: 37, division_id: 4, zone_id: 4, name: "Jhenaidah", name_bn: "ঝিনাইদহ" },
+  { id: 50, division_id: 6, zone_id: 6, name: "Joypurhat", name_bn: "জয়পুরহাট" },
+  { id: 10, division_id: 2, zone_id: 2, name: "Khagrachhari", name_bn: "খাগড়াছড়ি" },
+  { id: 36, division_id: 4, zone_id: 4, name: "Khulna", name_bn: "খুলনা" },
+  { id: 26, division_id: 3, zone_id: 3, name: "Kishoreganj", name_bn: "কিশোরগঞ্জ" },
+  { id: 58, division_id: 7, zone_id: 7, name: "Kurigram", name_bn: "কুড়িগ্রাম" },
+  { id: 35, division_id: 4, zone_id: 4, name: "Kushtia", name_bn: "কুষ্টিয়া" },
+  { id: 9, division_id: 2, zone_id: 2, name: "Lakshmipur", name_bn: "লক্ষ্মীপুর" },
+  { id: 57, division_id: 7, zone_id: 7, name: "Lalmonirhat", name_bn: "লালমনিরহাট" },
+  { id: 25, division_id: 3, zone_id: 3, name: "Madaripur", name_bn: "মাদারীপুর" },
+  { id: 34, division_id: 4, zone_id: 4, name: "Magura", name_bn: "মাগুরা" },
+  { id: 24, division_id: 3, zone_id: 3, name: "Manikganj", name_bn: "মানিকগঞ্জ" },
+  { id: 33, division_id: 4, zone_id: 4, name: "Meherpur", name_bn: "মেহেরপুর" },
+  { id: 63, division_id: 8, zone_id: 8, name: "Moulvibazar", name_bn: "মৌলভীবাজার" },
+  { id: 23, division_id: 3, zone_id: 3, name: "Munshiganj", name_bn: "মুন্সীগঞ্জ" },
+  { id: 43, division_id: 5, zone_id: 5, name: "Mymensingh", name_bn: "ময়মনসিংহ" },
+  { id: 49, division_id: 6, zone_id: 6, name: "Naogaon", name_bn: "নওগাঁ" },
+  { id: 32, division_id: 4, zone_id: 4, name: "Narail", name_bn: "নড়াইল" },
+  { id: 22, division_id: 3, zone_id: 3, name: "Narayanganj", name_bn: "নারায়ণগঞ্জ" },
+  { id: 21, division_id: 3, zone_id: 3, name: "Narsingdi", name_bn: "নরসিংদী" },
+  { id: 48, division_id: 6, zone_id: 6, name: "Natore", name_bn: "নাটোর" },
+  { id: 42, division_id: 5, zone_id: 5, name: "Netrokona", name_bn: "নেত্রকোণা" },
+  { id: 56, division_id: 7, zone_id: 7, name: "Nilphamari", name_bn: "নীলফামারী" },
+  { id: 8, division_id: 2, zone_id: 2, name: "Noakhali", name_bn: "নোয়াখালী" },
+  { id: 47, division_id: 6, zone_id: 6, name: "Pabna", name_bn: "পাবনা" },
+  { id: 55, division_id: 7, zone_id: 7, name: "Panchagarh", name_bn: "পঞ্চগড়" },
+  { id: 2, division_id: 1, zone_id: 1, name: "Patuakhali", name_bn: "পটুয়াখালী" },
+  { id: 1, division_id: 1, zone_id: 1, name: "Pirojpur", name_bn: "পিরোজপুর" },
+  { id: 20, division_id: 3, zone_id: 3, name: "Rajbari", name_bn: "রাজবাড়ী" },
+  { id: 46, division_id: 6, zone_id: 6, name: "Rajshahi", name_bn: "রাজশাহী" },
+  { id: 7, division_id: 2, zone_id: 2, name: "Rangamati", name_bn: "রাঙ্গামাটি" },
+  { id: 54, division_id: 7, zone_id: 7, name: "Rangpur", name_bn: "রংপুর" },
+  { id: 31, division_id: 4, zone_id: 4, name: "Satkhira", name_bn: "সাতক্ষীরা" },
+  { id: 19, division_id: 3, zone_id: 3, name: "Shariatpur", name_bn: "শরীয়তপুর" },
+  { id: 41, division_id: 5, zone_id: 5, name: "Sherpur", name_bn: "শেরপুর" },
+  { id: 45, division_id: 6, zone_id: 6, name: "Sirajganj", name_bn: "সিরাজগঞ্জ" },
+  { id: 62, division_id: 8, zone_id: 8, name: "Sunamganj", name_bn: "সুনামগঞ্জ" },
+  { id: 61, division_id: 8, zone_id: 8, name: "Sylhet", name_bn: "সিলেট" },
+  { id: 18, division_id: 3, zone_id: 3, name: "Tangail", name_bn: "টাঙ্গাইল" },
+  { id: 53, division_id: 7, zone_id: 7, name: "Thakurgaon", name_bn: "ঠাকুরগাঁও" },
+];
+
+export async function fetchGeoDivisionsAndDistricts(): Promise<{
+  divisions: DbGeoDivision[];
+  districts: DbGeoDistrict[];
+}> {
+  try {
+    const [divRes, distRes] = await Promise.all([
+      supabase.from("geo_divisions").select("*").order("name", { ascending: true }),
+      supabase.from("geo_districts").select("*").order("name", { ascending: true }),
+    ]);
+
+    const divisions = divRes.data && divRes.data.length > 0 ? divRes.data : fallbackDivisions;
+    const districts = distRes.data && distRes.data.length > 0 ? distRes.data : fallbackDistricts;
+
+    return {
+      divisions,
+      districts,
+    };
+  } catch (err) {
+    console.error("Error fetching geo divisions and districts from Supabase:", err);
+    return {
+      divisions: fallbackDivisions,
+      districts: fallbackDistricts,
+    };
+  }
+}
+
+export async function fetchGeoDistricts(divisionId?: number): Promise<DbGeoDistrict[]> {
+  try {
+    let query = supabase.from("geo_districts").select("*").order("name", { ascending: true });
+    if (divisionId) {
+      query = query.eq("division_id", divisionId);
+    }
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) {
+      if (divisionId) {
+        return fallbackDistricts.filter((d) => d.division_id === divisionId);
+      }
+      return fallbackDistricts;
+    }
+    return data;
+  } catch (err) {
+    console.error("Error fetching geo_districts from Supabase:", err);
+    if (divisionId) {
+      return fallbackDistricts.filter((d) => d.division_id === divisionId);
+    }
+    return fallbackDistricts;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER CREATION & DATABASE SYNC
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function normalizeBdPhone(phone: string): string {
+  let cleaned = (phone || "").replace(/[\s\-\(\)]/g, "");
+  if (!cleaned) return "";
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("0")) return "+88" + cleaned;
+  return "+880" + cleaned;
+}
+
+export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
+  try {
+    const [prodRes, varRes, catRes] = await Promise.all([
+      supabase.from("products").select("id, name, slug, category_id").order("sort_order", { ascending: true }),
+      supabase.from("product_variants").select("id, product_id, sku, name, price, stock_status").eq("is_active", true),
+      supabase.from("categories").select("id, name"),
+    ]);
+
+    if (varRes.error || !varRes.data || varRes.data.length === 0) {
+      return [];
+    }
+
+    const categoryMap = new Map<string, string>();
+    if (catRes.data) {
+      catRes.data.forEach((c) => categoryMap.set(c.id, c.name));
+    }
+
+    const productMap = new Map<string, any>();
+    if (prodRes.data) {
+      prodRes.data.forEach((p) => productMap.set(p.id, p));
+    }
+
+    return varRes.data.map((v) => {
+      const prod = productMap.get(v.product_id);
+      const catName = prod?.category_id ? (categoryMap.get(prod.category_id) || "Molasses") : "Pure Molasses";
+      return {
+        variant_id: v.id,
+        product_id: v.product_id,
+        sku: v.sku,
+        product_name: prod ? prod.name : "Pure Cane Molasses",
+        variant_name: v.name,
+        category: catName,
+        unit_price: Number(v.price) || 0,
+        stock: v.stock_status === "in_stock" ? "In Stock" : v.stock_status.replace("_", " "),
+        image: "/images/products/raw-sugarcane-drum.jpg",
+      };
+    });
+  } catch (err) {
+    console.error("Error fetching catalog products from Supabase:", err);
+    return [];
+  }
+}
+
+export async function fetchRawShippingMethodsFromDb(): Promise<
+  { id: string; name: string; is_pickup: boolean }[]
+> {
+  try {
+    const { data, error } = await supabase
+      .from("shipping_methods")
+      .select("id, name, is_pickup")
+      .eq("is_active", true);
+    if (error || !data || data.length === 0) {
+      return [
+        { id: "f6e5986b-b545-4023-9b6b-abf7bdb2d5d3", name: "Courier delivery", is_pickup: false },
+        { id: "e09c2596-174e-45a8-95b8-81c62744e5e3", name: "Pickup from warehouse", is_pickup: true },
+      ];
+    }
+    return data;
+  } catch (err) {
+    console.error("Error fetching shipping methods from Supabase:", err);
+    return [
+      { id: "f6e5986b-b545-4023-9b6b-abf7bdb2d5d3", name: "Courier delivery", is_pickup: false },
+    ];
+  }
+}
+
+export async function createOrderInDb(savedOrder: Order): Promise<Order> {
+  const isDraft =
+    savedOrder.status === "incomplete_order" || savedOrder.status === "pending";
+
+  if (!isDraft && (!savedOrder.items || savedOrder.items.length === 0)) {
+    throw new Error("Cannot place a confirmed or processing order with no items.");
+  }
+
+  // 1. Clean Phone Number (never auto-fill a dummy number)
+  const normalizedPhone = normalizeBdPhone(savedOrder.phone);
+  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const customerName = (savedOrder.customer || "").trim();
+
+  // If this is a draft (incomplete or pending) order, or if customer name or phone is left blank,
+  // insert directly into the orders and order_items tables so no dummy fields are auto-filled.
+  const shouldUseDirectInsert = isDraft || !customerName || !normalizedPhone;
+
+  if (shouldUseDirectInsert) {
+    const orderNumber =
+      savedOrder.id ||
+      `MOL-2610-0${1085 + Date.now().toString().slice(-4)}`;
+
+    const subtotal = (savedOrder.items || []).reduce(
+      (sum, item) => sum + (Number(item.line_total) || (Number(item.quantity) * Number(item.unit_price)) || 0),
+      0
+    );
+    const shippingTotal = Number(savedOrder.shipping_total) || 0;
+    const discountTotal = Number(savedOrder.discount_total) || 0;
+    const grandTotal = Math.max(0, subtotal - discountTotal + shippingTotal);
+
+    const createdOrder: Order = {
+      id: orderNumber,
+      customer: customerName,
+      phone: normalizedPhone,
+      email: savedOrder.email ? savedOrder.email.trim() : "",
+      address: {
+        division: savedOrder.address?.division || "",
+        district: savedOrder.address?.district || "",
+        address_line: savedOrder.address?.address_line || "",
+      },
+      status: savedOrder.status,
+      payment: savedOrder.payment || "unpaid",
+      fulfillment: savedOrder.fulfillment || "unfulfilled",
+      method: savedOrder.method || "cod",
+      channel: savedOrder.channel || "phone",
+      subtotal,
+      discount_total: discountTotal,
+      shipping_total: shippingTotal,
+      grand_total: grandTotal,
+      amount_paid: Number(savedOrder.amount_paid) || 0,
+      currency: "BDT",
+      date: formatDate(savedOrder.date) || formatDate(nowStr),
+      customer_note: savedOrder.customer_note || "",
+      courier_name: savedOrder.courier_name || "",
+      cancel_reason: savedOrder.cancel_reason || "",
+      items: savedOrder.items || [],
+      notes: savedOrder.notes && savedOrder.notes.length > 0
+        ? savedOrder.notes
+        : [
+            {
+              id: `note-${Date.now()}`,
+              author: "Admin Staff",
+              text: `Order recorded via ${savedOrder.channel?.toUpperCase() || "ADMIN"}.`,
+              type: "internal",
+              created_at: formatDateTime(nowStr),
+            },
+          ],
+      events: savedOrder.events && savedOrder.events.length > 0
+        ? savedOrder.events
+        : [
+            {
+              id: `ev-${Date.now()}`,
+              event_type: "placed",
+              message: `Order created (${savedOrder.status.replace(/_/g, " ")})`,
+              actor: "Admin Staff",
+              created_at: formatDateTime(nowStr),
+            },
+          ],
+      isFromDb: false,
+    };
+
+    // Attempt direct database INSERT via RLS policy
+    try {
+      const dbInsertPayload: Record<string, any> = {
+        order_number: orderNumber,
+        status: savedOrder.status,
+        channel: savedOrder.channel || "phone",
+        payment_status: savedOrder.payment || "unpaid",
+        fulfillment_status: savedOrder.fulfillment || "unfulfilled",
+        payment_method: savedOrder.method || "cod",
+        currency: "BDT",
+        customer_name: customerName || null,
+        customer_phone: normalizedPhone || null,
+        customer_email: savedOrder.email ? savedOrder.email.trim() : null,
+        shipping_address: {
+          division: savedOrder.address?.division || "",
+          district: savedOrder.address?.district || "",
+          address_line: savedOrder.address?.address_line || "",
+          phone: normalizedPhone || "",
+          recipient_name: customerName || "",
+        },
+        subtotal,
+        discount_total: discountTotal,
+        shipping_total: shippingTotal,
+        tax_total: 0,
+        grand_total: grandTotal,
+        amount_paid: Number(savedOrder.amount_paid) || 0,
+        customer_note: savedOrder.customer_note || null,
+        attribution: {},
+        cancel_reason: savedOrder.cancel_reason || null,
+        shipping_method_name: savedOrder.courier_name || null,
+      };
+
+      // 1. Insert into orders table directly
+      const { data: dbData, error: dbErr } = await supabase
+        .from("orders")
+        .insert(dbInsertPayload)
+        .select()
+        .maybeSingle();
+
+      if (dbErr) {
+        // Fallback: If SELECT returning is not permitted, perform standard insert
+        const { error: blindErr } = await supabase
+          .from("orders")
+          .insert(dbInsertPayload);
+
+        if (blindErr) {
+          throw new Error(blindErr.message || "Failed to create order in database");
+        }
+      }
+
+      createdOrder.id = dbData?.order_number || orderNumber;
+      createdOrder.isFromDb = true;
+      createdOrder.public_token = dbData?.public_token;
+
+      // 2. Insert items into order_items table if any
+      let orderDbId = dbData?.id;
+      if (!orderDbId) {
+        const { data: fetchedOrder } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("order_number", orderNumber)
+          .maybeSingle();
+        orderDbId = fetchedOrder?.id;
+      }
+
+      if (orderDbId && savedOrder.items && savedOrder.items.length > 0) {
+        try {
+          const itemRows = savedOrder.items.map((it) => {
+            const isUuid =
+              typeof it.variant_id === "string" &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                it.variant_id
+              );
+            return {
+              order_id: orderDbId,
+              variant_id: isUuid ? it.variant_id : null,
+              sku: it.sku || "SKU-ITEM",
+              product_name: it.product_name || "Molasses Product",
+              variant_name: it.variant_name || "Standard",
+              quantity: Math.max(1, Number(it.quantity) || 1),
+              unit_price: Math.max(0, Number(it.unit_price) || 0),
+            };
+          });
+          const { error: itemInsertErr } = await supabase.from("order_items").insert(itemRows);
+          if (itemInsertErr) {
+            console.error("Direct order_items insert error:", itemInsertErr);
+          }
+        } catch (itemErr) {
+          console.warn("Could not insert order items directly:", itemErr);
+        }
+      }
+
+      // 3. Insert notes into order_notes table if any
+      if (orderDbId && savedOrder.notes && savedOrder.notes.length > 0) {
+        try {
+          const noteRows = savedOrder.notes.map((n) => ({
+            order_id: orderDbId,
+            order_number: orderNumber,
+            type: n.type || "internal",
+            author: n.author || "Admin Staff",
+            note: n.text || "",
+            created_at: n.created_at || new Date().toISOString(),
+          }));
+          await supabase.from("order_notes").insert(noteRows);
+        } catch {
+          // Non-blocking fallback if order_notes table is not yet created
+        }
+      }
+    } catch (insertErr: any) {
+      console.error("Error attempting order insert:", insertErr);
+      throw new Error(insertErr?.message || "Failed to save order in database");
+    }
+
+    return createdOrder;
+  }
+
+  // 2. Resolve District ID
+  let districtId = 30; // Default to Dhaka
+  try {
+    const targetDistrictName = (savedOrder.address?.district || "").trim().toLowerCase();
+    const { data: distData } = await supabase
+      .from("geo_districts")
+      .select("id, name")
+      .ilike("name", targetDistrictName);
+
+    if (distData && distData.length > 0) {
+      districtId = distData[0].id;
+    } else {
+      const found = fallbackDistricts.find(
+        (d) => d.name.toLowerCase() === targetDistrictName
+      );
+      if (found) districtId = found.id;
+    }
+  } catch (e) {
+    console.warn("District resolution warning:", e);
+  }
+
+  // 3. Resolve Shipping Method
+  const shippingMethods = await fetchRawShippingMethodsFromDb();
+  const isPickup =
+    (savedOrder.address?.address_line || "").toLowerCase().includes("pickup") ||
+    Number(savedOrder.shipping_total) === 0;
+
+  const matchedMethod =
+    shippingMethods.find((m) => m.is_pickup === isPickup) ||
+    shippingMethods.find((m) => !m.is_pickup) ||
+    shippingMethods[0];
+
+  const shippingMethodId = matchedMethod.id;
+
+  // 4. Resolve Variant IDs for Items
+  const { data: dbVariants } = await supabase
+    .from("product_variants")
+    .select("id, sku, price")
+    .eq("is_active", true);
+
+  const variantSkuMap = new Map<string, string>();
+  if (dbVariants) {
+    dbVariants.forEach((v) => variantSkuMap.set(v.sku.toLowerCase(), v.id));
+  }
+  const defaultVariantId = dbVariants && dbVariants.length > 0
+    ? dbVariants[0].id
+    : "0c696f68-7bc2-4006-befa-0540dd24dc5b";
+
+  const pItems = savedOrder.items.map((it) => {
+    let vId = it.variant_id;
+    if (!vId || vId.length < 32) {
+      vId = variantSkuMap.get(it.sku.toLowerCase()) || defaultVariantId;
+    }
+    return {
+      variant_id: vId,
+      quantity: Math.max(1, Number(it.quantity) || 1),
+    };
+  });
+
+  // 5. Payment method mapping
+  const validMethods = ["cod", "bkash", "nagad", "rocket", "card", "bank_transfer", "credit_terms", "cash"];
+  let paymentMethod = (savedOrder.method || "cod") as any;
+  if (!validMethods.includes(paymentMethod)) {
+    paymentMethod = "cod";
+  }
+
+  // 6. Call Supabase RPC 'place_order'
+  const { data: placeData, error: placeError } = await supabase.rpc("place_order", {
+    p_items: pItems,
+    p_customer: {
+      name: customerName,
+      phone: normalizedPhone,
+      email: savedOrder.email ? savedOrder.email.trim() : undefined,
+    },
+    p_shipping_address: {
+      recipient_name: customerName,
+      phone: normalizedPhone,
+      district_id: districtId,
+      address_line: savedOrder.address?.address_line?.trim() || "",
+    },
+    p_shipping_method_id: shippingMethodId,
+    p_payment_method: paymentMethod,
+    p_customer_note: savedOrder.customer_note?.trim() || undefined,
+  });
+
+  if (placeError) {
+    console.error("Supabase place_order RPC error:", placeError);
+    let msg = placeError.message;
+    if (msg.includes("OUT_OF_STOCK")) msg = "Selected molasses product is currently out of stock in warehouse.";
+    else if (msg.includes("CUSTOMER_PHONE_INVALID")) msg = "Please enter a valid mobile number (+880...)";
+    else if (msg.includes("ADDRESS_REQUIRED")) msg = "Please provide delivery district and street address.";
+    else if (msg.includes("FORBIDDEN")) msg = "Access restricted for this channel or customer action.";
+    throw new Error(msg);
+  }
+
+  // 7. Retrieve full created order details from DB via get_order_by_token
+  let orderDetails: any = null;
+  if (placeData?.public_token) {
+    try {
+      const { data: tokenData } = await supabase.rpc("get_order_by_token", {
+        p_token: placeData.public_token,
+      });
+      if (tokenData) {
+        orderDetails = tokenData;
+      }
+    } catch (e) {
+      console.warn("Could not immediately fetch order token details:", e);
+    }
+  }
+
+  const orderNumber = orderDetails?.order_number || placeData?.order_number || `MOL-2610-${Date.now().toString().slice(-5)}`;
+
+  const createdResult: Order = {
+    id: orderNumber,
+    customer: orderDetails?.customer_name || customerName || "",
+    phone: orderDetails?.shipping_address?.phone || normalizedPhone,
+    email: savedOrder.email || "",
+    address: {
+      division: orderDetails?.shipping_address?.division || savedOrder.address?.division || "",
+      district: orderDetails?.shipping_address?.district || savedOrder.address?.district || "",
+      address_line: orderDetails?.shipping_address?.address_line || savedOrder.address?.address_line || "",
+    },
+    status: savedOrder.status || (orderDetails?.status as any) || "pending",
+    payment: (orderDetails?.payment_status as any) || savedOrder.payment || "unpaid",
+    fulfillment: (orderDetails?.fulfillment_status as any) || savedOrder.fulfillment || "unfulfilled",
+    method: (orderDetails?.payment_method as any) || paymentMethod,
+    channel: savedOrder.channel || "web",
+    subtotal: Number(orderDetails?.subtotal) || Number(placeData?.grand_total) || savedOrder.subtotal,
+    discount_total: Number(orderDetails?.discount_total) || 0,
+    shipping_total: Number(orderDetails?.shipping_total) || savedOrder.shipping_total,
+    grand_total: Number(orderDetails?.grand_total) || Number(placeData?.grand_total) || savedOrder.grand_total,
+    amount_paid: Number(orderDetails?.amount_paid) || 0,
+    currency: orderDetails?.currency || "BDT",
+    date: formatDate(orderDetails?.placed_at) || formatDate(nowStr),
+    customer_note: savedOrder.customer_note,
+    items: orderDetails?.items && orderDetails.items.length > 0
+      ? orderDetails.items.map((it: any, idx: number) => ({
+          id: `item-db-${idx}-${it.sku}`,
+          sku: it.sku,
+          product_name: it.product_name,
+          variant_name: it.variant_name,
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unit_price) || 0,
+          line_total: Number(it.line_total) || (Number(it.quantity) * Number(it.unit_price)),
+          variant_id: savedOrder.items[idx]?.variant_id,
+        }))
+      : savedOrder.items,
+    notes: [
+      {
+        id: `note-${Date.now()}`,
+        author: "System",
+        text: `Order created and confirmed.`,
+        type: "internal",
+        created_at: formatDateTime(nowStr),
+      },
+    ],
+    events: orderDetails?.timeline && orderDetails.timeline.length > 0
+      ? orderDetails.timeline.map((ev: any, idx: number) => ({
+          id: `ev-db-${idx}`,
+          event_type: ev.event || "placed",
+          message: ev.message || "Order placed",
+          actor: "System Checkout",
+          created_at: formatDateTime(ev.at) || formatDateTime(nowStr),
+        }))
+      : [
+          {
+            id: `ev-${Date.now()}`,
+            event_type: "placed",
+            message: "Order placed",
+            actor: "System Checkout",
+            created_at: formatDateTime(nowStr),
+          },
+        ],
+    isFromDb: true,
+    public_token: placeData?.public_token,
+  };
+
+  return createdResult;
+}
+
+function formatDbOrderRecord(data: any): Order {
+  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const rawItems = data.order_items || data.items || [];
+  const items: OrderItem[] = rawItems.map((it: any, idx: number) => ({
+    id: it.id || `item-db-${idx}-${it.sku}`,
+    sku: it.sku || "",
+    product_name: it.product_name || "",
+    variant_name: it.variant_name || "",
+    quantity: Number(it.quantity) || 1,
+    unit_price: Number(it.unit_price) || 0,
+    line_total: Number(it.line_total) || (Number(it.quantity) * Number(it.unit_price)),
+    variant_id: it.variant_id,
+  }));
+
+  const rawEvents = data.order_events || data.timeline || [];
+  const events: OrderEvent[] = rawEvents.map((ev: any, idx: number) => ({
+    id: String(ev.id || `ev-db-${idx}`),
+    event_type: ev.event_type || ev.event || "placed",
+    message: ev.message || `Order ${ev.event_type || "updated"}`,
+    actor: "Admin Staff",
+    created_at: formatDateTime(ev.created_at || ev.at) || formatDateTime(nowStr),
+  }));
+
+  return {
+    id: data.order_number,
+    customer: data.customer_name || "",
+    phone: data.shipping_address?.phone || data.customer_phone || "",
+    email: data.customer_email || "",
+    address: {
+      division: data.shipping_address?.division || "",
+      district: data.shipping_address?.district || "",
+      address_line: data.shipping_address?.address_line || "",
+    },
+    status: (data.status as any) || "pending",
+    payment: (data.payment_status as any) || "unpaid",
+    fulfillment: (data.fulfillment_status as any) || "unfulfilled",
+    method: (data.payment_method as any) || "cod",
+    channel: data.channel || "web",
+    subtotal: Number(data.subtotal) || 0,
+    discount_total: Number(data.discount_total) || 0,
+    shipping_total: Number(data.shipping_total) || 0,
+    grand_total: Number(data.grand_total) || 0,
+    amount_paid: Number(data.amount_paid) || 0,
+    currency: data.currency || "BDT",
+    date: formatDate(data.placed_at) || formatDate(nowStr),
+    customer_note: data.customer_note || "",
+    cancel_reason: data.cancel_reason || "",
+    courier_name: data.shipping_method_name || "",
+    items,
+    notes: Array.isArray(data.order_notes)
+      ? data.order_notes
+          .filter((n: any) => n && (n.note || n.text))
+          .map((n: any, idx: number) => ({
+            id: String(n.id || `note-${idx}`),
+            author: n.author || "Admin Staff",
+            text: (n.note || n.text || "").trim(),
+            type: (n.type === "customer" ? "customer" : "internal") as "customer" | "internal",
+            created_at: formatDateTime(n.created_at || nowStr),
+          }))
+      : [],
+    events: events.length > 0 ? events : [
+      {
+        id: `ev-${data.id || data.order_number}`,
+        event_type: "placed",
+        message: "Order placed",
+        actor: "System Checkout",
+        created_at: formatDateTime(data.placed_at) || formatDateTime(nowStr),
+      },
+    ],
+    isFromDb: true,
+    public_token: data.public_token,
+  };
+}
+
+export async function fetchOrdersFromDb(): Promise<Order[]> {
+  // Purge any stale legacy local caches from browser
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("gur_created_orders");
+      localStorage.removeItem("gur_order_modifications");
+      localStorage.removeItem("gur_deleted_orders");
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Pure server query directly to Supabase
+  let data: any[] | null = null;
+  let error: any = null;
+
+  // 1. Attempt query joining order_items, order_events, and order_notes
+  const fullRes = await supabase
+    .from("orders")
+    .select(`
+      *,
+      order_items (*),
+      order_events (*),
+      order_notes (*)
+    `)
+    .order("placed_at", { ascending: false });
+
+  if (fullRes.error) {
+    // 2. If order_notes relation is not yet in schema cache, fallback to order_items and order_events
+    const withoutOrderNotesRes = await supabase
+      .from("orders")
+      .select(`
+        *,
+        order_items (*),
+        order_events (*)
+      `)
+      .order("placed_at", { ascending: false });
+
+    if (withoutOrderNotesRes.error && withoutOrderNotesRes.error.code === "42501") {
+      console.warn(
+        "Supabase notice: Permission denied for child tables. Falling back to direct orders table query."
+      );
+      const fallbackRes = await supabase
+        .from("orders")
+        .select("*")
+        .order("placed_at", { ascending: false });
+
+      data = fallbackRes.data;
+      error = fallbackRes.error;
+    } else {
+      data = withoutOrderNotesRes.data;
+      error = withoutOrderNotesRes.error;
+    }
+  } else {
+    data = fullRes.data;
+    error = fullRes.error;
+  }
+
+  if (error) {
+    console.error("Failed to fetch orders from database:", error);
+    throw new Error(error.message || "Failed to fetch orders from database");
+  }
+
+  if (!data || !Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((d) => formatDbOrderRecord(d));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER UPDATE & PERSISTENCE FUNCTIONS (DIRECT DATABASE ONLY)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function updateOrderInDb(
+  updatedOrder: Order,
+  syncItems: boolean = true
+): Promise<Order> {
+  const orderId = updatedOrder.id;
+
+  const dbStatus =
+    updatedOrder.status === "partially_delivered"
+      ? "delivered"
+      : updatedOrder.status;
+
+  const calculatedSubtotal = (updatedOrder.items || []).reduce(
+    (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+    0
+  );
+  const subtotal = updatedOrder.subtotal !== undefined ? Number(updatedOrder.subtotal) : calculatedSubtotal;
+  const shippingTotal = Number(updatedOrder.shipping_total) || 0;
+  const discountTotal = Number(updatedOrder.discount_total) || 0;
+  const grandTotal = updatedOrder.grand_total !== undefined
+    ? Number(updatedOrder.grand_total)
+    : Math.max(0, subtotal - discountTotal + shippingTotal);
+
+  // Deduplicate notes before updating DB
+  const seenSaveKeys = new Set<string>();
+  const deduplicatedNotes = (updatedOrder.notes || []).filter((n) => {
+    const key = `${n.type || "internal"}:${(n.text || "").trim()}`;
+    if (!n.text?.trim() || seenSaveKeys.has(key)) return false;
+    seenSaveKeys.add(key);
+    return true;
+  });
+  updatedOrder.notes = deduplicatedNotes;
+
+  const updatePayload: Record<string, any> = {
+    customer_name: updatedOrder.customer ? updatedOrder.customer.trim() : null,
+    customer_phone: updatedOrder.phone ? updatedOrder.phone.trim() : null,
+    customer_email: updatedOrder.email ? updatedOrder.email.trim() : null,
+    status: dbStatus,
+    payment_status: updatedOrder.payment,
+    fulfillment_status: updatedOrder.fulfillment,
+    shipping_total: shippingTotal,
+    discount_total: discountTotal,
+    subtotal: subtotal,
+    grand_total: grandTotal,
+    amount_paid: updatedOrder.amount_paid ?? 0,
+    customer_note: updatedOrder.customer_note || null,
+    attribution: {},
+    cancel_reason: updatedOrder.cancel_reason || null,
+    shipping_method_name: updatedOrder.courier_name || null,
+    shipping_address: updatedOrder.address
+      ? {
+          division: updatedOrder.address.division || "",
+          district: updatedOrder.address.district || "",
+          address_line: updatedOrder.address.address_line || "",
+          phone: updatedOrder.phone || "",
+          recipient_name: updatedOrder.customer || "",
+        }
+      : undefined,
+  };
+
+  // Direct update to orders table (single source of truth)
+  const { data: updatedDbOrders, error: updateErr } = await supabase
+    .from("orders")
+    .update(updatePayload)
+    .eq("order_number", orderId)
+    .select("id");
+
+  if (updateErr) {
+    console.error("Direct Supabase update error:", updateErr);
+    throw new DatabaseOperationError(parseDatabaseError(updateErr));
+  }
+
+  if (!updatedDbOrders || updatedDbOrders.length === 0) {
+    const { data: existingOrder } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderId)
+      .maybeSingle();
+
+    if (existingOrder) {
+      throw new DatabaseOperationError(
+        parseDatabaseError({
+          code: "0-ROWS-RLS",
+          message: `Database Row-Level Security (RLS) policy prevented modifying order ${orderId}.`,
+        })
+      );
+    }
+  }
+
+  let orderUuid = updatedDbOrders?.[0]?.id;
+  if (!orderUuid) {
+    const { data: existingOrder } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderId)
+      .maybeSingle();
+    orderUuid = existingOrder?.id;
+  }
+
+  // 1. Sync line items in public.order_items if requested
+  if (syncItems && Array.isArray(updatedOrder.items)) {
+    if (orderUuid) {
+      // 1. Delete existing items for this order
+      const { error: delErr } = await supabase
+        .from("order_items")
+        .delete()
+        .eq("order_id", orderUuid);
+
+      if (delErr) {
+        console.warn("Notice deleting existing order_items:", delErr);
+      }
+
+      // 2. Insert updated items if any
+      if (updatedOrder.items.length > 0) {
+        const itemRows = updatedOrder.items.map((it) => {
+          const isUuid =
+            typeof it.variant_id === "string" &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              it.variant_id
+            );
+          const qty = Math.max(1, Number(it.quantity) || 1);
+          const price = Math.max(0, Number(it.unit_price) || 0);
+          return {
+            order_id: orderUuid,
+            variant_id: isUuid ? it.variant_id : null,
+            sku: it.sku || "SKU-ITEM",
+            product_name: it.product_name || "Molasses Product",
+            variant_name: it.variant_name || "Standard",
+            quantity: qty,
+            unit_price: price,
+          };
+        });
+
+        const { data: insertedItems, error: insertErr } = await supabase
+          .from("order_items")
+          .insert(itemRows)
+          .select();
+
+        if (insertErr) {
+          console.error("Direct Supabase order_items insert error:", insertErr);
+          throw new Error(insertErr.message || "Failed to update order items in database");
+        }
+
+        if (insertedItems && insertedItems.length > 0) {
+          updatedOrder.items = insertedItems.map((it: any, idx: number) => ({
+            id: it.id || `item-${idx}`,
+            sku: it.sku,
+            product_name: it.product_name,
+            variant_name: it.variant_name,
+            quantity: Number(it.quantity) || 1,
+            unit_price: Number(it.unit_price) || 0,
+            line_total: (Number(it.quantity) || 1) * (Number(it.unit_price) || 0),
+            variant_id: it.variant_id,
+          }));
+        }
+      } else {
+        updatedOrder.items = [];
+      }
+    }
+  }
+
+  // 2. Sync notes in public.order_notes table (SSOT)
+  if (orderUuid && Array.isArray(updatedOrder.notes)) {
+    try {
+      await supabase.from("order_notes").delete().eq("order_id", orderUuid);
+      const noteRows = updatedOrder.notes
+        .filter((n) => n && n.text && n.text.trim())
+        .map((n) => ({
+          order_id: orderUuid,
+          order_number: orderId,
+          type: n.type || "internal",
+          author: n.author || "Admin Staff",
+          note: n.text.trim(),
+          created_at: n.created_at || new Date().toISOString(),
+        }));
+      if (noteRows.length > 0) {
+        await supabase.from("order_notes").insert(noteRows);
+      }
+    } catch (noteErr) {
+      console.warn("Notice updating order_notes:", noteErr);
+    }
+  }
+
+  updatedOrder.subtotal = subtotal;
+  updatedOrder.grand_total = grandTotal;
+  return updatedOrder;
+}
+
+export async function updateOrderStatusInDb(
+  orderId: string,
+  newStatus: Order["status"],
+  cancelReason?: string,
+  eventMessage?: string,
+  currentOrder?: Order,
+  courierName?: string
+): Promise<Order> {
+  const nowIso = new Date().toISOString();
+  const nowStr = nowIso.replace("T", " ").slice(0, 16);
+  const detailParts: string[] = [];
+  if (cancelReason) detailParts.push(`Reason: ${cancelReason}`);
+  if (courierName) detailParts.push(`Courier: ${courierName}`);
+  const detailsStr = detailParts.length > 0 ? ` (${detailParts.join(" | ")})` : "";
+
+  const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
+
+  // Pre-validate transition if currentOrder is available
+  if (currentOrder) {
+    const val = validateOrderStatusTransition(
+      currentOrder.status,
+      newStatus,
+      currentOrder.customer,
+      currentOrder.phone
+    );
+    if (!val.valid) {
+      throw new DatabaseOperationError(
+        parseDatabaseError({
+          code: val.code || "P0001",
+          message: `${val.reason} (${orderId})`,
+          details: `Order ${orderId}: ${val.reason}`,
+        })
+      );
+    }
+  }
+
+  // 1. Prepare surgical status update payload (never overwrite customer or items with null)
+  const statusPayload: Record<string, any> = {
+    status: dbStatus,
+    updated_at: nowIso,
+  };
+
+  if (courierName !== undefined) {
+    statusPayload.shipping_method_name = courierName || null;
+  }
+
+  if (newStatus === "cancelled") {
+    if (cancelReason) statusPayload.cancel_reason = cancelReason;
+    statusPayload.cancelled_at = nowIso;
+  } else if (newStatus === "confirmed") {
+    statusPayload.confirmed_at = nowIso;
+  } else if (newStatus === "shipped") {
+    statusPayload.shipped_at = nowIso;
+  } else if (newStatus === "delivered" || newStatus === "partially_delivered") {
+    statusPayload.delivered_at = nowIso;
+  }
+
+  // 2. Perform direct targeted UPDATE on orders table
+  const { data: updatedRows, error: updateErr } = await supabase
+    .from("orders")
+    .update(statusPayload)
+    .eq("order_number", orderId)
+    .select("id, order_number, status, customer_name, customer_phone, shipping_method_name, cancel_reason");
+
+  if (updateErr) {
+    console.error("Direct Supabase status update error:", updateErr);
+    const parsed = parseDatabaseError(updateErr);
+    throw new DatabaseOperationError(parsed);
+  }
+
+  // 3. Verify that the row was actually updated (detect silent RLS 0-row rejections)
+  if (!updatedRows || updatedRows.length === 0) {
+    const { data: existingRow } = await supabase
+      .from("orders")
+      .select("id, status")
+      .eq("order_number", orderId)
+      .maybeSingle();
+
+    if (existingRow) {
+      const rlsErr = parseDatabaseError({
+        code: "0-ROWS-RLS",
+        message: `Database Row-Level Security (RLS) policy prevented updating status for order ${orderId}.`,
+        details: `Order exists with current status '${existingRow.status}', but RLS UPDATE policy evaluated to FALSE for the current session.`,
+        hint: "Apply migration 20261028000001_fix_order_status_rls_and_workflow.sql in your Supabase SQL Editor.",
+      });
+      throw new DatabaseOperationError(rlsErr);
+    } else {
+      throw new DatabaseOperationError(
+        parseDatabaseError({
+          code: "404",
+          message: `Order ${orderId} was not found in the database.`,
+        })
+      );
+    }
+  }
+
+  const orderUuid = updatedRows[0].id;
+
+  // 4. Record order timeline event in public.order_events
+  const newEvent: OrderEvent = {
+    id: `ev-${Date.now()}`,
+    event_type: "status_changed",
+    to_value: newStatus,
+    message: eventMessage || `Order status updated to ${newStatus.toUpperCase()}${detailsStr}`,
+    actor: "Admin Staff",
+    created_at: formatDateTime(nowStr),
+  };
+
+  try {
+    await supabase.from("order_events").insert({
+      order_id: orderUuid,
+      event_type: "status_changed",
+      to_value: newStatus,
+      message: eventMessage || `Order status updated to ${newStatus.toUpperCase()}${detailsStr}`,
+    });
+  } catch (eventErr) {
+    console.warn("Could not insert order event into order_events:", eventErr);
+  }
+
+  // 5. Build and return the updated order object
+  let baseOrder = currentOrder;
+  if (!baseOrder || !baseOrder.customer) {
+    try {
+      const { data: fullData } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          order_items (*),
+          order_events (*),
+          order_notes (*)
+        `)
+        .eq("order_number", orderId)
+        .maybeSingle();
+
+      if (fullData) {
+        baseOrder = formatDbOrderRecord(fullData);
+      }
+    } catch {
+      // Fallback to minimal order
+    }
+  }
+
+  const finalOrder: Order = {
+    ...(baseOrder || ({} as Order)),
+    id: orderId,
+    status: newStatus,
+    cancel_reason: newStatus === "cancelled" ? (cancelReason || baseOrder?.cancel_reason) : baseOrder?.cancel_reason,
+    courier_name: courierName !== undefined ? courierName : baseOrder?.courier_name,
+    events: [newEvent, ...(baseOrder?.events || [])],
+  };
+
+  return finalOrder;
+}
+
+export async function addOrderNoteInDb(
+  orderId: string,
+  note: OrderNote,
+  currentOrder?: Order
+): Promise<Order> {
+  const baseOrder = currentOrder || ({
+    id: orderId,
+    customer: "",
+    phone: "",
+    email: "",
+    address: { division: "", district: "", address_line: "" },
+    status: "pending",
+    payment: "unpaid",
+    fulfillment: "unfulfilled",
+    method: "cod",
+    channel: "web",
+    subtotal: 0,
+    discount_total: 0,
+    shipping_total: 0,
+    grand_total: 0,
+    amount_paid: 0,
+    currency: "BDT",
+    date: formatDate(new Date()),
+    items: [],
+    notes: [],
+    events: [],
+  } as Order);
+
+  // If adding a customer-type note, update the primary customer_note on the order
+  const newCustomerNote = note.type === "customer" ? note.text : (baseOrder.customer_note || "");
+
+  const updated: Order = {
+    ...baseOrder,
+    customer_note: newCustomerNote,
+    notes: [note, ...(baseOrder.notes || []).filter((n) => n.id !== note.id)],
+  };
+
+  return await updateOrderInDb(updated, false);
+}
+
+export async function deleteOrderNoteInDb(
+  orderId: string,
+  noteId: string,
+  currentOrder?: Order
+): Promise<Order> {
+  if (!currentOrder) {
+    throw new Error("currentOrder required for note deletion");
+  }
+
+  const targetNote = (currentOrder.notes || []).find((n) => n.id === noteId);
+  const remainingNotes = (currentOrder.notes || []).filter((n) => n.id !== noteId);
+
+  // If the deleted note was the customer note, update customer_note
+  let customerNote = currentOrder.customer_note;
+  if (targetNote?.type === "customer") {
+    const nextCustomerNote = remainingNotes.find((n) => n.type === "customer");
+    customerNote = nextCustomerNote ? nextCustomerNote.text : "";
+  }
+
+  const updated: Order = {
+    ...currentOrder,
+    customer_note: customerNote,
+    notes: remainingNotes,
+  };
+
+  return await updateOrderInDb(updated, false);
+}
+
+export async function updateCustomerNoteInDb(
+  orderId: string,
+  customerNoteText: string,
+  currentOrder?: Order
+): Promise<Order> {
+  if (!currentOrder) {
+    throw new Error("currentOrder required for customer note update");
+  }
+
+  const trimmed = customerNoteText.trim();
+  const updated: Order = {
+    ...currentOrder,
+    customer_note: trimmed,
+  };
+
+  return await updateOrderInDb(updated, false);
+}
+
+export async function recordOrderPaymentInDb(
+  orderId: string,
+  amountPaid: number,
+  paymentStatus: Order["payment"],
+  paymentMethod?: Order["method"],
+  transactionRef?: string,
+  noteText?: string,
+  currentOrder?: Order
+): Promise<Order> {
+  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const paymentEvent: OrderEvent = {
+    id: `ev-pay-${Date.now()}`,
+    event_type: "payment_recorded",
+    to_value: paymentStatus,
+    message: `Payment updated: ৳ ${amountPaid.toLocaleString()} (${paymentStatus.replace("_", " ")})${transactionRef ? ` via ${transactionRef}` : ""}`,
+    actor: "Admin Staff",
+    created_at: formatDateTime(nowStr),
+  };
+
+  const newNotes = [...(currentOrder?.notes || [])];
+  if (noteText && noteText.trim()) {
+    newNotes.unshift({
+      id: `note-pay-${Date.now()}`,
+      author: "Admin Staff",
+      text: `[Payment Record]: ${noteText.trim()}${transactionRef ? ` (Ref: ${transactionRef})` : ""}`,
+      type: "internal",
+      created_at: formatDateTime(nowStr),
+    });
+  }
+
+  const baseOrder = currentOrder || ({
+    id: orderId,
+    customer: "",
+    phone: "",
+    email: "",
+    address: { division: "", district: "", address_line: "" },
+    status: "confirmed",
+    payment: paymentStatus,
+    fulfillment: "unfulfilled",
+    method: paymentMethod || "cod",
+    channel: "web",
+    subtotal: 0,
+    discount_total: 0,
+    shipping_total: 0,
+    grand_total: 0,
+    amount_paid: amountPaid,
+    currency: "BDT",
+    date: nowStr,
+    items: [],
+    notes: [],
+    events: [],
+  } as Order);
+
+  const updated: Order = {
+    ...baseOrder,
+    payment: paymentStatus,
+    amount_paid: amountPaid,
+    method: paymentMethod || baseOrder.method,
+    notes: newNotes,
+    events: [paymentEvent, ...(baseOrder.events || [])],
+  };
+
+  return await updateOrderInDb(updated, false);
+}
+
+export async function deleteOrderInDb(orderId: string): Promise<boolean> {
+  // Direct database DELETE
+  const { error } = await supabase
+    .from("orders")
+    .delete()
+    .eq("order_number", orderId);
+
+  if (error) {
+    console.warn("Direct delete failed, marking order as cancelled:", error);
+    const { error: cancelError } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancel_reason: "Cancelled by Admin",
+      })
+      .eq("order_number", orderId);
+
+    if (cancelError) {
+      throw new Error(cancelError.message || "Failed to delete or cancel order in database");
+    }
+  }
+
+  return true;
+}
+
+export async function bulkUpdateOrderStatusInDb(
+  orderIds: string[],
+  newStatus: Order["status"],
+  batchNote?: string
+): Promise<BulkStatusUpdateResult> {
+  if (!orderIds || orderIds.length === 0) {
+    return {
+      success: true,
+      totalRequested: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      updatedOrderNumbers: [],
+      skippedOrders: [],
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
+
+  // 1. Fetch current orders from DB to validate workflow eligibility
+  const { data: dbOrders, error: fetchErr } = await supabase
+    .from("orders")
+    .select("id, order_number, status, customer_name, customer_phone")
+    .in("order_number", orderIds);
+
+  if (fetchErr) {
+    console.error("Failed to query orders for bulk update:", fetchErr);
+    throw new DatabaseOperationError(parseDatabaseError(fetchErr));
+  }
+
+  const ordersList = dbOrders || [];
+  const eligibleOrders: typeof ordersList = [];
+  const skippedOrders: { id: string; reason: string }[] = [];
+
+  // Account for any IDs not found in DB
+  const foundOrderNumbers = new Set(ordersList.map((o) => o.order_number));
+  for (const id of orderIds) {
+    if (!foundOrderNumbers.has(id)) {
+      skippedOrders.push({ id, reason: "Order not found in database" });
+    }
+  }
+
+  // Validate each order against the workflow transition rules
+  for (const o of ordersList) {
+    const val = validateOrderStatusTransition(
+      o.status,
+      dbStatus,
+      o.customer_name,
+      o.customer_phone
+    );
+
+    if (val.valid) {
+      eligibleOrders.push(o);
+    } else {
+      skippedOrders.push({
+        id: o.order_number,
+        reason: val.reason || "Ineligible for status transition",
+      });
+    }
+  }
+
+  // If none of the selected orders are eligible, throw a structured error with exact details
+  if (eligibleOrders.length === 0) {
+    const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
+    const primaryReason = skippedOrders[0]?.reason || "Cannot advance orders";
+    const primaryCode = skippedOrders[0]?.reason?.includes("Customer name")
+      ? "CUSTOMER_NAME_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("phone")
+      ? "CUSTOMER_PHONE_REQUIRED"
+      : "INVALID_STATUS_TRANSITION";
+
+    throw new DatabaseOperationError(
+      parseDatabaseError({
+        code: primaryCode,
+        message: `${primaryReason} (Affecting: ${skippedOrders.map((s) => s.id).join(", ")})`,
+        details: reasonSummary,
+        hint: "Edit the affected orders to fill required customer details or verify workflow progression.",
+      })
+    );
+  }
+
+  // 2. Perform targeted update ONLY on the eligible orders
+  const eligibleOrderNumbers = eligibleOrders.map((o) => o.order_number);
+  const { data: updatedOrders, error: updateErr } = await supabase
+    .from("orders")
+    .update({
+      status: dbStatus,
+      updated_at: nowIso,
+    })
+    .in("order_number", eligibleOrderNumbers)
+    .select("id, order_number");
+
+  if (updateErr) {
+    console.error("Failed to bulk update orders status in database:", updateErr);
+    throw new DatabaseOperationError(parseDatabaseError(updateErr));
+  }
+
+  if (!updatedOrders || updatedOrders.length === 0) {
+    const { count } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .in("order_number", eligibleOrderNumbers);
+
+    if (count && count > 0) {
+      throw new DatabaseOperationError(
+        parseDatabaseError({
+          code: "0-ROWS-RLS",
+          message: `Database Row-Level Security (RLS) policy prevented bulk updating ${count} order(s).`,
+          hint: "Ensure the user role has UPDATE permissions or apply migration 20261028000001_fix_order_status_rls_and_workflow.sql.",
+        })
+      );
+    }
+  }
+
+  const actuallyUpdatedNumbers = (updatedOrders || []).map((o) => o.order_number);
+
+  // 3. Insert batch notes if provided
+  if (batchNote && batchNote.trim()) {
+    const cleanNote = batchNote.trim();
+    const noteRows = (updatedOrders || []).map((o) => ({
+      order_id: o.id,
+      order_number: o.order_number,
+      type: "internal",
+      author: "Admin Staff",
+      note: `[Batch Status Update → ${newStatus.toUpperCase()}]: ${cleanNote}`,
+      created_at: nowIso,
+    }));
+
+    if (noteRows.length > 0) {
+      try {
+        await supabase.from("order_notes").insert(noteRows);
+      } catch (noteErr) {
+        console.warn("Could not record batch note in order_notes:", noteErr);
+      }
+    }
+  }
+
+  // 4. Insert timeline events into public.order_events for each updated order
+  if (updatedOrders && updatedOrders.length > 0) {
+    try {
+      const eventRows = updatedOrders.map((o) => ({
+        order_id: o.id,
+        event_type: "status_changed",
+        to_value: newStatus,
+        message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)`,
+      }));
+      await supabase.from("order_events").insert(eventRows);
+    } catch (eventErr) {
+      console.warn("Could not record timeline events for bulk orders:", eventErr);
+    }
+  }
+
+  return {
+    success: true,
+    totalRequested: orderIds.length,
+    updatedCount: actuallyUpdatedNumbers.length,
+    skippedCount: skippedOrders.length,
+    updatedOrderNumbers: actuallyUpdatedNumbers,
+    skippedOrders,
+  };
+}
+
+export async function bulkAssignCourierInDb(
+  orderIds: string[],
+  courierName: string,
+  batchNote?: string
+): Promise<boolean> {
+  if (!orderIds || orderIds.length === 0) return true;
+
+  const nowIso = new Date().toISOString();
+
+  // 1. Update courier on all orders
+  const { data: updatedOrders, error: updateErr } = await supabase
+    .from("orders")
+    .update({
+      shipping_method_name: courierName,
+      updated_at: nowIso,
+    })
+    .in("order_number", orderIds)
+    .select("id, order_number");
+
+  if (updateErr) {
+    console.error("Failed to bulk assign courier:", updateErr);
+    throw new Error(updateErr.message || "Failed to bulk assign courier in database");
+  }
+
+  // 2. If batch note provided, insert into public.order_notes
+  if (batchNote && batchNote.trim()) {
+    const cleanNote = batchNote.trim();
+    const ordersMap = updatedOrders || [];
+
+    const noteRows = ordersMap.map((o) => ({
+      order_id: o.id,
+      order_number: o.order_number,
+      type: "internal",
+      author: "Admin Staff",
+      note: `[Courier Assigned → ${courierName}]: ${cleanNote}`,
+      created_at: nowIso,
+    }));
+
+    if (noteRows.length > 0) {
+      try {
+        await supabase.from("order_notes").insert(noteRows);
+      } catch (noteErr) {
+        console.warn("Could not record batch courier note:", noteErr);
+      }
+    }
+  }
+
+  return true;
+}
+
+export async function bulkDeleteOrdersInDb(orderIds: string[]): Promise<boolean> {
+  if (!orderIds || orderIds.length === 0) return true;
+
+  const { error } = await supabase
+    .from("orders")
+    .delete()
+    .in("order_number", orderIds);
+
+  if (error) {
+    console.warn("Bulk delete failed, falling back to cancel:", error);
+    const { error: cancelError } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancel_reason: "Bulk cancelled by Admin",
+      })
+      .in("order_number", orderIds);
+
+    if (cancelError) {
+      throw new Error(cancelError.message || "Failed to bulk delete or cancel orders");
+    }
+  }
+
+  return true;
+}
+
+export async function fetchOrdersByIdsFromDb(orderNumbers: string[]): Promise<Order[]> {
+  if (!orderNumbers || orderNumbers.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      order_items (*),
+      order_events (*),
+      order_notes (*)
+    `)
+    .in("order_number", orderNumbers)
+    .order("placed_at", { ascending: false });
+
+  if (error || !data) {
+    console.error("Error fetching orders by ids:", error);
+    return [];
+  }
+
+  return data.map((d) => formatDbOrderRecord(d));
+}
+
+

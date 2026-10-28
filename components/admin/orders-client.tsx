@@ -1,0 +1,3926 @@
+"use client";
+
+import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  useToast,
+  ToastNotificationPortal,
+  type ToastData,
+  type ToastType,
+} from "@/components/ui/toast-notification";
+import {
+  Plus,
+  Search,
+  Download,
+  Eye,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  MessageSquare,
+  Truck,
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  FileText,
+  Send,
+  ArrowRight,
+  RefreshCw,
+  PackageCheck,
+  Building,
+  RotateCcw,
+  Check,
+  Minus,
+  PackagePlus,
+  CheckSquare,
+  Square,
+  X,
+  ShoppingCart,
+  Loader2,
+  CreditCard,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronsUpDown,
+  Copy,
+  AlertCircle,
+  ShieldCheck,
+  Printer,
+  Package,
+  XCircle,
+} from "lucide-react";
+import {
+  supabase,
+  fetchGeoDivisionsAndDistricts,
+  fetchGeoDistricts,
+  fetchOrdersFromDb,
+  createOrderInDb,
+  updateOrderInDb,
+  updateOrderStatusInDb,
+  addOrderNoteInDb,
+  deleteOrderNoteInDb,
+  updateCustomerNoteInDb,
+  deleteOrderInDb,
+  recordOrderPaymentInDb,
+  fetchCatalogProductsFromDb,
+  bulkUpdateOrderStatusInDb,
+  bulkAssignCourierInDb,
+  bulkDeleteOrdersInDb,
+  DbGeoDivision,
+  DbGeoDistrict,
+  fallbackDivisions,
+  fallbackDistricts,
+  parseDatabaseError,
+  validateOrderStatusTransition,
+  type ParsedDatabaseError,
+  type BulkStatusUpdateResult,
+} from "@/lib/supabase";
+import { DistrictCombobox } from "@/components/admin/district-combobox";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useForm } from "@tanstack/react-form";
+import {
+  FormFieldItem,
+  FormFieldLabel,
+  FormFieldError,
+  FormFieldDescription,
+} from "@/components/ui/tanstack-form";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { ColumnDef } from "@tanstack/react-table";
+import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { OrderFormDialog } from "@/components/admin/order-form-dialog";
+import {
+  orderNoteFormSchema,
+  orderNoteTextSchema,
+  recordPaymentFormSchema,
+  orderAmountPaidSchema,
+  BANGLADESH_COURIERS,
+  isFieldRequiredForStatus,
+  validateWithZod,
+} from "@/lib/validations/order";
+import type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct } from "@/types/order";
+export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct } from "@/types/order";
+
+const availableCatalogProducts: CatalogProduct[] = [
+  {
+    sku: "MOL-CAN-DRUM-200L",
+    product_name: "Raw Sugarcane Molasses (ঝোলা গুড়)",
+    variant_name: "200L Industrial Steel Drum",
+    category: "Industrial Molasses",
+    unit_price: 12000,
+    stock: "38 Drums in stock",
+    image: "/images/products/raw-sugarcane-drum.jpg",
+  },
+  {
+    sku: "GUR-DAT-PAT-1KG",
+    product_name: "Pure Date Palm Patali Gur (খাঁটি খেজুর পাটালি গুড়)",
+    variant_name: "1 kg Food-Grade Vacuum Pouch",
+    category: "Specialty Gur",
+    unit_price: 620,
+    stock: "450 Pouches in stock",
+    image: "/images/products/date-palm-patali.jpg",
+  },
+  {
+    sku: "GUR-DAT-LIQ-5L",
+    product_name: "Liquid Date Palm Molasses (খেজুরের ঝোলা গুড়)",
+    variant_name: "5L Food-grade Jerrycan",
+    category: "Specialty Gur",
+    unit_price: 1700,
+    stock: "120 Jerrycans in stock",
+    image: "/images/products/date-palm-liquid.jpg",
+  },
+  {
+    sku: "MOL-BLK-DRUM-200L",
+    product_name: "Blackstrap Industrial Molasses (ব্ল্যাকস্ট্র্যাপ গুড়)",
+    variant_name: "200L Heavy IBC/Steel Drum",
+    category: "Feed & Industrial",
+    unit_price: 11000,
+    stock: "15 Drums in stock",
+    image: "/images/products/blackstrap-drum.jpg",
+  },
+  {
+    sku: "MOL-ORG-CAN-50KG",
+    product_name: "Organic Sugarcane Molasses (অর্গানিক মোলাসেস)",
+    variant_name: "50 kg Food-Grade Drum",
+    category: "Organic Food Grade",
+    unit_price: 4800,
+    stock: "60 Drums in stock",
+    image: "/images/products/organic-sugarcane.jpg",
+  },
+  {
+    sku: "GUR-JHA-NAT-500G",
+    product_name: "Organic Nolen Gur (নলেন গুড়)",
+    variant_name: "500g Glass Jar",
+    category: "Specialty Gur",
+    unit_price: 420,
+    stock: "25 Jars in stock",
+    image: "/images/products/nolen-gur-jar.jpg",
+  },
+];
+
+const statusStyles: Record<string, string> = {
+  incomplete_order: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300 border border-slate-300 dark:border-slate-700/60",
+  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50",
+  confirmed: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-700/50",
+  processing: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700/50",
+  shipped: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700/50",
+  delivered: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/50",
+  partially_delivered: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border border-teal-300 dark:border-teal-700/50",
+  cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300 dark:border-rose-700/50",
+  returned: "bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300 border border-orange-300 dark:border-orange-700/50",
+};
+
+const validStatusTabs = [
+  "all",
+  "incomplete_order",
+  "pending",
+  "confirmed",
+  "processing",
+  "shipped",
+  "delivered",
+  "partially_delivered",
+  "cancelled",
+  "returned",
+];
+
+const paymentStyles: Record<string, string> = {
+  unpaid: "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800",
+  partially_paid: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+  paid: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800",
+  partially_refunded: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+  refunded: "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
+};
+
+export function OrdersClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status");
+  const queryClient = useQueryClient();
+
+  // Toast notification context & local fallback (always portaled to document.body at z-[99999])
+  const toastContext = useToast();
+  const [localToast, setLocalToast] = React.useState<ToastData | null>(null);
+
+  const showToast = React.useCallback(
+    (message: string, type: ToastType = "success", options?: { title?: string; duration?: number }) => {
+      if (toastContext.isAvailable) {
+        toastContext.showToast(message, type, options);
+      } else {
+        setLocalToast({ message, type, title: options?.title, duration: options?.duration });
+      }
+    },
+    [toastContext]
+  );
+
+  // ─── TANSTACK QUERY: SSR HYDRATED QUERIES ───────────────────────────────────
+
+  const {
+    data: orders = [],
+    isLoading: isOrdersLoading,
+    isFetching: isOrdersFetching,
+    refetch: refetchOrders,
+  } = useQuery({
+    queryKey: ["admin", "orders"],
+    queryFn: fetchOrdersFromDb,
+  });
+
+  const { data: catalogProducts = availableCatalogProducts } = useQuery({
+    queryKey: ["admin", "catalog-products"],
+    queryFn: fetchCatalogProductsFromDb,
+  });
+
+  const { data: geoData } = useQuery({
+    queryKey: ["admin", "geo-data"],
+    queryFn: async () => {
+      const [geoAll, dbDistricts] = await Promise.all([
+        fetchGeoDivisionsAndDistricts(),
+        fetchGeoDistricts(),
+      ]);
+      return {
+        divisions: geoAll.divisions && geoAll.divisions.length > 0 ? geoAll.divisions : fallbackDivisions,
+        districts: dbDistricts && dbDistricts.length > 0 ? dbDistricts : fallbackDistricts,
+      };
+    },
+  });
+
+  const geoDivisions = geoData?.divisions || fallbackDivisions;
+  const [geoDistricts, setGeoDistricts] = React.useState<DbGeoDistrict[]>(geoData?.districts || fallbackDistricts);
+
+  React.useEffect(() => {
+    if (geoData?.districts && geoData.districts.length > 0) {
+      setGeoDistricts(geoData.districts);
+    }
+  }, [geoData]);
+
+  // ─── TANSTACK QUERY: MUTATIONS ──────────────────────────────────────────────
+
+  const createOrderMutation = useMutation({
+    mutationFn: (newOrder: Order) => createOrderInDb(newOrder),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      showToast(`Order ${created.id} successfully created and synced to database!`, "success");
+    },
+    onError: (err: any) => {
+      console.error("Order creation failed:", err);
+      const parsed = parseDatabaseError(err);
+      showToast(parsed.message, "destructive", { title: parsed.title, duration: 8000 });
+    },
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: (updated: Order) => updateOrderInDb(updated),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      showToast(`Order ${updated.id} successfully updated and synced!`, "success");
+    },
+    onError: (err: any) => {
+      console.error("Order update failed:", err);
+      const parsed = parseDatabaseError(err);
+      showToast(parsed.message, "destructive", { title: parsed.title, duration: 8000 });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      newStatus,
+      cancelReason,
+      eventMsg,
+      currentOrder,
+      courierName,
+    }: {
+      orderId: string;
+      newStatus: Order["status"];
+      cancelReason?: string;
+      eventMsg?: string;
+      currentOrder?: Order;
+      courierName?: string;
+    }) => {
+      return await updateOrderStatusInDb(orderId, newStatus, cancelReason, eventMsg, currentOrder, courierName);
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      setIsStatusOpen(false);
+      setStatusError(null);
+      showToast(`Order ${updated.id} status changed to ${updated.status.replace(/_/g, " ").toUpperCase()} and synced!`, "success");
+    },
+    onError: (err: any) => {
+      console.error("Failed to update status:", err);
+      const parsed = parseDatabaseError(err);
+      setStatusError(parsed);
+      showToast(
+        parsed.message,
+        "destructive",
+        {
+          title: parsed.title,
+          duration: 9000,
+        }
+      );
+    },
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      note,
+      currentOrder,
+    }: {
+      orderId: string;
+      note: OrderNote;
+      currentOrder?: Order;
+    }) => {
+      return await addOrderNoteInDb(orderId, note, currentOrder);
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      showToast(`Note recorded and synced on ${updated.id}!`, "info");
+    },
+    onError: (err: any) => {
+      console.error("Failed to add note:", err);
+      showToast("Failed to sync note to database", "destructive");
+    },
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      noteId,
+      currentOrder,
+    }: {
+      orderId: string;
+      noteId: string;
+      currentOrder?: Order;
+    }) => {
+      return await deleteOrderNoteInDb(orderId, noteId, currentOrder);
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      showToast("Note deleted and synced.", "info");
+    },
+    onError: (err: any) => {
+      console.error("Failed to delete note:", err);
+      showToast("Failed to sync note deletion to database", "destructive");
+    },
+  });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: (orderId: string) => deleteOrderInDb(orderId),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === deletedId) {
+        setSelectedOrder(null);
+        setIsViewOpen(false);
+      }
+      setIsDeleteOpen(false);
+      showToast(`Order ${deletedId} permanently deleted and synced.`, "destructive");
+    },
+    onError: (err: any) => {
+      console.error("Failed to delete order:", err);
+      showToast("Failed to sync deletion to database", "destructive");
+    },
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({
+      orderIds,
+      targetStatus,
+      batchNote,
+    }: {
+      orderIds: string[];
+      targetStatus: Order["status"];
+      batchNote?: string;
+    }): Promise<BulkStatusUpdateResult> => {
+      return await bulkUpdateOrderStatusInDb(orderIds, targetStatus, batchNote);
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      setIsBulkStatusOpen(false);
+      setBulkStatusError(null);
+      if (clearSelectionFn) clearSelectionFn();
+
+      if (result.skippedCount > 0 && result.updatedCount > 0) {
+        showToast(
+          `Updated ${result.updatedCount} order(s) to ${variables.targetStatus.replace(/_/g, " ")}. ${result.skippedCount} order(s) skipped (${result.skippedOrders.map((o) => o.id).join(", ")}) due to missing customer info or workflow restriction.`,
+          "warning",
+          {
+            title: "Partial Status Update Completed",
+            duration: 10000,
+          }
+        );
+      } else {
+        showToast(
+          `Updated status to ${variables.targetStatus.replace(/_/g, " ")} for all ${result.updatedCount} order(s).`,
+          "success"
+        );
+      }
+    },
+    onError: (err: any) => {
+      console.warn("Bulk status validation notice:", err?.message || err);
+      const parsed = parseDatabaseError(err);
+      setBulkStatusError(parsed);
+      showToast(
+        parsed.message,
+        "destructive",
+        {
+          title: parsed.title,
+          duration: 9000,
+        }
+      );
+    },
+  });
+
+  const bulkCourierMutation = useMutation({
+    mutationFn: async ({
+      orderIds,
+      courierName,
+      batchNote,
+    }: {
+      orderIds: string[];
+      courierName: string;
+      batchNote?: string;
+    }) => {
+      return await bulkAssignCourierInDb(orderIds, courierName, batchNote);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      setIsBulkCourierOpen(false);
+      if (clearSelectionFn) clearSelectionFn();
+      showToast(
+        `Assigned ${variables.courierName} to ${variables.orderIds.length} order(s).`,
+        "success"
+      );
+    },
+    onError: (err: any) => {
+      console.error("Bulk courier error:", err);
+      showToast("Failed to sync bulk courier assignment to database", "destructive");
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      return await bulkDeleteOrdersInDb(orderIds);
+    },
+    onSuccess: (_, orderIds) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      setIsBulkDeleteOpen(false);
+      if (clearSelectionFn) clearSelectionFn();
+      showToast(`Deleted and synced ${orderIds.length} order(s).`, "destructive");
+    },
+    onError: (err: any) => {
+      console.error("Bulk delete error:", err);
+      showToast("Failed to sync bulk deletion to database", "destructive");
+    },
+  });
+
+  const recordPaymentMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      amountPaid,
+      paymentStatus,
+      paymentMethod,
+      transactionRef,
+      noteText,
+      currentOrder,
+    }: {
+      orderId: string;
+      amountPaid: number;
+      paymentStatus: Order["payment"];
+      paymentMethod?: Order["method"];
+      transactionRef?: string;
+      noteText?: string;
+      currentOrder?: Order;
+    }) => {
+      return await recordOrderPaymentInDb(
+        orderId,
+        amountPaid,
+        paymentStatus,
+        paymentMethod,
+        transactionRef,
+        noteText,
+        currentOrder
+      );
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      setIsPaymentOpen(false);
+      showToast(
+        `Payment recorded for ${updated.id}: ৳ ${updated.amount_paid.toLocaleString()} (${updated.payment.replace(/_/g, " ")}).`,
+        "success"
+      );
+    },
+    onError: (err: any) => {
+      console.error("Payment recording error:", err);
+      showToast(err?.message || "Failed to record payment", "destructive");
+    },
+  });
+
+  // ─── FILTER & TAB STATE ──────────────────────────────────────────────────────
+
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedTab, setSelectedTab] = React.useState<string>(() => {
+    if (statusParam && validStatusTabs.includes(statusParam)) {
+      return statusParam;
+    }
+    return "all";
+  });
+  const [channelFilter, setChannelFilter] = React.useState<string>("all");
+  const [paymentFilter, setPaymentFilter] = React.useState<string>("all");
+
+  // Sync tab with URL search parameter
+  React.useEffect(() => {
+    if (statusParam && validStatusTabs.includes(statusParam)) {
+      setSelectedTab(statusParam);
+    } else if (!statusParam) {
+      setSelectedTab("all");
+    }
+  }, [statusParam]);
+
+  const handleTabChange = (val: string) => {
+    setSelectedTab(val);
+    const params = new URLSearchParams(searchParams.toString());
+    if (val === "all") {
+      params.delete("status");
+    } else {
+      params.set("status", val);
+    }
+    const queryStr = params.toString();
+    router.push(`/admin/orders${queryStr ? `?${queryStr}` : ""}`, { scroll: false });
+  };
+
+  // Horizontally scrollable status tabs ref & overflow indicators
+  const tabsContainerRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
+
+  const checkScrollPosition = React.useCallback(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    const hasOverflow = el.scrollWidth > el.clientWidth;
+    setCanScrollLeft(hasOverflow && el.scrollLeft > 6);
+    setCanScrollRight(hasOverflow && el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
+  }, []);
+
+  React.useEffect(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    checkScrollPosition();
+    el.addEventListener("scroll", checkScrollPosition, { passive: true });
+    window.addEventListener("resize", checkScrollPosition);
+    return () => {
+      el.removeEventListener("scroll", checkScrollPosition);
+      window.removeEventListener("resize", checkScrollPosition);
+    };
+  }, [checkScrollPosition]);
+
+  // Smoothly center active tab when selected or when URL parameter loads
+  React.useEffect(() => {
+    if (!tabsContainerRef.current) return;
+    const timer = setTimeout(() => {
+      const activeEl = tabsContainerRef.current?.querySelector<HTMLElement>(
+        `[data-active], [data-state="active"], [aria-selected="true"]`
+      );
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+      checkScrollPosition();
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [selectedTab, checkScrollPosition]);
+
+  // Support natural horizontal scroll with standard mouse wheel
+  const handleTabsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (tabsContainerRef.current && e.deltaY !== 0 && !e.shiftKey) {
+      tabsContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
+  const scrollTabsBy = (offset: number) => {
+    if (tabsContainerRef.current) {
+      tabsContainerRef.current.scrollBy({ left: offset, behavior: "smooth" });
+    }
+  };
+
+  // Dialog & Sheet States
+  const [selectedOrder, setSelectedOrder] = React.useState<Order | null>(null);
+  const [isViewOpen, setIsViewOpen] = React.useState(false);
+
+  // Unified Order Dialog State (for creating and editing)
+  const [orderModalState, setOrderModalState] = React.useState<{
+    open: boolean;
+    mode: "create" | "edit";
+    order?: Order | null;
+  }>({
+    open: false,
+    mode: "create",
+    order: null,
+  });
+
+  const [statusOrder, setStatusOrder] = React.useState<Order | null>(null);
+  const [newStatus, setNewStatus] = React.useState<Order["status"]>("pending");
+  const [cancelReason, setCancelReason] = React.useState("");
+  const [selectedCourier, setSelectedCourier] = React.useState("");
+  const [notifyCustomer, setNotifyCustomer] = React.useState(true);
+  const [isStatusOpen, setIsStatusOpen] = React.useState(false);
+  const [statusError, setStatusError] = React.useState<ParsedDatabaseError | null>(null);
+
+  const [paymentOrder, setPaymentOrder] = React.useState<Order | null>(null);
+  const [isPaymentOpen, setIsPaymentOpen] = React.useState(false);
+
+  const [noteOrder, setNoteOrder] = React.useState<Order | null>(null);
+  const [isNoteOpen, setIsNoteOpen] = React.useState(false);
+
+  const [deletingOrder, setDeletingOrder] = React.useState<Order | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = React.useState(false);
+
+  // Bulk Operations State & Handlers
+  const [bulkSelectedOrders, setBulkSelectedOrders] = React.useState<Order[]>([]);
+  const [clearSelectionFn, setClearSelectionFn] = React.useState<(() => void) | null>(null);
+
+  const [isBulkStatusOpen, setIsBulkStatusOpen] = React.useState(false);
+  const [bulkTargetStatus, setBulkTargetStatus] = React.useState<Order["status"]>("confirmed");
+  const [bulkStatusNote, setBulkStatusNote] = React.useState("");
+  const [bulkStatusError, setBulkStatusError] = React.useState<ParsedDatabaseError | null>(null);
+
+  const [isBulkCourierOpen, setIsBulkCourierOpen] = React.useState(false);
+  const [bulkTargetCourier, setBulkTargetCourier] = React.useState("Steadfast Courier");
+  const [bulkCourierNote, setBulkCourierNote] = React.useState("");
+
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
+
+  const handleOpenBulkStatus = (orders: Order[], status: Order["status"], clearFn: () => void) => {
+    setBulkSelectedOrders(orders);
+    setBulkTargetStatus(status);
+    setBulkStatusNote("");
+    setBulkStatusError(null);
+    setClearSelectionFn(() => clearFn);
+    setIsBulkStatusOpen(true);
+  };
+
+  const handleConfirmBulkStatus = () => {
+    if (bulkSelectedOrders.length === 0) return;
+    bulkStatusMutation.mutate({
+      orderIds: bulkSelectedOrders.map((o) => o.id),
+      targetStatus: bulkTargetStatus,
+      batchNote: bulkStatusNote,
+    });
+  };
+
+  const bulkEligibility = React.useMemo(() => {
+    if (!isBulkStatusOpen || bulkSelectedOrders.length === 0) {
+      return { eligible: [] as Order[], ineligible: [] as { order: Order; reason: string }[] };
+    }
+    const eligible: Order[] = [];
+    const ineligible: { order: Order; reason: string }[] = [];
+
+    for (const o of bulkSelectedOrders) {
+      const val = validateOrderStatusTransition(
+        o.status,
+        bulkTargetStatus,
+        o.customer,
+        o.phone
+      );
+      if (val.valid) {
+        eligible.push(o);
+      } else {
+        ineligible.push({ order: o, reason: val.reason || "Ineligible for status transition" });
+      }
+    }
+    return { eligible, ineligible };
+  }, [isBulkStatusOpen, bulkSelectedOrders, bulkTargetStatus]);
+
+  const handleOpenBulkCourier = (orders: Order[], courier: string, clearFn: () => void) => {
+    setBulkSelectedOrders(orders);
+    setBulkTargetCourier(courier);
+    setBulkCourierNote("");
+    setClearSelectionFn(() => clearFn);
+    setIsBulkCourierOpen(true);
+  };
+
+  const handleConfirmBulkCourier = () => {
+    if (bulkSelectedOrders.length === 0) return;
+    bulkCourierMutation.mutate({
+      orderIds: bulkSelectedOrders.map((o) => o.id),
+      courierName: bulkTargetCourier,
+      batchNote: bulkCourierNote,
+    });
+  };
+
+  const handleOpenBulkDelete = (orders: Order[], clearFn: () => void) => {
+    setBulkSelectedOrders(orders);
+    setClearSelectionFn(() => clearFn);
+    setIsBulkDeleteOpen(true);
+  };
+
+  const handleConfirmBulkDelete = () => {
+    if (bulkSelectedOrders.length === 0) return;
+    bulkDeleteMutation.mutate(bulkSelectedOrders.map((o) => o.id));
+  };
+
+  const handleBulkPrintInvoices = (orders: Order[]) => {
+    if (orders.length === 0) return;
+    const ids = orders.map((o) => o.id).join(",");
+    window.open(`/admin/orders/print?ids=${encodeURIComponent(ids)}`, "_blank");
+  };
+
+  const handleOpenPayment = (order: Order) => {
+    setPaymentOrder(order);
+    setIsPaymentOpen(true);
+  };
+
+  // TanStack Form for Add Note Dialog
+  const addNoteForm = useForm({
+    defaultValues: {
+      text: "",
+      type: "internal" as "internal" | "customer",
+    },
+    onSubmit: async ({ value }) => {
+      const validation = orderNoteFormSchema.safeParse(value);
+      if (!validation.success) {
+        showToast(validation.error.issues[0]?.message || "Invalid note details", "destructive");
+        return;
+      }
+      if (!noteOrder) return;
+
+      const isCustomer = validation.data.type === "customer";
+      const newNoteObj: OrderNote = {
+        id: `note-${Date.now()}`,
+        author: isCustomer ? (noteOrder.customer ? `${noteOrder.customer} (Customer)` : "Customer") : "Admin Staff",
+        text: validation.data.text.trim(),
+        type: validation.data.type,
+        created_at: new Date().toISOString().replace("T", " ").slice(0, 16),
+      };
+
+      addNoteMutation.mutate({
+        orderId: noteOrder.id,
+        note: newNoteObj,
+        currentOrder: noteOrder,
+      });
+
+      setIsNoteOpen(false);
+      addNoteForm.reset();
+    },
+  });
+
+  // TanStack Form for View Details Sheet Inline Note
+  const drawerNoteForm = useForm({
+    defaultValues: {
+      text: "",
+      type: "internal" as "internal" | "customer",
+    },
+    onSubmit: async ({ value }) => {
+      const validation = orderNoteFormSchema.safeParse(value);
+      if (!validation.success) {
+        showToast(validation.error.issues[0]?.message || "Invalid note details", "destructive");
+        return;
+      }
+      if (!selectedOrder) return;
+
+      const isCustomer = validation.data.type === "customer";
+      const newNoteObj: OrderNote = {
+        id: `note-${Date.now()}`,
+        author: isCustomer ? (selectedOrder.customer ? `${selectedOrder.customer} (Customer)` : "Customer") : "Admin Staff",
+        text: validation.data.text.trim(),
+        type: validation.data.type,
+        created_at: new Date().toISOString().replace("T", " ").slice(0, 16),
+      };
+
+      addNoteMutation.mutate({
+        orderId: selectedOrder.id,
+        note: newNoteObj,
+        currentOrder: selectedOrder,
+      });
+
+      drawerNoteForm.reset();
+    },
+  });
+
+  // TanStack Form for Record / Update Payment Dialog
+  const recordPaymentForm = useForm({
+    defaultValues: {
+      payment: "partially_paid" as Order["payment"],
+      method: "bkash" as Order["method"],
+      amount_paid: 0,
+      transaction_ref: "",
+      note: "",
+    },
+    onSubmit: async ({ value }) => {
+      if (!paymentOrder) return;
+      const valid = recordPaymentFormSchema.safeParse(value);
+      if (!valid.success) {
+        showToast(valid.error.issues[0]?.message || "Invalid payment details", "destructive");
+        return;
+      }
+      recordPaymentMutation.mutate({
+        orderId: paymentOrder.id,
+        amountPaid: valid.data.amount_paid,
+        paymentStatus: valid.data.payment,
+        paymentMethod: valid.data.method,
+        transactionRef: valid.data.transaction_ref,
+        noteText: valid.data.note,
+        currentOrder: paymentOrder,
+      });
+    },
+  });
+
+  React.useEffect(() => {
+    if (isPaymentOpen && paymentOrder) {
+      recordPaymentForm.reset({
+        payment: paymentOrder.payment || "partially_paid",
+        method: paymentOrder.method || "bkash",
+        amount_paid: paymentOrder.amount_paid || 0,
+        transaction_ref: "",
+        note: "",
+      });
+    }
+  }, [isPaymentOpen, paymentOrder, recordPaymentForm]);
+
+  // Filter logic
+  const filteredOrders = React.useMemo(() => {
+    return orders.filter((order) => {
+      // Tab filter
+      if (selectedTab !== "all" && order.status !== selectedTab) {
+        return false;
+      }
+      // Channel filter
+      if (channelFilter !== "all" && order.channel !== channelFilter) {
+        return false;
+      }
+      // Payment filter
+      if (paymentFilter !== "all" && order.payment !== paymentFilter) {
+        return false;
+      }
+      // Search query
+      if (searchQuery.trim() !== "") {
+        const q = searchQuery.toLowerCase();
+        const matchesId = order.id.toLowerCase().includes(q);
+        const matchesCustomer = (order.customer || "").toLowerCase().includes(q);
+        const matchesPhone = (order.phone || "").toLowerCase().includes(q);
+        const matchesNote = (order.customer_note || "").toLowerCase().includes(q);
+        const matchesItem = (order.items || []).some((i) => i.product_name.toLowerCase().includes(q));
+        const matchesDivision = order.address?.division?.toLowerCase().includes(q) || false;
+        const matchesDistrict = order.address?.district?.toLowerCase().includes(q) || false;
+        const matchesAddress = order.address?.address_line?.toLowerCase().includes(q) || false;
+        if (
+          !matchesId &&
+          !matchesCustomer &&
+          !matchesPhone &&
+          !matchesNote &&
+          !matchesItem &&
+          !matchesDivision &&
+          !matchesDistrict &&
+          !matchesAddress
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [orders, selectedTab, channelFilter, paymentFilter, searchQuery]);
+
+  // Status counts
+  const counts = React.useMemo(() => {
+    return {
+      all: orders.length,
+      incomplete_order: orders.filter((o) => o.status === "incomplete_order").length,
+      pending: orders.filter((o) => o.status === "pending").length,
+      confirmed: orders.filter((o) => o.status === "confirmed").length,
+      processing: orders.filter((o) => o.status === "processing").length,
+      shipped: orders.filter((o) => o.status === "shipped").length,
+      delivered: orders.filter((o) => o.status === "delivered").length,
+      partially_delivered: orders.filter((o) => o.status === "partially_delivered").length,
+      cancelled: orders.filter((o) => o.status === "cancelled").length,
+      returned: orders.filter((o) => o.status === "returned").length,
+    };
+  }, [orders]);
+
+  // Revenue calculation
+  const totalRevenue = React.useMemo(() => {
+    return orders
+      .filter((o) => o.status !== "cancelled" && o.status !== "returned" && o.status !== "incomplete_order")
+      .reduce((sum, o) => sum + o.grand_total, 0);
+  }, [orders]);
+
+  // ─── ROW EXPANSION & COPY HELPERS ─────────────────────────────────────────
+  const [expandedRows, setExpandedRows] = React.useState<Record<string, boolean>>({});
+
+  const toggleRowExpanded = React.useCallback((orderId: string) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [orderId]: !prev[orderId],
+    }));
+  }, []);
+
+  const allExpanded = React.useMemo(() => {
+    if (filteredOrders.length === 0) return false;
+    return filteredOrders.every((o) => !!expandedRows[o.id]);
+  }, [filteredOrders, expandedRows]);
+
+  const toggleExpandAll = React.useCallback(() => {
+    if (allExpanded) {
+      setExpandedRows({});
+    } else {
+      const next: Record<string, boolean> = {};
+      filteredOrders.forEach((o) => {
+        next[o.id] = true;
+      });
+      setExpandedRows(next);
+    }
+  }, [allExpanded, filteredOrders]);
+
+  const copyToClipboard = React.useCallback((text: string, label: string) => {
+    if (!text) return;
+    try {
+      navigator.clipboard?.writeText(text);
+      showToast(`Copied ${label} to clipboard`, "info");
+    } catch {
+      // ignore
+    }
+  }, [showToast]);
+
+  // Open Details Sheet
+  const handleOpenView = (order: Order) => {
+    setSelectedOrder(order);
+    setIsViewOpen(true);
+  };
+
+  // Open Edit Dialog (Unified form)
+  const handleOpenEdit = (order: Order) => {
+    setIsViewOpen(false);
+    setOrderModalState({
+      open: true,
+      mode: "edit",
+      order,
+    });
+  };
+
+  // Open Create Dialog (Unified form)
+  const handleOpenCreate = () => {
+    setOrderModalState({
+      open: true,
+      mode: "create",
+      order: null,
+    });
+  };
+
+  // Save handler for unified form
+  const handleSaveOrder = async (savedOrder: Order, mode: "create" | "edit") => {
+    if (mode === "create") {
+      await createOrderMutation.mutateAsync(savedOrder);
+    } else {
+      await updateOrderMutation.mutateAsync(savedOrder);
+    }
+  };
+
+  // Next status determination
+  const getNextStatus = (current: Order["status"]): Order["status"] | null => {
+    switch (current) {
+      case "incomplete_order":
+        return "pending";
+      case "pending":
+        return "confirmed";
+      case "confirmed":
+        return "processing";
+      case "processing":
+        return "shipped";
+      case "shipped":
+        return "delivered";
+      case "delivered":
+        return "partially_delivered";
+      default:
+        return null;
+    }
+  };
+
+  // Quick advance status
+  const handleQuickAdvanceStatus = (order: Order) => {
+    const next = getNextStatus(order.status);
+    if (!next) return;
+
+    // Check if advancing to confirmed or higher requires missing details
+    if (next !== "incomplete_order" && next !== "pending") {
+      if (
+        !order.customer ||
+        order.customer.trim().length < 2 ||
+        !order.items ||
+        order.items.length === 0 ||
+        !order.address?.address_line ||
+        order.address.address_line.trim().length < 3
+      ) {
+        showToast(
+          "Please edit order to fill required customer, products, or delivery address before advancing.",
+          "destructive"
+        );
+        handleOpenEdit(order);
+        return;
+      }
+    }
+
+    // If advancing to processing or dispatched, ensure courier is assigned
+    const requiresCourier =
+      next === "processing" ||
+      next === "shipped" ||
+      next === "delivered" ||
+      next === "partially_delivered";
+
+    if (requiresCourier && (!order.courier_name || order.courier_name.trim().length < 2)) {
+      handleOpenStatus(order);
+      setNewStatus(next);
+      showToast(
+        `Please assign a Courier Service before moving to ${next.replace(/_/g, " ").toUpperCase()}`,
+        "info"
+      );
+      return;
+    }
+
+    const eventMsg = `Workflow advanced from ${order.status.replace(/_/g, " ").toUpperCase()} to ${next.replace(/_/g, " ").toUpperCase()}`;
+    updateStatusMutation.mutate({
+      orderId: order.id,
+      newStatus: next,
+      eventMsg,
+      currentOrder: order,
+      courierName: order.courier_name,
+    });
+  };
+
+  // Open Status Dialog
+  const handleOpenStatus = (order: Order) => {
+    setStatusOrder(order);
+    setNewStatus(order.status);
+    setCancelReason(order.cancel_reason || "");
+    setSelectedCourier(order.courier_name || "");
+    setStatusError(null);
+    setIsStatusOpen(true);
+  };
+
+  // Save Status Update
+  const handleSaveStatus = () => {
+    if (!statusOrder) return;
+
+    const fromStatus = statusOrder.status;
+    const updatedStatus = newStatus;
+
+    // 1. Validation for confirmed and higher
+    const isDraft = updatedStatus === "incomplete_order" || updatedStatus === "pending";
+    const isTerminated = updatedStatus === "cancelled" || updatedStatus === "returned";
+    const requiresCourier =
+      updatedStatus === "processing" ||
+      updatedStatus === "shipped" ||
+      updatedStatus === "delivered" ||
+      updatedStatus === "partially_delivered";
+
+    if (!isDraft && !isTerminated) {
+      if (!statusOrder.customer || statusOrder.customer.trim().length < 2) {
+        showToast(
+          "Customer name is required before setting status to Confirmed. Please edit the order.",
+          "destructive"
+        );
+        return;
+      }
+      if (!statusOrder.items || statusOrder.items.length === 0) {
+        showToast(
+          "At least one product item is required before setting status to Confirmed. Please edit the order.",
+          "destructive"
+        );
+        return;
+      }
+      if (!statusOrder.address?.address_line || statusOrder.address.address_line.trim().length < 3) {
+        showToast(
+          "Street delivery address is required before setting status to Confirmed. Please edit the order.",
+          "destructive"
+        );
+        return;
+      }
+    }
+
+    if (requiresCourier && (!selectedCourier || selectedCourier.trim().length < 2)) {
+      showToast("Courier Service is required for processing or dispatched orders.", "destructive");
+      return;
+    }
+
+    if (isTerminated && (!cancelReason || cancelReason.trim().length < 3)) {
+      showToast(
+        `Please provide a reason for marking order as ${updatedStatus.replace(/_/g, " ")}.`,
+        "destructive"
+      );
+      return;
+    }
+
+    const eventMsg = `Status changed from ${fromStatus.replace(/_/g, " ")} to ${updatedStatus.replace(/_/g, " ")}${
+      isTerminated && cancelReason ? `: ${cancelReason}` : ""
+    }${requiresCourier && selectedCourier ? ` (Courier: ${selectedCourier})` : ""}${
+      notifyCustomer ? " (Customer notified via SMS)" : ""
+    }`;
+
+    updateStatusMutation.mutate({
+      orderId: statusOrder.id,
+      newStatus: updatedStatus,
+      cancelReason,
+      eventMsg,
+      currentOrder: statusOrder,
+      courierName: selectedCourier,
+    });
+  };
+
+  // Open Add Note Dialog
+  const handleOpenNote = (order: Order) => {
+    setNoteOrder(order);
+    addNoteForm.reset({ text: "", type: "internal" });
+    setIsNoteOpen(true);
+  };
+
+  // Open Delete Confirmation
+  const handleOpenDelete = (order: Order) => {
+    setDeletingOrder(order);
+    setIsDeleteOpen(true);
+  };
+
+  // Confirm Delete
+  const handleConfirmDelete = () => {
+    if (!deletingOrder) return;
+    deleteOrderMutation.mutate(deletingOrder.id);
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const headers = [
+      "Order ID",
+      "Customer",
+      "Phone",
+      "District",
+      "Address",
+      "Items Count",
+      "Products",
+      "Status",
+      "Payment",
+      "Method",
+      "Channel",
+      "Courier",
+      "Grand Total (BDT)",
+      "Amount Paid",
+      "Due Balance",
+      "Date & Time",
+      "Customer Note",
+    ];
+    const rows = filteredOrders.map((o) => [
+      o.id,
+      `"${o.customer || ""}"`,
+      `"${o.phone || ""}"`,
+      `"${o.address?.district || ""}"`,
+      `"${(o.address?.address_line || "").replace(/"/g, '""')}"`,
+      (o.items || []).length,
+      `"${(o.items || []).map((i) => `${i.quantity}x ${i.product_name}`).join("; ")}"`,
+      o.status,
+      o.payment,
+      o.method,
+      o.channel,
+      `"${o.courier_name || "Unassigned"}"`,
+      o.grand_total,
+      o.amount_paid,
+      Math.max(0, o.grand_total - o.amount_paid),
+      formatDateTime(o.date),
+      `"${(o.customer_note || "").replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `gur_orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`Exported ${filteredOrders.length} orders to CSV`, "info");
+  };
+
+  const channelBadgeColors: Record<string, string> = {
+    web: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
+    phone: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800",
+    whatsapp: "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 border-green-200 dark:border-green-800",
+    admin: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+    facebook: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800",
+    walk_in: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+  };
+
+  const orderColumns: ColumnDef<Order>[] = React.useMemo(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex items-center gap-1">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
+              }
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="Select all"
+              className="translate-y-[2px]"
+            />
+          </div>
+        ),
+        cell: ({ row }) => {
+          const order = row.original;
+          const isExpanded = !!expandedRows[order.id];
+          return (
+            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => toggleRowExpanded(order.id)}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                title={isExpanded ? "Collapse item breakdown" : "Expand item breakdown"}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-amber-600" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </button>
+              <Checkbox
+                checked={row.getIsSelected()}
+                onCheckedChange={(value) => row.toggleSelected(!!value)}
+                aria-label="Select row"
+                className="translate-y-[2px]"
+              />
+            </div>
+          );
+        },
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        accessorKey: "id",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Order & Date" />,
+        cell: ({ row }) => {
+          const order = row.original;
+          const itemCount = (order.items || []).length;
+          return (
+            <div className="space-y-1 min-w-[120px]" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => handleOpenView(order)}
+                  className="text-left font-mono text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                >
+                  {order.id}
+                </button>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  ({itemCount} {itemCount === 1 ? "item" : "items"})
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] font-mono uppercase px-1.5 py-0 font-bold",
+                    channelBadgeColors[order.channel] || "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {order.channel}
+                </Badge>
+                <span className="text-[11px] font-medium text-foreground/80 whitespace-nowrap">
+                  {formatDateTime(order.date)}
+                </span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "customer",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Customer & Delivery" />,
+        cell: ({ row }) => {
+          const order = row.original;
+          const district = order.address?.district;
+          const addressLine = order.address?.address_line;
+
+          return (
+            <div className="space-y-1 min-w-[140px] max-w-[220px]">
+              {/* Customer Name */}
+              <p className="text-xs font-bold text-foreground leading-tight truncate">
+                {order.customer || <span className="text-muted-foreground font-normal italic">Guest Customer</span>}
+              </p>
+
+              {/* Phone with click-to-call and 1-click copy */}
+              {order.phone && (
+                <div className="flex items-center gap-1 text-xs">
+                  <a
+                    href={`tel:${order.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-mono text-xs font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                  >
+                    <Phone className="h-3 w-3 text-amber-600 shrink-0" />
+                    <span>{order.phone}</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyToClipboard(order.phone, "Phone number");
+                    }}
+                    className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                    title="Copy phone"
+                  >
+                    <Copy className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Destination: District Badge + Address Line */}
+              <div className="space-y-0.5">
+                {district && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50">
+                    <MapPin className="h-2.5 w-2.5 text-rose-500 shrink-0" />
+                    {district}
+                  </span>
+                )}
+                {addressLine && (
+                  <p className="text-[11px] text-muted-foreground truncate leading-normal" title={addressLine}>
+                    {addressLine}
+                  </p>
+                )}
+              </div>
+
+              {/* Customer Checkout Delivery Instruction - Full Note Display */}
+              {order.customer_note && (
+                <div
+                  className="p-2 rounded-lg bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px] text-blue-950 dark:text-blue-100 space-y-0.5 mt-1"
+                >
+                  <div className="flex items-center gap-1 font-bold text-[10px] text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                    <MessageSquare className="h-3 w-3 text-blue-600 shrink-0" />
+                    <span>Customer Note:</span>
+                  </div>
+                  <p className="whitespace-pre-wrap leading-relaxed italic break-words">
+                    &quot;{order.customer_note}&quot;
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status & Courier" />,
+        cell: ({ row }) => {
+          const order = row.original;
+          return (
+            <div className="space-y-1.5 min-w-[115px] max-w-[155px]">
+              {/* Order Status Badge */}
+              <div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenStatus(order);
+                  }}
+                  title="Click to update order status"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold capitalize transition-all hover:ring-1 hover:ring-current cursor-pointer",
+                    statusStyles[order.status] || "bg-muted text-muted-foreground"
+                  )}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {order.status.replace(/_/g, " ")}
+                </button>
+              </div>
+
+              {/* Fulfillment Status */}
+              <div>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "text-[10px] font-medium capitalize px-1.5 py-0.5",
+                    order.fulfillment === "fulfilled"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : order.fulfillment === "partial"
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  )}
+                >
+                  <Truck className="h-3 w-3 mr-1" />
+                  {order.fulfillment}
+                </Badge>
+              </div>
+
+              {/* Courier Service & Tracking */}
+              {order.courier_name ? (
+                <div className="flex items-center gap-1 text-[11px] text-foreground font-medium">
+                  <span className="inline-flex items-center gap-1 font-semibold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded text-[10px]">
+                    <Truck className="h-2.5 w-2.5 text-blue-600" />
+                    {order.courier_name}
+                  </span>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground italic">
+                  No courier
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "grand_total",
+        header: ({ column }) => (
+          <div className="text-right">
+            <DataTableColumnHeader column={column} title="Payment & Due" className="justify-end" />
+          </div>
+        ),
+        cell: ({ row }) => {
+          const order = row.original;
+          const due = Math.max(0, order.grand_total - order.amount_paid);
+          const percentPaid =
+            order.grand_total > 0
+              ? Math.min(100, Math.round((order.amount_paid / order.grand_total) * 100))
+              : 0;
+
+          return (
+            <div className="text-right space-y-1 min-w-[105px] max-w-[135px]">
+              {/* Grand Total */}
+              <p className="font-bold text-sm font-mono text-foreground">
+                ৳ {order.grand_total.toLocaleString()}
+              </p>
+
+              {/* Payment Status + Method Pill */}
+              <div className="flex items-center justify-end gap-1 flex-wrap">
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenPayment(order);
+                  }}
+                  title="Click to record or update payment"
+                  className={cn(
+                    "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize cursor-pointer hover:ring-1 hover:ring-current",
+                    paymentStyles[order.payment]
+                  )}
+                >
+                  {order.payment.replace(/_/g, " ")}
+                </span>
+                <Badge variant="outline" className="text-[10px] font-mono uppercase px-1 py-0 font-normal">
+                  {order.method.replace("_", " ")}
+                </Badge>
+              </div>
+
+              {/* Financial Balance Summary - Highly Visible Due Balance */}
+              {order.payment === "unpaid" && (
+                <p className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                  Due ৳ {order.grand_total.toLocaleString()}
+                </p>
+              )}
+
+              {order.payment === "partially_paid" && (
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-end gap-1 text-[10px] font-mono">
+                    <span className="text-emerald-600 font-semibold">Paid ৳{order.amount_paid.toLocaleString()}</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-rose-600 font-bold">Due ৳{due.toLocaleString()}</span>
+                  </div>
+                  <div className="w-20 ml-auto h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500 rounded-full"
+                      style={{ width: `${percentPaid}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {order.payment === "paid" && (
+                <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Paid in Full
+                </p>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: ({ column }) => (
+          <div className="text-right pr-2">
+            <DataTableColumnHeader column={column} title="Actions" className="justify-end" />
+          </div>
+        ),
+        cell: ({ row }) => {
+          const order = row.original;
+          const internalNotes = (order.notes || []).filter((n) => n.type === "internal");
+          const hasInternalNotes = internalNotes.length > 0;
+
+          return (
+            <div onClick={(e) => e.stopPropagation()} className="text-right space-y-2 min-w-[140px] max-w-[220px] ml-auto">
+              {/* Action Buttons Row */}
+              <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  title="View Order Details"
+                  onClick={() => handleOpenView(order)}
+                  className="cursor-pointer h-7 w-7 text-muted-foreground hover:text-foreground"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" className="cursor-pointer h-7 w-7 text-muted-foreground hover:text-foreground">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>Order {order.id}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleOpenView(order)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenEdit(order)}>
+                      <Edit className="h-4 w-4 mr-2 text-blue-600" />
+                      Edit Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenStatus(order)}>
+                      <RefreshCw className="h-4 w-4 mr-2 text-amber-600" />
+                      Update Status
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenPayment(order)}>
+                      <CreditCard className="h-4 w-4 mr-2 text-emerald-600" />
+                      Record / Edit Payment
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenNote(order)}>
+                      <ShieldCheck className="h-4 w-4 mr-2 text-amber-600" />
+                      Add Staff Note
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])}>
+                      <Printer className="h-4 w-4 mr-2 text-amber-600" />
+                      Print 2&quot; Sticker
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleOpenDelete(order)}
+                      className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Order
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Only show full staff notes below action button */}
+              <div className="space-y-1.5 w-full text-left max-h-52 overflow-y-auto pr-0.5">
+                {hasInternalNotes ? (
+                  <>
+                    {internalNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        onClick={() => handleOpenNote(order)}
+                        className="p-2 rounded-lg bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-950 dark:text-amber-100 space-y-1 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                        title="Click to manage staff notes"
+                      >
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                          <span className="flex items-center gap-1">
+                            <ShieldCheck className="h-3 w-3 text-amber-600 shrink-0" />
+                            <span>Staff Note</span>
+                          </span>
+                          <span className="text-[9px] font-normal text-muted-foreground/80">
+                            {note.created_at}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-wrap leading-relaxed break-words font-medium">
+                          {note.text}
+                        </p>
+                      </div>
+                    ))}
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNote(order)}
+                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                        title="Add another staff note"
+                      >
+                        <Plus className="h-2.5 w-2.5" />
+                        <span>Add Note</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenNote(order)}
+                      className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/50 hover:text-amber-600 hover:underline cursor-pointer transition-colors"
+                      title="Add staff note"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      <span>Staff Note</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        },
+        enableSorting: false,
+        enableHiding: false,
+      },
+    ],
+    [expandedRows, toggleRowExpanded, copyToClipboard]
+  );
+
+  const renderOrderDetailsSubRow = (order: Order) => {
+    const dueAmount = Math.max(0, order.grand_total - order.amount_paid);
+
+    return (
+      <div className="px-4 py-3.5 sm:px-6 bg-gradient-to-r from-amber-500/[0.03] via-background to-muted/20 border-t border-dashed border-border/70 space-y-3">
+        {/* Header strip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/50 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+              <PackageCheck className="h-4 w-4 text-amber-600 shrink-0" />
+              Order Items ({order.items?.length || 0})
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">Currency: {order.currency}</span>
+            {order.customer_note && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300 font-medium" title={order.customer_note}>
+                  <MessageSquare className="h-3 w-3 text-blue-600 shrink-0" />
+                  Customer Note: &quot;{order.customer_note}&quot;
+                </span>
+              </>
+            )}
+            {(() => {
+              const latestInternal = (order.notes || []).find((n) => n.type === "internal");
+              if (!latestInternal) return null;
+              return (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-300 font-medium" title={latestInternal.text}>
+                    <ShieldCheck className="h-3 w-3 text-amber-600 shrink-0" />
+                    Staff Note: &quot;{latestInternal.text}&quot;
+                  </span>
+                </>
+              );
+            })()}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => handleOpenNote(order)}
+            >
+              <MessageSquare className="h-3.5 w-3.5 mr-1 text-amber-600" />
+              Add Note
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => handleOpenView(order)}
+            >
+              <Eye className="h-3.5 w-3.5 mr-1" />
+              Open Drawer
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700"
+              onClick={() => handleBulkPrintInvoices([order])}
+              title="Print 2-inch thermal sticker label"
+            >
+              <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
+              2&quot; Sticker
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => handleOpenEdit(order)}
+            >
+              <Edit className="h-3.5 w-3.5 mr-1 text-blue-600" />
+              Edit
+            </Button>
+          </div>
+        </div>
+
+        {/* Product Items Table */}
+        {!order.items || order.items.length === 0 ? (
+          <div className="rounded-lg border border-dashed bg-background/60 p-6 text-center space-y-2">
+            <PackageCheck className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-xs font-medium text-muted-foreground">
+              No products added to this order yet (Lead / Incomplete order).
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7"
+              onClick={() => handleOpenEdit(order)}
+            >
+              <Edit className="h-3.5 w-3.5 mr-1" />
+              Add Products Now
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-background/80 overflow-hidden shadow-2xs">
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-12 text-[11px] font-semibold">#</TableHead>
+                  <TableHead className="text-[11px] font-semibold">SKU</TableHead>
+                  <TableHead className="text-[11px] font-semibold">Product & Variant</TableHead>
+                  <TableHead className="text-right text-[11px] font-semibold">Unit Price</TableHead>
+                  <TableHead className="text-center text-[11px] font-semibold">Quantity</TableHead>
+                  <TableHead className="text-right text-[11px] font-semibold">Line Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {order.items.map((item, idx) => (
+                  <TableRow key={item.id} className="text-xs hover:bg-muted/30">
+                    <TableCell className="font-mono text-muted-foreground text-[11px] py-2">
+                      {idx + 1}
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-amber-700 dark:text-amber-400 font-medium py-2">
+                      {item.sku}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <p className="font-medium text-foreground">{item.product_name}</p>
+                      {item.variant_name && (
+                        <p className="text-[11px] text-muted-foreground">{item.variant_name}</p>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-[11px] py-2">
+                      ৳ {item.unit_price.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center font-mono font-semibold py-2">
+                      <span className="inline-block px-2 py-0.5 rounded bg-muted/60 text-foreground text-xs">
+                        {item.quantity}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-foreground py-2">
+                      ৳ {item.line_total.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Summary Footer */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs">
+          <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Delivery Address</span>
+            <p className="font-medium text-foreground truncate">
+              {order.address?.district}, {order.address?.division}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">{order.address?.address_line}</p>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Order Breakdown</span>
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>Subtotal:</span>
+              <span className="font-mono">৳ {order.subtotal.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>Shipping Fee:</span>
+              <span className="font-mono">৳ {order.shipping_total.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Discounts & Net</span>
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>Discount Total:</span>
+              <span className="font-mono text-emerald-600">- ৳ {order.discount_total.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-[11px] font-bold text-foreground pt-0.5 border-t">
+              <span>Grand Total:</span>
+              <span className="font-mono text-amber-700 dark:text-amber-400">
+                ৳ {order.grand_total.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Payment Settlement</span>
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>Amount Paid:</span>
+              <span className="font-mono text-emerald-600 font-semibold">৳ {order.amount_paid.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-[11px] font-semibold text-foreground">
+              <span>Due Balance:</span>
+              <span className={`font-mono ${dueAmount > 0 ? "text-rose-600 font-bold" : "text-muted-foreground"}`}>
+                ৳ {dueAmount.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6 w-full max-w-full">
+      {/* Toast Notification: Rendered via Portal directly in document.body at z-[99999] (always above all modals) */}
+      {!toastContext.isAvailable && (
+        <ToastNotificationPortal
+          toast={localToast}
+          onDismiss={() => setLocalToast(null)}
+        />
+      )}
+
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">Order Management</h1>
+            {isOrdersFetching && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full font-medium">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Syncing with DB
+              </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            Monitor, edit, fulfill, and record notes on wholesale & retail molasses orders with SSR and TanStack Query
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetchOrders()}
+            disabled={isOrdersFetching}
+            className="cursor-pointer"
+            title="Refetch orders from database"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isOrdersFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCSV} className="cursor-pointer">
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button
+            id="btn-open-create-order-dialog"
+            size="sm"
+            onClick={handleOpenCreate}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-medium cursor-pointer shrink-0"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Order
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* Stats Cards */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-amber-200/60 dark:border-amber-900/30">
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+              <PackageCheck className="h-4 w-4 text-amber-600" />
+            </div>
+            <p className="text-2xl font-bold mt-1">{orders.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Hydrated SSR database records</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Pending Action</p>
+              <Clock className="h-4 w-4 text-amber-500" />
+            </div>
+            <p className="text-2xl font-bold mt-1 text-amber-600">{counts.pending + counts.confirmed}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {counts.pending} pending · {counts.confirmed} confirmed
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">In Transit / Shipped</p>
+              <Truck className="h-4 w-4 text-purple-600" />
+            </div>
+            <p className="text-2xl font-bold mt-1 text-purple-600">{counts.shipped + counts.processing}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Dispatched to courier or depot</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                BDT
+              </span>
+            </div>
+            <p className="text-2xl font-bold mt-1 text-emerald-600">
+              ৳ {totalRevenue.toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Excluding incomplete, cancelled & returned</p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Filter Tabs & Search Bar */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-full min-w-0 max-w-full overflow-hidden">
+        <Tabs value={selectedTab} onValueChange={handleTabChange} className="w-full min-w-0 max-w-full">
+          <div className="space-y-3 mb-4 w-full min-w-0 max-w-full">
+            {/* Horizontally Scrollable Status Tabs with Left/Right Overflow Fade Masks & Navigation Buttons */}
+            <div className="relative w-full min-w-0 max-w-full group">
+              {/* Left Overflow Gradient Mask & Scroll Button */}
+              <div
+                className={`pointer-events-none absolute left-0 top-0 bottom-0 w-10 sm:w-14 bg-gradient-to-r from-background via-background/80 to-transparent z-10 transition-opacity duration-300 rounded-l-xl ${
+                  canScrollLeft ? "opacity-100" : "opacity-0"
+                }`}
+                aria-hidden="true"
+              />
+              {canScrollLeft && (
+                <button
+                  type="button"
+                  onClick={() => scrollTabsBy(-220)}
+                  aria-label="Scroll status tabs left"
+                  className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 h-7 w-7 rounded-full bg-background/95 hover:bg-background shadow-xs border border-border/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all cursor-pointer backdrop-blur-xs"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              )}
+
+              {/* Scrollable Container */}
+              <div
+                ref={tabsContainerRef}
+                onWheel={handleTabsWheel}
+                className="w-full min-w-0 max-w-full overflow-x-auto no-scrollbar scroll-smooth p-0.5"
+              >
+                <TabsList className="inline-flex w-max min-w-full items-center gap-1.5 p-1.5 bg-muted/70 rounded-xl border border-border/60 h-auto">
+                  <TabsTrigger
+                    value="all"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span>All Orders</span>
+                    <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-bold text-foreground shrink-0">
+                      {counts.all}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="incomplete_order"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-500 mr-1.5 shrink-0" />
+                    <span>Incomplete Order</span>
+                    <span className="ml-1.5 rounded-full bg-slate-500/20 text-slate-800 dark:text-slate-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.incomplete_order}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="pending"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 mr-1.5 shrink-0" />
+                    <span>Pending</span>
+                    <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.pending}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="confirmed"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 mr-1.5 shrink-0" />
+                    <span>Confirmed</span>
+                    <span className="ml-1.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.confirmed}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="processing"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 mr-1.5 shrink-0" />
+                    <span>Processing</span>
+                    <span className="ml-1.5 rounded-full bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.processing}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="shipped"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-500 mr-1.5 shrink-0" />
+                    <span>Shipped</span>
+                    <span className="ml-1.5 rounded-full bg-purple-500/20 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.shipped}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="delivered"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 shrink-0" />
+                    <span>Delivered</span>
+                    <span className="ml-1.5 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.delivered}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="partially_delivered"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-500 mr-1.5 shrink-0" />
+                    <span>Partially Delivered</span>
+                    <span className="ml-1.5 rounded-full bg-teal-500/20 text-teal-800 dark:text-teal-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.partially_delivered}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="cancelled"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 mr-1.5 shrink-0" />
+                    <span>Cancelled</span>
+                    <span className="ml-1.5 rounded-full bg-rose-500/20 text-rose-800 dark:text-rose-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.cancelled}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="returned"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border-border/60 cursor-pointer"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500 mr-1.5 shrink-0" />
+                    <span>Returned</span>
+                    <span className="ml-1.5 rounded-full bg-orange-500/20 text-orange-800 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                      {counts.returned}
+                    </span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Right Overflow Gradient Mask & Scroll Button */}
+              <div
+                className={`pointer-events-none absolute right-0 top-0 bottom-0 w-10 sm:w-14 bg-gradient-to-l from-background via-background/80 to-transparent z-10 transition-opacity duration-300 rounded-r-xl ${
+                  canScrollRight ? "opacity-100" : "opacity-0"
+                }`}
+                aria-hidden="true"
+              />
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => scrollTabsBy(220)}
+                  aria-label="Scroll status tabs right"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 h-7 w-7 rounded-full bg-background/95 hover:bg-background shadow-xs border border-border/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all cursor-pointer backdrop-blur-xs"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* TanStack Orders Table with Pagination, Selection, Sorting & View Options */}
+          <DataTable
+            columns={orderColumns}
+            data={filteredOrders}
+            enableGlobalFilter={false}
+            enableRowSelection={true}
+            enableSorting={true}
+            enablePagination={true}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 20, 50]}
+            toolbarPrefix={
+              <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap w-full">
+                <div className="relative flex-1 min-w-[200px] max-w-md">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by order ID, customer name, phone, address..."
+                    className="pl-8 h-9 text-xs w-full bg-background"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                  {/* Channel filter */}
+                  <select
+                    value={channelFilter}
+                    onChange={(e) => setChannelFilter(e.target.value)}
+                    className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  >
+                    <option value="all">All Channels</option>
+                    <option value="web">Web Store</option>
+                    <option value="phone">Phone Call</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="admin">Admin Manual</option>
+                  </select>
+
+                  {/* Payment filter */}
+                  <select
+                    value={paymentFilter}
+                    onChange={(e) => setPaymentFilter(e.target.value)}
+                    className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  >
+                    <option value="all">All Payments</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="partially_paid">Partially Paid</option>
+                    <option value="paid">Paid</option>
+                    <option value="refunded">Refunded</option>
+                  </select>
+
+                  {(searchQuery || channelFilter !== "all" || paymentFilter !== "all" || selectedTab !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setChannelFilter("all");
+                        setPaymentFilter("all");
+                        setSelectedTab("all");
+                      }}
+                      className="h-9 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                      Reset
+                    </Button>
+                  )}
+
+                  {/* Expand / Collapse All Details Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleExpandAll}
+                    className="h-9 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                    title={allExpanded ? "Collapse all item details" : "Expand all item details"}
+                  >
+                    <ChevronsUpDown className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                    {allExpanded ? "Collapse All" : "Expand All"}
+                  </Button>
+                </div>
+              </div>
+            }
+            onRowClick={(order) => handleOpenView(order)}
+            renderSubRow={renderOrderDetailsSubRow}
+            isRowExpanded={(order) => !!expandedRows[order.id]}
+            emptyMessage={
+              isOrdersLoading ? "Loading orders from server..." : "No orders match your filter criteria."
+            }
+            bulkActions={(selectedOrders, clearSelection) => (
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 1. Status Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={bulkStatusMutation.isPending}
+                      className="h-7 text-xs gap-1 bg-background hover:bg-muted"
+                    >
+                      <Clock className="h-3.5 w-3.5 text-amber-600" />
+                      Update Status
+                      <ChevronDown className="h-3 w-3 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48 text-xs">
+                    <DropdownMenuLabel>Set Status ({selectedOrders.length} orders):</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "pending", clearSelection)}
+                      className="cursor-pointer"
+                    >
+                      <Clock className="h-3.5 w-3.5 mr-2 text-amber-500" /> Mark Pending
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "confirmed", clearSelection)}
+                      className="cursor-pointer"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-2 text-blue-500" /> Mark Confirmed
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "processing", clearSelection)}
+                      className="cursor-pointer"
+                    >
+                      <Package className="h-3.5 w-3.5 mr-2 text-indigo-500" /> Mark Processing
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "shipped", clearSelection)}
+                      className="cursor-pointer"
+                    >
+                      <Truck className="h-3.5 w-3.5 mr-2 text-purple-500" /> Mark Shipped
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "delivered", clearSelection)}
+                      className="cursor-pointer"
+                    >
+                      <PackageCheck className="h-3.5 w-3.5 mr-2 text-emerald-500" /> Mark Delivered
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleOpenBulkStatus(selectedOrders, "cancelled", clearSelection)}
+                      className="cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-2" /> Mark Cancelled
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* 2. Assign Courier Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={bulkCourierMutation.isPending}
+                      className="h-7 text-xs gap-1 bg-background hover:bg-muted"
+                    >
+                      <Truck className="h-3.5 w-3.5 text-blue-600" />
+                      Assign Courier
+                      <ChevronDown className="h-3 w-3 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-52 text-xs">
+                    <DropdownMenuLabel>Assign Courier Partner:</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {[
+                      "Steadfast Courier",
+                      "Pathao Courier",
+                      "RedX Delivery",
+                      "Paperfly",
+                      "Sundarban Courier",
+                      "SA Paribahan",
+                    ].map((courier) => (
+                      <DropdownMenuItem
+                        key={courier}
+                        onClick={() => handleOpenBulkCourier(selectedOrders, courier, clearSelection)}
+                        className="cursor-pointer"
+                      >
+                        <Truck className="h-3.5 w-3.5 mr-2 text-slate-500" />
+                        {courier}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* 3. Print 2" Thermal Stickers */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkPrintInvoices(selectedOrders)}
+                  className="h-7 text-xs bg-background hover:bg-muted text-foreground hover:text-amber-600 cursor-pointer"
+                  title="Open 2-inch thermal sticker roll printable invoices in a new tab"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  Print 2&quot; Stickers ({selectedOrders.length})
+                </Button>
+
+                {/* 4. Export Selected CSV */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs bg-background hover:bg-muted"
+                  onClick={() => {
+                    const headers = [
+                      "Order ID",
+                      "Date",
+                      "Customer",
+                      "Phone",
+                      "Status",
+                      "Payment",
+                      "Method",
+                      "Courier",
+                      "Fulfillment",
+                      "Grand Total (BDT)",
+                    ];
+                    const rows = selectedOrders.map((o) => [
+                      o.id,
+                      formatDate(o.date),
+                      `"${o.customer.replace(/"/g, '""')}"`,
+                      `"${o.phone}"`,
+                      o.status,
+                      o.payment,
+                      o.method,
+                      o.courier_name || "",
+                      o.fulfillment,
+                      o.grand_total,
+                    ]);
+                    const csvContent =
+                      "data:text/csv;charset=utf-8," +
+                      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute(
+                      "download",
+                      `gur_orders_selected_${new Date().toISOString().slice(0, 10)}.csv`
+                    );
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast(`Exported ${selectedOrders.length} order(s) to CSV.`, "info");
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  Export CSV
+                </Button>
+
+                {/* 5. Delete Selected */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs bg-background hover:bg-rose-50 text-rose-600 border-rose-200 dark:border-rose-900 cursor-pointer"
+                  disabled={bulkDeleteMutation.isPending}
+                  onClick={() => handleOpenBulkDelete(selectedOrders, clearSelection)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete ({selectedOrders.length})
+                </Button>
+              </div>
+            )}
+          />
+        </Tabs>
+      </motion.div>
+
+      {/* ========================================================================= */}
+      {/* 1. SLIDE-OVER SHEET: VIEW ORDER DETAILS & TIMELINE */}
+      {/* ========================================================================= */}
+      <Sheet open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <SheetContent side="right" className="w-full md:w-[70%] lg:w-[80%] max-w-none overflow-y-auto p-6 sm:p-8">
+          {selectedOrder && (
+            <div className="space-y-6">
+              <SheetHeader className="p-0 border-b pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-base sm:text-lg font-bold text-amber-700 dark:text-amber-400">
+                      {selectedOrder.id}
+                    </span>
+                    <Badge variant="outline" className="text-xs uppercase font-mono">
+                      {selectedOrder.channel}
+                    </Badge>
+                  </div>
+                  <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${statusStyles[selectedOrder.status] || "bg-muted text-muted-foreground"}`}>
+                    {selectedOrder.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <SheetDescription className="text-xs text-muted-foreground mt-1">
+                  Placed on {formatDate(selectedOrder.date)} · Currency: {selectedOrder.currency}
+                </SheetDescription>
+              </SheetHeader>
+
+              {/* Status Stepper Workflow */}
+              <div className="p-4 rounded-xl bg-muted/40 border">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Fulfillment Pipeline
+                  </p>
+                  <span className="text-[11px] text-muted-foreground">Click step to change</span>
+                </div>
+                <div className="flex items-center justify-between text-xs overflow-x-auto gap-2 pb-1">
+                  {[
+                    { value: "incomplete_order", label: "Incomplete" },
+                    { value: "pending", label: "Pending" },
+                    { value: "confirmed", label: "Confirmed" },
+                    { value: "processing", label: "Processing" },
+                    { value: "shipped", label: "Shipped" },
+                    { value: "delivered", label: "Delivered" },
+                    { value: "partially_delivered", label: "Partially Deliv." },
+                  ].map((stepObj, idx) => {
+                    const statusOrderList = [
+                      "incomplete_order",
+                      "pending",
+                      "confirmed",
+                      "processing",
+                      "shipped",
+                      "delivered",
+                      "partially_delivered",
+                    ];
+                    const currentIdx = statusOrderList.indexOf(selectedOrder.status);
+                    const isDone = currentIdx >= idx && currentIdx !== -1;
+                    const isCurrent = selectedOrder.status === stepObj.value;
+                    return (
+                      <button
+                        key={stepObj.value}
+                        type="button"
+                        onClick={() => {
+                          setStatusOrder(selectedOrder);
+                          setNewStatus(stepObj.value as Order["status"]);
+                          setCancelReason("");
+                          setIsStatusOpen(true);
+                        }}
+                        className="flex flex-col items-center gap-1.5 flex-1 min-w-[55px] relative group hover:opacity-80 transition-opacity"
+                      >
+                        <div
+                          className={`h-7 w-7 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                            isCurrent
+                              ? "bg-amber-600 text-white ring-4 ring-amber-100 dark:ring-amber-950 scale-110"
+                              : isDone
+                              ? "bg-emerald-600 text-white"
+                              : "bg-muted text-muted-foreground border group-hover:border-amber-500"
+                          }`}
+                        >
+                          {isDone ? <Check className="h-3.5 w-3.5" /> : idx + 1}
+                        </div>
+                        <span
+                          className={`text-[10px] sm:text-[11px] capitalize text-center leading-tight ${
+                            isCurrent ? "font-bold text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                          }`}
+                        >
+                          {stepObj.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick Actions Bar */}
+              <div className="flex items-center gap-2">
+                {getNextStatus(selectedOrder.status) && (
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() => handleQuickAdvanceStatus(selectedOrder)}
+                  >
+                    <ArrowRight className="h-3.5 w-3.5 mr-1" />
+                    {selectedOrder.status === "incomplete_order" && "Submit as Pending"}
+                    {selectedOrder.status === "pending" && "Confirm Order"}
+                    {selectedOrder.status === "confirmed" && "Start Processing"}
+                    {selectedOrder.status === "processing" && "Dispatch / Ship"}
+                    {selectedOrder.status === "shipped" && "Mark Delivered"}
+                    {selectedOrder.status === "delivered" && "Mark Partially Delivered"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`${getNextStatus(selectedOrder.status) ? "" : "flex-1"} text-xs`}
+                  onClick={() => {
+                    handleOpenStatus(selectedOrder);
+                  }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  Status
+                </Button>
+                <Button
+                  id="btn-drawer-edit-order"
+                  size="sm"
+                  variant="outline"
+                  className={`${getNextStatus(selectedOrder.status) ? "" : "flex-1"} text-xs`}
+                  onClick={() => {
+                    handleOpenEdit(selectedOrder);
+                  }}
+                >
+                  <Edit className="h-3.5 w-3.5 mr-1 text-blue-600" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700"
+                  onClick={() => handleBulkPrintInvoices([selectedOrder])}
+                  title="Print 2-inch thermal sticker label"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  2&quot; Sticker
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    handleOpenDelete(selectedOrder);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Customer & Shipping Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardContent className="pt-4 space-y-2 text-xs">
+                    <p className="font-semibold text-sm flex items-center gap-1.5 text-foreground">
+                      <User className="h-4 w-4 text-amber-600" />
+                      Customer Details
+                    </p>
+                    <p className="font-medium text-foreground">
+                      {selectedOrder.customer || <span className="text-muted-foreground italic font-normal">Not provided</span>}
+                    </p>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5" />
+                      <a href={`tel:${selectedOrder.phone}`} className="hover:underline text-primary">
+                        {selectedOrder.phone}
+                      </a>
+                    </div>
+                    {selectedOrder.email && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Mail className="h-3.5 w-3.5" />
+                        <a href={`mailto:${selectedOrder.email}`} className="hover:underline">
+                          {selectedOrder.email}
+                        </a>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-4 space-y-2 text-xs">
+                    <p className="font-semibold text-sm flex items-center gap-1.5 text-foreground">
+                      <MapPin className="h-4 w-4 text-amber-600" />
+                      Shipping Address
+                    </p>
+                    <p className="font-medium text-foreground">
+                      {[selectedOrder.address?.district, selectedOrder.address?.division].filter(Boolean).join(", ") || (
+                        <span className="text-muted-foreground italic font-normal">District / Division not set</span>
+                      )}
+                    </p>
+                    {selectedOrder.address?.address_line && (
+                      <p className="text-muted-foreground">{selectedOrder.address.address_line}</p>
+                    )}
+                    {selectedOrder.courier_name && (
+                      <div className="pt-1 flex items-center gap-1.5 border-t border-border/50">
+                        <Truck className="h-3.5 w-3.5 text-amber-600" />
+                        <span className="font-semibold text-foreground">Courier Partner:</span>
+                        <Badge variant="outline" className="text-[11px] font-semibold border-amber-500 text-amber-800 dark:text-amber-300 bg-amber-500/10">
+                          {selectedOrder.courier_name}
+                        </Badge>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Main Split Grid for Tablet & Desktop */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left Column: Items, Instructions, Financials (7 cols on lg) */}
+                <div className="lg:col-span-7 space-y-6">
+                  {/* Customer Order Note (if any) */}
+                  {selectedOrder.customer_note && (
+                    <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
+                      <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5 mb-1">
+                        <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+                        Customer Note / Delivery Instruction:
+                      </p>
+                      <p className="text-blue-950 dark:text-blue-100">{selectedOrder.customer_note}</p>
+                    </div>
+                  )}
+
+                  {/* Cancellation Reason (if cancelled or returned) */}
+                  {(selectedOrder.status === "cancelled" || selectedOrder.status === "returned") && selectedOrder.cancel_reason && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-xs">
+                      <p className="font-semibold text-rose-900 dark:text-rose-300 flex items-center gap-1.5 mb-1">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
+                        Reason for {selectedOrder.status === "returned" ? "Return" : "Cancellation"}:
+                      </p>
+                      <p className="text-rose-800 dark:text-rose-200">{selectedOrder.cancel_reason}</p>
+                    </div>
+                  )}
+
+                  {/* Items Table */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-1.5">
+                      <PackageCheck className="h-4 w-4 text-amber-600" />
+                      Ordered Products ({selectedOrder.items?.length || 0})
+                    </p>
+                    {!selectedOrder.items || selectedOrder.items.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed text-center space-y-2 bg-muted/20">
+                        <PackageCheck className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+                        <p className="text-xs text-muted-foreground font-medium">No products added to this order yet.</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-8"
+                          onClick={() => {
+                            setIsViewOpen(false);
+                            handleOpenEdit(selectedOrder);
+                          }}
+                        >
+                          <Edit className="h-3.5 w-3.5 mr-1" />
+                          Add Products
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 text-xs">
+                              <TableHead>Item</TableHead>
+                              <TableHead className="text-right">Price</TableHead>
+                              <TableHead className="text-center">Qty</TableHead>
+                              <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedOrder.items.map((item) => (
+                              <TableRow key={item.id} className="text-xs">
+                                <TableCell>
+                                  <p className="font-medium">{item.product_name}</p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {item.variant_name} · {item.sku}
+                                  </p>
+                                </TableCell>
+                                <TableCell className="text-right font-mono">
+                                  ৳ {item.unit_price.toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-center font-mono font-semibold">
+                                  {item.quantity}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-semibold">
+                                  ৳ {item.line_total.toLocaleString()}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Financials Breakdown */}
+                  <div className="p-4 rounded-xl bg-muted/30 border space-y-2 text-xs">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span className="font-mono">৳ {selectedOrder.subtotal.toLocaleString()}</span>
+                    </div>
+                    {selectedOrder.discount_total > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Discount</span>
+                        <span className="font-mono">- ৳ {selectedOrder.discount_total.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Shipping Fee</span>
+                      <span className="font-mono">৳ {selectedOrder.shipping_total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-sm pt-2 border-t text-foreground">
+                      <span>Grand Total</span>
+                      <span className="font-mono text-amber-700 dark:text-amber-400">
+                        ৳ {selectedOrder.grand_total.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs pt-1 border-t border-dashed">
+                      <span className="text-muted-foreground">Payment Status:</span>
+                      <span
+                        className={`capitalize font-semibold ${
+                          selectedOrder.payment === "paid"
+                            ? "text-emerald-600"
+                            : selectedOrder.payment === "partially_paid"
+                            ? "text-amber-600 font-bold"
+                            : "text-amber-600"
+                        }`}
+                      >
+                        {selectedOrder.payment.replace(/_/g, " ")} ({selectedOrder.method.replace("_", " ")})
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs pt-0.5">
+                      <span className="text-muted-foreground">Amount Paid:</span>
+                      <span className="font-mono font-semibold text-emerald-600">
+                        ৳ {selectedOrder.amount_paid.toLocaleString()}
+                      </span>
+                    </div>
+                    {selectedOrder.payment !== "paid" && (
+                      <div className="flex justify-between text-xs pt-0.5 font-bold">
+                        <span className="text-rose-600">Due Balance:</span>
+                        <span className="font-mono text-rose-600">
+                          ৳ {Math.max(0, selectedOrder.grand_total - selectedOrder.amount_paid).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-2 text-xs font-medium border-emerald-600/30 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-300"
+                      onClick={() => handleOpenPayment(selectedOrder)}
+                    >
+                      <CreditCard className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                      Record / Update Partial Payment
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Right Column: Timeline & Notes (5 cols on lg) */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* Notes Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold flex items-center gap-1.5">
+                        <MessageSquare className="h-4 w-4 text-amber-600" />
+                        Notes & Memos ({(selectedOrder.notes || []).length})
+                      </p>
+                    </div>
+
+                    {/* Quick Add Note inside Drawer using TanStack Form */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        drawerNoteForm.handleSubmit();
+                      }}
+                      className="p-3 rounded-xl border bg-muted/20 space-y-2.5"
+                    >
+                      <drawerNoteForm.Field
+                        name="text"
+                        validators={{
+                          onChange: validateWithZod(orderNoteTextSchema),
+                        }}
+                      >
+                        {(field) => (
+                          <FormFieldItem>
+                            <FormFieldLabel htmlFor="drawer_note_text" className="text-xs font-semibold">
+                              Add New Note / Memo
+                            </FormFieldLabel>
+                            <Textarea
+                              id="drawer_note_text"
+                              value={field.state.value}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              onBlur={field.handleBlur}
+                              placeholder="Write staff instructions or notes..."
+                              rows={2}
+                              className="text-xs bg-background"
+                            />
+                            <FormFieldError errors={field.state.meta.errors} />
+                          </FormFieldItem>
+                        )}
+                      </drawerNoteForm.Field>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <drawerNoteForm.Field name="type">
+                          {(field) => (
+                            <select
+                              value={field.state.value}
+                              onChange={(e) => field.handleChange(e.target.value as "internal" | "customer")}
+                              className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none cursor-pointer"
+                            >
+                              <option value="internal">🔒 Internal Staff Note</option>
+                              <option value="customer">💬 Customer Note</option>
+                            </select>
+                          )}
+                        </drawerNoteForm.Field>
+
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+                          disabled={addNoteMutation.isPending}
+                        >
+                          <Send className="h-3 w-3 mr-1" />
+                          Record
+                        </Button>
+                      </div>
+                    </form>
+
+                    {/* Notes List with Delete functionality */}
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {(!selectedOrder.notes || selectedOrder.notes.length === 0) ? (
+                        <p className="text-xs text-muted-foreground italic py-2">No notes recorded yet.</p>
+                      ) : (
+                        selectedOrder.notes.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`p-3 rounded-xl border text-xs space-y-1.5 relative group ${
+                              note.type === "customer"
+                                ? "bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                                : "bg-amber-500/[0.04] dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-900/40"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                {note.type === "customer" ? (
+                                  <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
+                                    <MessageSquare className="h-3 w-3 mr-1 inline" />
+                                    Customer Note
+                                  </Badge>
+                                ) : (
+                                  <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">
+                                    <ShieldCheck className="h-3 w-3 mr-1 inline" />
+                                    Internal Staff Note
+                                  </Badge>
+                                )}
+                                <span className="text-[11px] text-muted-foreground">{note.author}</span>
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-muted-foreground">{formatDateTime(note.created_at)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    deleteNoteMutation.mutate({
+                                      orderId: selectedOrder.id,
+                                      noteId: note.id,
+                                      currentOrder: selectedOrder,
+                                    });
+                                  }}
+                                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+                                  title="Delete Note"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-foreground/90 whitespace-pre-wrap">{note.text}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Timeline / Order Events */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-1.5">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      Activity Log ({(selectedOrder.events || []).length})
+                    </p>
+                    <div className="border-l-2 border-muted ml-3 space-y-4 pl-4 text-xs">
+                      {(selectedOrder.events || []).map((ev) => (
+                        <div key={ev.id} className="relative">
+                          <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background" />
+                          <p className="font-medium text-foreground">{ev.message}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {ev.actor} · {formatDateTime(ev.created_at)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ========================================================================= */}
+      {/* UNIFIED ORDER FORM DIALOG (CREATING & EDITING) */}
+      {/* ========================================================================= */}
+      <OrderFormDialog
+        open={orderModalState.open}
+        onOpenChange={(open) => setOrderModalState((prev) => ({ ...prev, open }))}
+        mode={orderModalState.mode}
+        order={orderModalState.order}
+        defaultStatus={selectedTab !== "all" ? (selectedTab as Order["status"]) : "confirmed"}
+        onSave={handleSaveOrder}
+        geoDivisions={geoDivisions}
+        geoDistricts={geoDistricts}
+        setGeoDistricts={setGeoDistricts}
+        availableCatalogProducts={catalogProducts}
+        ordersCount={orders.length}
+        showToast={showToast}
+      />
+
+      {/* ========================================================================= */}
+      {/* 3. UPDATE ORDER STATUS DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={isStatusOpen}
+        onOpenChange={(open) => {
+          setIsStatusOpen(open);
+          if (!open) setStatusError(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-amber-600" />
+              Update Order Status
+            </DialogTitle>
+            <DialogDescription>
+              Change workflow progression for order <span className="font-mono font-bold text-foreground">{statusOrder?.id}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Inline Database / RLS / Trigger Error Banner */}
+          {statusError && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/95 dark:bg-rose-950/50 dark:border-rose-800 text-rose-950 dark:text-rose-100 shadow-sm space-y-2 text-xs"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="p-1 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-rose-900 dark:text-rose-200 text-xs sm:text-sm">
+                      {statusError.title}
+                    </p>
+                    {statusError.code && (
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-200/80 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 font-semibold">
+                        Code: {statusError.code}
+                      </span>
+                    )}
+                    {statusError.isRlsError && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200/90 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200 font-bold uppercase tracking-wider">
+                        RLS Policy Block
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-rose-800 dark:text-rose-200 mt-1 leading-relaxed">
+                    {statusError.message}
+                  </p>
+                  {statusError.resolution && (
+                    <div className="mt-2 p-2 rounded-lg bg-rose-100/80 dark:bg-rose-900/40 border border-rose-200 dark:border-rose-800 text-[11px] text-rose-900 dark:text-rose-200">
+                      <span className="font-bold">Required Action: </span>
+                      {statusError.resolution}
+                    </div>
+                  )}
+                  {statusError.hint && (
+                    <p className="text-[10px] text-rose-700/80 dark:text-rose-300/80 mt-1 italic">
+                      Tip: {statusError.hint}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons inside error banner */}
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-rose-200/70 dark:border-rose-800/70">
+                {(statusError.code === "CUSTOMER_NAME_REQUIRED" || statusError.code === "CUSTOMER_PHONE_REQUIRED") && statusOrder ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setIsStatusOpen(false);
+                      handleOpenEdit(statusOrder);
+                    }}
+                    className="h-7 text-xs bg-white dark:bg-zinc-900 border-rose-300 text-rose-900 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-950 cursor-pointer"
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit Order Customer Info
+                  </Button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setStatusError(null)}
+                  className="text-[11px] text-rose-700 dark:text-rose-300 hover:underline px-2 py-1 cursor-pointer font-medium"
+                >
+                  Dismiss Error
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Select New Status</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { value: "incomplete_order", label: "Incomplete Order", desc: "Draft or missing info" },
+                  { value: "pending", label: "Pending", desc: "Awaiting confirmation" },
+                  { value: "confirmed", label: "Confirmed", desc: "Order verified by desk" },
+                  { value: "processing", label: "Processing", desc: "Being packed at warehouse" },
+                  { value: "shipped", label: "Shipped", desc: "Dispatched to courier" },
+                  { value: "delivered", label: "Delivered", desc: "Received by buyer" },
+                  { value: "partially_delivered", label: "Partially Delivered", desc: "Partial items delivered" },
+                  { value: "cancelled", label: "Cancelled", desc: "Order terminated" },
+                  { value: "returned", label: "Returned", desc: "Returned to warehouse" },
+                ].map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => {
+                      setNewStatus(s.value as Order["status"]);
+                      setStatusError(null);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                      newStatus === s.value
+                        ? "border-amber-600 bg-amber-50/50 dark:bg-amber-950/40 ring-2 ring-amber-500/20"
+                        : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <p className="font-semibold text-foreground flex items-center justify-between">
+                      {s.label}
+                      {newStatus === s.value && <Check className="h-3.5 w-3.5 text-amber-600" />}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{s.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* If Cancelled or Returned, require reason */}
+            {(newStatus === "cancelled" || newStatus === "returned") && (
+              <div className="space-y-1.5 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">
+                <Label htmlFor="cancel_reason" className="text-rose-900 dark:text-rose-200">
+                  Reason for {newStatus === "returned" ? "Return" : "Cancellation"}
+                </Label>
+                <Textarea
+                  id="cancel_reason"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder={
+                    newStatus === "returned"
+                      ? "e.g. Defective seal, damaged in transit, customer refused delivery..."
+                      : "e.g. Customer changed mind, stock out, duplicate order..."
+                  }
+                  rows={2}
+                  className="bg-background text-xs"
+                />
+              </div>
+            )}
+
+            {/* If Processing, Shipped, Delivered, or Partially Delivered, require Courier assignment */}
+            {(newStatus === "processing" ||
+              newStatus === "shipped" ||
+              newStatus === "delivered" ||
+              newStatus === "partially_delivered") && (
+              <div className="space-y-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="status_courier_name" className="text-amber-900 dark:text-amber-200 flex items-center gap-1.5 font-medium text-xs">
+                    <Truck className="h-4 w-4 text-amber-600" />
+                    Courier Service Partner <span className="text-destructive font-bold">*</span>
+                  </Label>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold uppercase">
+                    Required for {newStatus.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <select
+                    id="status_courier_select"
+                    value={
+                      (BANGLADESH_COURIERS as readonly string[]).includes(selectedCourier)
+                        ? selectedCourier
+                        : selectedCourier
+                        ? "other"
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val !== "other") {
+                        setSelectedCourier(val);
+                      }
+                    }}
+                    className="w-full h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  >
+                    <option value="">-- Choose Courier Service --</option>
+                    {BANGLADESH_COURIERS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    <option value="other">Other / Custom Courier</option>
+                  </select>
+
+                  <Input
+                    id="status_courier_name"
+                    value={selectedCourier}
+                    onChange={(e) => setSelectedCourier(e.target.value)}
+                    placeholder="Courier name (e.g. Steadfast, Pathao, RedX)..."
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-1 pt-0.5">
+                  {BANGLADESH_COURIERS.slice(0, 5).map((cName) => (
+                    <button
+                      key={cName}
+                      type="button"
+                      onClick={() => setSelectedCourier(cName)}
+                      className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                        selectedCourier === cName
+                          ? "bg-amber-600 text-white border-amber-600 font-semibold"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {cName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notification toggle */}
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={notifyCustomer}
+                onChange={(e) => setNotifyCustomer(e.target.checked)}
+                className="rounded border-input text-amber-600 focus:ring-amber-500 h-4 w-4"
+              />
+              <span>Send automated SMS / WhatsApp notification to {statusOrder?.phone}</span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveStatus}
+              disabled={updateStatusMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {updateStatusMutation.isPending ? "Saving..." : "Confirm Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 3B. RECORD / UPDATE PAYMENT DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-amber-600" />
+              Record Order Payment
+            </DialogTitle>
+            <DialogDescription>
+              Update payment settlement or log partial payments for order{" "}
+              <span className="font-mono font-bold text-foreground">{paymentOrder?.id}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {paymentOrder && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                recordPaymentForm.handleSubmit();
+              }}
+              className="space-y-4 py-2"
+            >
+              {/* Order Amount Overview Card */}
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-muted/40 border text-center">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Total</span>
+                  <p className="font-mono font-bold text-sm text-foreground">
+                    ৳ {paymentOrder.grand_total.toLocaleString()}
+                  </p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Paid</span>
+                  <p className="font-mono font-bold text-sm text-emerald-600">
+                    ৳ {paymentOrder.amount_paid.toLocaleString()}
+                  </p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Due</span>
+                  <p className="font-mono font-bold text-sm text-rose-600">
+                    ৳ {Math.max(0, paymentOrder.grand_total - paymentOrder.amount_paid).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Payment Status & Method */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <recordPaymentForm.Field name="payment">
+                  {(field) => (
+                    <FormFieldItem>
+                      <FormFieldLabel htmlFor="pay_modal_status">Payment Status</FormFieldLabel>
+                      <select
+                        id="pay_modal_status"
+                        value={field.state.value}
+                        onChange={(e) => {
+                          const newStatus = e.target.value as Order["payment"];
+                          field.handleChange(newStatus);
+                          if (newStatus === "paid") {
+                            recordPaymentForm.setFieldValue("amount_paid", paymentOrder.grand_total);
+                          } else if (newStatus === "unpaid") {
+                            recordPaymentForm.setFieldValue("amount_paid", 0);
+                          } else if (newStatus === "partially_paid") {
+                            const cur = Number(recordPaymentForm.state.values.amount_paid) || 0;
+                            if (cur <= 0 || cur >= paymentOrder.grand_total) {
+                              const half = Math.round(paymentOrder.grand_total / 2);
+                              recordPaymentForm.setFieldValue("amount_paid", half > 0 ? half : 500);
+                            }
+                          }
+                        }}
+                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="partially_paid">Partially Paid</option>
+                        <option value="paid">Paid in Full</option>
+                        <option value="refunded">Refunded</option>
+                      </select>
+                    </FormFieldItem>
+                  )}
+                </recordPaymentForm.Field>
+
+                <recordPaymentForm.Field name="method">
+                  {(field) => (
+                    <FormFieldItem>
+                      <FormFieldLabel htmlFor="pay_modal_method">Payment Method</FormFieldLabel>
+                      <select
+                        id="pay_modal_method"
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value as Order["method"])}
+                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                      >
+                        <option value="bkash">bKash</option>
+                        <option value="nagad">Nagad</option>
+                        <option value="rocket">Rocket</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="card">Credit / Debit Card</option>
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                      </select>
+                    </FormFieldItem>
+                  )}
+                </recordPaymentForm.Field>
+              </div>
+
+              {/* Amount Paid Field */}
+              <recordPaymentForm.Field
+                name="amount_paid"
+                validators={{
+                  onChange: validateWithZod(orderAmountPaidSchema),
+                  onBlur: validateWithZod(orderAmountPaidSchema),
+                }}
+              >
+                {(field) => {
+                  const paidVal = Number(field.state.value) || 0;
+                  const remainingDue = Math.max(0, paymentOrder.grand_total - paidVal);
+
+                  return (
+                    <FormFieldItem>
+                      <div className="flex items-center justify-between">
+                        <FormFieldLabel htmlFor="pay_modal_amount">Amount Paid (BDT ৳)</FormFieldLabel>
+                        <span className="text-[11px] font-mono text-muted-foreground">
+                          Due: <span className="text-rose-600 font-bold">৳ {remainingDue.toLocaleString()}</span>
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
+                          ৳
+                        </span>
+                        <Input
+                          id="pay_modal_amount"
+                          type="number"
+                          min="0"
+                          max={paymentOrder.grand_total}
+                          value={field.state.value === 0 ? "" : field.state.value}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : Number(e.target.value);
+                            field.handleChange(val);
+                            if (val >= paymentOrder.grand_total) {
+                              recordPaymentForm.setFieldValue("payment", "paid");
+                            } else if (val > 0) {
+                              recordPaymentForm.setFieldValue("payment", "partially_paid");
+                            } else {
+                              recordPaymentForm.setFieldValue("payment", "unpaid");
+                            }
+                          }}
+                          onBlur={field.handleBlur}
+                          className="pl-7 font-mono font-bold text-sm h-9 bg-background"
+                        />
+                      </div>
+                      <FormFieldError errors={field.state.meta.errors} />
+
+                      {/* Quick Presets */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
+                          Quick Presets:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            field.handleChange(500);
+                            recordPaymentForm.setFieldValue("payment", "partially_paid");
+                          }}
+                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                        >
+                          ৳ 500
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            field.handleChange(1000);
+                            recordPaymentForm.setFieldValue("payment", "partially_paid");
+                          }}
+                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                        >
+                          ৳ 1,000
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const half = Math.round(paymentOrder.grand_total * 0.5);
+                            field.handleChange(half);
+                            recordPaymentForm.setFieldValue("payment", "partially_paid");
+                          }}
+                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                        >
+                          50%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            field.handleChange(paymentOrder.grand_total);
+                            recordPaymentForm.setFieldValue("payment", "paid");
+                          }}
+                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                        >
+                          Full (৳ {paymentOrder.grand_total.toLocaleString()})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            field.handleChange(0);
+                            recordPaymentForm.setFieldValue("payment", "unpaid");
+                          }}
+                          className="px-2 py-0.5 rounded border text-[11px] font-mono text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </FormFieldItem>
+                  );
+                }}
+              </recordPaymentForm.Field>
+
+              {/* Transaction Ref / Code */}
+              <recordPaymentForm.Field name="transaction_ref">
+                {(field) => (
+                  <FormFieldItem>
+                    <FormFieldLabel htmlFor="pay_modal_ref">Transaction ID / Reference (Optional)</FormFieldLabel>
+                    <Input
+                      id="pay_modal_ref"
+                      placeholder="e.g. bKash TrxID 9K284JFK or Bank Slip #..."
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      className="font-mono text-xs h-9"
+                    />
+                  </FormFieldItem>
+                )}
+              </recordPaymentForm.Field>
+
+              {/* Memo Note */}
+              <recordPaymentForm.Field name="note">
+                {(field) => (
+                  <FormFieldItem>
+                    <FormFieldLabel htmlFor="pay_modal_note">Payment Note (Internal)</FormFieldLabel>
+                    <Textarea
+                      id="pay_modal_note"
+                      placeholder="Add memo e.g. Customer paid ৳500 advance via bKash personal..."
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      rows={2}
+                      className="text-xs"
+                    />
+                  </FormFieldItem>
+                )}
+              </recordPaymentForm.Field>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={recordPaymentMutation.isPending}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                >
+                  {recordPaymentMutation.isPending ? "Recording..." : "Save Payment"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 4. ADD ORDER NOTE DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-amber-600" />
+              Add Order Note
+            </DialogTitle>
+            <DialogDescription>
+              Record an internal staff note or customer memo for order <span className="font-mono font-bold text-foreground">{noteOrder?.id}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {noteOrder && (
+            <div className="space-y-2 py-1 text-xs">
+              {/* Show customer note if present */}
+              {noteOrder.customer_note ? (
+                <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40">
+                  <span className="flex items-center gap-1 font-bold text-blue-900 dark:text-blue-300">
+                    <MessageSquare className="h-3 w-3 text-blue-600" />
+                    Current Customer Note (Visible to customer)
+                  </span>
+                  <p className="text-blue-950 dark:text-blue-100 italic mt-0.5">&quot;{noteOrder.customer_note}&quot;</p>
+                </div>
+              ) : null}
+
+              {/* Show staff notes summary if present */}
+              {((noteOrder.notes || []).filter((n) => n.type === "internal").length > 0) && (
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <span className="flex items-center gap-1 font-bold text-amber-900 dark:text-amber-300">
+                    <ShieldCheck className="h-3 w-3 text-amber-600" />
+                    Existing Internal Staff Notes ({(noteOrder.notes || []).filter((n) => n.type === "internal").length})
+                  </span>
+                  <div className="space-y-1 mt-1 max-h-20 overflow-y-auto pr-1">
+                    {(noteOrder.notes || []).filter((n) => n.type === "internal").map((n) => (
+                      <p key={n.id} className="text-[11px] text-amber-950 dark:text-amber-100 line-clamp-1">
+                        • {n.text} <span className="text-[10px] text-muted-foreground">({n.created_at})</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addNoteForm.handleSubmit();
+            }}
+            className="space-y-4 py-1"
+          >
+            <addNoteForm.Field name="type">
+              {(field) => (
+                <FormFieldItem>
+                  <FormFieldLabel htmlFor="modal_note_type">Note Type</FormFieldLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => field.handleChange("internal")}
+                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                        field.state.value === "internal"
+                          ? "border-amber-600 bg-amber-500/10 text-amber-950 dark:text-amber-200 font-semibold ring-1 ring-amber-600"
+                          : "border-input hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold leading-none">Staff Note</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Private to admin / staff</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => field.handleChange("customer")}
+                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                        field.state.value === "customer"
+                          ? "border-blue-600 bg-blue-500/10 text-blue-950 dark:text-blue-200 font-semibold ring-1 ring-blue-600"
+                          : "border-input hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      <MessageSquare className="h-4 w-4 text-blue-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold leading-none">Customer Note</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Visible to customer</p>
+                      </div>
+                    </button>
+                  </div>
+                </FormFieldItem>
+              )}
+            </addNoteForm.Field>
+
+            <addNoteForm.Field
+              name="text"
+              validators={{
+                onChange: validateWithZod(orderNoteTextSchema),
+              }}
+            >
+              {(field) => (
+                <FormFieldItem>
+                  <addNoteForm.Subscribe selector={(state) => state.values.type}>
+                    {(noteType) => (
+                      <>
+                        <FormFieldLabel htmlFor="modal_note_text">
+                          {noteType === "internal" ? "Internal Staff Note Details" : "Customer Note Details"}
+                        </FormFieldLabel>
+                        <Textarea
+                          id="modal_note_text"
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          placeholder={
+                            noteType === "internal"
+                              ? "Enter instructions, customer verification comments, or packaging notes..."
+                              : "Enter customer note or special delivery instructions..."
+                          }
+                          rows={4}
+                          className="text-xs"
+                        />
+                      </>
+                    )}
+                  </addNoteForm.Subscribe>
+                  <FormFieldError errors={field.state.meta.errors} />
+                  <FormFieldDescription>Max 1000 characters. Automatically stamps timestamp & author and syncs to database.</FormFieldDescription>
+                </FormFieldItem>
+              )}
+            </addNoteForm.Field>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsNoteOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={addNoteMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+              >
+                {addNoteMutation.isPending ? "Saving..." : "Save Note"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 5. DELETE ORDER CONFIRMATION DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Order {deletingOrder?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this order? This action will sync to the database and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deletingOrder && (
+            <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs space-y-1">
+              <p className="font-semibold text-destructive">Customer: {deletingOrder.customer}</p>
+              <p className="text-muted-foreground">
+                Total Amount: ৳ {deletingOrder.grand_total.toLocaleString()} · Status: {deletingOrder.status}
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">
+                Notice: Deleting this order removes associated items and event records. Stock reservation will be freed.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteOrderMutation.isPending}
+              onClick={handleConfirmDelete}
+            >
+              {deleteOrderMutation.isPending ? "Deleting..." : "Confirm Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isBulkStatusOpen}
+        onOpenChange={(open) => {
+          setIsBulkStatusOpen(open);
+          if (!open) setBulkStatusError(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              Update Status for {bulkSelectedOrders.length} Order(s)
+            </DialogTitle>
+            <DialogDescription>
+              Set status to <span className="font-bold text-foreground uppercase">{bulkTargetStatus.replace(/_/g, " ")}</span> across all selected orders.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Inline Database / RLS Error Banner for Bulk Status */}
+          {bulkStatusError && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/95 dark:bg-rose-950/50 dark:border-rose-800 text-rose-950 dark:text-rose-100 shadow-sm space-y-2 text-xs"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="p-1 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-rose-900 dark:text-rose-200 text-xs sm:text-sm">
+                      {bulkStatusError.title}
+                    </p>
+                    {bulkStatusError.code && (
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-200/80 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 font-semibold">
+                        Code: {bulkStatusError.code}
+                      </span>
+                    )}
+                    {bulkStatusError.isRlsError && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200/90 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200 font-bold uppercase tracking-wider">
+                        RLS Policy Block
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-rose-800 dark:text-rose-200 mt-1 leading-relaxed">
+                    {bulkStatusError.message}
+                  </p>
+                  {bulkStatusError.resolution && (
+                    <div className="mt-2 p-2 rounded-lg bg-rose-100/80 dark:bg-rose-900/40 border border-rose-200 dark:border-rose-800 text-[11px] text-rose-900 dark:text-rose-200">
+                      <span className="font-bold">Required Action: </span>
+                      {bulkStatusError.resolution}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Pre-validation Warning Card for Ineligible Orders */}
+          {bulkEligibility.ineligible.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  {bulkEligibility.ineligible.length} of {bulkSelectedOrders.length} order(s) cannot be moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}:
+                </span>
+              </div>
+              <div className="space-y-1.5 pl-1 max-h-36 overflow-y-auto pr-1">
+                {bulkEligibility.ineligible.map(({ order, reason }) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background/80 border text-[11px]"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono font-bold text-foreground">{order.id}</span>
+                        <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground uppercase">
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="text-rose-600 dark:text-rose-400 font-medium text-[10px] mt-0.5 truncate">
+                        {reason}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsBulkStatusOpen(false);
+                        handleOpenEdit(order);
+                      }}
+                      className="h-6 px-2 text-[10px] bg-background hover:bg-muted text-foreground cursor-pointer shrink-0"
+                    >
+                      <Edit className="h-2.5 w-2.5 mr-1" />
+                      Edit Info
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {bulkEligibility.eligible.length > 0 ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium pt-1 border-t border-amber-500/20">
+                  ✓ Clicking confirm will update the <span className="font-bold">{bulkEligibility.eligible.length} eligible order(s)</span> and safely skip the invalid ones.
+                </p>
+              ) : (
+                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium pt-1 border-t border-rose-500/20">
+                  ✕ None of the selected orders can be advanced to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}. Please click &apos;Edit Info&apos; above to fill required details first.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-3 py-2">
+            <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-foreground">
+                  Selected Orders ({bulkSelectedOrders.length}):
+                </p>
+                {bulkEligibility.ineligible.length > 0 && (
+                  <span className="text-[11px] font-mono text-amber-700 dark:text-amber-300 font-bold">
+                    {bulkEligibility.eligible.length} Eligible · {bulkEligibility.ineligible.length} Ineligible
+                  </span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-muted-foreground break-words">
+                {bulkSelectedOrders.map((o) => o.id).join(", ")}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Optional Batch Staff Note:
+              </label>
+              <Textarea
+                value={bulkStatusNote}
+                onChange={(e) => setBulkStatusNote(e.target.value)}
+                placeholder="e.g. Dispatched via evening courier pickup / Customer phone verification completed..."
+                rows={3}
+                className="text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                This note will be automatically added to the internal staff notes for all processed orders.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={bulkStatusMutation.isPending || bulkEligibility.eligible.length === 0}
+              onClick={handleConfirmBulkStatus}
+              className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+            >
+              {bulkStatusMutation.isPending
+                ? "Updating..."
+                : bulkEligibility.ineligible.length > 0 && bulkEligibility.eligible.length > 0
+                ? `Update ${bulkEligibility.eligible.length} Eligible Orders (Skip ${bulkEligibility.ineligible.length})`
+                : bulkEligibility.eligible.length === 0
+                ? "No Eligible Orders Selected"
+                : `Update ${bulkSelectedOrders.length} Orders`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 7. BULK ASSIGN COURIER MODAL */}
+      {/* ========================================================================= */}
+      <Dialog open={isBulkCourierOpen} onOpenChange={setIsBulkCourierOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-blue-600" />
+              Assign Courier to {bulkSelectedOrders.length} Order(s)
+            </DialogTitle>
+            <DialogDescription>
+              Assign <span className="font-bold text-foreground">{bulkTargetCourier}</span> as the delivery partner for all selected orders.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs space-y-1">
+              <p className="font-semibold text-foreground">
+                Selected Orders ({bulkSelectedOrders.length}):
+              </p>
+              <p className="font-mono text-[11px] text-blue-950 dark:text-blue-200 break-words">
+                {bulkSelectedOrders.map((o) => o.id).join(", ")}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Optional Courier / Dispatch Note:
+              </label>
+              <Textarea
+                value={bulkCourierNote}
+                onChange={(e) => setBulkCourierNote(e.target.value)}
+                placeholder="e.g. Bulk courier consignment manifest #48291..."
+                rows={3}
+                className="text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Stored in internal staff notes for all {bulkSelectedOrders.length} orders.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkCourierOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={bulkCourierMutation.isPending}
+              onClick={handleConfirmBulkCourier}
+              className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+            >
+              {bulkCourierMutation.isPending ? "Assigning..." : `Assign to ${bulkSelectedOrders.length} Orders`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 8. BULK DELETE CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      <Dialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete {bulkSelectedOrders.length} Order(s)
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete these {bulkSelectedOrders.length} orders? This action will sync to the database and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs space-y-1.5">
+            <p className="font-semibold text-destructive">
+              Selected Orders ({bulkSelectedOrders.length}):
+            </p>
+            <p className="text-muted-foreground font-mono text-[11px] break-words">
+              {bulkSelectedOrders.map((o) => o.id).join(", ")}
+            </p>
+            <p className="text-[11px] text-muted-foreground pt-1">
+              Associated line items and event records will be permanently removed.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkDeleteMutation.isPending}
+              onClick={handleConfirmBulkDelete}
+              className="cursor-pointer"
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${bulkSelectedOrders.length} Orders`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
