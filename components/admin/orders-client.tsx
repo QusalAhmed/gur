@@ -63,6 +63,7 @@ import {
   updateOrderInDb,
   updateOrderStatusInDb,
   addOrderNoteInDb,
+  updateOrderNoteInDb,
   deleteOrderNoteInDb,
   updateCustomerNoteInDb,
   deleteOrderInDb,
@@ -139,14 +140,16 @@ import { OrderFormDialog } from "@/components/admin/order-form-dialog";
 import {
   orderNoteFormSchema,
   orderNoteTextSchema,
+  orderNoteTypeSchema,
+  updateOrderNoteFormSchema,
   recordPaymentFormSchema,
   orderAmountPaidSchema,
   BANGLADESH_COURIERS,
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
-import type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct } from "@/types/order";
-export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct } from "@/types/order";
+import type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
+export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
 
 const availableCatalogProducts: CatalogProduct[] = [
   {
@@ -382,18 +385,63 @@ export function OrdersClient() {
       note: OrderNote;
       currentOrder?: Order;
     }) => {
-      return await addOrderNoteInDb(orderId, note, currentOrder);
+      const resolvedOrder =
+        currentOrder ||
+        orders.find((o) => o.id === orderId) ||
+        (selectedOrder?.id === orderId ? selectedOrder : undefined);
+      return await addOrderNoteInDb(orderId, note, resolvedOrder);
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       if (selectedOrder?.id === updated.id) {
         setSelectedOrder(updated);
       }
+      if (noteOrder?.id === updated.id) {
+        setNoteOrder(updated);
+      }
       showToast(`Note recorded and synced on ${updated.id}!`, "info");
     },
     onError: (err: any) => {
       console.error("Failed to add note:", err);
       showToast("Failed to sync note to database", "destructive");
+    },
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      noteId,
+      text,
+      type,
+      currentOrder,
+    }: {
+      orderId: string;
+      noteId: string;
+      text: string;
+      type?: OrderNoteType;
+      currentOrder?: Order;
+    }) => {
+      const resolvedOrder =
+        currentOrder ||
+        orders.find((o) => o.id === orderId) ||
+        (selectedOrder?.id === orderId ? selectedOrder : undefined);
+      return await updateOrderNoteInDb(orderId, noteId, text, type, resolvedOrder);
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (selectedOrder?.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      if (noteOrder?.id === updated.id) {
+        setNoteOrder(updated);
+      }
+      setIsEditNoteOpen(false);
+      setEditingNote(null);
+      showToast("Note updated and synced to database!", "success");
+    },
+    onError: (err: any) => {
+      console.error("Failed to update note:", err);
+      showToast("Failed to sync note update to database", "destructive");
     },
   });
 
@@ -407,13 +455,23 @@ export function OrdersClient() {
       noteId: string;
       currentOrder?: Order;
     }) => {
-      return await deleteOrderNoteInDb(orderId, noteId, currentOrder);
+      const resolvedOrder =
+        currentOrder ||
+        orders.find((o) => o.id === orderId) ||
+        (selectedOrder?.id === orderId ? selectedOrder : undefined);
+      return await deleteOrderNoteInDb(orderId, noteId, resolvedOrder);
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       if (selectedOrder?.id === updated.id) {
         setSelectedOrder(updated);
       }
+      if (noteOrder?.id === updated.id) {
+        setNoteOrder(updated);
+      }
+      setDeletingNoteTarget(null);
+      setIsEditNoteOpen(false);
+      setEditingNote(null);
       showToast("Note deleted and synced.", "info");
     },
     onError: (err: any) => {
@@ -690,9 +748,26 @@ export function OrdersClient() {
 
   const [noteOrder, setNoteOrder] = React.useState<Order | null>(null);
   const [isNoteOpen, setIsNoteOpen] = React.useState(false);
+  const [editingNote, setEditingNote] = React.useState<{
+    id: string;
+    text: string;
+    type: OrderNoteType;
+    orderId: string;
+    author?: string;
+  } | null>(null);
+  const [isEditNoteOpen, setIsEditNoteOpen] = React.useState(false);
+  const [noteFilterType, setNoteFilterType] = React.useState<"all" | OrderNoteType>("all");
 
   const [deletingOrder, setDeletingOrder] = React.useState<Order | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = React.useState(false);
+
+  const [deletingNoteTarget, setDeletingNoteTarget] = React.useState<{
+    orderId: string;
+    noteId: string;
+    text: string;
+    type: OrderNoteType;
+    currentOrder?: Order;
+  } | null>(null);
 
   // Bulk Operations State & Handlers
   const [bulkSelectedOrders, setBulkSelectedOrders] = React.useState<Order[]>([]);
@@ -781,7 +856,7 @@ export function OrdersClient() {
   const handleBulkPrintInvoices = (orders: Order[]) => {
     if (orders.length === 0) return;
     const ids = orders.map((o) => o.id).join(",");
-    window.open(`/admin/orders/print?ids=${encodeURIComponent(ids)}`, "_blank");
+    window.open(`/admin/orders/print?ids=${encodeURIComponent(ids)}&format=58mm`, "_blank");
   };
 
   const handleOpenPayment = (order: Order) => {
@@ -793,7 +868,7 @@ export function OrdersClient() {
   const addNoteForm = useForm({
     defaultValues: {
       text: "",
-      type: "internal" as "internal" | "customer",
+      type: "internal" as OrderNoteType,
     },
     onSubmit: async ({ value }) => {
       const validation = orderNoteFormSchema.safeParse(value);
@@ -827,7 +902,7 @@ export function OrdersClient() {
   const drawerNoteForm = useForm({
     defaultValues: {
       text: "",
-      type: "internal" as "internal" | "customer",
+      type: "internal" as OrderNoteType,
     },
     onSubmit: async ({ value }) => {
       const validation = orderNoteFormSchema.safeParse(value);
@@ -853,6 +928,35 @@ export function OrdersClient() {
       });
 
       drawerNoteForm.reset();
+    },
+  });
+
+  // TanStack Form for Edit Note Dialog
+  const editNoteForm = useForm({
+    defaultValues: {
+      text: "",
+      type: "internal" as OrderNoteType,
+    },
+    onSubmit: async ({ value }) => {
+      const validation = orderNoteFormSchema.safeParse(value);
+      if (!validation.success) {
+        showToast(validation.error.issues[0]?.message || "Invalid note details", "destructive");
+        return;
+      }
+      if (!editingNote) return;
+
+      updateNoteMutation.mutate({
+        orderId: editingNote.orderId,
+        noteId: editingNote.id,
+        text: validation.data.text.trim(),
+        type: value.type,
+        currentOrder:
+          selectedOrder?.id === editingNote.orderId
+            ? selectedOrder
+            : noteOrder?.id === editingNote.orderId
+            ? noteOrder
+            : orders.find((o) => o.id === editingNote.orderId),
+      });
     },
   });
 
@@ -917,7 +1021,9 @@ export function OrdersClient() {
         const matchesId = order.id.toLowerCase().includes(q);
         const matchesCustomer = (order.customer || "").toLowerCase().includes(q);
         const matchesPhone = (order.phone || "").toLowerCase().includes(q);
-        const matchesNote = (order.customer_note || "").toLowerCase().includes(q);
+        const matchesCustomerNote = (order.customer_note || "").toLowerCase().includes(q);
+        const matchesRestNotes = (order.notes || []).some((n) => (n.text || "").toLowerCase().includes(q));
+        const matchesNote = matchesCustomerNote || matchesRestNotes;
         const matchesItem = (order.items || []).some((i) => i.product_name.toLowerCase().includes(q));
         const matchesDivision = order.address?.division?.toLowerCase().includes(q) || false;
         const matchesDistrict = order.address?.district?.toLowerCase().includes(q) || false;
@@ -1184,10 +1290,85 @@ export function OrdersClient() {
   };
 
   // Open Add Note Dialog
-  const handleOpenNote = (order: Order) => {
+  const handleOpenNote = (order: Order, defaultType: OrderNoteType = "internal") => {
     setNoteOrder(order);
-    addNoteForm.reset({ text: "", type: "internal" });
+    addNoteForm.setFieldValue("text", "");
+    addNoteForm.setFieldValue("type", defaultType);
     setIsNoteOpen(true);
+  };
+
+  // Open Edit Note Dialog (for notes in notes table)
+  const handleOpenEditNote = (note: OrderNote, orderId: string) => {
+    setEditingNote({
+      id: note.id,
+      text: note.text,
+      type: note.type,
+      orderId,
+      author: note.author,
+    });
+    editNoteForm.setFieldValue("text", note.text);
+    editNoteForm.setFieldValue("type", note.type);
+    setIsEditNoteOpen(true);
+  };
+
+  // Open Edit Note Dialog specifically for customer note
+  const handleOpenEditCustomerNote = (order: Order) => {
+    setEditingNote({
+      id: "customer_note",
+      text: order.customer_note || "",
+      type: "customer",
+      orderId: order.id,
+      author: order.customer ? `${order.customer} (Customer)` : "Customer",
+    });
+    editNoteForm.setFieldValue("text", order.customer_note || "");
+    editNoteForm.setFieldValue("type", "customer");
+    setIsEditNoteOpen(true);
+  };
+
+  // Keep Edit Note Form synchronized with editingNote
+  React.useEffect(() => {
+    if (editingNote && isEditNoteOpen) {
+      editNoteForm.setFieldValue("text", editingNote.text);
+      editNoteForm.setFieldValue("type", editingNote.type);
+    }
+  }, [editingNote, isEditNoteOpen]);
+
+  // Open Delete Note Confirmation Modal
+  const handleOpenDeleteNote = (
+    noteId: string,
+    orderId: string,
+    text: string,
+    type: OrderNoteType,
+    currentOrder?: Order
+  ) => {
+    setDeletingNoteTarget({
+      orderId,
+      noteId,
+      text,
+      type,
+      currentOrder,
+    });
+  };
+
+  // Confirm Delete Note
+  const handleConfirmDeleteNote = () => {
+    if (!deletingNoteTarget) return;
+    deleteNoteMutation.mutate({
+      orderId: deletingNoteTarget.orderId,
+      noteId: deletingNoteTarget.noteId,
+      currentOrder: deletingNoteTarget.currentOrder,
+    });
+  };
+
+  // Clear customer note
+  const handleClearCustomerNote = (order: Order) => {
+    handleOpenDeleteNote(
+      "customer_note",
+      order.id,
+      order.customer_note || "",
+      "customer",
+      order
+    );
   };
 
   // Open Delete Confirmation
@@ -1221,27 +1402,38 @@ export function OrdersClient() {
       "Amount Paid",
       "Due Balance",
       "Date & Time",
-      "Customer Note",
+      "Customer Note (for seller)",
+      "Delivery Notes (for delivery man)",
+      "Packaging Notes (for packaging)",
+      "Internal Staff Notes",
     ];
-    const rows = filteredOrders.map((o) => [
-      o.id,
-      `"${o.customer || ""}"`,
-      `"${o.phone || ""}"`,
-      `"${o.address?.district || ""}"`,
-      `"${(o.address?.address_line || "").replace(/"/g, '""')}"`,
-      (o.items || []).length,
-      `"${(o.items || []).map((i) => `${i.quantity}x ${i.product_name}`).join("; ")}"`,
-      o.status,
-      o.payment,
-      o.method,
-      o.channel,
-      `"${o.courier_name || "Unassigned"}"`,
-      o.grand_total,
-      o.amount_paid,
-      Math.max(0, o.grand_total - o.amount_paid),
-      formatDateTime(o.date),
-      `"${(o.customer_note || "").replace(/"/g, '""')}"`,
-    ]);
+    const rows = filteredOrders.map((o) => {
+      const delivNotes = (o.notes || []).filter((n) => n.type === "delivery").map((n) => n.text).join(" | ");
+      const packNotes = (o.notes || []).filter((n) => n.type === "packaging").map((n) => n.text).join(" | ");
+      const staffNotes = (o.notes || []).filter((n) => n.type === "internal").map((n) => n.text).join(" | ");
+      return [
+        o.id,
+        `"${o.customer || ""}"`,
+        `"${o.phone || ""}"`,
+        `"${o.address?.district || ""}"`,
+        `"${(o.address?.address_line || "").replace(/"/g, '""')}"`,
+        (o.items || []).length,
+        `"${(o.items || []).map((i) => `${i.quantity}x ${i.product_name}`).join("; ")}"`,
+        o.status,
+        o.payment,
+        o.method,
+        o.channel,
+        `"${o.courier_name || "Unassigned"}"`,
+        o.grand_total,
+        o.amount_paid,
+        Math.max(0, o.grand_total - o.amount_paid),
+        formatDateTime(o.date),
+        `"${(o.customer_note || "").replace(/"/g, '""')}"`,
+        `"${delivNotes.replace(/"/g, '""')}"`,
+        `"${packNotes.replace(/"/g, '""')}"`,
+        `"${staffNotes.replace(/"/g, '""')}"`,
+      ];
+    });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -1610,7 +1802,7 @@ export function OrdersClient() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])}>
                       <Printer className="h-4 w-4 mr-2 text-amber-600" />
-                      Print 2&quot; Sticker
+                      Print
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -1702,21 +1894,47 @@ export function OrdersClient() {
             {order.customer_note && (
               <>
                 <span className="text-muted-foreground">·</span>
-                <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300 font-medium" title={order.customer_note}>
+                <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300 font-medium" title={`Customer Note: ${order.customer_note}`}>
                   <MessageSquare className="h-3 w-3 text-blue-600 shrink-0" />
-                  Customer Note: &quot;{order.customer_note}&quot;
+                  Customer: &quot;{order.customer_note}&quot;
                 </span>
               </>
             )}
+            {(() => {
+              const latestDeliv = (order.notes || []).find((n) => n.type === "delivery");
+              if (!latestDeliv) return null;
+              return (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300 font-medium" title={`Delivery Note: ${latestDeliv.text}`}>
+                    <Truck className="h-3 w-3 text-indigo-600 shrink-0" />
+                    Delivery: &quot;{latestDeliv.text}&quot;
+                  </span>
+                </>
+              );
+            })()}
+            {(() => {
+              const latestPack = (order.notes || []).find((n) => n.type === "packaging");
+              if (!latestPack) return null;
+              return (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-medium" title={`Packaging Note: ${latestPack.text}`}>
+                    <PackageCheck className="h-3 w-3 text-emerald-600 shrink-0" />
+                    Packaging: &quot;{latestPack.text}&quot;
+                  </span>
+                </>
+              );
+            })()}
             {(() => {
               const latestInternal = (order.notes || []).find((n) => n.type === "internal");
               if (!latestInternal) return null;
               return (
                 <>
                   <span className="text-muted-foreground">·</span>
-                  <span className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-300 font-medium" title={latestInternal.text}>
+                  <span className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-300 font-medium" title={`Staff Note: ${latestInternal.text}`}>
                     <ShieldCheck className="h-3 w-3 text-amber-600 shrink-0" />
-                    Staff Note: &quot;{latestInternal.text}&quot;
+                    Staff: &quot;{latestInternal.text}&quot;
                   </span>
                 </>
               );
@@ -1746,10 +1964,10 @@ export function OrdersClient() {
               variant="outline"
               className="h-7 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700"
               onClick={() => handleBulkPrintInvoices([order])}
-              title="Print 2-inch thermal sticker label"
+              title="Print 58mm thermal sticker label"
             >
               <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
-              2&quot; Sticker
+              58mm Sticker
             </Button>
             <Button
               size="sm"
@@ -2340,17 +2558,17 @@ export function OrdersClient() {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* 3. Print 2" Thermal Stickers */}
+                {/* 3. Print 58mm Thermal Stickers */}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => handleBulkPrintInvoices(selectedOrders)}
                   className="h-7 text-xs bg-background hover:bg-muted text-foreground hover:text-amber-600 cursor-pointer"
-                  title="Open 2-inch thermal sticker roll printable invoices in a new tab"
+                  title="Open 58mm thermal sticker roll printable invoices in a new tab"
                 >
                   <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                  Print 2&quot; Stickers ({selectedOrders.length})
+                  Print ({selectedOrders.length})
                 </Button>
 
                 {/* 4. Export Selected CSV */}
@@ -2560,10 +2778,10 @@ export function OrdersClient() {
                   variant="outline"
                   className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700"
                   onClick={() => handleBulkPrintInvoices([selectedOrder])}
-                  title="Print 2-inch thermal sticker label"
+                  title="Print 58mm thermal sticker label"
                 >
                   <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                  2&quot; Sticker
+                  58mm Sticker
                 </Button>
                 <Button
                   size="sm"
@@ -2636,16 +2854,132 @@ export function OrdersClient() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* Left Column: Items, Instructions, Financials (7 cols on lg) */}
                 <div className="lg:col-span-7 space-y-6">
-                  {/* Customer Order Note (if any) */}
+                  {/* 1. Customer Note for seller (stored in orders.customer_note) */}
                   {selectedOrder.customer_note && (
-                    <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
-                      <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5 mb-1">
-                        <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-                        Customer Note / Delivery Instruction:
-                      </p>
-                      <p className="text-blue-950 dark:text-blue-100">{selectedOrder.customer_note}</p>
+                    <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs relative group">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+                          <span>Customer Note (for Seller, written while ordering):</span>
+                        </p>
+                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCustomerNote(selectedOrder)}
+                            className="p-1 rounded hover:bg-blue-200/50 text-blue-800 dark:text-blue-300 transition-colors"
+                            title="Edit Customer Note"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleClearCustomerNote(selectedOrder)}
+                            className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors"
+                            title="Clear Customer Note"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-blue-950 dark:text-blue-100 italic whitespace-pre-wrap leading-relaxed">&quot;{selectedOrder.customer_note}&quot;</p>
                     </div>
                   )}
+
+                  {/* 2. Delivery Note for delivery man (from notes table) */}
+                  {(() => {
+                    const deliveryNotes = (selectedOrder.notes || []).filter((n) => n.type === "delivery");
+                    if (deliveryNotes.length === 0) return null;
+                    return (
+                      <div className="space-y-2">
+                        {deliveryNotes.map((dn) => (
+                          <div key={dn.id} className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs relative group">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                                <Truck className="h-3.5 w-3.5 text-indigo-600" />
+                                <span>Delivery Note (for Delivery Man):</span>
+                              </p>
+                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditNote(dn, selectedOrder.id)}
+                                  className="p-1 rounded hover:bg-indigo-200/50 text-indigo-800 dark:text-indigo-300 transition-colors"
+                                  title="Edit Delivery Note"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenDeleteNote(
+                                      dn.id,
+                                      selectedOrder.id,
+                                      dn.text,
+                                      dn.type,
+                                      selectedOrder
+                                    )
+                                  }
+                                  className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors cursor-pointer"
+                                  title="Delete Delivery Note"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-indigo-950 dark:text-indigo-100 whitespace-pre-wrap leading-relaxed">{dn.text}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{dn.author} · {dn.created_at}</p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* 3. Packaging Note for checking while packaging (from notes table) */}
+                  {(() => {
+                    const packagingNotes = (selectedOrder.notes || []).filter((n) => n.type === "packaging");
+                    if (packagingNotes.length === 0) return null;
+                    return (
+                      <div className="space-y-2">
+                        {packagingNotes.map((pn) => (
+                          <div key={pn.id} className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs relative group">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                                <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Packaging Note (for checking while packaging):</span>
+                              </p>
+                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditNote(pn, selectedOrder.id)}
+                                  className="p-1 rounded hover:bg-emerald-200/50 text-emerald-800 dark:text-emerald-300 transition-colors cursor-pointer"
+                                  title="Edit Packaging Note"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenDeleteNote(
+                                      pn.id,
+                                      selectedOrder.id,
+                                      pn.text,
+                                      pn.type,
+                                      selectedOrder
+                                    )
+                                  }
+                                  className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors cursor-pointer"
+                                  title="Delete Packaging Note"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-emerald-950 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{pn.text}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{pn.author} · {pn.created_at}</p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Cancellation Reason (if cancelled or returned) */}
                   {(selectedOrder.status === "cancelled" || selectedOrder.status === "returned") && selectedOrder.cancel_reason && (
@@ -2787,8 +3121,18 @@ export function OrdersClient() {
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold flex items-center gap-1.5">
                         <MessageSquare className="h-4 w-4 text-amber-600" />
-                        Notes & Memos ({(selectedOrder.notes || []).length})
+                        Notes & Memos ({(selectedOrder.notes || []).length + (selectedOrder.customer_note ? 1 : 0)})
                       </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-primary"
+                        onClick={() => handleOpenNote(selectedOrder)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        New Note
+                      </Button>
                     </div>
 
                     {/* Quick Add Note inside Drawer using TanStack Form */}
@@ -2811,15 +3155,27 @@ export function OrdersClient() {
                             <FormFieldLabel htmlFor="drawer_note_text" className="text-xs font-semibold">
                               Add New Note / Memo
                             </FormFieldLabel>
-                            <Textarea
-                              id="drawer_note_text"
-                              value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value)}
-                              onBlur={field.handleBlur}
-                              placeholder="Write staff instructions or notes..."
-                              rows={2}
-                              className="text-xs bg-background"
-                            />
+                            <drawerNoteForm.Subscribe selector={(state) => state.values.type}>
+                              {(noteType) => (
+                                <Textarea
+                                  id="drawer_note_text"
+                                  value={field.state.value}
+                                  onChange={(e) => field.handleChange(e.target.value)}
+                                  onBlur={field.handleBlur}
+                                  placeholder={
+                                    noteType === "customer"
+                                      ? "Write customer note for seller (saves to orders.customer_note)..."
+                                      : noteType === "delivery"
+                                      ? "Write delivery instructions for delivery man (saves to notes table)..."
+                                      : noteType === "packaging"
+                                      ? "Write packaging checklist notes for packaging (saves to notes table)..."
+                                      : "Write internal staff update notes (saves to notes table)..."
+                                  }
+                                  rows={2}
+                                  className="text-xs bg-background"
+                                />
+                              )}
+                            </drawerNoteForm.Subscribe>
                             <FormFieldError errors={field.state.meta.errors} />
                           </FormFieldItem>
                         )}
@@ -2828,14 +3184,27 @@ export function OrdersClient() {
                       <div className="flex items-center justify-between gap-2">
                         <drawerNoteForm.Field name="type">
                           {(field) => (
-                            <select
-                              value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value as "internal" | "customer")}
-                              className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none cursor-pointer"
-                            >
-                              <option value="internal">🔒 Internal Staff Note</option>
-                              <option value="customer">💬 Customer Note</option>
-                            </select>
+                            <div className="flex items-center gap-1.5">
+                              {field.state.value === "internal" ? (
+                                <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                              ) : field.state.value === "customer" ? (
+                                <MessageSquare className="h-4 w-4 text-blue-600 shrink-0" />
+                              ) : field.state.value === "delivery" ? (
+                                <Truck className="h-4 w-4 text-indigo-600 shrink-0" />
+                              ) : (
+                                <PackageCheck className="h-4 w-4 text-purple-600 shrink-0" />
+                              )}
+                              <select
+                                value={field.state.value}
+                                onChange={(e) => field.handleChange(e.target.value as OrderNoteType)}
+                                className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none cursor-pointer max-w-[210px]"
+                              >
+                                <option value="internal">Staff Note (Update/Status)</option>
+                                <option value="customer">Customer Note (For Seller)</option>
+                                <option value="delivery">Delivery Note (For Courier)</option>
+                                <option value="packaging">Packaging Note (For Packing)</option>
+                              </select>
+                            </div>
                           )}
                         </drawerNoteForm.Field>
 
@@ -2851,57 +3220,198 @@ export function OrdersClient() {
                       </div>
                     </form>
 
-                    {/* Notes List with Delete functionality */}
-                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                      {(!selectedOrder.notes || selectedOrder.notes.length === 0) ? (
-                        <p className="text-xs text-muted-foreground italic py-2">No notes recorded yet.</p>
-                      ) : (
-                        selectedOrder.notes.map((note) => (
-                          <div
-                            key={note.id}
-                            className={`p-3 rounded-xl border text-xs space-y-1.5 relative group ${
-                              note.type === "customer"
-                                ? "bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
-                                : "bg-amber-500/[0.04] dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-900/40"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-foreground flex items-center gap-1.5">
-                                {note.type === "customer" ? (
-                                  <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
-                                    <MessageSquare className="h-3 w-3 mr-1 inline" />
-                                    Customer Note
-                                  </Badge>
-                                ) : (
-                                  <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">
-                                    <ShieldCheck className="h-3 w-3 mr-1 inline" />
-                                    Internal Staff Note
-                                  </Badge>
-                                )}
-                                <span className="text-[11px] text-muted-foreground">{note.author}</span>
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-muted-foreground">{formatDateTime(note.created_at)}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    deleteNoteMutation.mutate({
-                                      orderId: selectedOrder.id,
-                                      noteId: note.id,
-                                      currentOrder: selectedOrder,
-                                    });
-                                  }}
-                                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
-                                  title="Delete Note"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
+                    {/* Filter Pills for Notes */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+                      {(() => {
+                        const allTotal = (selectedOrder.notes || []).length + (selectedOrder.customer_note ? 1 : 0);
+                        const staffCount = (selectedOrder.notes || []).filter((n) => n.type === "internal").length;
+                        const delivCount = (selectedOrder.notes || []).filter((n) => n.type === "delivery").length;
+                        const packCount = (selectedOrder.notes || []).filter((n) => n.type === "packaging").length;
+                        const custCount = selectedOrder.customer_note ? 1 : 0;
+
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setNoteFilterType("all")}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                                noteFilterType === "all"
+                                  ? "bg-foreground text-background font-semibold"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                              }`}
+                            >
+                              All ({allTotal})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNoteFilterType("internal")}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+                                noteFilterType === "internal"
+                                  ? "bg-amber-600 text-white font-semibold"
+                                  : "bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+                              }`}
+                            >
+                              <ShieldCheck className="h-3 w-3" />
+                              Staff ({staffCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNoteFilterType("delivery")}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+                                noteFilterType === "delivery"
+                                  ? "bg-indigo-600 text-white font-semibold"
+                                  : "bg-indigo-500/10 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-500/20"
+                              }`}
+                            >
+                              <Truck className="h-3 w-3" />
+                              Delivery ({delivCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNoteFilterType("packaging")}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+                                noteFilterType === "packaging"
+                                  ? "bg-emerald-600 text-white font-semibold"
+                                  : "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/20"
+                              }`}
+                            >
+                              <PackageCheck className="h-3 w-3" />
+                              Packing ({packCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNoteFilterType("customer")}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+                                noteFilterType === "customer"
+                                  ? "bg-blue-600 text-white font-semibold"
+                                  : "bg-blue-500/10 text-blue-800 dark:text-blue-300 hover:bg-blue-500/20"
+                              }`}
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              Customer ({custCount})
+                            </button>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Notes List with Edit & Delete functionality */}
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {/* Customer Note Card (shown when 'all' or 'customer' filter is active) */}
+                      {(noteFilterType === "all" || noteFilterType === "customer") && selectedOrder.customer_note && (
+                        <div className="p-3 rounded-xl border text-xs space-y-1.5 bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 relative group">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
+                                <MessageSquare className="h-3 w-3 mr-1 inline" />
+                                Customer Note (Order Column)
+                              </Badge>
+                              <span className="text-[11px] text-muted-foreground">{selectedOrder.customer || "Customer"}</span>
+                            </span>
+                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditCustomerNote(selectedOrder)}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-blue-200/40 cursor-pointer"
+                                title="Edit Customer Note"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearCustomerNote(selectedOrder)}
+                                className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-rose-200/40 cursor-pointer"
+                                title="Clear Customer Note"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
                             </div>
-                            <p className="text-foreground/90 whitespace-pre-wrap">{note.text}</p>
                           </div>
-                        ))
+                          <p className="text-foreground/90 whitespace-pre-wrap italic">&quot;{selectedOrder.customer_note}&quot;</p>
+                          <p className="text-[10px] text-blue-800 dark:text-blue-300 font-medium">Written while ordering product for seller</p>
+                        </div>
                       )}
+
+                      {/* Rest Notes from notes table */}
+                      {(() => {
+                        const filteredNotes = (selectedOrder.notes || []).filter((n) => {
+                          if (noteFilterType === "all") return true;
+                          return n.type === noteFilterType;
+                        });
+
+                        if (filteredNotes.length === 0 && (noteFilterType !== "all" || !selectedOrder.customer_note)) {
+                          return <p className="text-xs text-muted-foreground italic py-2">No notes found for this filter.</p>;
+                        }
+
+                        return filteredNotes.map((note) => {
+                          const isDeliv = note.type === "delivery";
+                          const isPack = note.type === "packaging";
+                          const isInternal = note.type === "internal";
+
+                          const bgClass = isDeliv
+                            ? "bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
+                            : isPack
+                            ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
+                            : "bg-amber-500/[0.04] dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-900/40";
+
+                          return (
+                            <div
+                              key={note.id}
+                              className={`p-3 rounded-xl border text-xs space-y-1.5 relative group ${bgClass}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                  {isDeliv ? (
+                                    <Badge className="text-[10px] py-0 px-1.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300">
+                                      <Truck className="h-3 w-3 mr-1 inline" />
+                                      Delivery Note
+                                    </Badge>
+                                  ) : isPack ? (
+                                    <Badge className="text-[10px] py-0 px-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border-emerald-300">
+                                      <PackageCheck className="h-3 w-3 mr-1 inline" />
+                                      Packaging Note
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">
+                                      <ShieldCheck className="h-3 w-3 mr-1 inline" />
+                                      Internal Staff Note
+                                    </Badge>
+                                  )}
+                                  <span className="text-[11px] text-muted-foreground">{note.author}</span>
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-muted-foreground">{formatDateTime(note.created_at)}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditNote(note, selectedOrder.id)}
+                                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/80 opacity-70 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    title="Edit Note"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenDeleteNote(
+                                        note.id,
+                                        selectedOrder.id,
+                                        note.text,
+                                        note.type,
+                                        selectedOrder
+                                      )
+                                    }
+                                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-rose-500/10 opacity-70 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    title="Delete Note"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-foreground/90 whitespace-pre-wrap">{note.text}</p>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
 
@@ -3475,7 +3985,8 @@ export function OrdersClient() {
               Add Order Note
             </DialogTitle>
             <DialogDescription>
-              Record an internal staff note or customer memo for order <span className="font-mono font-bold text-foreground">{noteOrder?.id}</span>.
+              Add staff status updates, customer note, delivery instructions, or packaging notes for order{" "}
+              <span className="font-mono font-bold text-foreground">{noteOrder?.id}</span>.
             </DialogDescription>
           </DialogHeader>
 
@@ -3484,22 +3995,65 @@ export function OrdersClient() {
               {/* Show customer note if present */}
               {noteOrder.customer_note ? (
                 <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40">
-                  <span className="flex items-center gap-1 font-bold text-blue-900 dark:text-blue-300">
-                    <MessageSquare className="h-3 w-3 text-blue-600" />
-                    Current Customer Note (Visible to customer)
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 font-bold text-blue-900 dark:text-blue-300">
+                      <MessageSquare className="h-3 w-3 text-blue-600" />
+                      Customer Note (Stored in Order Table)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCustomerNote(noteOrder)}
+                      className="text-[10px] text-blue-700 dark:text-blue-300 hover:underline cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </div>
                   <p className="text-blue-950 dark:text-blue-100 italic mt-0.5">&quot;{noteOrder.customer_note}&quot;</p>
                 </div>
               ) : null}
 
+              {/* Show delivery notes summary if present */}
+              {((noteOrder.notes || []).filter((n) => n.type === "delivery").length > 0) && (
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <span className="flex items-center gap-1 font-bold text-emerald-900 dark:text-emerald-300">
+                    <Truck className="h-3 w-3 text-emerald-600" />
+                    Delivery Notes ({(noteOrder.notes || []).filter((n) => n.type === "delivery").length})
+                  </span>
+                  <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
+                    {(noteOrder.notes || []).filter((n) => n.type === "delivery").map((n) => (
+                      <p key={n.id} className="text-[11px] text-emerald-950 dark:text-emerald-100 line-clamp-1">
+                        • {n.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show packaging notes summary if present */}
+              {((noteOrder.notes || []).filter((n) => n.type === "packaging").length > 0) && (
+                <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                  <span className="flex items-center gap-1 font-bold text-purple-900 dark:text-purple-300">
+                    <Package className="h-3 w-3 text-purple-600" />
+                    Packaging Notes ({(noteOrder.notes || []).filter((n) => n.type === "packaging").length})
+                  </span>
+                  <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
+                    {(noteOrder.notes || []).filter((n) => n.type === "packaging").map((n) => (
+                      <p key={n.id} className="text-[11px] text-purple-950 dark:text-purple-100 line-clamp-1">
+                        • {n.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Show staff notes summary if present */}
               {((noteOrder.notes || []).filter((n) => n.type === "internal").length > 0) && (
-                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
                   <span className="flex items-center gap-1 font-bold text-amber-900 dark:text-amber-300">
                     <ShieldCheck className="h-3 w-3 text-amber-600" />
-                    Existing Internal Staff Notes ({(noteOrder.notes || []).filter((n) => n.type === "internal").length})
+                    Internal Staff Notes ({(noteOrder.notes || []).filter((n) => n.type === "internal").length})
                   </span>
-                  <div className="space-y-1 mt-1 max-h-20 overflow-y-auto pr-1">
+                  <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
                     {(noteOrder.notes || []).filter((n) => n.type === "internal").map((n) => (
                       <p key={n.id} className="text-[11px] text-amber-950 dark:text-amber-100 line-clamp-1">
                         • {n.text} <span className="text-[10px] text-muted-foreground">({n.created_at})</span>
@@ -3522,37 +4076,73 @@ export function OrdersClient() {
             <addNoteForm.Field name="type">
               {(field) => (
                 <FormFieldItem>
-                  <FormFieldLabel htmlFor="modal_note_type">Note Type</FormFieldLabel>
+                  <FormFieldLabel htmlFor="modal_note_type">Select Note Type</FormFieldLabel>
                   <div className="grid grid-cols-2 gap-2">
+                    {/* 1. Internal Staff Note */}
                     <button
                       type="button"
                       onClick={() => field.handleChange("internal")}
-                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                         field.state.value === "internal"
                           ? "border-amber-600 bg-amber-500/10 text-amber-950 dark:text-amber-200 font-semibold ring-1 ring-amber-600"
                           : "border-input hover:bg-muted/50 text-muted-foreground"
                       }`}
                     >
-                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs font-semibold leading-none">Staff Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Private to admin / staff</p>
+                        <p className="text-xs font-semibold leading-none">Internal Staff Note</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Order update & status (private)</p>
                       </div>
                     </button>
 
+                    {/* 2. Customer Note */}
                     <button
                       type="button"
                       onClick={() => field.handleChange("customer")}
-                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
                         field.state.value === "customer"
                           ? "border-blue-600 bg-blue-500/10 text-blue-950 dark:text-blue-200 font-semibold ring-1 ring-blue-600"
                           : "border-input hover:bg-muted/50 text-muted-foreground"
                       }`}
                     >
-                      <MessageSquare className="h-4 w-4 text-blue-600 shrink-0" />
+                      <MessageSquare className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-xs font-semibold leading-none">Customer Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Visible to customer</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">For seller (order column)</p>
+                      </div>
+                    </button>
+
+                    {/* 3. Delivery Note */}
+                    <button
+                      type="button"
+                      onClick={() => field.handleChange("delivery")}
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                        field.state.value === "delivery"
+                          ? "border-emerald-600 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200 font-semibold ring-1 ring-emerald-600"
+                          : "border-input hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      <Truck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold leading-none">Delivery Note</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">For delivery man / rider</p>
+                      </div>
+                    </button>
+
+                    {/* 4. Packaging Note */}
+                    <button
+                      type="button"
+                      onClick={() => field.handleChange("packaging")}
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                        field.state.value === "packaging"
+                          ? "border-purple-600 bg-purple-500/10 text-purple-950 dark:text-purple-200 font-semibold ring-1 ring-purple-600"
+                          : "border-input hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      <Package className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold leading-none">Packaging Note</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">For checking while packaging</p>
                       </div>
                     </button>
                   </div>
@@ -3572,7 +4162,13 @@ export function OrdersClient() {
                     {(noteType) => (
                       <>
                         <FormFieldLabel htmlFor="modal_note_text">
-                          {noteType === "internal" ? "Internal Staff Note Details" : "Customer Note Details"}
+                          {noteType === "internal"
+                            ? "Internal Staff Note Details"
+                            : noteType === "customer"
+                            ? "Customer Note Details (For Seller)"
+                            : noteType === "delivery"
+                            ? "Delivery Instructions (For Delivery Man)"
+                            : "Packaging Checklist & Instructions"}
                         </FormFieldLabel>
                         <Textarea
                           id="modal_note_text"
@@ -3581,8 +4177,12 @@ export function OrdersClient() {
                           onBlur={field.handleBlur}
                           placeholder={
                             noteType === "internal"
-                              ? "Enter instructions, customer verification comments, or packaging notes..."
-                              : "Enter customer note or special delivery instructions..."
+                              ? "Enter order status update, customer verification remarks, or internal follow-up..."
+                              : noteType === "customer"
+                              ? "Enter customer note or special request for seller..."
+                              : noteType === "delivery"
+                              ? "Enter special delivery instructions (e.g. Call before delivery, ring doorbell twice)..."
+                              : "Enter packaging instructions (e.g. Check jar seals, bubble wrap bottle, add gift ribbon)..."
                           }
                           rows={4}
                           className="text-xs"
@@ -3591,7 +4191,9 @@ export function OrdersClient() {
                     )}
                   </addNoteForm.Subscribe>
                   <FormFieldError errors={field.state.meta.errors} />
-                  <FormFieldDescription>Max 1000 characters. Automatically stamps timestamp & author and syncs to database.</FormFieldDescription>
+                  <FormFieldDescription>
+                    Max 1000 characters. Customer notes update the order customer note column; rest notes are saved to the notes table.
+                  </FormFieldDescription>
                 </FormFieldItem>
               )}
             </addNoteForm.Field>
@@ -3609,6 +4211,249 @@ export function OrdersClient() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 4B. EDIT ORDER NOTE DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog open={isEditNoteOpen} onOpenChange={setIsEditNoteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-amber-600" />
+              Edit Order Note
+            </DialogTitle>
+            <DialogDescription>
+              Modify note for order <span className="font-mono font-bold text-foreground">{editingNote?.orderId}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingNote && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editNoteForm.handleSubmit();
+              }}
+              className="space-y-4 py-1"
+            >
+              <editNoteForm.Field name="type">
+                {(field) => (
+                  <FormFieldItem>
+                    <FormFieldLabel htmlFor="edit_modal_note_type">Note Category</FormFieldLabel>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {/* 1. Internal Staff Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("internal")}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                          field.state.value === "internal"
+                            ? "border-amber-600 bg-amber-500/10 text-amber-950 dark:text-amber-200 font-semibold ring-1 ring-amber-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <ShieldCheck className="h-4 w-4 text-amber-600" />
+                        <span className="text-xs font-semibold">Staff Note</span>
+                      </button>
+
+                      {/* 2. Customer Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("customer")}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                          field.state.value === "customer"
+                            ? "border-blue-600 bg-blue-500/10 text-blue-950 dark:text-blue-200 font-semibold ring-1 ring-blue-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <MessageSquare className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs font-semibold">Customer</span>
+                      </button>
+
+                      {/* 3. Delivery Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("delivery")}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                          field.state.value === "delivery"
+                            ? "border-emerald-600 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200 font-semibold ring-1 ring-emerald-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Truck className="h-4 w-4 text-emerald-600" />
+                        <span className="text-xs font-semibold">Delivery</span>
+                      </button>
+
+                      {/* 4. Packaging Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("packaging")}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                          field.state.value === "packaging"
+                            ? "border-purple-600 bg-purple-500/10 text-purple-950 dark:text-purple-200 font-semibold ring-1 ring-purple-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Package className="h-4 w-4 text-purple-600" />
+                        <span className="text-xs font-semibold">Packaging</span>
+                      </button>
+                    </div>
+                    {field.state.value === "customer" && (
+                      <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-1 flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3 inline shrink-0" />
+                        Saved in order customer note column (for seller, written while ordering).
+                      </p>
+                    )}
+                  </FormFieldItem>
+                )}
+              </editNoteForm.Field>
+
+              <editNoteForm.Field
+                name="text"
+                validators={{
+                  onChange: validateWithZod(orderNoteTextSchema),
+                }}
+              >
+                {(field) => (
+                  <FormFieldItem>
+                    <FormFieldLabel htmlFor="edit_modal_note_text">Note Content</FormFieldLabel>
+                    <Textarea
+                      id="edit_modal_note_text"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      rows={4}
+                      className="text-xs"
+                      placeholder="Enter updated note text..."
+                    />
+                    <FormFieldError errors={field.state.meta.errors} />
+                  </FormFieldItem>
+                )}
+              </editNoteForm.Field>
+
+              <DialogFooter className="flex items-center justify-between pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 text-xs flex items-center gap-1 px-2.5 cursor-pointer"
+                  onClick={() => {
+                    const resolvedOrder =
+                      selectedOrder?.id === editingNote.orderId
+                        ? selectedOrder
+                        : noteOrder?.id === editingNote.orderId
+                        ? noteOrder
+                        : orders.find((o) => o.id === editingNote.orderId);
+                    handleOpenDeleteNote(
+                      editingNote.id,
+                      editingNote.orderId,
+                      editingNote.text,
+                      editingNote.type,
+                      resolvedOrder
+                    );
+                  }}
+                  disabled={deleteNoteMutation.isPending || updateNoteMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Note
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditNoteOpen(false);
+                      setEditingNote(null);
+                    }}
+                    disabled={updateNoteMutation.isPending || deleteNoteMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={updateNoteMutation.isPending || deleteNoteMutation.isPending}
+                    className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+                  >
+                    {updateNoteMutation.isPending ? "Updating..." : "Save Changes"}
+                  </Button>
+                </div>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* 4C. DELETE ORDER NOTE CONFIRMATION DIALOG */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={!!deletingNoteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeletingNoteTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete {deletingNoteTarget?.type === "customer" ? "Customer Note" : "Order Note"}
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this note from order{" "}
+              <span className="font-mono font-bold text-foreground">
+                {deletingNoteTarget?.orderId}
+              </span>
+              ? This action will sync to the database.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deletingNoteTarget && (
+            <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs space-y-2">
+              <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                {deletingNoteTarget.type === "customer" ? (
+                  <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
+                    Customer Note (Order Column)
+                  </Badge>
+                ) : deletingNoteTarget.type === "delivery" ? (
+                  <Badge className="text-[10px] py-0 px-1.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300">
+                    Delivery Note
+                  </Badge>
+                ) : deletingNoteTarget.type === "packaging" ? (
+                  <Badge className="text-[10px] py-0 px-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border-emerald-300">
+                    Packaging Note
+                  </Badge>
+                ) : (
+                  <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">
+                    Internal Staff Note
+                  </Badge>
+                )}
+              </div>
+              <p className="text-foreground/90 italic whitespace-pre-wrap leading-relaxed line-clamp-4">
+                &quot;{deletingNoteTarget.text}&quot;
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeletingNoteTarget(null)}
+              disabled={deleteNoteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDeleteNote}
+              disabled={deleteNoteMutation.isPending}
+              className="cursor-pointer"
+            >
+              {deleteNoteMutation.isPending ? "Deleting..." : "Confirm Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

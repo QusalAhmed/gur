@@ -9,12 +9,24 @@ export interface OrderItem {
   variant_id?: string;
 }
 
+export type OrderNoteType =
+  | "internal"
+  | "customer"
+  | "delivery"
+  | "packaging"
+  | "internal_staff_note"
+  | "delivery_note"
+  | "packaging_note";
+
 export interface OrderNote {
   id: string;
   author: string;
   text: string;
-  type: "internal" | "customer";
+  type: OrderNoteType;
   created_at: string;
+  order_id?: string;
+  order_number?: string;
+  updated_at?: string;
 }
 
 export interface OrderEvent {

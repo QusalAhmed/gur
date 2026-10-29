@@ -21,6 +21,9 @@ import {
   ShieldCheck,
   Package,
   Layers,
+  MessageSquare,
+  Truck,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
@@ -34,25 +37,21 @@ interface StoreConfig {
   address: string;
   phone: string;
   website: string;
-  email: string;
-  binNumber: string;
 }
 
 const DEFAULT_STORE: StoreConfig = {
-  name: "GUR | Pure Cane & Date Molasses",
+  name: "খেজুরের খাটি গুড়",
   tagline: "Heritage Artisanal Molasses & Natural Sweeteners",
-  address: "House 12, Road 4, Dhanmondi, Dhaka-1205, Bangladesh",
-  phone: "+880 1811-223344",
+  address: "Bagha, Rajshahi",
+  phone: "0184-355389",
   website: "https://gur.com.bd",
-  email: "orders@gur.com.bd",
-  binNumber: "TRAD/DSCC/019284/2026",
 };
 
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const idsParam = searchParams.get("ids") || "";
-  const initialFormat = (searchParams.get("format") as PaperFormat) || "2inch";
+  const initialFormat = (searchParams.get("format") as PaperFormat) || "58mm";
 
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -61,7 +60,6 @@ function PrintContent() {
   // Print controls & preferences
   const [paperFormat, setPaperFormat] = React.useState<PaperFormat>(initialFormat);
   const [zoomLevel, setZoomLevel] = React.useState<number>(100);
-  const [showPrices, setShowPrices] = React.useState<boolean>(true);
   const [showQrCode, setShowQrCode] = React.useState<boolean>(true);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
@@ -173,9 +171,9 @@ function PrintContent() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-slate-800">
         <Loader2 className="h-9 w-9 animate-spin text-amber-600 mb-3" />
-        <h2 className="text-sm font-bold tracking-tight">Preparing 2&quot; Thermal Stickers...</h2>
+        <h2 className="text-sm font-bold tracking-tight">Preparing invoice...</h2>
         <p className="text-xs text-slate-500 mt-1">
-          Loading order line items, address records, and generating vector QR codes...
+          Loading order line items and generating vector QR codes...
         </p>
       </div>
     );
@@ -205,24 +203,24 @@ function PrintContent() {
 
   // Dimension classes for preview based on format
   const getContainerWidth = () => {
-    if (paperFormat === "2inch") return "w-[300px]"; // 2 inch preview representation
-    if (paperFormat === "58mm") return "w-[340px]"; // 58mm preview
+    if (paperFormat === "58mm") return "w-[340px]"; // 58mm roll preview (Default)
+    if (paperFormat === "2inch") return "w-[300px]"; // 2 inch (50.8mm) preview
     return "w-[800px]"; // A4 preview
   };
 
   return (
     <div className="min-h-screen bg-slate-200 text-slate-900 print:bg-white print:text-black">
       {/* ─────────────────────────────────────────────────────────────────────────────
-          PRINT STYLESHEET (Configured specifically for 2-inch thermal sticker paper rolls)
+          PRINT STYLESHEET (Configured specifically for 58mm thermal sticker paper rolls)
       ───────────────────────────────────────────────────────────────────────────── */}
       <style jsx global>{`
         @media print {
           @page {
-            /* 2-inch roll = 50.8mm width, continuous auto height */
-            size: ${paperFormat === "2inch"
-                ? "50.8mm auto"
-                : paperFormat === "58mm"
+            /* 58mm roll = 58mm width, continuous auto height */
+            size: ${paperFormat === "58mm"
                 ? "58mm auto"
+                : paperFormat === "2inch"
+                ? "50.8mm auto"
                 : "A4 portrait"};
             margin: 0mm !important;
           }
@@ -241,7 +239,7 @@ function PrintContent() {
             color: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: ${paperFormat === "a4" ? "100%" : "50.8mm"} !important;
+            width: ${paperFormat === "a4" ? "100%" : paperFormat === "58mm" ? "58mm" : "50.8mm"} !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
           }
 
@@ -253,15 +251,15 @@ function PrintContent() {
 
           /* Thermal Sticker Container for Print */
           .thermal-sticker-page {
-            width: ${paperFormat === "2inch"
-              ? "48mm"
-              : paperFormat === "58mm"
+            width: ${paperFormat === "58mm"
               ? "54mm"
+              : paperFormat === "2inch"
+              ? "48mm"
               : "100%"} !important;
-            max-width: ${paperFormat === "2inch"
-              ? "48mm"
-              : paperFormat === "58mm"
+            max-width: ${paperFormat === "58mm"
               ? "54mm"
+              : paperFormat === "2inch"
+              ? "48mm"
               : "100%"} !important;
             margin: 0 auto !important;
             padding: 2.5mm 1mm 4mm 1mm !important;
@@ -315,10 +313,10 @@ function PrintContent() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xs sm:text-sm text-slate-900">
-                  2&quot; Thermal Sticker Invoice & Packing Slip
+                  58mm Thermal Sticker Invoice & Packing Slip
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
-                  50.8mm Roll
+                  58mm Roll
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">
@@ -333,27 +331,27 @@ function PrintContent() {
             <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
               <button
                 type="button"
-                onClick={() => setPaperFormat("2inch")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                  paperFormat === "2inch"
-                    ? "bg-white text-slate-900 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="2 inch (50.8mm) continuous adhesive sticker roll for jars and cartons"
-              >
-                2&quot; Sticker Roll
-              </button>
-              <button
-                type="button"
                 onClick={() => setPaperFormat("58mm")}
                 className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                   paperFormat === "58mm"
                     ? "bg-white text-slate-900 shadow-xs font-bold"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
-                title="58mm POS receipt roll"
+                title="58mm continuous adhesive sticker and POS receipt roll (Default)"
               >
-                58mm POS
+                58mm Roll
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperFormat("2inch")}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                  paperFormat === "2inch"
+                    ? "bg-white text-slate-900 shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="2 inch (50.8mm) continuous adhesive sticker roll"
+              >
+                2&quot; Roll (50.8mm)
               </button>
               <button
                 type="button"
@@ -404,16 +402,6 @@ function PrintContent() {
             <label className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none">
               <input
                 type="checkbox"
-                checked={showPrices}
-                onChange={(e) => setShowPrices(e.target.checked)}
-                className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-              />
-              <span>Prices</span>
-            </label>
-
-            <label className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
                 checked={showQrCode}
                 onChange={(e) => setShowQrCode(e.target.checked)}
                 className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
@@ -443,10 +431,10 @@ function PrintContent() {
         <div className="print-control-bar mb-6 text-center text-xs text-slate-600 max-w-md bg-white/90 border border-slate-300/80 rounded-xl p-3 shadow-xs">
           <div className="flex items-center justify-center gap-2 text-slate-800 font-bold mb-1">
             <Package className="h-4 w-4 text-amber-700" />
-            <span>Thermal Roll Output: 2 Inch (50.8mm) Sticker Roll</span>
+            <span>Thermal Roll Output: 58mm Thermal Sticker Roll</span>
           </div>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Layout is optimized for 203/300 DPI thermal barcode and sticker printers (Xprinter, Rongta, Munbyn, Dymo, generic POS). High contrast monochrome typography with 100% full-width phone banners.
+            Layout is calibrated for 58mm direct thermal sticker & POS receipt printers (Xprinter, Rongta, Munbyn, Dymo, generic POS). High contrast monochrome typography with 100% full-width phone banners.
           </p>
         </div>
 
@@ -460,16 +448,6 @@ function PrintContent() {
           className={`space-y-8 print:space-y-0 print:transform-none ${getContainerWidth()}`}
         >
           {orders.map((order, orderIdx) => {
-            const dueAmount = Math.max(0, order.grand_total - (order.amount_paid || 0));
-            const isPaid = order.payment === "paid" || dueAmount === 0;
-            const fullAddress = [
-              order.address?.address_line,
-              order.address?.district,
-              order.address?.division,
-            ]
-              .filter(Boolean)
-              .join(", ");
-
             const qrSvgString = qrSvgs[order.id] || qrSvgs[DEFAULT_STORE.website] || "";
 
             return (
@@ -478,115 +456,88 @@ function PrintContent() {
                     2-INCH / 58MM THERMAL STICKER TICKET
                 ───────────────────────────────────────────────────────────────── */}
                 <article
-                  className="thermal-sticker-page bg-white text-black font-sans shadow-lg rounded-sm border border-slate-300 p-4 print:p-0 print:border-none print:shadow-none print:rounded-none select-text"
+                  className="thermal-sticker-page bg-white text-black font-sans shadow-lg rounded-sm border border-slate-300 p-2 sm:p-2.5 print:p-0 print:border-none print:shadow-none print:rounded-none select-text"
                   style={{
-                    width: paperFormat === "2inch" ? "48mm" : paperFormat === "58mm" ? "54mm" : "100%",
+                    width: paperFormat === "58mm" ? "54mm" : paperFormat === "2inch" ? "48mm" : "100%",
                     minWidth: paperFormat === "a4" ? "auto" : undefined,
                   }}
                 >
                   {/* ============================================================= */}
                   {/* 1. BUSINESS NAME AND ADDRESS */}
                   {/* ============================================================= */}
-                  <header className="text-center pb-2 border-b-2 border-black space-y-0.5">
+                  <header className="text-center">
                     {/* Brand Crown / Emblem */}
                     <div className="inline-flex items-center justify-center gap-1 font-black text-[13px] tracking-wider uppercase text-black">
-                      <span>★</span>
-                      <span>GUR</span>
-                      <span>★</span>
+                      {DEFAULT_STORE.name}
                     </div>
 
-                    <h1 className="font-extrabold text-[12px] leading-tight text-black tracking-tight uppercase">
-                      Pure Cane & Date Molasses
-                    </h1>
-
-                    <p className="text-[9px] font-medium text-black/90 leading-tight">
-                      Heritage Artisanal Natural Sweeteners
-                    </p>
-
                     {/* Physical Address */}
-                    <p className="text-[9px] font-semibold text-black leading-tight pt-0.5">
-                      House 12, Road 4, Dhanmondi, Dhaka-1205
-                    </p>
-
-                    <p className="text-[8.5px] font-mono text-black/80">
-                      BIN: {DEFAULT_STORE.binNumber}
+                    <p className="text-[9.5px] font-light text-black leading-tight pt-0.5">
+                      {DEFAULT_STORE.address}
                     </p>
                   </header>
 
                   {/* ============================================================= */}
-                  {/* STORE HOTLINE STRIP */}
-                  {/* ============================================================= */}
-                  <div className="w-full text-center py-1 border-b border-black text-[9.5px] font-bold tracking-tight">
-                    SUPPORT: {DEFAULT_STORE.phone}
-                  </div>
-
-                  {/* ============================================================= */}
-                  {/* ORDER IDENTIFICATION & COURIER TAG */}
-                  {/* ============================================================= */}
-                  <div className="py-2 border-b border-black space-y-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-mono font-black text-[13px] tracking-tight bg-black text-white px-1.5 py-0.5 rounded-xs">
-                        #{order.id}
-                      </span>
-                      <span className="font-bold text-[9px] uppercase border border-black px-1 py-0.5 rounded-xs">
-                        {order.channel || "WEB"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[9px] font-medium text-black pt-0.5">
-                      <span>DATE: {order.date?.slice(0, 16) || "N/A"}</span>
-                      {order.courier_name && (
-                        <span className="font-bold font-mono uppercase text-right truncate max-w-[120px]">
-                          {order.courier_name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ============================================================= */}
-                  {/* DELIVER TO: CUSTOMER & DESTINATION */}
-                  {/* ============================================================= */}
-                  <div className="pt-2 pb-1 space-y-0.5">
-                    <p className="font-black text-[9px] uppercase tracking-wider text-black">
-                      DELIVER TO:
-                    </p>
-                    <p className="font-black text-[12px] leading-tight text-black break-words">
-                      {order.customer || "Valued Customer"}
-                    </p>
-                    <p className="text-[10px] leading-snug font-medium text-black break-words">
-                      {fullAddress || "Address provided at delivery"}
-                    </p>
-                    {order.address?.district && (
-                      <p className="text-[9.5px] font-black uppercase text-black pt-0.5">
-                        DESTINATION: {order.address.district}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* ============================================================= */}
-                  {/* 2. PHONE NUMBER (SPAN FULL WIDTH OF PAGE)                      */}
+                  {/* SUPPORT / HELPLINE NUMBER (SPAN FULL WIDTH OF PAGE)           */}
                   {/* ============================================================= */}
                   <section
                     className="w-full bg-black text-white text-center py-2 px-1 my-2 rounded-xs select-all"
-                    title="Customer Delivery Phone Number"
+                    title="Store Support Helpline"
                   >
-                    <div className="text-[8px] font-bold tracking-widest uppercase opacity-90 leading-none mb-0.5">
-                      CUSTOMER CONTACT NUMBER
+                    <div className="text-[8.5px] font-bold tracking-widest uppercase opacity-90 leading-none mb-1 flex items-center justify-center gap-1">
+                      <Phone className="h-2.5 w-2.5 inline" />
+                      <span>HELPLINE</span>
                     </div>
-                    <div className="font-mono font-black text-[15px] sm:text-[16px] tracking-widest leading-tight">
-                      {order.phone || "NO PHONE GIVEN"}
+                    <div className="font-mono font-black text-[13.5px] sm:text-[14px] tracking-wider leading-tight whitespace-nowrap">
+                      {DEFAULT_STORE.phone}
                     </div>
                   </section>
 
                   {/* Customer checkout instructions/note if present */}
                   {order.customer_note && (
                     <div className="p-1.5 my-1.5 bg-black/5 border border-dashed border-black text-[9px] rounded-xs">
-                      <span className="font-black uppercase text-[8px] block">
-                        NOTE FROM CUSTOMER:
+                      <span className="font-black uppercase text-[8px] flex items-center gap-1 font-mono">
+                        <MessageSquare className="h-2.5 w-2.5 shrink-0 inline text-black" />
+                        <span>NOTE FROM CUSTOMER (FOR SELLER):</span>
                       </span>
-                      <p className="italic text-black font-medium leading-tight">
+                      <p className="italic text-black font-medium leading-tight mt-0.5">
                         &quot;{order.customer_note}&quot;
                       </p>
+                    </div>
+                  )}
+
+                  {/* Delivery Note for delivery man */}
+                  {order.notes && order.notes.filter((n) => n.type === "delivery").length > 0 && (
+                    <div className="p-1.5 my-1.5 bg-black/5 border-2 border-black text-[9px] rounded-xs">
+                      <span className="font-black uppercase text-[8.5px] flex items-center gap-1 font-mono">
+                        <Truck className="h-3 w-3 shrink-0 inline text-black" />
+                        <span>DELIVERY INSTRUCTIONS (FOR DELIVERY MAN):</span>
+                      </span>
+                      <div className="space-y-0.5 mt-0.5">
+                        {order.notes.filter((n) => n.type === "delivery").map((n) => (
+                          <p key={n.id} className="text-black font-bold leading-tight">
+                            • {n.text}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Packaging Note for checking while packaging */}
+                  {order.notes && order.notes.filter((n) => n.type === "packaging").length > 0 && (
+                    <div className="p-1.5 my-1.5 bg-black/5 border border-black text-[9px] rounded-xs">
+                      <span className="font-black uppercase text-[8px] flex items-center gap-1 font-mono">
+                        <Package className="h-2.5 w-2.5 shrink-0 inline text-black" />
+                        <span>PACKAGING CHECKLIST & INSTRUCTIONS:</span>
+                      </span>
+                      <div className="space-y-0.5 mt-0.5">
+                        {order.notes.filter((n) => n.type === "packaging").map((n) => (
+                          <p key={n.id} className="text-black font-medium leading-tight flex items-start gap-1">
+                            <Square className="h-2.5 w-2.5 shrink-0 mt-0.5 text-black" />
+                            <span>{n.text}</span>
+                          </p>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -596,16 +547,21 @@ function PrintContent() {
                   <section className="my-2 border-t-2 border-b-2 border-black py-1.5">
                     <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider pb-1 border-b border-black">
                       <span>ORDER ITEMS</span>
-                      <span className="text-right">QTY {showPrices && "/ AMT"}</span>
+                      <span className="text-right">QTY</span>
                     </div>
 
                     <div className="divide-y divide-dashed divide-black/50">
                       {order.items && order.items.length > 0 ? (
                         order.items.map((it, idx) => (
                           <div key={it.id || idx} className="py-1.5 space-y-0.5">
-                            {/* Product Name */}
-                            <div className="font-bold text-[10.5px] leading-tight text-black break-words">
-                              {idx + 1}. {it.product_name}
+                            {/* Product Name & Quantity Badge */}
+                            <div className="flex items-start justify-between gap-1.5">
+                              <span className="font-bold text-[10.5px] leading-tight text-black break-words flex-1">
+                                {idx + 1}. {it.product_name}
+                              </span>
+                              <span className="font-mono font-black bg-black text-white px-1.5 py-0.5 rounded-xs text-[9.5px] shrink-0">
+                                {it.quantity}
+                              </span>
                             </div>
 
                             {/* Variant / Pack description if present */}
@@ -614,18 +570,6 @@ function PrintContent() {
                                 Pack: {it.variant_name}
                               </div>
                             )}
-
-                            {/* Quantity and Price Row */}
-                            <div className="flex items-center justify-between pl-3 pt-0.5 text-[10px]">
-                              <span className="font-black bg-black text-white px-1.5 py-0.2 rounded-xs text-[9.5px]">
-                                QTY: {it.quantity}
-                              </span>
-                              {showPrices && (
-                                <span className="font-mono font-bold text-black text-right">
-                                  ৳ {Number(it.line_total).toLocaleString()}
-                                </span>
-                              )}
-                            </div>
                           </div>
                         ))
                       ) : (
@@ -637,68 +581,9 @@ function PrintContent() {
                   </section>
 
                   {/* ============================================================= */}
-                  {/* FINANCIAL TOTALS & PAYMENT STATUS                              */}
-                  {/* ============================================================= */}
-                  {showPrices && (
-                    <div className="py-1 text-[9.5px] space-y-1">
-                      <div className="flex justify-between text-black">
-                        <span>Items Subtotal:</span>
-                        <span className="font-mono font-medium">
-                          ৳ {Number(order.subtotal).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-black">
-                        <span>Delivery Fee:</span>
-                        <span className="font-mono font-medium">
-                          ৳ {Number(order.shipping_total).toLocaleString()}
-                        </span>
-                      </div>
-                      {order.discount_total > 0 && (
-                        <div className="flex justify-between font-medium text-black">
-                          <span>Discount:</span>
-                          <span className="font-mono">
-                            - ৳ {Number(order.discount_total).toLocaleString()}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Grand Total Bar */}
-                      <div className="flex justify-between items-center py-1 border-t border-b border-black font-black text-[12px]">
-                        <span>GRAND TOTAL:</span>
-                        <span className="font-mono">
-                          ৳ {Number(order.grand_total).toLocaleString()}
-                        </span>
-                      </div>
-
-                      {/* PAYMENT INSTRUCTION / COD BOX */}
-                      <div
-                        className={`w-full p-2 my-1.5 text-center rounded-xs border-2 ${
-                          isPaid
-                            ? "border-black bg-white text-black"
-                            : "border-black bg-black text-white"
-                        }`}
-                      >
-                        <div className="text-[8.5px] font-bold tracking-widest uppercase opacity-90">
-                          PAYMENT STATUS
-                        </div>
-                        <div className="font-black text-[13px] tracking-tight leading-tight">
-                          {isPaid ? "✓ PAID IN FULL (PREPAID)" : "CASH ON DELIVERY (COD)"}
-                        </div>
-                        <div className="font-mono font-bold text-[11px] mt-0.5">
-                          {isPaid ? (
-                            "DO NOT COLLECT CASH"
-                          ) : (
-                            <span>COLLECT: ৳ {dueAmount.toLocaleString()}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ============================================================= */}
                   {/* 4. CONTACT INFORMATION (WEB ADDRESS, QR CODE OF WEB ADDRESS)   */}
                   {/* ============================================================= */}
-                  <footer className="pt-2 border-t border-black text-center space-y-1.5">
+                  <footer className="text-center space-y-1.5">
                     {/* QR Code */}
                     {showQrCode && qrSvgString && (
                       <div className="flex flex-col items-center justify-center pt-1">
@@ -707,29 +592,21 @@ function PrintContent() {
                           dangerouslySetInnerHTML={{ __html: qrSvgString }}
                           title={`Scan to visit ${DEFAULT_STORE.website}`}
                         />
-                        <p className="text-[8px] font-bold uppercase tracking-wider text-black pt-0.5">
-                          SCAN TO VISIT OUR STORE
+                        <p className="text-[8px] font-bold uppercase tracking-wider text-black pt-0.5 flex items-center justify-center gap-1">
+                          <Globe className="h-2.5 w-2.5 inline" />
+                          <span>SCAN TO VISIT OUR STORE</span>
                         </p>
                       </div>
                     )}
-
-                    {/* Web Address */}
-                    <div className="font-mono font-black text-[11px] tracking-wider text-black uppercase">
-                      {DEFAULT_STORE.website.replace(/^https?:\/\//, "")}
-                    </div>
-
-                    <p className="text-[8px] font-medium text-black leading-tight">
-                      Email: {DEFAULT_STORE.email} · Phone: {DEFAULT_STORE.phone}
-                    </p>
-
-                    <div className="text-[8px] font-bold text-black border-t border-dotted border-black pt-1">
-                      Pure & Authentic Artisanal Molasses Guaranteed
-                    </div>
                   </footer>
 
                   {/* Perforation / Tear Marker for Roll Printers */}
-                  <div className="thermal-tear-line text-[9px] font-mono tracking-widest text-center py-1 border-b border-dashed border-black/80 my-2 select-none">
-                    - - ✂ TEAR HERE ✂ - -
+                  <div className="thermal-tear-line text-[9px] font-mono tracking-widest text-center py-1 border-b border-dashed border-black/80 select-none flex items-center justify-center gap-1.5 text-black">
+                    <span>- -</span>
+                    <Scissors className="h-2.5 w-2.5 inline rotate-90" />
+                    <span>TEAR HERE</span>
+                    <Scissors className="h-2.5 w-2.5 inline -rotate-90" />
+                    <span>- -</span>
                   </div>
                 </article>
 

@@ -14,7 +14,7 @@ import {
   DbGeoDivision,
   DbGeoDistrict,
 } from "./types";
-import type { Order, OrderItem, CatalogProduct, OrderEvent, OrderNote } from "@/types/order";
+import type { Order, OrderItem, CatalogProduct, OrderEvent, OrderNote, OrderNoteType } from "@/types/order";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   parseDatabaseError,
@@ -924,20 +924,33 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         }
       }
 
-      // 3. Insert notes into order_notes table if any
+      // 3. Insert rest of notes into order_notes table (customer note stays in orders.customer_note)
       if (orderDbId && savedOrder.notes && savedOrder.notes.length > 0) {
         try {
-          const noteRows = savedOrder.notes.map((n) => ({
-            order_id: orderDbId,
-            order_number: orderNumber,
-            type: n.type || "internal",
-            author: n.author || "Admin Staff",
-            note: n.text || "",
-            created_at: n.created_at || new Date().toISOString(),
-          }));
-          await supabase.from("order_notes").insert(noteRows);
-        } catch {
-          // Non-blocking fallback if order_notes table is not yet created
+          const nonCustomerNotes = savedOrder.notes.filter(
+            (n) => n && n.text && n.text.trim() && n.type !== "customer"
+          );
+          if (nonCustomerNotes.length > 0) {
+            const noteRows = nonCustomerNotes.map((n) => {
+              const dbType =
+                n.type === "delivery" || n.type === "delivery_note"
+                  ? "delivery"
+                  : n.type === "packaging" || n.type === "packaging_note"
+                  ? "packaging"
+                  : "internal";
+              return {
+                order_id: orderDbId,
+                order_number: orderNumber,
+                type: dbType,
+                author: n.author || "Admin Staff",
+                note: n.text.trim().replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, ""),
+                created_at: n.created_at || new Date().toISOString(),
+              };
+            });
+            await supabase.from("order_notes").insert(noteRows);
+          }
+        } catch (noteInsErr) {
+          console.warn("Notice inserting notes into order_notes:", noteInsErr);
         }
       }
     } catch (insertErr: any) {
@@ -1173,20 +1186,55 @@ function formatDbOrderRecord(data: any): Order {
     amount_paid: Number(data.amount_paid) || 0,
     currency: data.currency || "BDT",
     date: formatDate(data.placed_at) || formatDate(nowStr),
-    customer_note: data.customer_note || "",
+    customer_note: data.customer_note || (() => {
+      if (Array.isArray(data.order_notes)) {
+        const custNote = data.order_notes.find((n: any) => n && n.type === "customer");
+        return custNote ? (custNote.note || custNote.text || "").trim() : "";
+      }
+      return "";
+    })(),
     cancel_reason: data.cancel_reason || "",
     courier_name: data.shipping_method_name || "",
     items,
     notes: Array.isArray(data.order_notes)
       ? data.order_notes
           .filter((n: any) => n && (n.note || n.text))
-          .map((n: any, idx: number) => ({
-            id: String(n.id || `note-${idx}`),
-            author: n.author || "Admin Staff",
-            text: (n.note || n.text || "").trim(),
-            type: (n.type === "customer" ? "customer" : "internal") as "customer" | "internal",
-            created_at: formatDateTime(n.created_at || nowStr),
-          }))
+          .map((n: any, idx: number) => {
+            const rawText = (n.note || n.text || "").trim();
+            let parsedType: OrderNoteType = "internal";
+            let parsedText = rawText;
+
+            if (n.type === "customer") {
+              parsedType = "customer";
+            } else if (n.type === "delivery" || n.type === "delivery_note") {
+              parsedType = "delivery";
+            } else if (n.type === "packaging" || n.type === "packaging_note") {
+              parsedType = "packaging";
+            } else {
+              parsedType = "internal";
+            }
+
+            // Strip any remaining legacy third-bracket prefixes
+            if (rawText.startsWith("[Delivery Note] ")) {
+              parsedText = rawText.replace("[Delivery Note] ", "").trim();
+            } else if (rawText.startsWith("[Packaging Note] ")) {
+              parsedText = rawText.replace("[Packaging Note] ", "").trim();
+            } else if (rawText.startsWith("[Internal Note] ")) {
+              parsedText = rawText.replace("[Internal Note] ", "").trim();
+            }
+
+            return {
+              id: String(n.id || `note-${idx}`),
+              order_id: String(n.order_id || data.id || ""),
+              order_number: String(n.order_number || data.order_number || ""),
+              author: n.author || "Admin Staff",
+              text: parsedText,
+              type: parsedType,
+              created_at: formatDateTime(n.created_at || nowStr),
+            };
+          })
+          // Keep only non-customer notes in notes table array (customer note lives in customer_note column)
+          .filter((n: OrderNote) => n.type !== "customer")
       : [],
     events: events.length > 0 ? events : [
       {
@@ -1436,22 +1484,52 @@ export async function updateOrderInDb(
     }
   }
 
-  // 2. Sync notes in public.order_notes table (SSOT)
+  // 2. Sync notes in public.order_notes table without destroying existing UUIDs
   if (orderUuid && Array.isArray(updatedOrder.notes)) {
     try {
-      await supabase.from("order_notes").delete().eq("order_id", orderUuid);
-      const noteRows = updatedOrder.notes
-        .filter((n) => n && n.text && n.text.trim())
-        .map((n) => ({
-          order_id: orderUuid,
-          order_number: orderId,
-          type: n.type || "internal",
-          author: n.author || "Admin Staff",
-          note: n.text.trim(),
-          created_at: n.created_at || new Date().toISOString(),
-        }));
-      if (noteRows.length > 0) {
-        await supabase.from("order_notes").insert(noteRows);
+      const newNotesToInsert = updatedOrder.notes.filter(
+        (n) =>
+          n &&
+          n.text &&
+          n.text.trim() &&
+          n.type !== "customer" &&
+          (!n.id ||
+            n.id.startsWith("note-") ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(n.id))
+      );
+
+      if (newNotesToInsert.length > 0) {
+        for (const n of newNotesToInsert) {
+          const rawText = n.text.trim().replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+          const dbType =
+            n.type === "delivery" || n.type === "delivery_note"
+              ? "delivery"
+              : n.type === "packaging" || n.type === "packaging_note"
+              ? "packaging"
+              : "internal";
+          const notePayload = {
+            order_id: orderUuid,
+            order_number: orderId,
+            type: dbType,
+            author: n.author || "Admin Staff",
+            note: rawText,
+            created_at: n.created_at || new Date().toISOString(),
+          };
+          await supabase.from("order_notes").insert(notePayload);
+        }
+      }
+
+      // Fetch fresh notes from DB to ensure exact UUIDs and domain types
+      const { data: dbNotes } = await supabase
+        .from("order_notes")
+        .select("*")
+        .or(`order_id.eq.${orderUuid},order_number.eq.${orderId}`)
+        .order("created_at", { ascending: false });
+
+      if (dbNotes) {
+        updatedOrder.notes = dbNotes
+          .filter((n: any) => n.type !== "customer")
+          .map((n: any) => parseDbNoteToDomain(n, orderId));
       }
     } catch (noteErr) {
       console.warn("Notice updating order_notes:", noteErr);
@@ -1617,44 +1695,339 @@ export async function updateOrderStatusInDb(
   return finalOrder;
 }
 
+function parseDbNoteToDomain(n: any, defaultOrderNumber: string): OrderNote {
+  const rawText = (n.note || n.text || "").trim();
+  let parsedType: OrderNoteType = "internal";
+  let parsedText = rawText;
+
+  if (n.type === "customer") {
+    parsedType = "customer";
+  } else if (n.type === "delivery" || n.type === "delivery_note") {
+    parsedType = "delivery";
+  } else if (n.type === "packaging" || n.type === "packaging_note") {
+    parsedType = "packaging";
+  } else {
+    parsedType = "internal";
+  }
+
+  // Strip any remaining legacy third-bracket prefixes
+  if (rawText.startsWith("[Delivery Note] ")) {
+    parsedText = rawText.replace("[Delivery Note] ", "").trim();
+  } else if (rawText.startsWith("[Packaging Note] ")) {
+    parsedText = rawText.replace("[Packaging Note] ", "").trim();
+  } else if (rawText.startsWith("[Internal Note] ")) {
+    parsedText = rawText.replace("[Internal Note] ", "").trim();
+  }
+
+  return {
+    id: String(n.id),
+    order_id: String(n.order_id || ""),
+    order_number: String(n.order_number || defaultOrderNumber || ""),
+    author: n.author || "Admin Staff",
+    text: parsedText,
+    type: parsedType,
+    created_at: formatDateTime(n.created_at || new Date().toISOString()),
+  };
+}
+
 export async function addOrderNoteInDb(
   orderId: string,
   note: OrderNote,
   currentOrder?: Order
 ): Promise<Order> {
-  const baseOrder = currentOrder || ({
-    id: orderId,
-    customer: "",
-    phone: "",
-    email: "",
-    address: { division: "", district: "", address_line: "" },
-    status: "pending",
-    payment: "unpaid",
-    fulfillment: "unfulfilled",
-    method: "cod",
-    channel: "web",
-    subtotal: 0,
-    discount_total: 0,
-    shipping_total: 0,
-    grand_total: 0,
-    amount_paid: 0,
-    currency: "BDT",
-    date: formatDate(new Date()),
-    items: [],
-    notes: [],
-    events: [],
-  } as Order);
+  const baseOrder =
+    currentOrder ||
+    (await fetchOrderByIdFromDb(orderId)) ||
+    ({
+      id: orderId,
+      customer: "",
+      phone: "",
+      email: "",
+      address: { division: "", district: "", address_line: "" },
+      status: "pending",
+      payment: "unpaid",
+      fulfillment: "unfulfilled",
+      method: "cod",
+      channel: "web",
+      subtotal: 0,
+      discount_total: 0,
+      shipping_total: 0,
+      grand_total: 0,
+      amount_paid: 0,
+      currency: "BDT",
+      date: formatDate(new Date()),
+      items: [],
+      notes: [],
+      events: [],
+    } as Order);
 
-  // If adding a customer-type note, update the primary customer_note on the order
-  const newCustomerNote = note.type === "customer" ? note.text : (baseOrder.customer_note || "");
+  const trimmedText = note.text.trim();
+  const authorName = note.author || "Admin Staff";
+  const nowIso = new Date().toISOString();
 
-  const updated: Order = {
-    ...baseOrder,
-    customer_note: newCustomerNote,
-    notes: [note, ...(baseOrder.notes || []).filter((n) => n.id !== note.id)],
+  // Resolve order UUID
+  let orderUuid = (baseOrder as any).uuid || (baseOrder as any).db_id;
+  if (!orderUuid) {
+    const { data: ordRow } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderId)
+      .maybeSingle();
+    orderUuid = ordRow?.id;
+  }
+
+  // 1. Customer note: store in customer note column in order table
+  if (note.type === "customer") {
+    await supabase
+      .from("orders")
+      .update({ customer_note: trimmedText })
+      .eq("order_number", orderId);
+
+    // Clean up any customer note in order_notes
+    if (orderUuid) {
+      await supabase
+        .from("order_notes")
+        .delete()
+        .eq("order_id", orderUuid)
+        .eq("type", "customer");
+    }
+    await supabase
+      .from("order_notes")
+      .delete()
+      .eq("order_number", orderId)
+      .eq("type", "customer");
+
+    baseOrder.customer_note = trimmedText;
+    baseOrder.notes = (baseOrder.notes || []).filter((n) => n.type !== "customer");
+    return baseOrder;
+  }
+
+  // 2. Rest of notes (internal, delivery, packaging): store directly in order_notes table
+  const dbType =
+    note.type === "delivery" || note.type === "delivery_note"
+      ? "delivery"
+      : note.type === "packaging" || note.type === "packaging_note"
+      ? "packaging"
+      : "internal";
+
+  const cleanNoteText = trimmedText.replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+
+  const insertPayload = {
+    order_id: orderUuid || null,
+    order_number: orderId,
+    type: dbType,
+    author: authorName,
+    note: cleanNoteText,
+    created_at: nowIso,
   };
 
-  return await updateOrderInDb(updated, false);
+  const { data: insData, error: insErr } = await supabase
+    .from("order_notes")
+    .insert(insertPayload)
+    .select();
+
+  if (insErr) {
+    console.error("Failed to insert order note into database:", insErr);
+    throw new Error(insErr.message || "Failed to add note to database");
+  }
+
+  const insertedRow = insData?.[0];
+
+  // Fetch updated notes from DB for this order
+  const { data: dbNotes } = await supabase
+    .from("order_notes")
+    .select("*")
+    .or(orderUuid ? `order_id.eq.${orderUuid},order_number.eq.${orderId}` : `order_number.eq.${orderId}`)
+    .order("created_at", { ascending: false });
+
+  if (dbNotes && dbNotes.length > 0) {
+    baseOrder.notes = dbNotes
+      .filter((n: any) => n.type !== "customer")
+      .map((n: any) => parseDbNoteToDomain(n, orderId));
+  } else if (insertedRow) {
+    const parsed = parseDbNoteToDomain(insertedRow, orderId);
+    baseOrder.notes = [parsed, ...(baseOrder.notes || []).filter((n) => n.id !== parsed.id)];
+  }
+
+  return baseOrder;
+}
+
+export async function updateOrderNoteInDb(
+  orderId: string,
+  noteId: string,
+  updatedText: string,
+  updatedType?: OrderNoteType,
+  currentOrder?: Order
+): Promise<Order> {
+  const baseOrder =
+    currentOrder ||
+    (await fetchOrderByIdFromDb(orderId)) ||
+    ({ id: orderId, notes: [] } as any as Order);
+
+  const trimmed = updatedText.trim();
+  const targetNote = (baseOrder.notes || []).find((n) => n.id === noteId);
+  const finalType = updatedType || targetNote?.type || (noteId === "customer_note" ? "customer" : "internal");
+  const nowIso = new Date().toISOString();
+
+  let orderUuid = (baseOrder as any).uuid || (baseOrder as any).db_id;
+  if (!orderUuid) {
+    const { data: ordRow } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderId)
+      .maybeSingle();
+    orderUuid = ordRow?.id;
+  }
+
+  // Case 1: Editing Customer Note (noteId is "customer_note" or target was customer)
+  if (noteId === "customer_note" || targetNote?.type === "customer") {
+    if (finalType === "customer") {
+      // Still customer note: update orders.customer_note
+      await supabase
+        .from("orders")
+        .update({ customer_note: trimmed })
+        .eq("order_number", orderId);
+
+      // Clean up order_notes customer rows
+      if (orderUuid) {
+        await supabase.from("order_notes").delete().eq("order_id", orderUuid).eq("type", "customer");
+      }
+      await supabase.from("order_notes").delete().eq("order_number", orderId).eq("type", "customer");
+
+      baseOrder.customer_note = trimmed;
+      baseOrder.notes = (baseOrder.notes || []).filter((n) => n.id !== noteId && n.type !== "customer");
+      return baseOrder;
+    } else {
+      // Changed from customer note to rest notes: clear customer_note and insert into order_notes
+      await supabase
+        .from("orders")
+        .update({ customer_note: null })
+        .eq("order_number", orderId);
+
+      baseOrder.customer_note = "";
+      return await addOrderNoteInDb(
+        orderId,
+        {
+          id: `note-${Date.now()}`,
+          author: "Admin Staff",
+          text: trimmed,
+          type: finalType,
+          created_at: formatDateTime(nowIso),
+        },
+        baseOrder
+      );
+    }
+  }
+
+  // Case 2: Target was a non-customer note, but user changed it to Customer Note
+  if (finalType === "customer") {
+    // Delete the note row from order_notes
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(noteId);
+    if (isUuid) {
+      await supabase.from("order_notes").delete().eq("id", noteId);
+    } else if (targetNote) {
+      await supabase
+        .from("order_notes")
+        .delete()
+        .eq("order_number", orderId)
+        .ilike("note", `%${targetNote.text.trim()}%`);
+    }
+
+    // Set on orders.customer_note
+    await supabase
+      .from("orders")
+      .update({ customer_note: trimmed })
+      .eq("order_number", orderId);
+
+    baseOrder.customer_note = trimmed;
+
+    // Refresh notes list from DB
+    const { data: dbNotes } = await supabase
+      .from("order_notes")
+      .select("*")
+      .or(orderUuid ? `order_id.eq.${orderUuid},order_number.eq.${orderId}` : `order_number.eq.${orderId}`)
+      .order("created_at", { ascending: false });
+
+    if (dbNotes) {
+      baseOrder.notes = dbNotes
+        .filter((n: any) => n.type !== "customer")
+        .map((n: any) => parseDbNoteToDomain(n, orderId));
+    } else {
+      baseOrder.notes = (baseOrder.notes || []).filter((n) => n.id !== noteId);
+    }
+    return baseOrder;
+  }
+
+  // Case 3: Target is in order_notes table (Internal, Delivery, Packaging)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(noteId);
+  const cleanText = trimmed.replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+  const dbFinalType =
+    finalType === "delivery" || finalType === "delivery_note"
+      ? "delivery"
+      : finalType === "packaging" || finalType === "packaging_note"
+      ? "packaging"
+      : "internal";
+
+  if (isUuid) {
+    const { error: updErr } = await supabase
+      .from("order_notes")
+      .update({
+        note: cleanText,
+        type: dbFinalType,
+      })
+      .eq("id", noteId);
+
+    if (updErr) {
+      console.error("Failed to update order note in DB:", updErr);
+      throw new Error(updErr.message || "Failed to update note in database");
+    }
+  } else {
+    // Non-UUID noteId: find matching row by note content or insert
+    const { data: existingRows } = await supabase
+      .from("order_notes")
+      .select("id, note")
+      .eq("order_number", orderId);
+
+    const matchingRow = existingRows?.find((r) =>
+      targetNote?.text ? r.note.includes(targetNote.text.trim()) : false
+    );
+
+    if (matchingRow) {
+      await updateOrderNoteInDb(orderId, matchingRow.id, trimmed, finalType, baseOrder);
+      return baseOrder;
+    } else {
+      return await addOrderNoteInDb(
+        orderId,
+        {
+          id: noteId,
+          author: targetNote?.author || "Admin Staff",
+          text: trimmed,
+          type: finalType,
+          created_at: formatDateTime(nowIso),
+        },
+        baseOrder
+      );
+    }
+  }
+
+  // Refresh notes list from DB
+  const { data: dbNotes } = await supabase
+    .from("order_notes")
+    .select("*")
+    .or(orderUuid ? `order_id.eq.${orderUuid},order_number.eq.${orderId}` : `order_number.eq.${orderId}`)
+    .order("created_at", { ascending: false });
+
+  if (dbNotes && dbNotes.length > 0) {
+    baseOrder.notes = dbNotes
+      .filter((n: any) => n.type !== "customer")
+      .map((n: any) => parseDbNoteToDomain(n, orderId));
+  } else {
+    baseOrder.notes = (baseOrder.notes || []).map((n) =>
+      n.id === noteId ? { ...n, text: trimmed, type: finalType } : n
+    );
+  }
+
+  return baseOrder;
 }
 
 export async function deleteOrderNoteInDb(
@@ -1662,27 +2035,71 @@ export async function deleteOrderNoteInDb(
   noteId: string,
   currentOrder?: Order
 ): Promise<Order> {
-  if (!currentOrder) {
-    throw new Error("currentOrder required for note deletion");
+  const baseOrder =
+    currentOrder ||
+    (await fetchOrderByIdFromDb(orderId)) ||
+    ({ id: orderId, notes: [] } as any as Order);
+
+  let orderUuid = (baseOrder as any).uuid || (baseOrder as any).db_id;
+  if (!orderUuid) {
+    const { data: ordRow } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderId)
+      .maybeSingle();
+    orderUuid = ordRow?.id;
   }
 
-  const targetNote = (currentOrder.notes || []).find((n) => n.id === noteId);
-  const remainingNotes = (currentOrder.notes || []).filter((n) => n.id !== noteId);
+  const targetNote = (baseOrder.notes || []).find((n) => n.id === noteId);
 
-  // If the deleted note was the customer note, update customer_note
-  let customerNote = currentOrder.customer_note;
-  if (targetNote?.type === "customer") {
-    const nextCustomerNote = remainingNotes.find((n) => n.type === "customer");
-    customerNote = nextCustomerNote ? nextCustomerNote.text : "";
+  // 1. If deleting Customer Note (noteId is "customer_note" or targetNote was customer)
+  if (noteId === "customer_note" || targetNote?.type === "customer") {
+    await supabase
+      .from("orders")
+      .update({ customer_note: null })
+      .eq("order_number", orderId);
+
+    // Delete any customer note in order_notes table too
+    if (orderUuid) {
+      await supabase.from("order_notes").delete().eq("order_id", orderUuid).eq("type", "customer");
+    }
+    await supabase.from("order_notes").delete().eq("order_number", orderId).eq("type", "customer");
+
+    baseOrder.customer_note = "";
+    baseOrder.notes = (baseOrder.notes || []).filter((n) => n.id !== noteId && n.type !== "customer");
+    return baseOrder;
   }
 
-  const updated: Order = {
-    ...currentOrder,
-    customer_note: customerNote,
-    notes: remainingNotes,
-  };
+  // 2. If deleting a note from order_notes table
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(noteId);
 
-  return await updateOrderInDb(updated, false);
+  if (isUuid) {
+    await supabase.from("order_notes").delete().eq("id", noteId);
+  } else if (targetNote) {
+    // Fallback: match by note content and order
+    await supabase
+      .from("order_notes")
+      .delete()
+      .or(orderUuid ? `order_id.eq.${orderUuid},order_number.eq.${orderId}` : `order_number.eq.${orderId}`)
+      .ilike("note", `%${targetNote.text.trim()}%`);
+  }
+
+  // Refresh notes list from DB
+  const { data: dbNotes } = await supabase
+    .from("order_notes")
+    .select("*")
+    .or(orderUuid ? `order_id.eq.${orderUuid},order_number.eq.${orderId}` : `order_number.eq.${orderId}`)
+    .order("created_at", { ascending: false });
+
+  if (dbNotes) {
+    baseOrder.notes = dbNotes
+      .filter((n: any) => n.type !== "customer")
+      .map((n: any) => parseDbNoteToDomain(n, orderId));
+  } else {
+    baseOrder.notes = (baseOrder.notes || []).filter((n) => n.id !== noteId);
+  }
+
+  return baseOrder;
 }
 
 export async function updateCustomerNoteInDb(
@@ -1690,17 +2107,28 @@ export async function updateCustomerNoteInDb(
   customerNoteText: string,
   currentOrder?: Order
 ): Promise<Order> {
-  if (!currentOrder) {
-    throw new Error("currentOrder required for customer note update");
-  }
+  const baseOrder =
+    currentOrder ||
+    (await fetchOrderByIdFromDb(orderId)) ||
+    ({ id: orderId, customer_note: "" } as any as Order);
 
   const trimmed = customerNoteText.trim();
-  const updated: Order = {
-    ...currentOrder,
-    customer_note: trimmed,
-  };
 
-  return await updateOrderInDb(updated, false);
+  await supabase
+    .from("orders")
+    .update({ customer_note: trimmed || null })
+    .eq("order_number", orderId);
+
+  // Clean up any stale customer notes in order_notes
+  await supabase
+    .from("order_notes")
+    .delete()
+    .eq("order_number", orderId)
+    .eq("type", "customer");
+
+  baseOrder.customer_note = trimmed;
+  baseOrder.notes = (baseOrder.notes || []).filter((n) => n.type !== "customer");
+  return baseOrder;
 }
 
 export async function recordOrderPaymentInDb(
@@ -2053,4 +2481,8 @@ export async function fetchOrdersByIdsFromDb(orderNumbers: string[]): Promise<Or
   return data.map((d) => formatDbOrderRecord(d));
 }
 
-
+export async function fetchOrderByIdFromDb(orderNumber: string): Promise<Order | null> {
+  if (!orderNumber) return null;
+  const orders = await fetchOrdersByIdsFromDb([orderNumber]);
+  return orders[0] || null;
+}

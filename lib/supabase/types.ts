@@ -192,13 +192,27 @@ export interface DbOrderItem {
   total_price: number;
 }
 
+export type DbOrderNoteType =
+  | "internal"
+  | "delivery"
+  | "packaging"
+  | "customer"
+  | "staff"
+  | "internal_staff_note"
+  | "delivery_note"
+  | "packaging_note";
+
 export interface DbOrderNote {
   id: string;
   order_id: string;
+  order_number?: string;
+  type?: DbOrderNoteType;
+  author?: string;
   author_id?: string | null;
   author_name?: string;
-  body: string;
-  is_customer_visible: boolean;
+  note?: string;
+  body?: string;
+  is_customer_visible?: boolean;
   created_at: string;
 }
 

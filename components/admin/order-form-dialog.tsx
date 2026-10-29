@@ -120,6 +120,8 @@ export function OrderFormDialog({
       amount_paid: 0,
       customer_note: "",
       staff_note: "",
+      delivery_note: "",
+      packaging_note: "",
       courier_name: "",
       cancel_reason: "",
       items: [] as OrderItem[],
@@ -205,21 +207,30 @@ export function OrderFormDialog({
             items: valid.items as OrderItem[],
             notes: (() => {
               const initialNotes: any[] = [];
-              if (valid.customer_note && valid.customer_note.trim()) {
-                initialNotes.push({
-                  id: `note-cust-${Date.now()}`,
-                  author: valid.customer ? valid.customer.trim() : "Customer",
-                  text: valid.customer_note.trim(),
-                  type: "customer",
-                  created_at: nowStr,
-                });
-              }
               if (valid.staff_note && valid.staff_note.trim()) {
                 initialNotes.push({
                   id: `note-staff-${Date.now()}`,
                   author: "Admin Staff",
                   text: valid.staff_note.trim(),
-                  type: "internal",
+                  type: "internal" as const,
+                  created_at: nowStr,
+                });
+              }
+              if (valid.delivery_note && valid.delivery_note.trim()) {
+                initialNotes.push({
+                  id: `note-deliv-${Date.now()}`,
+                  author: "Admin Staff",
+                  text: valid.delivery_note.trim(),
+                  type: "delivery" as const,
+                  created_at: nowStr,
+                });
+              }
+              if (valid.packaging_note && valid.packaging_note.trim()) {
+                initialNotes.push({
+                  id: `note-pack-${Date.now()}`,
+                  author: "Admin Staff",
+                  text: valid.packaging_note.trim(),
+                  type: "packaging" as const,
                   created_at: nowStr,
                 });
               }
@@ -229,7 +240,7 @@ export function OrderFormDialog({
                 text: valid.items.length > 0
                   ? `Manual order created with ${valid.items.length} product(s) via ${valid.channel.toUpperCase()} channel.${valid.payment === "partially_paid" ? ` Partial advance payment: ৳ ${finalAmountPaid.toLocaleString()} recorded.` : ""}${valid.courier_name ? ` Assigned courier: ${valid.courier_name}.` : ""}`
                   : `Draft ${valid.status === "incomplete_order" ? "incomplete" : "pending"} order created without product items via ${valid.channel.toUpperCase()} channel.`,
-                type: "internal",
+                type: "internal" as const,
                 created_at: nowStr,
               });
               return initialNotes;
@@ -259,35 +270,34 @@ export function OrderFormDialog({
             created_at: nowStr,
           };
 
-          let updatedNotes = order.notes ? [...order.notes] : [];
+          // Filter out customer notes from notes table array (customer note lives in customer_note column)
+          let updatedNotes = order.notes ? [...order.notes].filter((n) => n.type !== "customer") : [];
           if (valid.staff_note && valid.staff_note.trim()) {
             updatedNotes.unshift({
               id: `note-staff-${Date.now()}`,
               author: "Admin Staff",
               text: valid.staff_note.trim(),
-              type: "internal",
+              type: "internal" as const,
               created_at: nowStr,
             });
           }
-          if (valid.customer_note && valid.customer_note.trim()) {
-            const custIdx = updatedNotes.findIndex((n) => n.type === "customer");
-            if (custIdx >= 0) {
-              updatedNotes[custIdx] = {
-                ...updatedNotes[custIdx],
-                text: valid.customer_note.trim(),
-                created_at: nowStr,
-              };
-            } else {
-              updatedNotes.unshift({
-                id: `note-cust-${Date.now()}`,
-                author: valid.customer ? valid.customer.trim() : "Customer",
-                text: valid.customer_note.trim(),
-                type: "customer",
-                created_at: nowStr,
-              });
-            }
-          } else {
-            updatedNotes = updatedNotes.filter((n) => n.type !== "customer");
+          if (valid.delivery_note && valid.delivery_note.trim()) {
+            updatedNotes.unshift({
+              id: `note-deliv-${Date.now()}`,
+              author: "Admin Staff",
+              text: valid.delivery_note.trim(),
+              type: "delivery" as const,
+              created_at: nowStr,
+            });
+          }
+          if (valid.packaging_note && valid.packaging_note.trim()) {
+            updatedNotes.unshift({
+              id: `note-pack-${Date.now()}`,
+              author: "Admin Staff",
+              text: valid.packaging_note.trim(),
+              type: "packaging" as const,
+              created_at: nowStr,
+            });
           }
 
           const updatedOrder: Order = {
@@ -353,6 +363,8 @@ export function OrderFormDialog({
           amount_paid: order.amount_paid ?? 0,
           customer_note: order.customer_note || "",
           staff_note: "",
+          delivery_note: "",
+          packaging_note: "",
           courier_name: order.courier_name || "",
           cancel_reason: order.cancel_reason || "",
           items: order.items ? order.items.map((it) => ({ ...it })) : [],
@@ -375,6 +387,8 @@ export function OrderFormDialog({
           amount_paid: 0,
           customer_note: "",
           staff_note: "",
+          delivery_note: "",
+          packaging_note: "",
           courier_name: "",
           cancel_reason: "",
           items: [],
@@ -1471,70 +1485,143 @@ export function OrderFormDialog({
                   </div>
                 </div>
 
-                {/* 5. Special Note / Instructions */}
-                <form.Field
-                  name="customer_note"
-                  validators={{
-                    onChange: validateWithZod(orderCustomerNoteSchema),
-                    onBlur: validateWithZod(orderCustomerNoteSchema),
-                  }}
-                >
-                  {(field) => (
-                    <FormFieldItem>
-                      <FormFieldLabel htmlFor="order_form_customer_note" className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 dark:text-blue-300">
-                        <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-                        <span>Customer Note / Delivery Instructions</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">(Visible to customer)</span>
-                      </FormFieldLabel>
-                      <Textarea
-                        id="order_form_customer_note"
-                        placeholder="Any special handling or customer notes..."
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        rows={2}
-                      />
-                      <FormFieldError errors={field.state.meta.errors} />
-                    </FormFieldItem>
-                  )}
-                </form.Field>
+                {/* 5. Four Types of Order Notes */}
+                <div className="space-y-3 pt-1">
+                  <div className="border-t border-border/60 pt-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2.5">
+                      <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                      Order Notes & Instructions (4 Types)
+                    </p>
+                  </div>
 
-                {/* 6. Internal Staff Note (Private to Staff) */}
-                <form.Field name="staff_note">
-                  {(field) => (
-                    <FormFieldItem className="pt-1">
-                      <FormFieldLabel htmlFor="order_form_staff_note" className="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-300">
-                        <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-                        <span>Internal Staff Note</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">(Private to staff only)</span>
-                      </FormFieldLabel>
-                      <Textarea
-                        id="order_form_staff_note"
-                        placeholder="Internal comments for warehouse or administration (e.g. Address verified via phone, wrap in bubble cushion)..."
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        rows={2}
-                        className="text-xs bg-amber-500/[0.03] border-amber-200 dark:border-amber-900/40"
-                      />
-                      {mode === "edit" && order && (order.notes || []).filter((n) => n.type === "internal").length > 0 && (
-                        <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1">
-                          <span className="font-semibold text-amber-900 dark:text-amber-300 flex items-center gap-1">
-                            <ShieldCheck className="h-3 w-3 text-amber-600" />
-                            Previous Staff Notes ({(order.notes || []).filter((n) => n.type === "internal").length}):
-                          </span>
-                          <div className="max-h-20 overflow-y-auto space-y-0.5 pr-1">
-                            {(order.notes || []).filter((n) => n.type === "internal").map((n) => (
-                              <p key={n.id} className="text-amber-950 dark:text-amber-100 line-clamp-1">
-                                • {n.text} <span className="text-[10px] text-muted-foreground">({n.created_at})</span>
-                              </p>
-                            ))}
+                  {/* 1. Customer Note (for seller, written while ordering product) -> stored in customer_note column */}
+                  <form.Field
+                    name="customer_note"
+                    validators={{
+                      onChange: validateWithZod(orderCustomerNoteSchema),
+                      onBlur: validateWithZod(orderCustomerNoteSchema),
+                    }}
+                  >
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_customer_note" className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 dark:text-blue-300">
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+                          <span>1. Customer Note</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">(For seller, written while ordering product)</span>
+                        </FormFieldLabel>
+                        <Textarea
+                          id="order_form_customer_note"
+                          placeholder="Note or special requests from the customer for the seller..."
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          rows={2}
+                          className="text-xs bg-blue-500/[0.03] border-blue-200 dark:border-blue-900/40"
+                        />
+                        <FormFieldError errors={field.state.meta.errors} />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
+
+                  {/* 2. Delivery Note for delivery man -> stored in notes table */}
+                  <form.Field name="delivery_note">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_delivery_note" className="flex items-center gap-1.5 text-xs font-semibold text-indigo-900 dark:text-indigo-300">
+                          <Truck className="h-3.5 w-3.5 text-indigo-600" />
+                          <span>2. Delivery Note</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">(For delivery man / courier)</span>
+                        </FormFieldLabel>
+                        <Textarea
+                          id="order_form_delivery_note"
+                          placeholder="e.g. Call before delivery, gate code, delivery after 4 PM, floor instructions..."
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          rows={2}
+                          className="text-xs bg-indigo-500/[0.03] border-indigo-200 dark:border-indigo-900/40"
+                        />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
+
+                  {/* 3. Packaging Note for checking while packaging -> stored in notes table */}
+                  <form.Field name="packaging_note">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_packaging_note" className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-emerald-300">
+                          <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>3. Packaging Note</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">(For checking while packaging)</span>
+                        </FormFieldLabel>
+                        <Textarea
+                          id="order_form_packaging_note"
+                          placeholder="e.g. Double bubble wrap glass jars, inspect jar seal, attach fragile label..."
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          rows={2}
+                          className="text-xs bg-emerald-500/[0.03] border-emerald-200 dark:border-emerald-900/40"
+                        />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
+
+                  {/* 4. Internal Staff Note (about order update and status) -> stored in notes table */}
+                  <form.Field name="staff_note">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_staff_note" className="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-300">
+                          <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                          <span>4. Internal Staff Note</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">(About order update and status)</span>
+                        </FormFieldLabel>
+                        <Textarea
+                          id="order_form_staff_note"
+                          placeholder="e.g. Phone verification confirmed, discount approved by manager, status update..."
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          rows={2}
+                          className="text-xs bg-amber-500/[0.03] border-amber-200 dark:border-amber-900/40"
+                        />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
+
+                  {/* Previous Notes View in Edit Mode */}
+                  {mode === "edit" && order && (order.notes || []).length > 0 && (
+                    <div className="mt-2 p-2.5 rounded-lg bg-muted/30 border text-[11px] space-y-2">
+                      <span className="font-semibold text-foreground flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                        Existing Order Notes ({(order.notes || []).length}):
+                      </span>
+                      <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
+                        {(order.notes || []).map((n) => (
+                          <div key={n.id} className="p-1.5 rounded bg-background border text-[11px] flex items-start gap-1.5">
+                            {n.type === "delivery" ? (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 border-indigo-400 text-indigo-700 bg-indigo-50 shrink-0">
+                                Delivery
+                              </Badge>
+                            ) : n.type === "packaging" ? (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 border-emerald-400 text-emerald-700 bg-emerald-50 shrink-0">
+                                Packaging
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-400 text-amber-700 bg-amber-50 shrink-0">
+                                Staff
+                              </Badge>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="line-clamp-2 text-foreground font-medium">{n.text}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{n.author} · {n.created_at}</p>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </FormFieldItem>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </form.Field>
+                </div>
               </div>
 
               {/* Right Column: Purchased Products & Financial Adjustments */}

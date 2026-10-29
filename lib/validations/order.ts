@@ -285,6 +285,8 @@ export const orderFormSchema = z
     courier_name: orderCourierNameSchema,
     customer_note: orderCustomerNoteSchema,
     staff_note: z.string().max(1000, "Internal staff note must not exceed 1000 characters").optional().default(""),
+    delivery_note: z.string().max(1000, "Delivery note must not exceed 1000 characters").optional().default(""),
+    packaging_note: z.string().max(1000, "Packaging note must not exceed 1000 characters").optional().default(""),
     cancel_reason: z.string().optional().default(""),
     items: z.array(orderItemSchema).default([]),
   })
@@ -442,11 +444,22 @@ export const orderNoteTextSchema = z
       .max(1000, "Note must not exceed 1000 characters")
   );
 
+export const orderNoteTypeSchema = z.enum(
+  ["internal", "customer", "delivery", "packaging"],
+  {
+    message: "Note type must be internal, customer, delivery, or packaging",
+  }
+);
+
 export const orderNoteFormSchema = z.object({
   text: orderNoteTextSchema,
-  type: z.enum(["internal", "customer"], {
-    message: "Note type must be internal or customer",
-  }),
+  type: orderNoteTypeSchema,
+});
+
+export const updateOrderNoteFormSchema = z.object({
+  id: z.string().min(1, "Note ID is required"),
+  text: orderNoteTextSchema,
+  type: orderNoteTypeSchema,
 });
 
 /**
@@ -455,6 +468,7 @@ export const orderNoteFormSchema = z.object({
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
 export type OrderItemValues = z.infer<typeof orderItemSchema>;
 export type OrderNoteValues = z.infer<typeof orderNoteFormSchema>;
+export type UpdateOrderNoteValues = z.infer<typeof updateOrderNoteFormSchema>;
 export type RecordPaymentFormValues = z.infer<typeof recordPaymentFormSchema>;
 
 /**
