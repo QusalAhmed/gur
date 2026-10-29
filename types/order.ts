@@ -6,7 +6,7 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   line_total: number;
-  variant_id?: string;
+  variant_id?: string | null;
 }
 
 export type OrderNoteType =

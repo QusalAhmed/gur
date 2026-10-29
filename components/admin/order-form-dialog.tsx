@@ -104,27 +104,27 @@ export function OrderFormDialog({
   const form = useForm({
     canSubmitWhenInvalid: true,
     defaultValues: {
-      customer: "",
-      phone: "",
-      email: "",
-      division: "",
-      district: "",
-      address_line: "",
-      channel: "phone" as Order["channel"],
-      method: "cod" as Order["method"],
-      status: (defaultStatus || "confirmed") as Order["status"],
-      payment: "unpaid" as Order["payment"],
-      fulfillment: "unfulfilled" as Order["fulfillment"],
-      shipping_total: 120,
-      discount_total: 0,
-      amount_paid: 0,
-      customer_note: "",
+      customer: (mode === "edit" && order?.customer ? order.customer : "") || "",
+      phone: (mode === "edit" && order?.phone ? order.phone : "") || "",
+      email: (mode === "edit" && order?.email ? order.email : "") || "",
+      division: (mode === "edit" && order?.address?.division ? order.address.division : "") || "",
+      district: (mode === "edit" && order?.address?.district ? order.address.district : "") || "",
+      address_line: (mode === "edit" && order?.address?.address_line ? order.address.address_line : "") || "",
+      channel: (mode === "edit" ? (order?.channel || "phone") : "phone") as Order["channel"],
+      method: (mode === "edit" ? (order?.method || "cod") : "cod") as Order["method"],
+      status: (mode === "edit" ? (order?.status || "confirmed") : (defaultStatus || "confirmed")) as Order["status"],
+      payment: (mode === "edit" ? (order?.payment || "unpaid") : "unpaid") as Order["payment"],
+      fulfillment: (mode === "edit" ? (order?.fulfillment || "unfulfilled") : "unfulfilled") as Order["fulfillment"],
+      shipping_total: mode === "edit" ? (order?.shipping_total ?? 120) : 120,
+      discount_total: mode === "edit" ? (order?.discount_total ?? 0) : 0,
+      amount_paid: mode === "edit" ? (order?.amount_paid ?? 0) : 0,
+      customer_note: mode === "edit" ? (order?.customer_note || "") : "",
       staff_note: "",
       delivery_note: "",
       packaging_note: "",
-      courier_name: "",
-      cancel_reason: "",
-      items: [] as OrderItem[],
+      courier_name: mode === "edit" ? (order?.courier_name || "") : "",
+      cancel_reason: mode === "edit" ? (order?.cancel_reason || "") : "",
+      items: (mode === "edit" && order?.items ? order.items.map((it) => ({ ...it })) : []) as OrderItem[],
     },
     onSubmitInvalid: ({ formApi }) => {
       const currentStatus = formApi.getFieldValue("status");
@@ -800,9 +800,11 @@ export function OrderFormDialog({
                             <option value="cod" className="bg-popover">Cash on Delivery (COD)</option>
                             <option value="bkash" className="bg-popover">bKash</option>
                             <option value="nagad" className="bg-popover">Nagad</option>
+                            <option value="rocket" className="bg-popover">Rocket</option>
                             <option value="bank_transfer" className="bg-popover">Bank Transfer</option>
                             <option value="cash" className="bg-popover">Cash</option>
                             <option value="card" className="bg-popover">Credit / Debit Card</option>
+                            <option value="credit_terms" className="bg-popover">Credit Terms (Business)</option>
                           </select>
                         </FormFieldItem>
                       )}

@@ -1356,12 +1356,16 @@ export async function updateOrderInDb(
   });
   updatedOrder.notes = deduplicatedNotes;
 
+  const normalizedPhone = updatedOrder.phone ? normalizeBdPhone(updatedOrder.phone) : null;
+
   const updatePayload: Record<string, any> = {
     customer_name: updatedOrder.customer ? updatedOrder.customer.trim() : null,
-    customer_phone: updatedOrder.phone ? updatedOrder.phone.trim() : null,
+    customer_phone: normalizedPhone,
     customer_email: updatedOrder.email ? updatedOrder.email.trim() : null,
     status: dbStatus,
     payment_status: updatedOrder.payment,
+    payment_method: updatedOrder.method || "cod",
+    channel: updatedOrder.channel || "web",
     fulfillment_status: updatedOrder.fulfillment,
     shipping_total: shippingTotal,
     discount_total: discountTotal,
@@ -1377,7 +1381,7 @@ export async function updateOrderInDb(
           division: updatedOrder.address.division || "",
           district: updatedOrder.address.district || "",
           address_line: updatedOrder.address.address_line || "",
-          phone: updatedOrder.phone || "",
+          phone: normalizedPhone || updatedOrder.phone || "",
           recipient_name: updatedOrder.customer || "",
         }
       : undefined,
@@ -1560,12 +1564,37 @@ export async function updateOrderStatusInDb(
 
   // Pre-validate transition if currentOrder is available
   if (currentOrder) {
-    const val = validateOrderStatusTransition(
+    let val = validateOrderStatusTransition(
       currentOrder.status,
       newStatus,
       currentOrder.customer,
-      currentOrder.phone
+      currentOrder.phone,
+      currentOrder.address?.address_line,
+      currentOrder.items?.length
     );
+    if (!val.valid) {
+      // If currentOrder fails validation, it might be stale in client memory.
+      // Re-validate against authoritative DB state before rejecting.
+      const { data: dbOrder } = await supabase
+        .from("orders")
+        .select("status, customer_name, customer_phone, shipping_address, order_items(id)")
+        .eq("order_number", orderId)
+        .maybeSingle();
+
+      if (dbOrder) {
+        const liveVal = validateOrderStatusTransition(
+          dbOrder.status,
+          dbStatus,
+          dbOrder.customer_name,
+          dbOrder.customer_phone,
+          dbOrder.shipping_address?.address_line,
+          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0
+        );
+        if (liveVal.valid) {
+          val = liveVal;
+        }
+      }
+    }
     if (!val.valid) {
       throw new DatabaseOperationError(
         parseDatabaseError({
@@ -1574,6 +1603,37 @@ export async function updateOrderStatusInDb(
           details: `Order ${orderId}: ${val.reason}`,
         })
       );
+    }
+  } else {
+    // If currentOrder is omitted but transitioning to confirmed or higher, enforce DB checks
+    const confirmedPos = STATUS_WORKFLOW_FLOW.indexOf("confirmed");
+    const targetPos = STATUS_WORKFLOW_FLOW.indexOf(dbStatus as any);
+    if (targetPos >= confirmedPos) {
+      const { data: dbOrder } = await supabase
+        .from("orders")
+        .select("status, customer_name, customer_phone, shipping_address, order_items(id)")
+        .eq("order_number", orderId)
+        .maybeSingle();
+
+      if (dbOrder) {
+        const val = validateOrderStatusTransition(
+          dbOrder.status,
+          dbStatus,
+          dbOrder.customer_name,
+          dbOrder.customer_phone,
+          dbOrder.shipping_address?.address_line,
+          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0
+        );
+        if (!val.valid) {
+          throw new DatabaseOperationError(
+            parseDatabaseError({
+              code: val.code || "P0001",
+              message: `${val.reason} (${orderId})`,
+              details: `Order ${orderId}: ${val.reason}`,
+            })
+          );
+        }
+      }
     }
   }
 
@@ -2161,37 +2221,59 @@ export async function recordOrderPaymentInDb(
     });
   }
 
-  const baseOrder = currentOrder || ({
-    id: orderId,
-    customer: "",
-    phone: "",
-    email: "",
-    address: { division: "", district: "", address_line: "" },
-    status: "confirmed",
-    payment: paymentStatus,
-    fulfillment: "unfulfilled",
-    method: paymentMethod || "cod",
-    channel: "web",
-    subtotal: 0,
-    discount_total: 0,
-    shipping_total: 0,
-    grand_total: 0,
-    amount_paid: amountPaid,
-    currency: "BDT",
-    date: nowStr,
-    items: [],
-    notes: [],
-    events: [],
-  } as Order);
+  const baseOrder =
+    currentOrder ||
+    (await fetchOrderByIdFromDb(orderId)) ||
+    ({
+      id: orderId,
+      customer: "",
+      phone: "",
+      email: "",
+      address: { division: "", district: "", address_line: "" },
+      status: "confirmed",
+      payment: paymentStatus,
+      fulfillment: "unfulfilled",
+      method: paymentMethod || "cod",
+      channel: "web",
+      subtotal: 0,
+      discount_total: 0,
+      shipping_total: 0,
+      grand_total: 0,
+      amount_paid: amountPaid,
+      currency: "BDT",
+      date: nowStr,
+      items: [],
+      notes: [],
+      events: [],
+    } as Order);
 
   const updated: Order = {
     ...baseOrder,
     payment: paymentStatus,
     amount_paid: amountPaid,
-    method: paymentMethod || baseOrder.method,
+    method: paymentMethod || baseOrder.method || "cod",
     notes: newNotes,
     events: [paymentEvent, ...(baseOrder.events || [])],
   };
+
+  // Directly update orders table for payment columns (single source of truth)
+  const orderPaymentUpdatePayload: Record<string, any> = {
+    payment_status: paymentStatus,
+    amount_paid: Number(amountPaid) || 0,
+    updated_at: new Date().toISOString(),
+  };
+  if (paymentMethod) {
+    orderPaymentUpdatePayload.payment_method = paymentMethod;
+  }
+
+  const { error: directPayErr } = await supabase
+    .from("orders")
+    .update(orderPaymentUpdatePayload)
+    .eq("order_number", orderId);
+
+  if (directPayErr) {
+    console.error("Direct payment update error:", directPayErr);
+  }
 
   return await updateOrderInDb(updated, false);
 }
@@ -2243,7 +2325,7 @@ export async function bulkUpdateOrderStatusInDb(
   // 1. Fetch current orders from DB to validate workflow eligibility
   const { data: dbOrders, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, order_number, status, customer_name, customer_phone")
+    .select("id, order_number, status, customer_name, customer_phone, shipping_address, order_items(id)")
     .in("order_number", orderIds);
 
   if (fetchErr) {
@@ -2265,11 +2347,15 @@ export async function bulkUpdateOrderStatusInDb(
 
   // Validate each order against the workflow transition rules
   for (const o of ordersList) {
+    const itemCount = Array.isArray(o.order_items) ? o.order_items.length : 0;
+    const addressLine = o.shipping_address?.address_line;
     const val = validateOrderStatusTransition(
       o.status,
       dbStatus,
       o.customer_name,
-      o.customer_phone
+      o.customer_phone,
+      addressLine,
+      itemCount
     );
 
     if (val.valid) {
@@ -2286,10 +2372,14 @@ export async function bulkUpdateOrderStatusInDb(
   if (eligibleOrders.length === 0) {
     const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
     const primaryReason = skippedOrders[0]?.reason || "Cannot advance orders";
-    const primaryCode = skippedOrders[0]?.reason?.includes("Customer name")
+    const primaryCode = skippedOrders[0]?.reason?.includes("product item")
+      ? "ORDER_ITEMS_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("Customer name")
       ? "CUSTOMER_NAME_REQUIRED"
       : skippedOrders[0]?.reason?.includes("phone")
       ? "CUSTOMER_PHONE_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("address")
+      ? "CUSTOMER_ADDRESS_REQUIRED"
       : "INVALID_STATUS_TRANSITION";
 
     throw new DatabaseOperationError(
@@ -2297,7 +2387,7 @@ export async function bulkUpdateOrderStatusInDb(
         code: primaryCode,
         message: `${primaryReason} (Affecting: ${skippedOrders.map((s) => s.id).join(", ")})`,
         details: reasonSummary,
-        hint: "Edit the affected orders to fill required customer details or verify workflow progression.",
+        hint: "Edit the affected orders to add required products, customer details, or verify workflow progression.",
       })
     );
   }

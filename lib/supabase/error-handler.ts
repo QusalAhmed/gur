@@ -156,6 +156,38 @@ export function parseDatabaseError(error: any): ParsedDatabaseError {
       };
     }
 
+    // 3c. Customer Delivery Address Required
+    if (lowerMsg.includes("customer_address_required") || lowerMsg.includes("delivery address is required") || lowerMsg.includes("street delivery address")) {
+      return {
+        title: "Delivery Address Required",
+        message: "Cannot advance order to Confirmed without a street delivery address.",
+        resolution: "Click 'Edit Order' to enter the customer's street delivery address, then retry confirming.",
+        code: "CUSTOMER_ADDRESS_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
+    // 3d. Order Items Required
+    if (
+      lowerMsg.includes("order_items_required") ||
+      lowerMsg.includes("order item is required") ||
+      lowerMsg.includes("at least one product item is required")
+    ) {
+      return {
+        title: "Product Items Required",
+        message: "Cannot advance order to Confirmed or beyond without at least one product item.",
+        resolution: "Click 'Edit Order' to add product items to the order before confirming or dispatching.",
+        code: "ORDER_ITEMS_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
     // 3c. Order Status Backwards
     if (lowerMsg.includes("order_status_backwards") || lowerMsg.includes("->")) {
       return {
@@ -377,7 +409,9 @@ export function validateOrderStatusTransition(
   currentStatus: string,
   targetStatus: string,
   customerName?: string | null,
-  customerPhone?: string | null
+  customerPhone?: string | null,
+  customerAddress?: string | null,
+  itemsCount?: number | null
 ): TransitionValidationResult {
   const normalizedCurrent = currentStatus === "partially_delivered" ? "delivered" : currentStatus;
   const normalizedTarget = targetStatus === "partially_delivered" ? "delivered" : targetStatus;
@@ -432,9 +466,18 @@ export function validateOrderStatusTransition(
     };
   }
 
-  // 6. Customer details required for confirmed or higher
+  // 6. Customer details and items required for confirmed or higher
   const confirmedPos = STATUS_WORKFLOW_FLOW.indexOf("confirmed");
   if (targetPos >= confirmedPos) {
+    // 6a. At least one line item required
+    if (itemsCount !== undefined && itemsCount !== null && itemsCount < 1) {
+      return {
+        valid: false,
+        code: "ORDER_ITEMS_REQUIRED",
+        reason: "At least one product item is required before confirming or advancing order.",
+      };
+    }
+
     const trimmedName = (customerName || "").trim();
     if (trimmedName.length < 1) {
       return {
@@ -452,6 +495,17 @@ export function validateOrderStatusTransition(
         code: "CUSTOMER_PHONE_REQUIRED",
         reason: "Valid customer mobile number is required before confirming order.",
       };
+    }
+
+    if (customerAddress !== undefined && customerAddress !== null) {
+      const trimmedAddress = customerAddress.trim();
+      if (trimmedAddress.length < 3) {
+        return {
+          valid: false,
+          code: "CUSTOMER_ADDRESS_REQUIRED",
+          reason: "Street delivery address is required before confirming order.",
+        };
+      }
     }
   }
 

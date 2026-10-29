@@ -196,7 +196,7 @@ export const orderItemSchema = z.object({
     .min(1, "Quantity must be at least 1"),
   unit_price: z.coerce.number().min(0, "Unit price cannot be negative"),
   line_total: z.coerce.number().min(0, "Line total cannot be negative"),
-  variant_id: z.string().optional(),
+  variant_id: z.string().nullable().optional(),
 });
 
 /**

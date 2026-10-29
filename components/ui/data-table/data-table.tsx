@@ -52,6 +52,7 @@ export interface DataTableProps<TData, TValue> {
   onRowClick?: (row: TData) => void;
   renderSubRow?: (row: TData) => React.ReactNode;
   isRowExpanded?: (row: TData) => boolean;
+  getRowId?: (row: TData, index: number) => string;
   className?: string;
 }
 
@@ -77,6 +78,10 @@ export function DataTable<TData, TValue>({
   onRowClick,
   renderSubRow,
   isRowExpanded,
+  getRowId = (row: any, index: number) =>
+    row && typeof row === "object" && "id" in row && row.id != null
+      ? String(row.id)
+      : String(index),
   className,
 }: DataTableProps<TData, TValue>) {
   const activeSearchCol = searchColumn || searchKey;
@@ -97,6 +102,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    getRowId,
     state: {
       sorting,
       columnFilters,

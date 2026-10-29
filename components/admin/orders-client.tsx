@@ -320,10 +320,33 @@ export function OrdersClient() {
   const updateOrderMutation = useMutation({
     mutationFn: (updated: Order) => updateOrderInDb(updated),
     onSuccess: (updated) => {
+      // 1. Immediately update TanStack Query cache so all hooks and tables see fresh data without waiting for network refetch
+      queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
+        old.map((o) => (o.id === updated.id ? updated : o))
+      );
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+
+      // 2. Synchronize all local modal states immediately
       if (selectedOrder?.id === updated.id) {
         setSelectedOrder(updated);
       }
+      if (statusOrder?.id === updated.id) {
+        setStatusOrder(updated);
+      }
+      if (noteOrder?.id === updated.id) {
+        setNoteOrder(updated);
+      }
+      if (paymentOrder?.id === updated.id) {
+        setPaymentOrder(updated);
+      }
+      setBulkSelectedOrders((prev) =>
+        prev.map((o) => (o.id === updated.id ? updated : o))
+      );
+
+      // 3. Clear any stale error messages from previous attempts
+      setStatusError(null);
+      setBulkStatusError(null);
+
       showToast(`Order ${updated.id} successfully updated and synced!`, "success");
     },
     onError: (err: any) => {
@@ -352,10 +375,19 @@ export function OrdersClient() {
       return await updateOrderStatusInDb(orderId, newStatus, cancelReason, eventMsg, currentOrder, courierName);
     },
     onSuccess: (updated) => {
+      queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
+        old.map((o) => (o.id === updated.id ? updated : o))
+      );
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       if (selectedOrder?.id === updated.id) {
         setSelectedOrder(updated);
       }
+      if (statusOrder?.id === updated.id) {
+        setStatusOrder(updated);
+      }
+      setBulkSelectedOrders((prev) =>
+        prev.map((o) => (o.id === updated.id ? updated : o))
+      );
       setIsStatusOpen(false);
       setStatusError(null);
       showToast(`Order ${updated.id} status changed to ${updated.status.replace(/_/g, " ").toUpperCase()} and synced!`, "success");
@@ -784,8 +816,81 @@ export function OrdersClient() {
 
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
 
-  const handleOpenBulkStatus = (orders: Order[], status: Order["status"], clearFn: () => void) => {
-    setBulkSelectedOrders(orders);
+  // Derive live, up-to-date versions of statusOrder and bulkSelectedOrders from TanStack Query orders
+  const effectiveStatusOrder = React.useMemo(() => {
+    if (!statusOrder) return null;
+    return orders.find((o) => o.id === statusOrder.id) || statusOrder;
+  }, [orders, statusOrder]);
+
+  const effectiveBulkSelectedOrders = React.useMemo(() => {
+    return bulkSelectedOrders.map((bo) => orders.find((o) => o.id === bo.id) || bo);
+  }, [orders, bulkSelectedOrders]);
+
+  // Synchronize modal states whenever orders cache updates
+  React.useEffect(() => {
+    if (statusOrder) {
+      const fresh = orders.find((o) => o.id === statusOrder.id);
+      if (fresh && fresh !== statusOrder) {
+        setStatusOrder(fresh);
+      }
+    }
+  }, [orders, statusOrder]);
+
+  React.useEffect(() => {
+    if (selectedOrder) {
+      const fresh = orders.find((o) => o.id === selectedOrder.id);
+      if (fresh && fresh !== selectedOrder) {
+        setSelectedOrder(fresh);
+      }
+    }
+  }, [orders, selectedOrder]);
+
+  React.useEffect(() => {
+    if (bulkSelectedOrders.length > 0) {
+      const freshList = bulkSelectedOrders.map((bo) => orders.find((o) => o.id === bo.id) || bo);
+      const hasChanged = freshList.some((fresh, idx) => fresh !== bulkSelectedOrders[idx]);
+      if (hasChanged) {
+        setBulkSelectedOrders(freshList);
+      }
+    }
+  }, [orders, bulkSelectedOrders]);
+
+  // Single Order Status Pre-validation Eligibility
+  const singleStatusEligibility = React.useMemo(() => {
+    if (!isStatusOpen || !effectiveStatusOrder) {
+      return { valid: true, reason: undefined, code: undefined };
+    }
+    return validateOrderStatusTransition(
+      effectiveStatusOrder.status,
+      newStatus,
+      effectiveStatusOrder.customer,
+      effectiveStatusOrder.phone,
+      effectiveStatusOrder.address?.address_line,
+      effectiveStatusOrder.items?.length
+    );
+  }, [isStatusOpen, effectiveStatusOrder, newStatus]);
+
+  // Auto-clear stale status error if the order was updated and now satisfies eligibility
+  React.useEffect(() => {
+    if (statusError && singleStatusEligibility.valid) {
+      if (
+        statusError.code === "CUSTOMER_NAME_REQUIRED" ||
+        statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
+        statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+        statusError.code === "ORDER_ITEMS_REQUIRED" ||
+        statusError.message.includes("Customer name") ||
+        statusError.message.includes("mobile number") ||
+        statusError.message.includes("product item") ||
+        statusError.message.includes("address")
+      ) {
+        setStatusError(null);
+      }
+    }
+  }, [singleStatusEligibility, statusError]);
+
+  const handleOpenBulkStatus = (ordersList: Order[], status: Order["status"], clearFn: () => void) => {
+    const freshOrders = ordersList.map((o) => orders.find((fresh) => fresh.id === o.id) || o);
+    setBulkSelectedOrders(freshOrders);
     setBulkTargetStatus(status);
     setBulkStatusNote("");
     setBulkStatusError(null);
@@ -794,27 +899,29 @@ export function OrdersClient() {
   };
 
   const handleConfirmBulkStatus = () => {
-    if (bulkSelectedOrders.length === 0) return;
+    if (effectiveBulkSelectedOrders.length === 0) return;
     bulkStatusMutation.mutate({
-      orderIds: bulkSelectedOrders.map((o) => o.id),
+      orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
       targetStatus: bulkTargetStatus,
       batchNote: bulkStatusNote,
     });
   };
 
   const bulkEligibility = React.useMemo(() => {
-    if (!isBulkStatusOpen || bulkSelectedOrders.length === 0) {
+    if (!isBulkStatusOpen || effectiveBulkSelectedOrders.length === 0) {
       return { eligible: [] as Order[], ineligible: [] as { order: Order; reason: string }[] };
     }
     const eligible: Order[] = [];
     const ineligible: { order: Order; reason: string }[] = [];
 
-    for (const o of bulkSelectedOrders) {
+    for (const o of effectiveBulkSelectedOrders) {
       const val = validateOrderStatusTransition(
         o.status,
         bulkTargetStatus,
         o.customer,
-        o.phone
+        o.phone,
+        o.address?.address_line,
+        o.items?.length
       );
       if (val.valid) {
         eligible.push(o);
@@ -823,10 +930,18 @@ export function OrdersClient() {
       }
     }
     return { eligible, ineligible };
-  }, [isBulkStatusOpen, bulkSelectedOrders, bulkTargetStatus]);
+  }, [isBulkStatusOpen, effectiveBulkSelectedOrders, bulkTargetStatus]);
 
-  const handleOpenBulkCourier = (orders: Order[], courier: string, clearFn: () => void) => {
-    setBulkSelectedOrders(orders);
+  // Auto-clear stale bulk status error if all selected orders now satisfy eligibility
+  React.useEffect(() => {
+    if (bulkStatusError && bulkEligibility.ineligible.length === 0) {
+      setBulkStatusError(null);
+    }
+  }, [bulkEligibility, bulkStatusError]);
+
+  const handleOpenBulkCourier = (ordersList: Order[], courier: string, clearFn: () => void) => {
+    const freshOrders = ordersList.map((o) => orders.find((fresh) => fresh.id === o.id) || o);
+    setBulkSelectedOrders(freshOrders);
     setBulkTargetCourier(courier);
     setBulkCourierNote("");
     setClearSelectionFn(() => clearFn);
@@ -834,23 +949,24 @@ export function OrdersClient() {
   };
 
   const handleConfirmBulkCourier = () => {
-    if (bulkSelectedOrders.length === 0) return;
+    if (effectiveBulkSelectedOrders.length === 0) return;
     bulkCourierMutation.mutate({
-      orderIds: bulkSelectedOrders.map((o) => o.id),
+      orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
       courierName: bulkTargetCourier,
       batchNote: bulkCourierNote,
     });
   };
 
-  const handleOpenBulkDelete = (orders: Order[], clearFn: () => void) => {
-    setBulkSelectedOrders(orders);
+  const handleOpenBulkDelete = (ordersList: Order[], clearFn: () => void) => {
+    const freshOrders = ordersList.map((o) => orders.find((fresh) => fresh.id === o.id) || o);
+    setBulkSelectedOrders(freshOrders);
     setClearSelectionFn(() => clearFn);
     setIsBulkDeleteOpen(true);
   };
 
   const handleConfirmBulkDelete = () => {
-    if (bulkSelectedOrders.length === 0) return;
-    bulkDeleteMutation.mutate(bulkSelectedOrders.map((o) => o.id));
+    if (effectiveBulkSelectedOrders.length === 0) return;
+    bulkDeleteMutation.mutate(effectiveBulkSelectedOrders.map((o) => o.id));
   };
 
   const handleBulkPrintInvoices = (orders: Order[]) => {
@@ -1107,17 +1223,19 @@ export function OrdersClient() {
 
   // Open Details Sheet
   const handleOpenView = (order: Order) => {
-    setSelectedOrder(order);
+    const freshOrder = orders.find((o) => o.id === order.id) || order;
+    setSelectedOrder(freshOrder);
     setIsViewOpen(true);
   };
 
   // Open Edit Dialog (Unified form)
   const handleOpenEdit = (order: Order) => {
     setIsViewOpen(false);
+    const freshOrder = orders.find((o) => o.id === order.id) || order;
     setOrderModalState({
       open: true,
       mode: "edit",
-      order,
+      order: freshOrder,
     });
   };
 
@@ -1161,24 +1279,25 @@ export function OrdersClient() {
 
   // Quick advance status
   const handleQuickAdvanceStatus = (order: Order) => {
-    const next = getNextStatus(order.status);
+    const freshOrder = orders.find((o) => o.id === order.id) || order;
+    const next = getNextStatus(freshOrder.status);
     if (!next) return;
 
     // Check if advancing to confirmed or higher requires missing details
     if (next !== "incomplete_order" && next !== "pending") {
       if (
-        !order.customer ||
-        order.customer.trim().length < 2 ||
-        !order.items ||
-        order.items.length === 0 ||
-        !order.address?.address_line ||
-        order.address.address_line.trim().length < 3
+        !freshOrder.customer ||
+        freshOrder.customer.trim().length < 2 ||
+        !freshOrder.items ||
+        freshOrder.items.length === 0 ||
+        !freshOrder.address?.address_line ||
+        freshOrder.address.address_line.trim().length < 3
       ) {
         showToast(
           "Please edit order to fill required customer, products, or delivery address before advancing.",
           "destructive"
         );
-        handleOpenEdit(order);
+        handleOpenEdit(freshOrder);
         return;
       }
     }
@@ -1190,9 +1309,8 @@ export function OrdersClient() {
       next === "delivered" ||
       next === "partially_delivered";
 
-    if (requiresCourier && (!order.courier_name || order.courier_name.trim().length < 2)) {
-      handleOpenStatus(order);
-      setNewStatus(next);
+    if (requiresCourier && (!freshOrder.courier_name || freshOrder.courier_name.trim().length < 2)) {
+      handleOpenStatus(freshOrder, next);
       showToast(
         `Please assign a Courier Service before moving to ${next.replace(/_/g, " ").toUpperCase()}`,
         "info"
@@ -1200,31 +1318,33 @@ export function OrdersClient() {
       return;
     }
 
-    const eventMsg = `Workflow advanced from ${order.status.replace(/_/g, " ").toUpperCase()} to ${next.replace(/_/g, " ").toUpperCase()}`;
+    const eventMsg = `Workflow advanced from ${freshOrder.status.replace(/_/g, " ").toUpperCase()} to ${next.replace(/_/g, " ").toUpperCase()}`;
     updateStatusMutation.mutate({
-      orderId: order.id,
+      orderId: freshOrder.id,
       newStatus: next,
       eventMsg,
-      currentOrder: order,
-      courierName: order.courier_name,
+      currentOrder: freshOrder,
+      courierName: freshOrder.courier_name,
     });
   };
 
   // Open Status Dialog
-  const handleOpenStatus = (order: Order) => {
-    setStatusOrder(order);
-    setNewStatus(order.status);
-    setCancelReason(order.cancel_reason || "");
-    setSelectedCourier(order.courier_name || "");
+  const handleOpenStatus = (order: Order, targetStatus?: Order["status"]) => {
+    const freshOrder = orders.find((o) => o.id === order.id) || order;
+    setStatusOrder(freshOrder);
+    setNewStatus(targetStatus || freshOrder.status);
+    setCancelReason(freshOrder.cancel_reason || "");
+    setSelectedCourier(freshOrder.courier_name || "");
     setStatusError(null);
     setIsStatusOpen(true);
   };
 
   // Save Status Update
   const handleSaveStatus = () => {
-    if (!statusOrder) return;
+    const targetOrder = effectiveStatusOrder;
+    if (!targetOrder) return;
 
-    const fromStatus = statusOrder.status;
+    const fromStatus = targetOrder.status;
     const updatedStatus = newStatus;
 
     // 1. Validation for confirmed and higher
@@ -1237,21 +1357,21 @@ export function OrdersClient() {
       updatedStatus === "partially_delivered";
 
     if (!isDraft && !isTerminated) {
-      if (!statusOrder.customer || statusOrder.customer.trim().length < 2) {
+      if (!targetOrder.customer || targetOrder.customer.trim().length < 2) {
         showToast(
           "Customer name is required before setting status to Confirmed. Please edit the order.",
           "destructive"
         );
         return;
       }
-      if (!statusOrder.items || statusOrder.items.length === 0) {
+      if (!targetOrder.items || targetOrder.items.length === 0) {
         showToast(
           "At least one product item is required before setting status to Confirmed. Please edit the order.",
           "destructive"
         );
         return;
       }
-      if (!statusOrder.address?.address_line || statusOrder.address.address_line.trim().length < 3) {
+      if (!targetOrder.address?.address_line || targetOrder.address.address_line.trim().length < 3) {
         showToast(
           "Street delivery address is required before setting status to Confirmed. Please edit the order.",
           "destructive"
@@ -1280,11 +1400,11 @@ export function OrdersClient() {
     }`;
 
     updateStatusMutation.mutate({
-      orderId: statusOrder.id,
+      orderId: targetOrder.id,
       newStatus: updatedStatus,
       cancelReason,
       eventMsg,
-      currentOrder: statusOrder,
+      currentOrder: targetOrder,
       courierName: selectedCourier,
     });
   };
@@ -2701,10 +2821,7 @@ export function OrdersClient() {
                         key={stepObj.value}
                         type="button"
                         onClick={() => {
-                          setStatusOrder(selectedOrder);
-                          setNewStatus(stepObj.value as Order["status"]);
-                          setCancelReason("");
-                          setIsStatusOpen(true);
+                          handleOpenStatus(selectedOrder, stepObj.value as Order["status"]);
                         }}
                         className="flex flex-col items-center gap-1.5 flex-1 min-w-[55px] relative group hover:opacity-80 transition-opacity"
                       >
@@ -3444,6 +3561,7 @@ export function OrdersClient() {
       {/* UNIFIED ORDER FORM DIALOG (CREATING & EDITING) */}
       {/* ========================================================================= */}
       <OrderFormDialog
+        key={orderModalState.open ? `${orderModalState.mode}-${orderModalState.order?.id || "create"}` : "closed"}
         open={orderModalState.open}
         onOpenChange={(open) => setOrderModalState((prev) => ({ ...prev, open }))}
         mode={orderModalState.mode}
@@ -3475,9 +3593,48 @@ export function OrdersClient() {
               Update Order Status
             </DialogTitle>
             <DialogDescription>
-              Change workflow progression for order <span className="font-mono font-bold text-foreground">{statusOrder?.id}</span>.
+              Change workflow progression for order <span className="font-mono font-bold text-foreground">{effectiveStatusOrder?.id}</span>.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Pre-validation Warning Card for Single Status Update */}
+          {!singleStatusEligibility.valid && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-900 dark:text-amber-200">
+                    Status Transition Notice
+                  </p>
+                  <p className="text-amber-800 dark:text-amber-300 mt-0.5 text-[11px] leading-relaxed">
+                    {singleStatusEligibility.reason}
+                  </p>
+                </div>
+              </div>
+              {(singleStatusEligibility.code === "CUSTOMER_NAME_REQUIRED" ||
+                singleStatusEligibility.code === "CUSTOMER_PHONE_REQUIRED" ||
+                singleStatusEligibility.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+                singleStatusEligibility.code === "ORDER_ITEMS_REQUIRED") && effectiveStatusOrder && (
+                <div className="flex items-center justify-end pt-1 border-t border-amber-500/20">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setIsStatusOpen(false);
+                      handleOpenEdit(effectiveStatusOrder);
+                    }}
+                    className="h-7 text-xs bg-background border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950 cursor-pointer"
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    {singleStatusEligibility.code === "ORDER_ITEMS_REQUIRED"
+                      ? "Add Products / Edit Order"
+                      : "Edit Order Details"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Inline Database / RLS / Trigger Error Banner */}
           {statusError && (
@@ -3525,19 +3682,24 @@ export function OrdersClient() {
 
               {/* Action buttons inside error banner */}
               <div className="flex items-center justify-end gap-2 pt-1 border-t border-rose-200/70 dark:border-rose-800/70">
-                {(statusError.code === "CUSTOMER_NAME_REQUIRED" || statusError.code === "CUSTOMER_PHONE_REQUIRED") && statusOrder ? (
+                {(statusError.code === "CUSTOMER_NAME_REQUIRED" ||
+                  statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
+                  statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+                  statusError.code === "ORDER_ITEMS_REQUIRED") && effectiveStatusOrder ? (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => {
                       setIsStatusOpen(false);
-                      handleOpenEdit(statusOrder);
+                      handleOpenEdit(effectiveStatusOrder);
                     }}
                     className="h-7 text-xs bg-white dark:bg-zinc-900 border-rose-300 text-rose-900 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-950 cursor-pointer"
                   >
                     <Edit className="h-3 w-3 mr-1" />
-                    Edit Order Customer Info
+                    {statusError.code === "ORDER_ITEMS_REQUIRED"
+                      ? "Add Products / Edit Order"
+                      : "Edit Order Details"}
                   </Button>
                 ) : null}
                 <button
@@ -3689,7 +3851,7 @@ export function OrdersClient() {
                 onChange={(e) => setNotifyCustomer(e.target.checked)}
                 className="rounded border-input text-amber-600 focus:ring-amber-500 h-4 w-4"
               />
-              <span>Send automated SMS / WhatsApp notification to {statusOrder?.phone}</span>
+              <span>Send automated SMS / WhatsApp notification to {effectiveStatusOrder?.phone || "customer"}</span>
             </label>
           </div>
 
@@ -3807,6 +3969,7 @@ export function OrdersClient() {
                         <option value="card">Credit / Debit Card</option>
                         <option value="cash">Cash</option>
                         <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="credit_terms">Credit Terms</option>
                       </select>
                     </FormFieldItem>
                   )}
@@ -4510,7 +4673,7 @@ export function OrdersClient() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-600" />
-              Update Status for {bulkSelectedOrders.length} Order(s)
+              Update Status for {effectiveBulkSelectedOrders.length} Order(s)
             </DialogTitle>
             <DialogDescription>
               Set status to <span className="font-bold text-foreground uppercase">{bulkTargetStatus.replace(/_/g, " ")}</span> across all selected orders.
@@ -4564,7 +4727,7 @@ export function OrdersClient() {
               <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
                 <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
                 <span>
-                  {bulkEligibility.ineligible.length} of {bulkSelectedOrders.length} order(s) cannot be moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}:
+                  {bulkEligibility.ineligible.length} of {effectiveBulkSelectedOrders.length} order(s) cannot be moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}:
                 </span>
               </div>
               <div className="space-y-1.5 pl-1 max-h-36 overflow-y-auto pr-1">
@@ -4595,7 +4758,7 @@ export function OrdersClient() {
                       className="h-6 px-2 text-[10px] bg-background hover:bg-muted text-foreground cursor-pointer shrink-0"
                     >
                       <Edit className="h-2.5 w-2.5 mr-1" />
-                      Edit Info
+                      {reason.includes("product item") ? "Add Items" : "Edit Info"}
                     </Button>
                   </div>
                 ))}
@@ -4616,7 +4779,7 @@ export function OrdersClient() {
             <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-foreground">
-                  Selected Orders ({bulkSelectedOrders.length}):
+                  Selected Orders ({effectiveBulkSelectedOrders.length}):
                 </p>
                 {bulkEligibility.ineligible.length > 0 && (
                   <span className="text-[11px] font-mono text-amber-700 dark:text-amber-300 font-bold">
@@ -4625,7 +4788,7 @@ export function OrdersClient() {
                 )}
               </div>
               <p className="font-mono text-[11px] text-muted-foreground break-words">
-                {bulkSelectedOrders.map((o) => o.id).join(", ")}
+                {effectiveBulkSelectedOrders.map((o) => o.id).join(", ")}
               </p>
             </div>
 
@@ -4661,7 +4824,7 @@ export function OrdersClient() {
                 ? `Update ${bulkEligibility.eligible.length} Eligible Orders (Skip ${bulkEligibility.ineligible.length})`
                 : bulkEligibility.eligible.length === 0
                 ? "No Eligible Orders Selected"
-                : `Update ${bulkSelectedOrders.length} Orders`}
+                : `Update ${effectiveBulkSelectedOrders.length} Orders`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4675,7 +4838,7 @@ export function OrdersClient() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-blue-600" />
-              Assign Courier to {bulkSelectedOrders.length} Order(s)
+              Assign Courier to {effectiveBulkSelectedOrders.length} Order(s)
             </DialogTitle>
             <DialogDescription>
               Assign <span className="font-bold text-foreground">{bulkTargetCourier}</span> as the delivery partner for all selected orders.
@@ -4685,10 +4848,10 @@ export function OrdersClient() {
           <div className="space-y-3 py-2">
             <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs space-y-1">
               <p className="font-semibold text-foreground">
-                Selected Orders ({bulkSelectedOrders.length}):
+                Selected Orders ({effectiveBulkSelectedOrders.length}):
               </p>
               <p className="font-mono text-[11px] text-blue-950 dark:text-blue-200 break-words">
-                {bulkSelectedOrders.map((o) => o.id).join(", ")}
+                {effectiveBulkSelectedOrders.map((o) => o.id).join(", ")}
               </p>
             </div>
 
@@ -4704,7 +4867,7 @@ export function OrdersClient() {
                 className="text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Stored in internal staff notes for all {bulkSelectedOrders.length} orders.
+                Stored in internal staff notes for all {effectiveBulkSelectedOrders.length} orders.
               </p>
             </div>
           </div>
@@ -4718,7 +4881,7 @@ export function OrdersClient() {
               onClick={handleConfirmBulkCourier}
               className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
             >
-              {bulkCourierMutation.isPending ? "Assigning..." : `Assign to ${bulkSelectedOrders.length} Orders`}
+              {bulkCourierMutation.isPending ? "Assigning..." : `Assign to ${effectiveBulkSelectedOrders.length} Orders`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4732,19 +4895,19 @@ export function OrdersClient() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="h-5 w-5" />
-              Delete {bulkSelectedOrders.length} Order(s)
+              Delete {effectiveBulkSelectedOrders.length} Order(s)
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete these {bulkSelectedOrders.length} orders? This action will sync to the database and cannot be undone.
+              Are you sure you want to permanently delete these {effectiveBulkSelectedOrders.length} orders? This action will sync to the database and cannot be undone.
             </DialogDescription>
           </DialogHeader>
 
           <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs space-y-1.5">
             <p className="font-semibold text-destructive">
-              Selected Orders ({bulkSelectedOrders.length}):
+              Selected Orders ({effectiveBulkSelectedOrders.length}):
             </p>
             <p className="text-muted-foreground font-mono text-[11px] break-words">
-              {bulkSelectedOrders.map((o) => o.id).join(", ")}
+              {effectiveBulkSelectedOrders.map((o) => o.id).join(", ")}
             </p>
             <p className="text-[11px] text-muted-foreground pt-1">
               Associated line items and event records will be permanently removed.
@@ -4761,7 +4924,7 @@ export function OrdersClient() {
               onClick={handleConfirmBulkDelete}
               className="cursor-pointer"
             >
-              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${bulkSelectedOrders.length} Orders`}
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${effectiveBulkSelectedOrders.length} Orders`}
             </Button>
           </DialogFooter>
         </DialogContent>
