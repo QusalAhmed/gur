@@ -1318,10 +1318,11 @@ export function normalizeBdPhone(phone: string): string {
 
 export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
   try {
-    const [prodRes, varRes, catRes] = await Promise.all([
+    const [prodRes, varRes, catRes, imgRes] = await Promise.all([
       supabase.from("products").select("id, name, slug, category_id").order("sort_order", { ascending: true }),
       supabase.from("product_variants").select("id, product_id, sku, name, price, stock_status").eq("is_active", true),
       supabase.from("categories").select("id, name"),
+      supabase.from("product_images").select("id, product_id, storage_path, is_primary, sort_order").order("sort_order", { ascending: true }),
     ]);
 
     if (varRes.error || !varRes.data || varRes.data.length === 0) {
@@ -1338,6 +1339,24 @@ export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
       prodRes.data.forEach((p) => productMap.set(p.id, p));
     }
 
+    const imageMap = new Map<string, string>();
+    if (imgRes.data) {
+      for (const img of imgRes.data) {
+        if (!imageMap.has(img.product_id) || img.is_primary) {
+          let pubUrl = img.storage_path;
+          if (pubUrl && !pubUrl.startsWith("http")) {
+            const { data: pubData } = supabase.storage
+              .from("catalog-images")
+              .getPublicUrl(img.storage_path);
+            pubUrl = pubData?.publicUrl || "";
+          }
+          if (pubUrl) {
+            imageMap.set(img.product_id, pubUrl);
+          }
+        }
+      }
+    }
+
     return varRes.data.map((v) => {
       const prod = productMap.get(v.product_id);
       const catName = prod?.category_id ? (categoryMap.get(prod.category_id) || "Molasses") : "Pure Molasses";
@@ -1350,7 +1369,7 @@ export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
         category: catName,
         unit_price: Number(v.price) || 0,
         stock: v.stock_status === "in_stock" ? "In Stock" : v.stock_status.replace("_", " "),
-        image: "/images/products/raw-sugarcane-drum.jpg",
+        image: imageMap.get(v.product_id) || "/images/products/raw-sugarcane-drum.jpg",
       };
     });
   } catch (err) {

@@ -397,18 +397,74 @@ export function OrderFormDialog({
     }
   }, [open, mode, order, defaultStatus, form]);
 
-  // Filtered catalog products for product selection modal
+  // Group available catalog products by parent product
+  const groupedCatalogProducts = React.useMemo(() => {
+    const groups: {
+      product_id: string;
+      product_name: string;
+      category: string;
+      image: string;
+      variants: CatalogProduct[];
+    }[] = [];
+    const groupMap = new Map<string, (typeof groups)[number]>();
+
+    availableCatalogProducts.forEach((p) => {
+      const key = p.product_id || p.product_name;
+      let group = groupMap.get(key);
+      if (!group) {
+        group = {
+          product_id: key,
+          product_name: p.product_name,
+          category: p.category,
+          image: p.image,
+          variants: [],
+        };
+        groupMap.set(key, group);
+        groups.push(group);
+      }
+      group.variants.push(p);
+    });
+
+    return groups;
+  }, [availableCatalogProducts]);
+
+  // Smart-filtered grouped catalog products for product selection modal
+  const filteredGroupedProducts = React.useMemo(() => {
+    if (!productSearchQuery.trim()) return groupedCatalogProducts;
+    const q = productSearchQuery.toLowerCase().trim();
+
+    const results: typeof groupedCatalogProducts = [];
+
+    groupedCatalogProducts.forEach((group) => {
+      const productNameMatch = group.product_name.toLowerCase().includes(q);
+      const categoryMatch = group.category.toLowerCase().includes(q);
+
+      if (productNameMatch || categoryMatch) {
+        // Parent matches -> show all variants
+        results.push(group);
+      } else {
+        // Check if any variant or SKU matches
+        const matchingVariants = group.variants.filter(
+          (v) =>
+            v.variant_name.toLowerCase().includes(q) ||
+            v.sku.toLowerCase().includes(q)
+        );
+        if (matchingVariants.length > 0) {
+          results.push({
+            ...group,
+            variants: matchingVariants,
+          });
+        }
+      }
+    });
+
+    return results;
+  }, [groupedCatalogProducts, productSearchQuery]);
+
+  // Flat list of currently visible/filtered variants for bulk selection
   const filteredCatalogProducts = React.useMemo(() => {
-    if (!productSearchQuery.trim()) return availableCatalogProducts;
-    const q = productSearchQuery.toLowerCase();
-    return availableCatalogProducts.filter(
-      (p) =>
-        p.product_name.toLowerCase().includes(q) ||
-        p.variant_name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q)
-    );
-  }, [availableCatalogProducts, productSearchQuery]);
+    return filteredGroupedProducts.flatMap((g) => g.variants);
+  }, [filteredGroupedProducts]);
 
   // Open Product Selection Modal
   const handleOpenProductModal = () => {
@@ -457,14 +513,17 @@ export function OrderFormDialog({
     });
   };
 
-  // Update unit price in modal
+  // Update unit price in modal (auto-selects with quantity 1 if currently unselected)
   const handleUpdateModalProductPrice = (sku: string, newPrice: number) => {
     const price = Math.max(0, newPrice);
     setSelectedModalProducts((prev) => {
-      if (!prev[sku]) return prev;
+      const existing = prev[sku];
       return {
         ...prev,
-        [sku]: { ...prev[sku], unit_price: price },
+        [sku]: {
+          quantity: existing && existing.quantity > 0 ? existing.quantity : 1,
+          unit_price: price,
+        },
       };
     });
   };
@@ -577,7 +636,7 @@ export function OrderFormDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           id={mode === "edit" ? "dialog-content-edit-order" : "dialog-content-create-order"}
-          className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] max-w-7xl max-h-[92vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8"
+          className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] max-w-7xl h-[96vh] max-h-[96vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8"
         >
           <DialogHeader className="border-b pb-3">
             <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -918,8 +977,8 @@ export function OrderFormDialog({
                         const currentDivName = form.getFieldValue("division") || "";
                         const currentDivObj = currentDivName
                           ? geoDivisions.find(
-                              (d) => d.name.toLowerCase() === currentDivName.toLowerCase()
-                            )
+                            (d) => d.name.toLowerCase() === currentDivName.toLowerCase()
+                          )
                           : undefined;
 
                         return (
@@ -1978,8 +2037,8 @@ export function OrderFormDialog({
                 {isSubmitting
                   ? (mode === "edit" ? "Saving..." : "Placing Order...")
                   : mode === "edit"
-                  ? "Save Changes"
-                  : "Place Order"}
+                    ? "Save Changes"
+                    : "Place Order"}
               </Button>
             </DialogFooter>
           </form>
@@ -1991,7 +2050,7 @@ export function OrderFormDialog({
         <DialogContent
           id="dialog-content-product-selection"
           overlayClassName="z-[55]"
-          className="z-[60] w-full sm:max-w-3xl md:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6"
+          className="z-[60] w-screen h-[100dvh] max-w-none max-h-none rounded-none md:rounded-xl md:w-[70vw] md:max-w-[70vw] md:h-[95vh] md:max-h-[95vh] lg:w-[80vw] lg:max-w-[80vw] lg:h-[95vh] lg:max-h-[95vh] overflow-hidden flex flex-col p-3 sm:p-4 md:p-6"
         >
           {(() => {
             const selectedEntries = Object.entries(selectedModalProducts).filter(
@@ -2019,7 +2078,7 @@ export function OrderFormDialog({
                     )}
                   </div>
                   <DialogDescription>
-                    Browse products, toggle selection, and adjust order quantities directly in each row. Setting quantity automatically selects the product.
+                    Browse products, select variations, adjust unit prices and quantities for this order. Setting quantity or price automatically selects the variation.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -2067,15 +2126,15 @@ export function OrderFormDialog({
                   <div className="hidden sm:flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 shrink-0">
                     <div className="flex-1">Product Details & Stock</div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="w-24 text-right">Price</span>
+                      <span className="w-28 text-right">Price</span>
                       <span className="w-28 text-center">Quantity</span>
                       <span className="w-20 text-right">Subtotal</span>
                     </div>
                   </div>
 
-                  {/* Product Rows List */}
-                  <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 min-h-0 max-h-[58vh]">
-                    {filteredCatalogProducts.length === 0 ? (
+                  {/* Grouped Product Cards List */}
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+                    {filteredGroupedProducts.length === 0 ? (
                       <div className="p-8 text-center border border-dashed rounded-xl bg-muted/20 space-y-2">
                         <PackageCheck className="h-8 w-8 text-muted-foreground mx-auto" />
                         <p className="text-sm font-medium text-foreground">No Products Found</p>
@@ -2084,172 +2143,205 @@ export function OrderFormDialog({
                         </p>
                       </div>
                     ) : (
-                      filteredCatalogProducts.map((prod) => {
-                        const selectedConfig = selectedModalProducts[prod.sku];
-                        const isSelected = Boolean(selectedConfig && selectedConfig.quantity > 0);
-                        const currentQty = selectedConfig?.quantity ?? 0;
-                        const currentPrice = selectedConfig?.unit_price ?? prod.unit_price;
-                        const lineTotal = currentQty * currentPrice;
+                      filteredGroupedProducts.map((group) => {
+                        const groupSelectedVariants = group.variants.filter(
+                          (v) => (selectedModalProducts[v.sku]?.quantity ?? 0) > 0
+                        );
+                        const groupSelectedCount = groupSelectedVariants.length;
 
                         return (
                           <div
-                            key={prod.sku}
-                            id={`catalog-product-row-${prod.sku}`}
-                            className={cn(
-                              "group flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-3.5 rounded-xl border transition-all gap-3 select-none",
-                              isSelected
-                                ? "border-amber-500 bg-amber-500/10 dark:bg-amber-500/15 ring-1 ring-amber-500 shadow-xs"
-                                : "hover:border-amber-300 dark:hover:border-amber-800 bg-card border-border/80 hover:bg-muted/30"
-                            )}
+                            key={group.product_id}
+                            className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs transition-all"
                           >
-                            {/* Left section: Selection button + Product Picture + Name, SKU & Stock */}
-                            <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
-                              <Button
-                                type="button"
-                                id={`btn-select-product-${prod.sku}`}
-                                variant={isSelected ? "default" : "outline"}
-                                size="icon-xs"
-                                onClick={() => handleToggleProductSelection(prod.sku)}
-                                className={cn(
-                                  "w-7 h-7 rounded-lg shrink-0 transition-all cursor-pointer",
-                                  isSelected
-                                    ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs border-amber-600"
-                                    : "hover:border-amber-500 hover:bg-amber-500/10 text-muted-foreground border-border/80"
-                                )}
-                                title={isSelected ? "Deselect product (sets qty to 0)" : "Select product (sets qty to 1)"}
-                              >
-                                {isSelected ? (
-                                  <Check className="h-4 w-4 stroke-[3]" />
-                                ) : (
-                                  <Square className="h-3.5 w-3.5 text-muted-foreground/60" />
-                                )}
-                              </Button>
-
-                              <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden border bg-muted/40 shrink-0 shadow-xs">
-                                <img
-                                  src={prod.image}
-                                  alt={prod.product_name}
-                                  className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = "none";
-                                  }}
-                                />
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-semibold text-sm text-foreground leading-tight">
-                                    {prod.product_name}
-                                  </span>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] py-0 px-1.5 h-4 border-amber-600/30 text-amber-700 dark:text-amber-400 font-normal shrink-0"
-                                  >
-                                    {prod.variant_name}
-                                  </Badge>
+                            {/* Parent Product Header: Image BEFORE Product Name, Category & Variant Count */}
+                            <div className="flex items-center justify-between gap-3 p-2.5 sm:p-3 bg-muted/30 border-b border-border/60">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="relative w-11 h-11 sm:w-13 sm:h-13 rounded-lg overflow-hidden border bg-background shrink-0 shadow-xs">
+                                  <img
+                                    src={group.image}
+                                    alt={group.product_name}
+                                    className="w-full h-full object-cover object-center"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
                                 </div>
-                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-                                  <span className="font-mono text-[11px] text-muted-foreground/80">SKU: {prod.sku}</span>
-                                  <span>•</span>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] h-4 py-0 px-1.5 font-medium bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                                  >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                                    {prod.stock}
-                                  </Badge>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                    <h4 className="font-semibold text-sm sm:text-base text-foreground leading-tight">
+                                      {group.product_name}
+                                    </h4>
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] py-0 px-1.5 h-4.5 font-medium shrink-0"
+                                    >
+                                      {group.category}
+                                    </Badge>
+                                    {groupSelectedCount > 0 && (
+                                      <Badge
+                                        className="bg-amber-600/90 text-white text-[10px] py-0 px-1.5 h-4.5 font-mono shrink-0"
+                                      >
+                                        {groupSelectedCount} {groupSelectedCount === 1 ? "variant" : "variants"} selected
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {group.variants.length} {group.variants.length === 1 ? "variation" : "variations"}
+                                  </p>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Right section: Price + Quantity Stepper + Line Total */}
-                            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50">
-                              <div className="text-left sm:text-right min-w-[90px]">
-                                <div className="flex items-center sm:justify-end gap-1">
-                                  <span className="text-[11px] text-muted-foreground">Price:</span>
-                                  {isSelected ? (
-                                    <div className="flex items-center gap-1">
-                                      <span className="font-mono font-bold text-xs text-amber-700 dark:text-amber-400">৳</span>
-                                      <Input
-                                        id={`input-product-price-${prod.sku}`}
-                                        type="number"
-                                        min="0"
-                                        value={currentPrice}
-                                        onChange={(e) =>
-                                          handleUpdateModalProductPrice(prod.sku, Math.max(0, Number(e.target.value) || 0))
-                                        }
-                                        className="h-7 w-20 text-xs px-1.5 py-0 font-mono font-semibold"
-                                        title="Adjust unit price"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <span className="font-mono font-bold text-xs text-foreground">
-                                      ৳ {prod.unit_price.toLocaleString()}
-                                    </span>
-                                  )}
-                                </div>
-                                {isSelected && currentPrice !== prod.unit_price && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateModalProductPrice(prod.sku, prod.unit_price)}
-                                    className="text-[10px] text-amber-600 hover:underline block text-right mt-0.5 cursor-pointer"
+                            {/* Variations List Nested Underneath */}
+                            <div className="divide-y divide-border/40">
+                              {group.variants.map((variant) => {
+                                const selectedConfig = selectedModalProducts[variant.sku];
+                                const isSelected = Boolean(selectedConfig && selectedConfig.quantity > 0);
+                                const currentQty = selectedConfig?.quantity ?? 0;
+                                const currentPrice = selectedConfig?.unit_price ?? variant.unit_price;
+                                const lineTotal = currentQty * currentPrice;
+
+                                return (
+                                  <div
+                                    key={variant.sku}
+                                    id={`catalog-product-row-${variant.sku}`}
+                                    className={cn(
+                                      "flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 sm:px-3.5 sm:py-2.5 transition-colors gap-2.5 sm:gap-3",
+                                      isSelected
+                                        ? "bg-amber-500/10 dark:bg-amber-500/15"
+                                        : "hover:bg-muted/30"
+                                    )}
                                   >
-                                    Reset (৳ {prod.unit_price.toLocaleString()})
-                                  </button>
-                                )}
-                              </div>
+                                    {/* Left: Checkbox + Variant info */}
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1 w-full sm:w-auto">
+                                      <Button
+                                        type="button"
+                                        id={`btn-select-product-${variant.sku}`}
+                                        variant={isSelected ? "default" : "outline"}
+                                        size="icon-xs"
+                                        onClick={() => handleToggleProductSelection(variant.sku)}
+                                        className={cn(
+                                          "w-6 h-6 sm:w-7 sm:h-7 rounded-lg shrink-0 transition-all cursor-pointer",
+                                          isSelected
+                                            ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs border-amber-600"
+                                            : "hover:border-amber-500 hover:bg-amber-500/10 text-muted-foreground border-border/80"
+                                        )}
+                                        title={isSelected ? "Deselect variation (sets qty to 0)" : "Select variation (sets qty to 1)"}
+                                      >
+                                        {isSelected ? (
+                                          <Check className="h-3.5 w-3.5 stroke-[3]" />
+                                        ) : (
+                                          <Square className="h-3 w-3 text-muted-foreground/60" />
+                                        )}
+                                      </Button>
 
-                              <div className="flex items-center gap-1 shrink-0 bg-background/80 p-1 rounded-lg border">
-                                <Button
-                                  type="button"
-                                  id={`btn-qty-minus-${prod.sku}`}
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
-                                  onClick={() => handleSetModalProductQty(prod.sku, currentQty - 1)}
-                                  disabled={currentQty === 0}
-                                  title={currentQty === 1 ? "Reduce to 0 (deselects product)" : "Decrease quantity"}
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </Button>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                          <span className="font-semibold text-xs sm:text-sm text-foreground">
+                                            {variant.variant_name}
+                                          </span>
+                                          <span className="font-mono text-[11px] text-muted-foreground/80">SKU: {variant.sku}</span>
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] h-4 py-0 px-1.5 font-medium bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
+                                            {variant.stock}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
 
-                                <Input
-                                  id={`input-product-qty-${prod.sku}`}
-                                  type="number"
-                                  min="0"
-                                  value={currentQty === 0 ? "0" : currentQty}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    handleSetModalProductQty(prod.sku, isNaN(val) ? 0 : Math.max(0, val));
-                                  }}
-                                  className={cn(
-                                    "h-7 w-12 text-center font-bold font-mono text-xs px-1 border-0 focus-visible:ring-1",
-                                    isSelected ? "text-foreground font-black" : "text-muted-foreground"
-                                  )}
-                                />
+                                    {/* Right: Unit Price (Always Editable) + Qty Stepper + Line Subtotal */}
+                                    <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                                      <div className="text-left sm:text-right min-w-[105px]">
+                                        <div className="flex items-center sm:justify-end gap-1">
+                                          <span className="text-[11px] text-muted-foreground">Price:</span>
+                                          <div className="flex items-center gap-0.5">
+                                            <span className="font-mono font-bold text-xs text-amber-700 dark:text-amber-400">৳</span>
+                                            <Input
+                                              id={`input-product-price-${variant.sku}`}
+                                              type="number"
+                                              min="0"
+                                              value={currentPrice}
+                                              onChange={(e) =>
+                                                handleUpdateModalProductPrice(variant.sku, Math.max(0, Number(e.target.value) || 0))
+                                              }
+                                              className="h-7 w-20 text-xs px-1.5 py-0 font-mono font-semibold"
+                                              title="Adjust unit price for this order"
+                                            />
+                                          </div>
+                                        </div>
+                                        {currentPrice !== variant.unit_price && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateModalProductPrice(variant.sku, variant.unit_price)}
+                                            className="text-[10px] text-amber-600 hover:underline block sm:text-right mt-0.5 cursor-pointer"
+                                          >
+                                            Reset (৳ {variant.unit_price.toLocaleString()})
+                                          </button>
+                                        )}
+                                      </div>
 
-                                <Button
-                                  type="button"
-                                  id={`btn-qty-plus-${prod.sku}`}
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  className="h-7 w-7 text-muted-foreground hover:text-amber-600 cursor-pointer"
-                                  onClick={() => handleSetModalProductQty(prod.sku, currentQty + 1)}
-                                  title={currentQty === 0 ? "Add 1 (selects product)" : "Increase quantity"}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                                      {/* Quantity Stepper */}
+                                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 bg-background/80 p-0.5 sm:p-1 rounded-lg border">
+                                        <Button
+                                          type="button"
+                                          id={`btn-qty-minus-${variant.sku}`}
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="h-6.5 w-6.5 sm:h-7 sm:w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                                          onClick={() => handleSetModalProductQty(variant.sku, currentQty - 1)}
+                                          disabled={currentQty === 0}
+                                          title={currentQty === 1 ? "Reduce to 0 (deselects variant)" : "Decrease quantity"}
+                                        >
+                                          <Minus className="h-3.5 w-3.5" />
+                                        </Button>
 
-                              <div className="w-20 text-right font-mono font-bold text-xs shrink-0">
-                                {isSelected ? (
-                                  <span className="text-amber-700 dark:text-amber-400">
-                                    ৳ {lineTotal.toLocaleString()}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground/40">—</span>
-                                )}
-                              </div>
+                                        <Input
+                                          id={`input-product-qty-${variant.sku}`}
+                                          type="number"
+                                          min="0"
+                                          value={currentQty === 0 ? "0" : currentQty}
+                                          onChange={(e) => {
+                                            const val = Number(e.target.value);
+                                            handleSetModalProductQty(variant.sku, isNaN(val) ? 0 : Math.max(0, val));
+                                          }}
+                                          className={cn(
+                                            "h-6.5 w-11 sm:h-7 sm:w-12 text-center font-bold font-mono text-xs px-1 border-0 focus-visible:ring-1",
+                                            isSelected ? "text-foreground font-black" : "text-muted-foreground"
+                                          )}
+                                        />
+
+                                        <Button
+                                          type="button"
+                                          id={`btn-qty-plus-${variant.sku}`}
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="h-6.5 w-6.5 sm:h-7 sm:w-7 text-muted-foreground hover:text-amber-600 cursor-pointer"
+                                          onClick={() => handleSetModalProductQty(variant.sku, currentQty + 1)}
+                                          title={currentQty === 0 ? "Add 1 (selects variant)" : "Increase quantity"}
+                                        >
+                                          <Plus className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+
+                                      {/* Subtotal */}
+                                      <div className="w-18 sm:w-20 text-right font-mono font-bold text-xs shrink-0">
+                                        {isSelected ? (
+                                          <span className="text-amber-700 dark:text-amber-400">
+                                            ৳ {lineTotal.toLocaleString()}
+                                          </span>
+                                        ) : (
+                                          <span className="text-muted-foreground/40">—</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -2262,7 +2354,7 @@ export function OrderFormDialog({
                   <div className="text-left text-xs text-muted-foreground">
                     {selectedCount > 0 ? (
                       <span>
-                        Total: <strong className="font-mono text-foreground font-bold">৳ {combinedTotal.toLocaleString()}</strong> ({selectedCount} products, {totalUnits} units)
+                        Total: <strong className="font-mono text-foreground font-bold">৳ {combinedTotal.toLocaleString()}</strong> ({selectedCount} variations, {totalUnits} units)
                       </span>
                     ) : (
                       <span>Select products or set quantity to add</span>
