@@ -80,6 +80,8 @@ import {
   validateOrderStatusTransition,
   type ParsedDatabaseError,
   type BulkStatusUpdateResult,
+  type BulkCourierUpdateResult,
+  type BulkDeleteResult,
 } from "@/lib/supabase";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
 import { Button } from "@/components/ui/button";
@@ -534,12 +536,14 @@ export function OrdersClient() {
       orderIds,
       targetStatus,
       batchNote,
+      courierName,
     }: {
       orderIds: string[];
       targetStatus: Order["status"];
       batchNote?: string;
+      courierName?: string;
     }): Promise<BulkStatusUpdateResult> => {
-      return await bulkUpdateOrderStatusInDb(orderIds, targetStatus, batchNote);
+      return await bulkUpdateOrderStatusInDb(orderIds, targetStatus, batchNote, courierName);
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -549,7 +553,7 @@ export function OrdersClient() {
 
       if (result.skippedCount > 0 && result.updatedCount > 0) {
         showToast(
-          `Updated ${result.updatedCount} order(s) to ${variables.targetStatus.replace(/_/g, " ")}. ${result.skippedCount} order(s) skipped (${result.skippedOrders.map((o) => o.id).join(", ")}) due to missing customer info or workflow restriction.`,
+          `Updated ${result.updatedCount} order(s) to ${variables.targetStatus.replace(/_/g, " ")}. ${result.skippedCount} order(s) skipped (${result.skippedOrders.map((o) => o.id).join(", ")}) due to missing details or workflow rules.`,
           "warning",
           {
             title: "Partial Status Update Completed",
@@ -587,37 +591,73 @@ export function OrdersClient() {
       orderIds: string[];
       courierName: string;
       batchNote?: string;
-    }) => {
+    }): Promise<BulkCourierUpdateResult> => {
       return await bulkAssignCourierInDb(orderIds, courierName, batchNote);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       setIsBulkCourierOpen(false);
+      setBulkCourierError(null);
       if (clearSelectionFn) clearSelectionFn();
-      showToast(
-        `Assigned ${variables.courierName} to ${variables.orderIds.length} order(s).`,
-        "success"
-      );
+
+      if (result.skippedCount > 0 && result.updatedCount > 0) {
+        showToast(
+          `Assigned ${variables.courierName} to ${result.updatedCount} order(s). ${result.skippedCount} order(s) skipped (${result.skippedOrders.map((o) => o.id).join(", ")}) because they are cancelled, returned, or delivered.`,
+          "warning",
+          {
+            title: "Partial Courier Assignment",
+            duration: 10000,
+          }
+        );
+      } else {
+        showToast(
+          `Assigned ${variables.courierName} to all ${result.updatedCount} order(s).`,
+          "success"
+        );
+      }
     },
     onError: (err: any) => {
       console.error("Bulk courier error:", err);
-      showToast("Failed to sync bulk courier assignment to database", "destructive");
+      const parsed = parseDatabaseError(err);
+      setBulkCourierError(parsed);
+      showToast(parsed.message, "destructive", {
+        title: parsed.title,
+        duration: 9000,
+      });
     },
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: async (orderIds: string[]) => {
+    mutationFn: async (orderIds: string[]): Promise<BulkDeleteResult> => {
       return await bulkDeleteOrdersInDb(orderIds);
     },
-    onSuccess: (_, orderIds) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       setIsBulkDeleteOpen(false);
+      setBulkDeleteError(null);
       if (clearSelectionFn) clearSelectionFn();
-      showToast(`Deleted and synced ${orderIds.length} order(s).`, "destructive");
+
+      if (result.skippedCount > 0 && result.deletedCount > 0) {
+        showToast(
+          `Deleted ${result.deletedCount} order(s). ${result.skippedCount} order(s) skipped (${result.skippedOrders.map((o) => o.id).join(", ")}) because they are already shipped or delivered.`,
+          "warning",
+          {
+            title: "Partial Deletion Completed",
+            duration: 10000,
+          }
+        );
+      } else {
+        showToast(`Deleted ${result.deletedCount} order(s).`, "destructive");
+      }
     },
     onError: (err: any) => {
       console.error("Bulk delete error:", err);
-      showToast("Failed to sync bulk deletion to database", "destructive");
+      const parsed = parseDatabaseError(err);
+      setBulkDeleteError(parsed);
+      showToast(parsed.message, "destructive", {
+        title: parsed.title,
+        duration: 9000,
+      });
     },
   });
 
@@ -807,14 +847,17 @@ export function OrdersClient() {
 
   const [isBulkStatusOpen, setIsBulkStatusOpen] = React.useState(false);
   const [bulkTargetStatus, setBulkTargetStatus] = React.useState<Order["status"]>("confirmed");
+  const [bulkTargetCourierForStatus, setBulkTargetCourierForStatus] = React.useState("Steadfast Courier");
   const [bulkStatusNote, setBulkStatusNote] = React.useState("");
   const [bulkStatusError, setBulkStatusError] = React.useState<ParsedDatabaseError | null>(null);
 
   const [isBulkCourierOpen, setIsBulkCourierOpen] = React.useState(false);
   const [bulkTargetCourier, setBulkTargetCourier] = React.useState("Steadfast Courier");
   const [bulkCourierNote, setBulkCourierNote] = React.useState("");
+  const [bulkCourierError, setBulkCourierError] = React.useState<ParsedDatabaseError | null>(null);
 
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = React.useState<ParsedDatabaseError | null>(null);
 
   // Derive live, up-to-date versions of statusOrder and bulkSelectedOrders from TanStack Query orders
   const effectiveStatusOrder = React.useMemo(() => {
@@ -866,9 +909,11 @@ export function OrdersClient() {
       effectiveStatusOrder.customer,
       effectiveStatusOrder.phone,
       effectiveStatusOrder.address?.address_line,
-      effectiveStatusOrder.items?.length
+      effectiveStatusOrder.items?.length,
+      selectedCourier || effectiveStatusOrder.courier_name,
+      cancelReason
     );
-  }, [isStatusOpen, effectiveStatusOrder, newStatus]);
+  }, [isStatusOpen, effectiveStatusOrder, newStatus, selectedCourier, cancelReason]);
 
   // Auto-clear stale status error if the order was updated and now satisfies eligibility
   React.useEffect(() => {
@@ -878,10 +923,13 @@ export function OrdersClient() {
         statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
         statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
         statusError.code === "ORDER_ITEMS_REQUIRED" ||
+        statusError.code === "COURIER_REQUIRED" ||
+        statusError.code === "CANCEL_REASON_REQUIRED" ||
         statusError.message.includes("Customer name") ||
         statusError.message.includes("mobile number") ||
         statusError.message.includes("product item") ||
-        statusError.message.includes("address")
+        statusError.message.includes("address") ||
+        statusError.message.includes("Courier")
       ) {
         setStatusError(null);
       }
@@ -894,17 +942,10 @@ export function OrdersClient() {
     setBulkTargetStatus(status);
     setBulkStatusNote("");
     setBulkStatusError(null);
+    const existingCourier = freshOrders.find((o) => o.courier_name)?.courier_name || "Steadfast Courier";
+    setBulkTargetCourierForStatus(existingCourier);
     setClearSelectionFn(() => clearFn);
     setIsBulkStatusOpen(true);
-  };
-
-  const handleConfirmBulkStatus = () => {
-    if (effectiveBulkSelectedOrders.length === 0) return;
-    bulkStatusMutation.mutate({
-      orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
-      targetStatus: bulkTargetStatus,
-      batchNote: bulkStatusNote,
-    });
   };
 
   const bulkEligibility = React.useMemo(() => {
@@ -913,15 +954,26 @@ export function OrdersClient() {
     }
     const eligible: Order[] = [];
     const ineligible: { order: Order; reason: string }[] = [];
+    const isAdvancingToDispatch =
+      bulkTargetStatus === "processing" ||
+      bulkTargetStatus === "shipped" ||
+      bulkTargetStatus === "delivered" ||
+      bulkTargetStatus === "partially_delivered";
 
     for (const o of effectiveBulkSelectedOrders) {
+      const effectiveCourier = isAdvancingToDispatch
+        ? (bulkTargetCourierForStatus || o.courier_name)
+        : o.courier_name;
+
       const val = validateOrderStatusTransition(
         o.status,
         bulkTargetStatus,
         o.customer,
         o.phone,
         o.address?.address_line,
-        o.items?.length
+        o.items?.length,
+        effectiveCourier,
+        bulkTargetStatus === "cancelled" || bulkTargetStatus === "returned" ? bulkStatusNote : undefined
       );
       if (val.valid) {
         eligible.push(o);
@@ -930,7 +982,23 @@ export function OrdersClient() {
       }
     }
     return { eligible, ineligible };
-  }, [isBulkStatusOpen, effectiveBulkSelectedOrders, bulkTargetStatus]);
+  }, [isBulkStatusOpen, effectiveBulkSelectedOrders, bulkTargetStatus, bulkTargetCourierForStatus, bulkStatusNote]);
+
+  const handleConfirmBulkStatus = () => {
+    if (bulkEligibility.eligible.length === 0) return;
+    const isAdvancingToDispatch =
+      bulkTargetStatus === "processing" ||
+      bulkTargetStatus === "shipped" ||
+      bulkTargetStatus === "delivered" ||
+      bulkTargetStatus === "partially_delivered";
+
+    bulkStatusMutation.mutate({
+      orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
+      targetStatus: bulkTargetStatus,
+      batchNote: bulkStatusNote,
+      courierName: isAdvancingToDispatch ? bulkTargetCourierForStatus : undefined,
+    });
+  };
 
   // Auto-clear stale bulk status error if all selected orders now satisfy eligibility
   React.useEffect(() => {
@@ -944,12 +1012,38 @@ export function OrdersClient() {
     setBulkSelectedOrders(freshOrders);
     setBulkTargetCourier(courier);
     setBulkCourierNote("");
+    setBulkCourierError(null);
     setClearSelectionFn(() => clearFn);
     setIsBulkCourierOpen(true);
   };
 
+  const bulkCourierEligibility = React.useMemo(() => {
+    if (!isBulkCourierOpen || effectiveBulkSelectedOrders.length === 0) {
+      return { eligible: [] as Order[], ineligible: [] as { order: Order; reason: string }[] };
+    }
+    const eligible: Order[] = [];
+    const ineligible: { order: Order; reason: string }[] = [];
+
+    for (const o of effectiveBulkSelectedOrders) {
+      if (o.status === "cancelled" || o.status === "returned") {
+        ineligible.push({
+          order: o,
+          reason: `Order is already ${o.status.replace(/_/g, " ")} and cannot be assigned a courier`,
+        });
+      } else if (o.status === "delivered") {
+        ineligible.push({
+          order: o,
+          reason: "Order is already delivered and courier partner cannot be reassigned",
+        });
+      } else {
+        eligible.push(o);
+      }
+    }
+    return { eligible, ineligible };
+  }, [isBulkCourierOpen, effectiveBulkSelectedOrders]);
+
   const handleConfirmBulkCourier = () => {
-    if (effectiveBulkSelectedOrders.length === 0) return;
+    if (bulkCourierEligibility.eligible.length === 0) return;
     bulkCourierMutation.mutate({
       orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
       courierName: bulkTargetCourier,
@@ -960,12 +1054,33 @@ export function OrdersClient() {
   const handleOpenBulkDelete = (ordersList: Order[], clearFn: () => void) => {
     const freshOrders = ordersList.map((o) => orders.find((fresh) => fresh.id === o.id) || o);
     setBulkSelectedOrders(freshOrders);
+    setBulkDeleteError(null);
     setClearSelectionFn(() => clearFn);
     setIsBulkDeleteOpen(true);
   };
 
+  const bulkDeleteEligibility = React.useMemo(() => {
+    if (!isBulkDeleteOpen || effectiveBulkSelectedOrders.length === 0) {
+      return { eligible: [] as Order[], ineligible: [] as { order: Order; reason: string }[] };
+    }
+    const eligible: Order[] = [];
+    const ineligible: { order: Order; reason: string }[] = [];
+
+    for (const o of effectiveBulkSelectedOrders) {
+      if (o.status === "shipped" || o.status === "delivered") {
+        ineligible.push({
+          order: o,
+          reason: `Dispatched order (${o.status.replace(/_/g, " ")}) cannot be deleted`,
+        });
+      } else {
+        eligible.push(o);
+      }
+    }
+    return { eligible, ineligible };
+  }, [isBulkDeleteOpen, effectiveBulkSelectedOrders]);
+
   const handleConfirmBulkDelete = () => {
-    if (effectiveBulkSelectedOrders.length === 0) return;
+    if (bulkDeleteEligibility.eligible.length === 0) return;
     bulkDeleteMutation.mutate(effectiveBulkSelectedOrders.map((o) => o.id));
   };
 
@@ -4792,21 +4907,73 @@ export function OrdersClient() {
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Optional Batch Staff Note:
-              </label>
-              <Textarea
-                value={bulkStatusNote}
-                onChange={(e) => setBulkStatusNote(e.target.value)}
-                placeholder="e.g. Dispatched via evening courier pickup / Customer phone verification completed..."
-                rows={3}
-                className="text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                This note will be automatically added to the internal staff notes for all processed orders.
-              </p>
-            </div>
+            {(bulkTargetStatus === "processing" ||
+              bulkTargetStatus === "shipped" ||
+              bulkTargetStatus === "delivered" ||
+              bulkTargetStatus === "partially_delivered") && (
+              <div className="space-y-1.5 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs">
+                <label className="font-semibold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5 text-blue-600" />
+                  Courier Partner for Dispatched Orders:
+                </label>
+                <select
+                  value={bulkTargetCourierForStatus}
+                  onChange={(e) => setBulkTargetCourierForStatus(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-md border border-input bg-background text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {[
+                    "Steadfast Courier",
+                    "Pathao Courier",
+                    "RedX Delivery",
+                    "Paperfly",
+                    "Sundarban Courier",
+                    "SA Paribahan",
+                  ].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Applied to all orders being moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()} if unassigned.
+                </p>
+              </div>
+            )}
+
+            {bulkTargetStatus === "cancelled" ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1">
+                  <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                  Cancellation Reason (Required, min 3 chars) *:
+                </label>
+                <Textarea
+                  value={bulkStatusNote}
+                  onChange={(e) => setBulkStatusNote(e.target.value)}
+                  placeholder="e.g. Customer requested cancellation / Item out of stock / Phone unreachable after 3 attempts..."
+                  rows={3}
+                  className="text-xs border-rose-300 dark:border-rose-800 focus-visible:ring-rose-500"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Saved into the database cancellation audit record and internal staff timeline.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Optional Batch Staff Note:
+                </label>
+                <Textarea
+                  value={bulkStatusNote}
+                  onChange={(e) => setBulkStatusNote(e.target.value)}
+                  placeholder="e.g. Dispatched via evening courier pickup / Customer phone verification completed..."
+                  rows={3}
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  This note will be automatically added to the internal staff notes for all processed orders.
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="shrink-0 pt-3 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 -mb-2 mt-4">
@@ -4814,7 +4981,11 @@ export function OrdersClient() {
               Cancel
             </Button>
             <Button
-              disabled={bulkStatusMutation.isPending || bulkEligibility.eligible.length === 0}
+              disabled={
+                bulkStatusMutation.isPending ||
+                bulkEligibility.eligible.length === 0 ||
+                (bulkTargetStatus === "cancelled" && bulkStatusNote.trim().length < 3)
+              }
               onClick={handleConfirmBulkStatus}
               className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
             >
@@ -4845,6 +5016,41 @@ export function OrdersClient() {
             </DialogDescription>
           </DialogHeader>
 
+          {bulkCourierError && (
+            <div className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/95 dark:bg-rose-950/50 dark:border-rose-800 text-rose-950 dark:text-rose-100 text-xs space-y-1">
+              <p className="font-bold text-rose-900 dark:text-rose-200">{bulkCourierError.title}</p>
+              <p className="text-xs text-rose-800 dark:text-rose-200">{bulkCourierError.message}</p>
+            </div>
+          )}
+
+          {bulkCourierEligibility.ineligible.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  {bulkCourierEligibility.ineligible.length} of {effectiveBulkSelectedOrders.length} order(s) cannot be assigned a courier:
+                </span>
+              </div>
+              <div className="space-y-1 pl-1 max-h-40 overflow-y-auto pr-1">
+                {bulkCourierEligibility.ineligible.map(({ order, reason }) => (
+                  <div key={order.id} className="p-1.5 rounded bg-background/80 border text-[11px] flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold">{order.id}</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-medium truncate">{reason}</span>
+                  </div>
+                ))}
+              </div>
+              {bulkCourierEligibility.eligible.length > 0 ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium pt-1 border-t border-amber-500/20">
+                  ✓ Confirming will assign courier to the <span className="font-bold">{bulkCourierEligibility.eligible.length} eligible order(s)</span> and safely skip the finalized ones.
+                </p>
+              ) : (
+                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium pt-1 border-t border-rose-500/20">
+                  ✕ None of the selected orders can be assigned a courier. Cancelled, returned, and delivered orders are locked.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-3 py-2">
             <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs space-y-1">
               <p className="font-semibold text-foreground">
@@ -4867,7 +5073,7 @@ export function OrdersClient() {
                 className="text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Stored in internal staff notes for all {effectiveBulkSelectedOrders.length} orders.
+                Stored in internal staff notes for all processed orders.
               </p>
             </div>
           </div>
@@ -4877,11 +5083,17 @@ export function OrdersClient() {
               Cancel
             </Button>
             <Button
-              disabled={bulkCourierMutation.isPending}
+              disabled={bulkCourierMutation.isPending || bulkCourierEligibility.eligible.length === 0}
               onClick={handleConfirmBulkCourier}
               className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
             >
-              {bulkCourierMutation.isPending ? "Assigning..." : `Assign to ${effectiveBulkSelectedOrders.length} Orders`}
+              {bulkCourierMutation.isPending
+                ? "Assigning..."
+                : bulkCourierEligibility.ineligible.length > 0 && bulkCourierEligibility.eligible.length > 0
+                ? `Assign to ${bulkCourierEligibility.eligible.length} Eligible Orders (Skip ${bulkCourierEligibility.ineligible.length})`
+                : bulkCourierEligibility.eligible.length === 0
+                ? "No Eligible Orders Selected"
+                : `Assign to ${effectiveBulkSelectedOrders.length} Orders`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4902,6 +5114,41 @@ export function OrdersClient() {
             </DialogDescription>
           </DialogHeader>
 
+          {bulkDeleteError && (
+            <div className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/95 dark:bg-rose-950/50 dark:border-rose-800 text-rose-950 dark:text-rose-100 text-xs space-y-1">
+              <p className="font-bold text-rose-900 dark:text-rose-200">{bulkDeleteError.title}</p>
+              <p className="text-xs text-rose-800 dark:text-rose-200">{bulkDeleteError.message}</p>
+            </div>
+          )}
+
+          {bulkDeleteEligibility.ineligible.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  {bulkDeleteEligibility.ineligible.length} of {effectiveBulkSelectedOrders.length} order(s) cannot be deleted:
+                </span>
+              </div>
+              <div className="space-y-1 pl-1 max-h-40 overflow-y-auto pr-1">
+                {bulkDeleteEligibility.ineligible.map(({ order, reason }) => (
+                  <div key={order.id} className="p-1.5 rounded bg-background/80 border text-[11px] flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold">{order.id}</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-medium truncate">{reason}</span>
+                  </div>
+                ))}
+              </div>
+              {bulkDeleteEligibility.eligible.length > 0 ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium pt-1 border-t border-amber-500/20">
+                  ✓ Confirming will delete the <span className="font-bold">{bulkDeleteEligibility.eligible.length} eligible order(s)</span> and safely preserve the dispatched ones.
+                </p>
+              ) : (
+                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium pt-1 border-t border-rose-500/20">
+                  ✕ None of the selected orders can be deleted. Orders that are shipped or delivered must be preserved for audit and inventory integrity.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs space-y-1.5">
             <p className="font-semibold text-destructive">
               Selected Orders ({effectiveBulkSelectedOrders.length}):
@@ -4920,11 +5167,17 @@ export function OrdersClient() {
             </Button>
             <Button
               variant="destructive"
-              disabled={bulkDeleteMutation.isPending}
+              disabled={bulkDeleteMutation.isPending || bulkDeleteEligibility.eligible.length === 0}
               onClick={handleConfirmBulkDelete}
               className="cursor-pointer"
             >
-              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${effectiveBulkSelectedOrders.length} Orders`}
+              {bulkDeleteMutation.isPending
+                ? "Deleting..."
+                : bulkDeleteEligibility.ineligible.length > 0 && bulkDeleteEligibility.eligible.length > 0
+                ? `Delete ${bulkDeleteEligibility.eligible.length} Eligible Orders (Skip ${bulkDeleteEligibility.ineligible.length})`
+                : bulkDeleteEligibility.eligible.length === 0
+                ? "No Deletable Orders Selected"
+                : `Delete ${effectiveBulkSelectedOrders.length} Orders`}
             </Button>
           </DialogFooter>
         </DialogContent>

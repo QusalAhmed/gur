@@ -782,6 +782,11 @@ export function OrderFormDialog({
     });
 
     form.setFieldValue("items", merged);
+    try {
+      form.validateField("items", "change");
+    } catch {
+      // Ignore
+    }
     if (showToast) {
       showToast(`Added ${itemsToAdd.length} product(s) to order`, "success");
     }

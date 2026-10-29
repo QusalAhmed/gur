@@ -37,6 +37,24 @@ export interface BulkStatusUpdateResult {
   skippedOrders: { id: string; reason: string }[];
 }
 
+export interface BulkCourierUpdateResult {
+  success: boolean;
+  totalRequested: number;
+  updatedCount: number;
+  skippedCount: number;
+  updatedOrderNumbers: string[];
+  skippedOrders: { id: string; reason: string }[];
+}
+
+export interface BulkDeleteResult {
+  success: boolean;
+  totalRequested: number;
+  deletedCount: number;
+  skippedCount: number;
+  deletedOrderNumbers: string[];
+  skippedOrders: { id: string; reason: string }[];
+}
+
 export interface SupabaseHealthStatus {
   connected: boolean;
   latencyMs: number;
@@ -2220,14 +2238,16 @@ export async function updateOrderStatusInDb(
       currentOrder.customer,
       currentOrder.phone,
       currentOrder.address?.address_line,
-      currentOrder.items?.length
+      currentOrder.items?.length,
+      courierName || currentOrder.courier_name,
+      cancelReason
     );
     if (!val.valid) {
       // If currentOrder fails validation, it might be stale in client memory.
       // Re-validate against authoritative DB state before rejecting.
       const { data: dbOrder } = await supabase
         .from("orders")
-        .select("status, customer_name, customer_phone, shipping_address, order_items(id)")
+        .select("status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
         .eq("order_number", orderId)
         .maybeSingle();
 
@@ -2235,10 +2255,12 @@ export async function updateOrderStatusInDb(
         const liveVal = validateOrderStatusTransition(
           dbOrder.status,
           dbStatus,
-          dbOrder.customer_name,
-          dbOrder.customer_phone,
+          dbOrder.customer_name || dbOrder.shipping_address?.recipient_name,
+          dbOrder.customer_phone || dbOrder.shipping_address?.phone,
           dbOrder.shipping_address?.address_line,
-          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0
+          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
+          courierName || dbOrder.shipping_method_name,
+          cancelReason
         );
         if (liveVal.valid) {
           val = liveVal;
@@ -2255,34 +2277,32 @@ export async function updateOrderStatusInDb(
       );
     }
   } else {
-    // If currentOrder is omitted but transitioning to confirmed or higher, enforce DB checks
-    const confirmedPos = STATUS_WORKFLOW_FLOW.indexOf("confirmed");
-    const targetPos = STATUS_WORKFLOW_FLOW.indexOf(dbStatus as any);
-    if (targetPos >= confirmedPos) {
-      const { data: dbOrder } = await supabase
-        .from("orders")
-        .select("status, customer_name, customer_phone, shipping_address, order_items(id)")
-        .eq("order_number", orderId)
-        .maybeSingle();
+    // If currentOrder is omitted, enforce authoritative DB checks
+    const { data: dbOrder } = await supabase
+      .from("orders")
+      .select("status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
+      .eq("order_number", orderId)
+      .maybeSingle();
 
-      if (dbOrder) {
-        const val = validateOrderStatusTransition(
-          dbOrder.status,
-          dbStatus,
-          dbOrder.customer_name,
-          dbOrder.customer_phone,
-          dbOrder.shipping_address?.address_line,
-          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0
+    if (dbOrder) {
+      const val = validateOrderStatusTransition(
+        dbOrder.status,
+        dbStatus,
+        dbOrder.customer_name || dbOrder.shipping_address?.recipient_name,
+        dbOrder.customer_phone || dbOrder.shipping_address?.phone,
+        dbOrder.shipping_address?.address_line,
+        Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
+        courierName || dbOrder.shipping_method_name,
+        cancelReason
+      );
+      if (!val.valid) {
+        throw new DatabaseOperationError(
+          parseDatabaseError({
+            code: val.code || "P0001",
+            message: `${val.reason} (${orderId})`,
+            details: `Order ${orderId}: ${val.reason}`,
+          })
         );
-        if (!val.valid) {
-          throw new DatabaseOperationError(
-            parseDatabaseError({
-              code: val.code || "P0001",
-              message: `${val.reason} (${orderId})`,
-              details: `Order ${orderId}: ${val.reason}`,
-            })
-          );
-        }
       }
     }
   }
@@ -2956,7 +2976,8 @@ export async function deleteOrderInDb(orderId: string): Promise<boolean> {
 export async function bulkUpdateOrderStatusInDb(
   orderIds: string[],
   newStatus: Order["status"],
-  batchNote?: string
+  batchNote?: string,
+  courierName?: string
 ): Promise<BulkStatusUpdateResult> {
   if (!orderIds || orderIds.length === 0) {
     return {
@@ -2973,9 +2994,10 @@ export async function bulkUpdateOrderStatusInDb(
   const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
 
   // 1. Fetch current orders from DB to validate workflow eligibility
+  // Select all required validation fields including courier and items
   const { data: dbOrders, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, order_number, status, customer_name, customer_phone, shipping_address, order_items(id)")
+    .select("id, order_number, status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
     .in("order_number", orderIds);
 
   if (fetchErr) {
@@ -2998,14 +3020,24 @@ export async function bulkUpdateOrderStatusInDb(
   // Validate each order against the workflow transition rules
   for (const o of ordersList) {
     const itemCount = Array.isArray(o.order_items) ? o.order_items.length : 0;
-    const addressLine = o.shipping_address?.address_line;
+    const addressLine =
+      o.shipping_address?.address_line ||
+      (typeof o.shipping_address === "string" ? o.shipping_address : "") ||
+      o.shipping_address?.address ||
+      "";
+    const customerName = o.customer_name || o.shipping_address?.recipient_name || "";
+    const customerPhone = o.customer_phone || o.shipping_address?.phone || "";
+    const effectiveCourier = courierName?.trim() || o.shipping_method_name || "";
+
     const val = validateOrderStatusTransition(
       o.status,
       dbStatus,
-      o.customer_name,
-      o.customer_phone,
+      customerName,
+      customerPhone,
       addressLine,
-      itemCount
+      itemCount,
+      effectiveCourier,
+      batchNote
     );
 
     if (val.valid) {
@@ -3024,6 +3056,12 @@ export async function bulkUpdateOrderStatusInDb(
     const primaryReason = skippedOrders[0]?.reason || "Cannot advance orders";
     const primaryCode = skippedOrders[0]?.reason?.includes("product item")
       ? "ORDER_ITEMS_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("Courier")
+      ? "COURIER_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("Cancellation reason")
+      ? "CANCEL_REASON_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("Return reason")
+      ? "RETURN_REASON_REQUIRED"
       : skippedOrders[0]?.reason?.includes("Customer name")
       ? "CUSTOMER_NAME_REQUIRED"
       : skippedOrders[0]?.reason?.includes("phone")
@@ -3037,19 +3075,36 @@ export async function bulkUpdateOrderStatusInDb(
         code: primaryCode,
         message: `${primaryReason} (Affecting: ${skippedOrders.map((s) => s.id).join(", ")})`,
         details: reasonSummary,
-        hint: "Edit the affected orders to add required products, customer details, or verify workflow progression.",
+        hint: "Edit the affected orders to add required products, courier partner, customer details, or verify workflow progression.",
       })
     );
   }
 
   // 2. Perform targeted update ONLY on the eligible orders
   const eligibleOrderNumbers = eligibleOrders.map((o) => o.order_number);
+  const updatePayload: Record<string, any> = {
+    status: dbStatus,
+    updated_at: nowIso,
+  };
+
+  if (courierName && courierName.trim()) {
+    updatePayload.shipping_method_name = courierName.trim();
+  }
+
+  if (dbStatus === "cancelled") {
+    updatePayload.cancel_reason = batchNote?.trim() || "Batch cancelled by Admin";
+    updatePayload.cancelled_at = nowIso;
+  } else if (dbStatus === "confirmed") {
+    updatePayload.confirmed_at = nowIso;
+  } else if (dbStatus === "shipped") {
+    updatePayload.shipped_at = nowIso;
+  } else if (dbStatus === "delivered") {
+    updatePayload.delivered_at = nowIso;
+  }
+
   const { data: updatedOrders, error: updateErr } = await supabase
     .from("orders")
-    .update({
-      status: dbStatus,
-      updated_at: nowIso,
-    })
+    .update(updatePayload)
     .in("order_number", eligibleOrderNumbers)
     .select("id, order_number");
 
@@ -3105,7 +3160,9 @@ export async function bulkUpdateOrderStatusInDb(
         order_id: o.id,
         event_type: "status_changed",
         to_value: newStatus,
-        message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)`,
+        message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)${
+          dbStatus === "cancelled" && batchNote ? `: ${batchNote.trim()}` : ""
+        }${courierName ? ` (Courier: ${courierName.trim()})` : ""}`,
       }));
       await supabase.from("order_events").insert(eventRows);
     } catch (eventErr) {
@@ -3127,27 +3184,101 @@ export async function bulkAssignCourierInDb(
   orderIds: string[],
   courierName: string,
   batchNote?: string
-): Promise<boolean> {
-  if (!orderIds || orderIds.length === 0) return true;
+): Promise<BulkCourierUpdateResult> {
+  if (!orderIds || orderIds.length === 0) {
+    return {
+      success: true,
+      totalRequested: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      updatedOrderNumbers: [],
+      skippedOrders: [],
+    };
+  }
+
+  const cleanCourier = (courierName || "").trim();
+  if (cleanCourier.length < 2) {
+    throw new DatabaseOperationError(
+      parseDatabaseError({
+        code: "COURIER_REQUIRED",
+        message: "A valid courier partner name is required before assigning in bulk.",
+      })
+    );
+  }
 
   const nowIso = new Date().toISOString();
 
-  // 1. Update courier on all orders
+  // 1. Fetch current orders from DB to validate courier assignment eligibility
+  const { data: dbOrders, error: fetchErr } = await supabase
+    .from("orders")
+    .select("id, order_number, status")
+    .in("order_number", orderIds);
+
+  if (fetchErr) {
+    console.error("Failed to query orders for bulk courier assignment:", fetchErr);
+    throw new DatabaseOperationError(parseDatabaseError(fetchErr));
+  }
+
+  const ordersList = dbOrders || [];
+  const eligibleOrders: typeof ordersList = [];
+  const skippedOrders: { id: string; reason: string }[] = [];
+
+  const foundOrderNumbers = new Set(ordersList.map((o) => o.order_number));
+  for (const id of orderIds) {
+    if (!foundOrderNumbers.has(id)) {
+      skippedOrders.push({ id, reason: "Order not found in database" });
+    }
+  }
+
+  // Validate: cancelled, returned, or already delivered orders cannot have couriers reassigned
+  for (const o of ordersList) {
+    if (o.status === "cancelled" || o.status === "returned") {
+      skippedOrders.push({
+        id: o.order_number,
+        reason: `Order is already ${o.status.replace(/_/g, " ")} and cannot be assigned a courier`,
+      });
+    } else if (o.status === "delivered") {
+      skippedOrders.push({
+        id: o.order_number,
+        reason: "Order is already delivered and courier partner cannot be reassigned",
+      });
+    } else {
+      eligibleOrders.push(o);
+    }
+  }
+
+  if (eligibleOrders.length === 0) {
+    const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
+    throw new DatabaseOperationError(
+      parseDatabaseError({
+        code: "ORDER_FINAL",
+        message: `Cannot assign courier to selected order(s): ${skippedOrders[0]?.reason || "Orders are finalized"}`,
+        details: reasonSummary,
+        hint: "Select orders that are in pending, confirmed, or processing status.",
+      })
+    );
+  }
+
+  const eligibleOrderNumbers = eligibleOrders.map((o) => o.order_number);
+
+  // 2. Update courier on all eligible orders
   const { data: updatedOrders, error: updateErr } = await supabase
     .from("orders")
     .update({
-      shipping_method_name: courierName,
+      shipping_method_name: cleanCourier,
       updated_at: nowIso,
     })
-    .in("order_number", orderIds)
+    .in("order_number", eligibleOrderNumbers)
     .select("id, order_number");
 
   if (updateErr) {
     console.error("Failed to bulk assign courier:", updateErr);
-    throw new Error(updateErr.message || "Failed to bulk assign courier in database");
+    throw new DatabaseOperationError(parseDatabaseError(updateErr));
   }
 
-  // 2. If batch note provided, insert into public.order_notes
+  const actuallyUpdated = (updatedOrders || []).map((o) => o.order_number);
+
+  // 3. If batch note provided, insert into public.order_notes
   if (batchNote && batchNote.trim()) {
     const cleanNote = batchNote.trim();
     const ordersMap = updatedOrders || [];
@@ -3157,7 +3288,7 @@ export async function bulkAssignCourierInDb(
       order_number: o.order_number,
       type: "internal",
       author: "Admin Staff",
-      note: `[Courier Assigned → ${courierName}]: ${cleanNote}`,
+      note: `[Courier Assigned → ${cleanCourier}]: ${cleanNote}`,
       created_at: nowIso,
     }));
 
@@ -3170,16 +3301,94 @@ export async function bulkAssignCourierInDb(
     }
   }
 
-  return true;
+  // 4. Record courier assigned event in public.order_events
+  if (updatedOrders && updatedOrders.length > 0) {
+    try {
+      const eventRows = updatedOrders.map((o) => ({
+        order_id: o.id,
+        event_type: "courier_assigned",
+        message: `Courier partner assigned to ${cleanCourier} (Bulk Action)`,
+      }));
+      await supabase.from("order_events").insert(eventRows);
+    } catch (eventErr) {
+      console.warn("Could not record timeline events for bulk courier:", eventErr);
+    }
+  }
+
+  return {
+    success: true,
+    totalRequested: orderIds.length,
+    updatedCount: actuallyUpdated.length,
+    skippedCount: skippedOrders.length,
+    updatedOrderNumbers: actuallyUpdated,
+    skippedOrders,
+  };
 }
 
-export async function bulkDeleteOrdersInDb(orderIds: string[]): Promise<boolean> {
-  if (!orderIds || orderIds.length === 0) return true;
+export async function bulkDeleteOrdersInDb(orderIds: string[]): Promise<BulkDeleteResult> {
+  if (!orderIds || orderIds.length === 0) {
+    return {
+      success: true,
+      totalRequested: 0,
+      deletedCount: 0,
+      skippedCount: 0,
+      deletedOrderNumbers: [],
+      skippedOrders: [],
+    };
+  }
+
+  // 1. Fetch current orders from DB to validate deletability
+  const { data: dbOrders, error: fetchErr } = await supabase
+    .from("orders")
+    .select("id, order_number, status")
+    .in("order_number", orderIds);
+
+  if (fetchErr) {
+    console.error("Failed to query orders for bulk delete:", fetchErr);
+    throw new DatabaseOperationError(parseDatabaseError(fetchErr));
+  }
+
+  const ordersList = dbOrders || [];
+  const eligibleOrders: typeof ordersList = [];
+  const skippedOrders: { id: string; reason: string }[] = [];
+
+  const foundOrderNumbers = new Set(ordersList.map((o) => o.order_number));
+  for (const id of orderIds) {
+    if (!foundOrderNumbers.has(id)) {
+      skippedOrders.push({ id, reason: "Order not found in database" });
+    }
+  }
+
+  // Dispatched and delivered orders cannot be deleted (audit & inventory integrity)
+  for (const o of ordersList) {
+    if (o.status === "shipped" || o.status === "delivered") {
+      skippedOrders.push({
+        id: o.order_number,
+        reason: `Orders already ${o.status} cannot be deleted. Use return or cancellation workflows instead.`,
+      });
+    } else {
+      eligibleOrders.push(o);
+    }
+  }
+
+  if (eligibleOrders.length === 0) {
+    const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
+    throw new DatabaseOperationError(
+      parseDatabaseError({
+        code: "ORDER_NOT_CANCELLABLE",
+        message: `Cannot delete selected orders: ${skippedOrders[0]?.reason || "Orders cannot be deleted"}`,
+        details: reasonSummary,
+        hint: "Only draft, pending, or cancelled orders can be deleted.",
+      })
+    );
+  }
+
+  const eligibleOrderNumbers = eligibleOrders.map((o) => o.order_number);
 
   const { error } = await supabase
     .from("orders")
     .delete()
-    .in("order_number", orderIds);
+    .in("order_number", eligibleOrderNumbers);
 
   if (error) {
     console.warn("Bulk delete failed, falling back to cancel:", error);
@@ -3188,15 +3397,23 @@ export async function bulkDeleteOrdersInDb(orderIds: string[]): Promise<boolean>
       .update({
         status: "cancelled",
         cancel_reason: "Bulk cancelled by Admin",
+        cancelled_at: new Date().toISOString(),
       })
-      .in("order_number", orderIds);
+      .in("order_number", eligibleOrderNumbers);
 
     if (cancelError) {
-      throw new Error(cancelError.message || "Failed to bulk delete or cancel orders");
+      throw new DatabaseOperationError(parseDatabaseError(cancelError));
     }
   }
 
-  return true;
+  return {
+    success: true,
+    totalRequested: orderIds.length,
+    deletedCount: eligibleOrderNumbers.length,
+    skippedCount: skippedOrders.length,
+    deletedOrderNumbers: eligibleOrderNumbers,
+    skippedOrders,
+  };
 }
 
 export async function fetchOrdersByIdsFromDb(orderNumbers: string[]): Promise<Order[]> {

@@ -258,6 +258,48 @@ export function parseDatabaseError(error: any): ParsedDatabaseError {
       };
     }
 
+    // 3h. Courier Partner Required
+    if (lowerMsg.includes("courier_required") || lowerMsg.includes("courier partner assignment is required")) {
+      return {
+        title: "Courier Partner Required",
+        message: "Orders advancing to Processing, Shipped, or Delivered must have a Courier Partner assigned.",
+        resolution: "Assign a courier partner (such as Steadfast Courier or Pathao Courier) before advancing this order.",
+        code: "COURIER_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
+    // 3i. Cancel Reason Required
+    if (lowerMsg.includes("cancel_reason_required") || lowerMsg.includes("cancellation reason is required")) {
+      return {
+        title: "Cancellation Reason Required",
+        message: "A cancellation reason of at least 3 characters is required to cancel an order.",
+        resolution: "Provide a descriptive cancellation reason explaining why the order was cancelled.",
+        code: "CANCEL_REASON_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
+    // 3j. Return Reason Required
+    if (lowerMsg.includes("return_reason_required") || lowerMsg.includes("return reason is required")) {
+      return {
+        title: "Return Reason Required",
+        message: "A return reason of at least 3 characters is required to mark an order as returned.",
+        resolution: "Provide a return reason explaining why the package was returned.",
+        code: "RETURN_REASON_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
     // Generic P0001
     return {
       title: "Order Workflow Validation Rejected",
@@ -411,7 +453,9 @@ export function validateOrderStatusTransition(
   customerName?: string | null,
   customerPhone?: string | null,
   customerAddress?: string | null,
-  itemsCount?: number | null
+  itemsCount?: number | null,
+  courierName?: string | null,
+  cancelReason?: string | null
 ): TransitionValidationResult {
   const normalizedCurrent = currentStatus === "partially_delivered" ? "delivered" : currentStatus;
   const normalizedTarget = targetStatus === "partially_delivered" ? "delivered" : targetStatus;
@@ -439,6 +483,16 @@ export function validateOrderStatusTransition(
         reason: `Orders already ${normalizedCurrent} cannot be cancelled. Use 'Returned' if the product was returned.`,
       };
     }
+    if (cancelReason !== undefined && cancelReason !== null) {
+      const trimmedReason = cancelReason.trim();
+      if (trimmedReason.length < 3) {
+        return {
+          valid: false,
+          code: "CANCEL_REASON_REQUIRED",
+          reason: "Cancellation reason is required (minimum 3 characters).",
+        };
+      }
+    }
     return { valid: true };
   }
 
@@ -450,6 +504,16 @@ export function validateOrderStatusTransition(
         code: "ORDER_NOT_RETURNABLE",
         reason: `Only dispatched orders (shipped or delivered) can be marked as returned. Current status is ${normalizedCurrent}.`,
       };
+    }
+    if (cancelReason !== undefined && cancelReason !== null) {
+      const trimmedReason = cancelReason.trim();
+      if (trimmedReason.length < 3) {
+        return {
+          valid: false,
+          code: "RETURN_REASON_REQUIRED",
+          reason: "Return reason is required (minimum 3 characters).",
+        };
+      }
     }
     return { valid: true };
   }
@@ -469,8 +533,8 @@ export function validateOrderStatusTransition(
   // 6. Customer details and items required for confirmed or higher
   const confirmedPos = STATUS_WORKFLOW_FLOW.indexOf("confirmed");
   if (targetPos >= confirmedPos) {
-    // 6a. At least one line item required
-    if (itemsCount !== undefined && itemsCount !== null && itemsCount < 1) {
+    // 6a. At least one line item required (strictly enforce: must be defined, not null, and >= 1)
+    if (itemsCount === undefined || itemsCount === null || itemsCount < 1) {
       return {
         valid: false,
         code: "ORDER_ITEMS_REQUIRED",
@@ -478,18 +542,20 @@ export function validateOrderStatusTransition(
       };
     }
 
+    // 6b. Customer name required (minimum 2 characters)
     const trimmedName = (customerName || "").trim();
-    if (trimmedName.length < 1) {
+    if (trimmedName.length < 2) {
       return {
         valid: false,
         code: "CUSTOMER_NAME_REQUIRED",
-        reason: "Customer name is required before confirming order.",
+        reason: "Customer name is required before confirming order (minimum 2 characters).",
       };
     }
 
+    // 6c. Valid customer phone required
     const trimmedPhone = (customerPhone || "").trim();
     const cleanedPhone = trimmedPhone.replace(/[\s\-\(\)]/g, "");
-    if (!cleanedPhone || (!cleanedPhone.startsWith("+") && cleanedPhone.length < 10)) {
+    if (!cleanedPhone || (!cleanedPhone.startsWith("+") && cleanedPhone.length < 10) || cleanedPhone.length > 16) {
       return {
         valid: false,
         code: "CUSTOMER_PHONE_REQUIRED",
@@ -497,15 +563,27 @@ export function validateOrderStatusTransition(
       };
     }
 
-    if (customerAddress !== undefined && customerAddress !== null) {
-      const trimmedAddress = customerAddress.trim();
-      if (trimmedAddress.length < 3) {
-        return {
-          valid: false,
-          code: "CUSTOMER_ADDRESS_REQUIRED",
-          reason: "Street delivery address is required before confirming order.",
-        };
-      }
+    // 6d. Street delivery address required (strictly enforce: must be defined and at least 3 characters)
+    const trimmedAddress = (customerAddress || "").trim();
+    if (trimmedAddress.length < 3) {
+      return {
+        valid: false,
+        code: "CUSTOMER_ADDRESS_REQUIRED",
+        reason: "Street delivery address is required before confirming order (minimum 3 characters).",
+      };
+    }
+  }
+
+  // 7. Courier partner required for processing, shipped, and delivered
+  const processingPos = STATUS_WORKFLOW_FLOW.indexOf("processing");
+  if (targetPos >= processingPos) {
+    const trimmedCourier = (courierName || "").trim();
+    if (trimmedCourier.length < 2) {
+      return {
+        valid: false,
+        code: "COURIER_REQUIRED",
+        reason: `Courier partner assignment is required before moving order to ${normalizedTarget.replace(/_/g, " ")}.`,
+      };
     }
   }
 
