@@ -53,7 +53,6 @@ export interface DbProduct {
   description_bn?: string | null;
   category_id?: string | null;
   status: "draft" | "active" | "archived";
-  source: string;
   grade?: string | null;
   uses?: string[];
   origin?: string | null;
@@ -103,7 +102,6 @@ export interface DbProductCard {
   category_slug: string;
   category_name: string;
   category_name_bn?: string | null;
-  source: string;
   grade?: string | null;
   uses: string[];
   certifications?: string[];

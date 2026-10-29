@@ -170,7 +170,6 @@ export function ProductsClient() {
         slug: uniqueSlug,
         category_id: item.categoryId || null,
         status: "draft",
-        source: item.source || "sugarcane",
       });
     },
     onSuccess: () => {
@@ -296,7 +295,6 @@ export function ProductsClient() {
       "Name_BN",
       "Slug",
       "Category",
-      "Source",
       "Status",
       "Stock",
       "Variants",
@@ -309,7 +307,6 @@ export function ProductsClient() {
       `"${(p.nameBn || "").replace(/"/g, '""')}"`,
       p.slug,
       p.category,
-      p.source,
       p.status,
       p.stock,
       p.variants,
@@ -410,14 +407,6 @@ export function ProductsClient() {
             {row.getValue("category")}
           </Badge>
         ),
-      },
-      {
-        accessorKey: "source",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Source" />,
-        cell: ({ row }) => {
-          const source = String(row.getValue("source")).replace("_", " ");
-          return <span className="capitalize text-xs text-muted-foreground">{source}</span>;
-        },
       },
       {
         accessorKey: "status",

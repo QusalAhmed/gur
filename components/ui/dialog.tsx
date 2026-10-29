@@ -88,6 +88,9 @@ function DialogContent({
   const hasZ = typeof className === "string" && className.includes("z-")
   const hasW = typeof className === "string" && className.includes("w-")
   const hasMaxW = typeof className === "string" && className.includes("max-w-")
+  const hasP = typeof className === "string" && (className.includes("p-0") || className.includes("p-") || className.includes("px-") || className.includes("py-"))
+  const hasGap = typeof className === "string" && className.includes("gap-")
+  const hasDisplay = typeof className === "string" && (className.includes("flex") || className.includes("block"))
 
   return (
     <DialogPortal>
@@ -95,7 +98,10 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 grid -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          !hasDisplay && "grid",
+          !hasGap && "gap-4",
+          !hasP && "p-4",
           !hasZ && "z-50",
           !hasW && "w-full",
           !hasMaxW && "max-w-[calc(100%-2rem)] sm:max-w-sm",

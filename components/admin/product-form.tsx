@@ -3,37 +3,28 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
 import {
   ArrowLeft,
   Save,
   Sparkles,
   UploadCloud,
   Image as ImageIcon,
-  CheckCircle2,
   Trash2,
   Star,
   Plus,
   Layers,
   Package,
-  Info,
   Sliders,
-  Search,
-  ExternalLink,
   RefreshCw,
-  AlertCircle,
-  FileText,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DbProduct,
-  DbProductVariant,
-  DbProductImage,
   saveProductWithDetails,
-  uploadProductImageToStorage,
   deleteProductImageFromStorage,
   fetchCategoriesList,
 } from "@/lib/supabase";
+import { ImageUploader, UploadedImage } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
+import { cn } from "@/lib/utils";
 
 interface ProductFormProps {
   initialData?: DbProduct | null;
@@ -81,14 +73,18 @@ interface FormImage {
   isNew?: boolean;
 }
 
-const MOLASSES_SOURCES = [
-  { value: "sugarcane", label: "Sugarcane (আখ)" },
-  { value: "date_palm", label: "Date Palm (খেজুর)" },
-  { value: "sugar_beet", label: "Sugar Beet (বিট)" },
-  { value: "palmyra", label: "Palmyra (তাল)" },
-  { value: "sorghum", label: "Sorghum" },
-  { value: "other", label: "Other Natural Source" },
-];
+const PUBLISHING_STATUS_OPTIONS = [
+  { value: "draft", label: "Draft (Hidden from store)" },
+  { value: "active", label: "Active (Visible in catalog)" },
+  { value: "archived", label: "Archived (Discontinued)" },
+] as const;
+
+const STOCK_STATUS_OPTIONS = [
+  { value: "in_stock", label: "In Stock" },
+  { value: "low_stock", label: "Low Stock" },
+  { value: "out_of_stock", label: "Out of Stock" },
+  { value: "backorder", label: "Available on Backorder" },
+] as const;
 
 const PACK_TYPES = [
   { value: "jar", label: "Glass Jar" },
@@ -117,8 +113,6 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
   const [activeTab, setActiveTab] = React.useState("general");
   const [toast, setToast] = React.useState<ToastData | null>(null);
-  const [uploadingImage, setUploadingImage] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // General Form State
   const [name, setName] = React.useState(initialData?.name || "");
@@ -129,7 +123,6 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const [status, setStatus] = React.useState<"draft" | "active" | "archived">(
     initialData?.status || "draft"
   );
-  const [source, setSource] = React.useState(initialData?.source || "sugarcane");
   const [isFeatured, setIsFeatured] = React.useState(initialData?.is_featured || false);
   const [summary, setSummary] = React.useState(initialData?.summary || "");
   const [summaryBn, setSummaryBn] = React.useState(initialData?.summary_bn || "");
@@ -194,28 +187,60 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
   const [deletedVariantIds, setDeletedVariantIds] = React.useState<string[]>([]);
 
-  // Images State
-  const [images, setImages] = React.useState<FormImage[]>(() => {
+  // Images State via ImageUploader
+  const [uploadedImages, setUploadedImages] = React.useState<UploadedImage[]>(() => {
     if (initialData?.images && initialData.images.length > 0) {
       return initialData.images.map((img, idx) => ({
         id: img.id,
-        storage_path: img.storage_path,
-        public_url: img.public_url || img.storage_path,
-        alt_text: img.alt_text || "",
-        is_primary: img.is_primary ?? idx === 0,
-        sort_order: img.sort_order ?? idx,
+        url: img.public_url || img.storage_path,
+        path: img.storage_path,
+        name: img.alt_text || img.storage_path.split("/").pop() || `Product Photo ${idx + 1}`,
+        altText: img.alt_text || "",
+        isPrimary: img.is_primary ?? idx === 0,
+        sortOrder: img.sort_order ?? idx,
+        status: "success" as const,
+        progress: 100,
       }));
     }
     return [];
   });
 
+  // Derived FormImage[] for compatibility with saveProductWithDetails and live preview
+  const images: FormImage[] = React.useMemo(() => {
+    return uploadedImages.map((img, idx) => ({
+      id: img.id && !img.id.startsWith("local-") && !img.id.startsWith("gallery-") ? img.id : undefined,
+      storage_path: img.path || img.url,
+      public_url: img.url,
+      alt_text: img.altText || img.name || name || "Product image",
+      is_primary: idx === 0 || img.isPrimary === true,
+      sort_order: idx,
+      isNew: !img.id || img.id.startsWith("local-") || img.id.startsWith("gallery-"),
+    }));
+  }, [uploadedImages, name]);
+
   const [deletedImageIds, setDeletedImageIds] = React.useState<string[]>([]);
+
+  const handleImageRemove = (item: UploadedImage) => {
+    if (item.id && !item.id.startsWith("local-") && !item.id.startsWith("gallery-")) {
+      setDeletedImageIds((prev) => [...prev, item.id]);
+    }
+    if (item.path) {
+      deleteProductImageFromStorage(item.path);
+    }
+  };
 
   // Fetch categories from DB
   const { data: categories = [] } = useQuery({
     queryKey: ["admin", "categories-list"],
     queryFn: fetchCategoriesList,
   });
+
+  const categoryItems = React.useMemo(() => {
+    return categories.map((c) => ({
+      value: c.id,
+      label: `${c.name}${c.name_bn ? ` (${c.name_bn})` : ""}`,
+    }));
+  }, [categories]);
 
   // Auto slug generation from Name
   React.useEffect(() => {
@@ -225,109 +250,11 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         .replace(/[^a-z0-9\s-]/g, "")
         .trim()
         .replace(/\s+/g, "-");
-      setSlug(generated);
+      queueMicrotask(() => {
+        setSlug(generated);
+      });
     }
   }, [name, isSlugManual]);
-
-  // Handle Image Upload to Supabase Storage
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadingImage(true);
-    try {
-      const newImagesList: FormImage[] = [...images];
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
-        // Validate size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          setToast({
-            type: "warning",
-            title: "File Too Large",
-            message: `"${file.name}" exceeds the 5MB file limit. Please select a smaller file.`,
-          });
-          continue;
-        }
-
-        try {
-          const { path, publicUrl } = await uploadProductImageToStorage(
-            file,
-            initialData?.id || "draft"
-          );
-
-          newImagesList.push({
-            storage_path: path,
-            public_url: publicUrl,
-            alt_text: name || file.name.replace(/\.[^/.]+$/, ""),
-            is_primary: newImagesList.length === 0,
-            sort_order: newImagesList.length,
-            isNew: true,
-          });
-        } catch (uploadErr: any) {
-          console.warn("Storage upload error for file:", file.name, uploadErr);
-          // Fallback object URL for instant preview if RLS/bucket upload warning occurs
-          const fallbackUrl = URL.createObjectURL(file);
-          newImagesList.push({
-            storage_path: `catalog-images/products/${Date.now()}-${file.name}`,
-            public_url: fallbackUrl,
-            alt_text: name || file.name,
-            is_primary: newImagesList.length === 0,
-            sort_order: newImagesList.length,
-            isNew: true,
-          });
-        }
-      }
-
-      setImages(newImagesList);
-      setToast({
-        type: "success",
-        title: "Images Uploaded",
-        message: "Product media uploaded to Supabase Storage successfully.",
-      });
-    } catch (err: any) {
-      console.error("Image upload exception:", err);
-      setToast({
-        type: "destructive",
-        title: "Upload Failed",
-        message: err?.message || "Failed to upload image to Supabase Storage.",
-      });
-    } finally {
-      setUploadingImage(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  const handleSetPrimaryImage = (index: number) => {
-    setImages((prev) =>
-      prev.map((img, i) => ({
-        ...img,
-        is_primary: i === index,
-      }))
-    );
-  };
-
-  const handleDeleteImage = async (index: number) => {
-    const target = images[index];
-    if (target.id) {
-      setDeletedImageIds((prev) => [...prev, target.id!]);
-    }
-    // Remove from storage if possible
-    if (target.storage_path) {
-      deleteProductImageFromStorage(target.storage_path);
-    }
-    setImages((prev) => {
-      const remaining = prev.filter((_, i) => i !== index);
-      // If deleted image was primary, set the first one as primary
-      if (target.is_primary && remaining.length > 0) {
-        remaining[0].is_primary = true;
-      }
-      return remaining;
-    });
-  };
 
   // Variant Management
   const handleAddVariant = () => {
@@ -373,7 +300,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const handleUpdateVariant = (
     index: number,
     field: keyof FormVariant,
-    value: any
+    value: FormVariant[keyof FormVariant]
   ) => {
     setVariants((prev) =>
       prev.map((v, i) => {
@@ -410,7 +337,6 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           slug: slug.trim(),
           category_id: categoryId || null,
           status: finalStatus,
-          source,
           summary: summary.trim() || undefined,
           summaryBn: summaryBn.trim() || undefined,
           description: description.trim() || undefined,
@@ -454,7 +380,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         router.push("/admin/products");
       }, 700);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       setToast({
         type: "destructive",
         title: "Error Saving Product",
@@ -532,7 +458,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           <Button
             size="sm"
             disabled={saveMutation.isPending}
-            onClick={() => saveMutation.mutate("active")}
+            onClick={() => saveMutation.mutate()}
             className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9 cursor-pointer"
           >
             {saveMutation.isPending ? (
@@ -540,7 +466,11 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            {mode === "create" ? "Publish Product" : "Save Changes"}
+            {mode === "create"
+              ? status === "active"
+                ? "Publish Product"
+                : "Save Product"
+              : "Save Changes"}
           </Button>
         </div>
       </div>
@@ -717,18 +647,50 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                       Publishing Status
                     </label>
                     <Select
+                      items={PUBLISHING_STATUS_OPTIONS}
                       value={status}
                       onValueChange={(val) => {
                         if (val) setStatus(val as "draft" | "active" | "archived");
                       }}
                     >
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Select Publishing Status">
+                          {(val) => {
+                            const found = PUBLISHING_STATUS_OPTIONS.find((opt) => opt.value === val);
+                            return found ? (
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "size-2 rounded-full",
+                                    val === "active" && "bg-emerald-500",
+                                    val === "draft" && "bg-amber-500",
+                                    val === "archived" && "bg-slate-400"
+                                  )}
+                                />
+                                <span>{found.label}</span>
+                              </span>
+                            ) : (
+                              "Select Status"
+                            );
+                          }}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="draft">Draft (Hidden from store)</SelectItem>
-                        <SelectItem value="active">Active (Visible in catalog)</SelectItem>
-                        <SelectItem value="archived">Archived (Discontinued)</SelectItem>
+                        {PUBLISHING_STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "size-2 rounded-full",
+                                  opt.value === "active" && "bg-emerald-500",
+                                  opt.value === "draft" && "bg-amber-500",
+                                  opt.value === "archived" && "bg-slate-400"
+                                )}
+                              />
+                              <span>{opt.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -738,39 +700,21 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                       Category
                     </label>
                     <Select
+                      items={categoryItems}
                       value={categoryId}
                       onValueChange={(val) => setCategoryId(val || "")}
                     >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Select Category" />
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Select Category">
+                          {(val) =>
+                            categoryItems.find((c) => c.value === val)?.label || "Select Category"
+                          }
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name} {c.name_bn ? `(${c.name_bn})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-foreground block mb-1.5">
-                      Molasses Source
-                    </label>
-                    <Select
-                      value={source}
-                      onValueChange={(val) => {
-                        if (val) setSource(val);
-                      }}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MOLASSES_SOURCES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
+                        {categoryItems.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -844,134 +788,33 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         <TabsContent value="media" className="space-y-6">
           <Card className="border shadow-xs">
             <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base font-semibold">
-                    Product Media & Supabase Storage
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Upload product photography directly to the public{" "}
-                    <code className="text-amber-600 bg-amber-500/10 px-1 py-0.5 rounded">
-                      catalog-images
-                    </code>{" "}
-                    storage bucket.
-                  </CardDescription>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImage}
-                  className="bg-amber-600 hover:bg-amber-700 text-white h-9 cursor-pointer"
-                >
-                  <UploadCloud className="h-4 w-4 mr-2" />
-                  {uploadingImage ? "Uploading..." : "Upload Images"}
-                </Button>
-              </div>
+              <CardTitle className="text-base font-semibold">
+                Product Media & Supabase Storage
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Upload product photography directly to the public{" "}
+                <code className="text-amber-600 bg-amber-500/10 px-1 py-0.5 rounded">
+                  catalog-images
+                </code>{" "}
+                storage bucket. Drag and drop cards to change serial order. The #1 serial image is automatically set as the primary catalog cover.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Hidden File Input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                onChange={handleImageUpload}
-                className="hidden"
+              <ImageUploader
+                value={uploadedImages}
+                onChange={(newItems) => {
+                  setUploadedImages(newItems);
+                }}
+                multiple={true}
+                maxFiles={12}
+                bucket="catalog-images"
+                folder={`products/${slug || initialData?.id || "draft"}`}
+                label="Click or drag product images to upload"
+                description="Supported formats: JPEG, PNG, WebP, AVIF up to 50MB (files > 5MB auto-compressed). Drag to serialize order. Serial #1 is the primary cover."
+                showAltInput={true}
+                allowGallery={true}
+                onRemove={handleImageRemove}
               />
-
-              {/* Dropzone Area */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-border hover:border-amber-500/60 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-muted/15 hover:bg-muted/30"
-              >
-                <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3 text-amber-600">
-                  <UploadCloud className="h-6 w-6" />
-                </div>
-                <p className="text-sm font-semibold text-foreground">
-                  Click to select images or drag and drop
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                  Supported formats: JPEG, PNG, WebP, AVIF up to 5MB each. High resolution
-                  square product photos recommended.
-                </p>
-              </div>
-
-              {/* Image Grid */}
-              {images.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                  {images.map((img, index) => (
-                    <div
-                      key={img.id || index}
-                      className={`relative group rounded-xl border overflow-hidden bg-card transition-all ${
-                        img.is_primary
-                          ? "border-amber-500 shadow-sm ring-2 ring-amber-500/20"
-                          : "border-border hover:border-muted-foreground/40"
-                      }`}
-                    >
-                      {/* Image Preview */}
-                      <div className="aspect-square bg-muted/30 relative flex items-center justify-center overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={img.public_url}
-                          alt={img.alt_text || "Product image"}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                        {img.is_primary && (
-                          <div className="absolute top-2 left-2">
-                            <Badge className="bg-amber-600 text-white font-medium text-[10px] shadow-xs">
-                              <Star className="h-2.5 w-2.5 mr-1 fill-white" /> Primary
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card Content & Actions */}
-                      <div className="p-3 space-y-2">
-                        <Input
-                          placeholder="Alt text (SEO & Accessibility)"
-                          value={img.alt_text || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setImages((prev) =>
-                              prev.map((item, i) => (i === index ? { ...item, alt_text: val } : item))
-                            );
-                          }}
-                          className="h-8 text-xs"
-                        />
-
-                        <div className="flex items-center justify-between pt-1">
-                          {!img.is_primary ? (
-                            <button
-                              type="button"
-                              onClick={() => handleSetPrimaryImage(index)}
-                              className="text-xs text-muted-foreground hover:text-amber-600 font-medium cursor-pointer"
-                            >
-                              Set as primary
-                            </button>
-                          ) : (
-                            <span className="text-xs text-amber-600 font-medium">Default view</span>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteImage(index)}
-                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                            title="Delete image"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-muted-foreground text-xs">
-                  No images uploaded yet. Upload images to showcase your product in the storefront
-                  and admin table.
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1193,19 +1036,25 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                           Stock Status
                         </label>
                         <Select
+                          items={STOCK_STATUS_OPTIONS}
                           value={v.stock_status}
                           onValueChange={(val) => {
                             if (val) handleUpdateVariant(index, "stock_status", val);
                           }}
                         >
-                          <SelectTrigger className="h-9 text-xs">
-                            <SelectValue />
+                          <SelectTrigger className="w-full h-9 text-xs">
+                            <SelectValue>
+                              {(val) =>
+                                STOCK_STATUS_OPTIONS.find((s) => s.value === val)?.label || "In Stock"
+                              }
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="in_stock">In Stock</SelectItem>
-                            <SelectItem value="low_stock">Low Stock</SelectItem>
-                            <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                            <SelectItem value="backorder">Available on Backorder</SelectItem>
+                            {STOCK_STATUS_OPTIONS.map((st) => (
+                              <SelectItem key={st.value} value={st.value}>
+                                {st.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

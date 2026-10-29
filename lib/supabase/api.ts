@@ -99,7 +99,6 @@ export interface UiProductItem {
   category: string;
   categoryId?: string | null;
   status: "active" | "draft" | "archived";
-  source: string;
   variants: number;
   stock: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
   rating: number;
@@ -187,7 +186,6 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
         category: (p.category_id && categoryMap.get(p.category_id)) || "General Molasses",
         categoryId: p.category_id,
         status: p.status as "active" | "draft" | "archived",
-        source: p.source || "sugarcane",
         variants: vInfo.count,
         stock: (vInfo.stock as any) || "in_stock",
         rating: Number(p.rating_avg) || 0,
@@ -257,6 +255,19 @@ export async function fetchProductDetailById(id: string): Promise<DbProduct | nu
   }
 }
 
+function resolveImageContentType(file: File, fileExt: string): string {
+  if (file.type && file.type.startsWith("image/")) {
+    if (file.type === "image/jpg") return "image/jpeg";
+    return file.type;
+  }
+  const ext = fileExt.toLowerCase();
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "avif") return "image/avif";
+  return "image/jpeg";
+}
+
 export async function uploadProductImageToStorage(
   file: File,
   productId?: string
@@ -269,13 +280,14 @@ export async function uploadProductImageToStorage(
     .slice(0, 30);
   const targetId = productId || "temp";
   const filePath = `products/${targetId}/${Date.now()}-${cleanBaseName}.${fileExt}`;
+  const contentType = resolveImageContentType(file, fileExt);
 
   const { data, error } = await supabase.storage
     .from("catalog-images")
     .upload(filePath, file, {
       cacheControl: "3600",
       upsert: true,
-      contentType: file.type || `image/${fileExt}`,
+      contentType,
     });
 
   if (error) {
@@ -316,7 +328,6 @@ export async function createProductInDb(payload: {
   slug: string;
   category_id?: string | null;
   status?: "draft" | "active" | "archived";
-  source?: string;
   summary?: string | null;
   summaryBn?: string | null;
   description?: string | null;
@@ -341,7 +352,6 @@ export async function createProductInDb(payload: {
         slug: payload.slug,
         category_id: payload.category_id || null,
         status: payload.status || "draft",
-        source: payload.source || "sugarcane",
         summary: payload.summary || null,
         summary_bn: payload.summaryBn || null,
         description: payload.description || null,
@@ -391,7 +401,6 @@ export async function saveProductWithDetails(params: {
     slug: string;
     category_id?: string | null;
     status: "draft" | "active" | "archived";
-    source: string;
     summary?: string;
     summaryBn?: string;
     description?: string;
@@ -443,7 +452,6 @@ export async function saveProductWithDetails(params: {
         slug: params.product.slug,
         category_id: params.product.category_id || null,
         status: params.product.status,
-        source: params.product.source,
         summary: params.product.summary || null,
         summary_bn: params.product.summaryBn || null,
         description: params.product.description || null,
@@ -466,7 +474,6 @@ export async function saveProductWithDetails(params: {
         slug: params.product.slug,
         category_id: params.product.category_id,
         status: params.product.status,
-        source: params.product.source,
         summary: params.product.summary,
         summaryBn: params.product.summaryBn,
         description: params.product.description,
@@ -649,11 +656,20 @@ export interface UiCategoryItem {
   name: string;
   nameBn: string;
   slug: string;
+  parentId?: string | null;
   parent: string;
+  description?: string | null;
+  descriptionBn?: string | null;
+  imagePath?: string | null;
+  imageUrl?: string | null;
   productsCount: number;
   displayOrder: number;
-  status: "active" | "draft" | "archived";
-  image: string;
+  status: "active" | "draft";
+  isActive: boolean;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
@@ -661,7 +677,8 @@ export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
     const { data: categories, error } = await supabase
       .from("categories")
       .select("*")
-      .order("sort_order", { ascending: true });
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (error || !categories) {
       if (error) console.warn("Supabase categories fetch warning:", error.message);
@@ -682,22 +699,115 @@ export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
     const categoryNameMap = new Map<string, string>();
     categories.forEach((c) => categoryNameMap.set(c.id, c.name));
 
-    const defaultIcons = ["🍯", "🐄", "🌴", "🏭", "🍵", "🌾"];
+    return categories.map((c, idx) => {
+      let imageUrl: string | null = null;
+      if (c.image_path) {
+        if (c.image_path.startsWith("http")) {
+          imageUrl = c.image_path;
+        } else {
+          const { data: pubData } = supabase.storage
+            .from("catalog-images")
+            .getPublicUrl(c.image_path);
+          imageUrl = pubData?.publicUrl || null;
+        }
+      }
 
-    return categories.map((c, idx) => ({
-      id: c.id,
-      name: c.name,
-      nameBn: c.name_bn || "",
-      slug: c.slug,
-      parent: c.parent_id ? categoryNameMap.get(c.parent_id) || "Top Level" : "None (Top Level)",
-      productsCount: countMap.get(c.id) || 0,
-      displayOrder: c.sort_order || idx + 1,
-      status: c.is_active ? "active" : "draft",
-      image: c.image_path || defaultIcons[idx % defaultIcons.length],
-    }));
+      return {
+        id: c.id,
+        name: c.name,
+        nameBn: c.name_bn || "",
+        slug: c.slug,
+        parentId: c.parent_id,
+        parent: c.parent_id ? categoryNameMap.get(c.parent_id) || "Top Level" : "None (Top Level)",
+        description: c.description || null,
+        descriptionBn: c.description_bn || null,
+        imagePath: c.image_path || null,
+        imageUrl,
+        productsCount: countMap.get(c.id) || 0,
+        displayOrder: c.sort_order ?? idx + 1,
+        status: c.is_active ? "active" : "draft",
+        isActive: c.is_active ?? true,
+        seoTitle: c.seo_title || null,
+        seoDescription: c.seo_description || null,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+      };
+    });
   } catch (err) {
     console.error("Error fetching categories from Supabase:", err);
     return [];
+  }
+}
+
+export async function fetchCategoryById(id: string): Promise<DbCategory | null> {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error || !data) {
+      console.warn("Category fetch error:", error?.message);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error("fetchCategoryById error:", err);
+    return null;
+  }
+}
+
+export async function uploadCategoryImageToStorage(
+  file: File,
+  categoryId?: string
+): Promise<{ path: string; publicUrl: string }> {
+  const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const cleanBaseName = file.name
+    .replace(/\.[^/.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .slice(0, 30);
+  const targetId = categoryId || "general";
+  const filePath = `categories/${targetId}/${Date.now()}-${cleanBaseName}.${fileExt}`;
+  const contentType = resolveImageContentType(file, fileExt);
+
+  const { data, error } = await supabase.storage
+    .from("catalog-images")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType,
+    });
+
+  if (error) {
+    console.error("Supabase Storage category upload error:", error);
+    throw error;
+  }
+
+  const { data: urlData } = supabase.storage
+    .from("catalog-images")
+    .getPublicUrl(data.path);
+
+  return {
+    path: data.path,
+    publicUrl: urlData.publicUrl,
+  };
+}
+
+export async function deleteCategoryImageFromStorage(imagePath: string): Promise<boolean> {
+  if (!imagePath || imagePath.startsWith("http")) return true;
+  try {
+    const { error } = await supabase.storage
+      .from("catalog-images")
+      .remove([imagePath]);
+    if (error) {
+      console.warn("Supabase Storage delete warning:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Storage deletion exception:", err);
+    return false;
   }
 }
 
@@ -724,20 +834,30 @@ export async function createCategoryInDb(payload: {
   name: string;
   nameBn?: string;
   slug: string;
-  description?: string;
+  parent_id?: string | null;
+  description?: string | null;
+  descriptionBn?: string | null;
+  image_path?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
 }): Promise<any> {
   const { data, error } = await supabase
     .from("categories")
     .insert([
       {
-        name: payload.name,
-        name_bn: payload.nameBn || null,
-        slug: payload.slug,
-        description: payload.description || null,
-        sort_order: payload.sort_order || 1,
+        name: payload.name.trim(),
+        name_bn: payload.nameBn?.trim() || null,
+        slug: payload.slug.trim(),
+        parent_id: payload.parent_id || null,
+        description: payload.description?.trim() || null,
+        description_bn: payload.descriptionBn?.trim() || null,
+        image_path: payload.image_path || null,
+        sort_order: payload.sort_order ?? 0,
         is_active: payload.is_active ?? true,
+        seo_title: payload.seo_title?.trim() || null,
+        seo_description: payload.seo_description?.trim() || null,
       },
     ])
     .select()
@@ -747,10 +867,85 @@ export async function createCategoryInDb(payload: {
   return data;
 }
 
-export async function deleteCategoryInDb(id: string): Promise<boolean> {
-  const { error } = await supabase.from("categories").delete().eq("id", id);
+export async function updateCategoryInDb(
+  id: string,
+  updates: Partial<DbCategory>
+): Promise<any> {
+  const { data, error } = await supabase
+    .from("categories")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
   if (error) throw error;
-  return true;
+  return data;
+}
+
+export async function deleteCategorySafe(id: string): Promise<{
+  success: boolean;
+  archived: boolean;
+  message: string;
+}> {
+  try {
+    // 1. Check if products map to this category
+    const { count: productCount } = await supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("category_id", id);
+
+    if ((productCount || 0) > 0) {
+      // Safely deactivate instead of deleting to protect product mapping
+      await updateCategoryInDb(id, { is_active: false });
+      return {
+        success: true,
+        archived: true,
+        message: `Category is assigned to ${productCount} products, so it has been deactivated (draft) instead of deleted to preserve product associations.`,
+      };
+    }
+
+    // 2. Unlink child subcategories if any
+    await supabase
+      .from("categories")
+      .update({ parent_id: null })
+      .eq("parent_id", id);
+
+    // 3. Delete image from storage
+    const { data: cat } = await supabase
+      .from("categories")
+      .select("image_path")
+      .eq("id", id)
+      .single();
+
+    if (cat?.image_path) {
+      await deleteCategoryImageFromStorage(cat.image_path);
+    }
+
+    // 4. Delete category row
+    const { error: delErr } = await supabase
+      .from("categories")
+      .delete()
+      .eq("id", id);
+
+    if (delErr) throw delErr;
+
+    return {
+      success: true,
+      archived: false,
+      message: "Category deleted successfully.",
+    };
+  } catch (err: any) {
+    console.error("Error deleting category safely:", err);
+    throw err;
+  }
+}
+
+export async function deleteCategoryInDb(id: string): Promise<boolean> {
+  const res = await deleteCategorySafe(id);
+  return res.success;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
