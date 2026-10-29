@@ -577,7 +577,7 @@ export function OrderFormDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           id={mode === "edit" ? "dialog-content-edit-order" : "dialog-content-create-order"}
-          className="w-full md:w-[70%] lg:w-[80%] max-w-none max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8"
+          className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] max-w-7xl max-h-[92vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8"
         >
           <DialogHeader className="border-b pb-3">
             <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -1684,7 +1684,7 @@ export function OrderFormDialog({
                               </Button>
                             </div>
                           ) : (
-                            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            <div className="space-y-2 max-h-72 sm:max-h-80 overflow-y-auto pr-1">
                               {items.map((item) => (
                                 <div
                                   key={item.id}
@@ -1960,7 +1960,7 @@ export function OrderFormDialog({
               </div>
             </div>
 
-            <DialogFooter className="pt-4 border-t">
+            <DialogFooter className="pt-4 border-t sticky bottom-0 bg-popover/95 backdrop-blur-xs z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-2 mt-4">
               <Button
                 type="button"
                 variant="outline"

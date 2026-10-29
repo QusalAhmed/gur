@@ -3586,9 +3586,9 @@ export function OrdersClient() {
           if (!open) setStatusError(null);
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 flex flex-col">
+          <DialogHeader className="shrink-0 border-b pb-3">
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <RefreshCw className="h-5 w-5 text-amber-600" />
               Update Order Status
             </DialogTitle>
@@ -3855,14 +3855,14 @@ export function OrdersClient() {
             </label>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-3 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 -mb-2 mt-4">
             <Button variant="outline" onClick={() => setIsStatusOpen(false)}>
               Cancel
             </Button>
             <Button
               onClick={handleSaveStatus}
               disabled={updateStatusMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
             >
               {updateStatusMutation.isPending ? "Saving..." : "Confirm Status"}
             </Button>
@@ -3874,7 +3874,7 @@ export function OrdersClient() {
       {/* 3B. RECORD / UPDATE PAYMENT DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-amber-600" />
@@ -4141,7 +4141,7 @@ export function OrdersClient() {
       {/* 4. ADD ORDER NOTE DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-amber-600" />
@@ -4381,7 +4381,7 @@ export function OrdersClient() {
       {/* 4B. EDIT ORDER NOTE DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isEditNoteOpen} onOpenChange={setIsEditNoteOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit className="h-5 w-5 text-amber-600" />
@@ -4669,9 +4669,9 @@ export function OrdersClient() {
           if (!open) setBulkStatusError(null);
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 flex flex-col">
+          <DialogHeader className="shrink-0 border-b pb-3">
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <Clock className="h-5 w-5 text-amber-600" />
               Update Status for {effectiveBulkSelectedOrders.length} Order(s)
             </DialogTitle>
@@ -4730,7 +4730,7 @@ export function OrdersClient() {
                   {bulkEligibility.ineligible.length} of {effectiveBulkSelectedOrders.length} order(s) cannot be moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}:
                 </span>
               </div>
-              <div className="space-y-1.5 pl-1 max-h-36 overflow-y-auto pr-1">
+              <div className="space-y-1.5 pl-1 max-h-52 overflow-y-auto pr-1">
                 {bulkEligibility.ineligible.map(({ order, reason }) => (
                   <div
                     key={order.id}
@@ -4809,7 +4809,7 @@ export function OrdersClient() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-3 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 -mb-2 mt-4">
             <Button variant="outline" onClick={() => setIsBulkStatusOpen(false)}>
               Cancel
             </Button>
@@ -4834,7 +4834,7 @@ export function OrdersClient() {
       {/* 7. BULK ASSIGN COURIER MODAL */}
       {/* ========================================================================= */}
       <Dialog open={isBulkCourierOpen} onOpenChange={setIsBulkCourierOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-blue-600" />
