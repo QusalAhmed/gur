@@ -76,6 +76,20 @@ export interface DbProduct {
   updated_at?: string;
   category?: DbCategory;
   variants?: DbProductVariant[];
+  images?: DbProductImage[];
+}
+
+export interface DbProductImage {
+  id: string;
+  product_id: string;
+  variant_id?: string | null;
+  storage_path: string;
+  alt_text?: string | null;
+  alt_text_bn?: string | null;
+  sort_order: number;
+  is_primary: boolean;
+  created_at?: string;
+  public_url?: string;
 }
 
 export interface DbProductCard {

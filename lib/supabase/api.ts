@@ -97,6 +97,7 @@ export interface UiProductItem {
   nameBn: string;
   slug: string;
   category: string;
+  categoryId?: string | null;
   status: "active" | "draft" | "archived";
   source: string;
   variants: number;
@@ -105,6 +106,9 @@ export interface UiProductItem {
   reviews: number;
   featured: boolean;
   basePrice?: number;
+  imageUrl?: string | null;
+  grade?: string | null;
+  createdAt?: string;
 }
 
 export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
@@ -113,7 +117,8 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
     const { data: productsData, error: prodErr } = await supabase
       .from("products")
       .select("*")
-      .order("sort_order", { ascending: true });
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false });
 
     if (prodErr || !productsData || productsData.length === 0) {
       if (prodErr) console.warn("Supabase products fetch warning:", prodErr.message);
@@ -149,6 +154,29 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
       }
     }
 
+    // 4. Fetch primary images
+    const { data: imagesData } = await supabase
+      .from("product_images")
+      .select("id, product_id, storage_path, is_primary, sort_order")
+      .order("sort_order", { ascending: true });
+
+    const imageMap = new Map<string, string>();
+    if (imagesData) {
+      // Prioritize is_primary or first image per product
+      for (const img of imagesData) {
+        if (!imageMap.has(img.product_id) || img.is_primary) {
+          let pubUrl = img.storage_path;
+          if (!pubUrl.startsWith("http")) {
+            const { data: pubData } = supabase.storage
+              .from("catalog-images")
+              .getPublicUrl(img.storage_path);
+            pubUrl = pubData?.publicUrl || "";
+          }
+          imageMap.set(img.product_id, pubUrl);
+        }
+      }
+    }
+
     return productsData.map((p) => {
       const vInfo = variantCountMap.get(p.id) || { count: 0, minPrice: 0, stock: "in_stock" };
       return {
@@ -157,14 +185,18 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
         nameBn: p.name_bn || "",
         slug: p.slug,
         category: (p.category_id && categoryMap.get(p.category_id)) || "General Molasses",
+        categoryId: p.category_id,
         status: p.status as "active" | "draft" | "archived",
         source: p.source || "sugarcane",
         variants: vInfo.count,
         stock: (vInfo.stock as any) || "in_stock",
-        rating: Number(p.rating_avg) || 4.8,
-        reviews: p.rating_count || 12,
+        rating: Number(p.rating_avg) || 0,
+        reviews: p.rating_count || 0,
         featured: Boolean(p.is_featured),
-        basePrice: vInfo.minPrice || 350,
+        basePrice: vInfo.minPrice || 0,
+        imageUrl: imageMap.get(p.id) || null,
+        grade: p.grade || null,
+        createdAt: p.created_at,
       };
     });
   } catch (err) {
@@ -173,14 +205,132 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
   }
 }
 
+export async function fetchProductDetailById(id: string): Promise<DbProduct | null> {
+  try {
+    const { data: product, error: prodErr } = await supabase
+      .from("products")
+      .select("*, category:categories(*)")
+      .eq("id", id)
+      .single();
+
+    if (prodErr || !product) {
+      console.warn("Product not found in Supabase:", prodErr?.message);
+      return null;
+    }
+
+    // Fetch variants
+    const { data: variants } = await supabase
+      .from("product_variants")
+      .select("*")
+      .eq("product_id", id)
+      .order("sort_order", { ascending: true });
+
+    // Fetch images
+    const { data: images } = await supabase
+      .from("product_images")
+      .select("*")
+      .eq("product_id", id)
+      .order("sort_order", { ascending: true });
+
+    const mappedImages = (images || []).map((img) => {
+      let publicUrl = img.storage_path;
+      if (!publicUrl.startsWith("http")) {
+        const { data: pubData } = supabase.storage
+          .from("catalog-images")
+          .getPublicUrl(img.storage_path);
+        publicUrl = pubData?.publicUrl || "";
+      }
+      return {
+        ...img,
+        public_url: publicUrl,
+      };
+    });
+
+    return {
+      ...product,
+      variants: variants || [],
+      images: mappedImages,
+    };
+  } catch (err) {
+    console.error("Error fetching product detail:", err);
+    return null;
+  }
+}
+
+export async function uploadProductImageToStorage(
+  file: File,
+  productId?: string
+): Promise<{ path: string; publicUrl: string }> {
+  const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const cleanBaseName = file.name
+    .replace(/\.[^/.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .slice(0, 30);
+  const targetId = productId || "temp";
+  const filePath = `products/${targetId}/${Date.now()}-${cleanBaseName}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from("catalog-images")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type || `image/${fileExt}`,
+    });
+
+  if (error) {
+    console.error("Supabase Storage upload error:", error);
+    throw error;
+  }
+
+  const { data: urlData } = supabase.storage
+    .from("catalog-images")
+    .getPublicUrl(data.path);
+
+  return {
+    path: data.path,
+    publicUrl: urlData.publicUrl,
+  };
+}
+
+export async function deleteProductImageFromStorage(storagePath: string): Promise<boolean> {
+  if (!storagePath || storagePath.startsWith("http")) return true;
+  try {
+    const { error } = await supabase.storage
+      .from("catalog-images")
+      .remove([storagePath]);
+    if (error) {
+      console.warn("Supabase Storage delete warning:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Storage deletion exception:", err);
+    return false;
+  }
+}
+
 export async function createProductInDb(payload: {
   name: string;
   nameBn?: string;
   slug: string;
-  category_id?: string;
+  category_id?: string | null;
   status?: "draft" | "active" | "archived";
   source?: string;
-  summary?: string;
+  summary?: string | null;
+  summaryBn?: string | null;
+  description?: string | null;
+  descriptionBn?: string | null;
+  grade?: string | null;
+  origin?: string | null;
+  ingredients?: string | null;
+  storage_instructions?: string | null;
+  shelf_life_days?: number | null;
+  tax_rate?: number;
+  is_featured?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  sort_order?: number;
 }): Promise<any> {
   const { data, error } = await supabase
     .from("products")
@@ -190,9 +340,22 @@ export async function createProductInDb(payload: {
         name_bn: payload.nameBn || null,
         slug: payload.slug,
         category_id: payload.category_id || null,
-        status: payload.status || "active",
+        status: payload.status || "draft",
         source: payload.source || "sugarcane",
         summary: payload.summary || null,
+        summary_bn: payload.summaryBn || null,
+        description: payload.description || null,
+        description_bn: payload.descriptionBn || null,
+        grade: payload.grade || null,
+        origin: payload.origin || null,
+        ingredients: payload.ingredients || null,
+        storage_instructions: payload.storage_instructions || null,
+        shelf_life_days: payload.shelf_life_days || null,
+        tax_rate: payload.tax_rate ?? 0,
+        is_featured: payload.is_featured ?? false,
+        seo_title: payload.seo_title || null,
+        seo_description: payload.seo_description || null,
+        sort_order: payload.sort_order ?? 0,
       },
     ])
     .select()
@@ -208,7 +371,10 @@ export async function updateProductInDb(
 ): Promise<any> {
   const { data, error } = await supabase
     .from("products")
-    .update(updates)
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .select()
     .single();
@@ -217,10 +383,261 @@ export async function updateProductInDb(
   return data;
 }
 
+export async function saveProductWithDetails(params: {
+  productId?: string;
+  product: {
+    name: string;
+    nameBn?: string;
+    slug: string;
+    category_id?: string | null;
+    status: "draft" | "active" | "archived";
+    source: string;
+    summary?: string;
+    summaryBn?: string;
+    description?: string;
+    descriptionBn?: string;
+    grade?: string;
+    origin?: string;
+    ingredients?: string;
+    storage_instructions?: string;
+    shelf_life_days?: number;
+    tax_rate?: number;
+    is_featured?: boolean;
+    seo_title?: string;
+    seo_description?: string;
+  };
+  variants: Array<{
+    id?: string;
+    sku: string;
+    name: string;
+    nameBn?: string;
+    pack_type: string;
+    net_quantity: number;
+    net_unit: string;
+    price: number;
+    compare_at_price?: number | null;
+    stock_status: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+    track_inventory?: boolean;
+    low_stock_threshold?: number;
+    is_default?: boolean;
+    is_active?: boolean;
+  }>;
+  images: Array<{
+    id?: string;
+    storage_path: string;
+    alt_text?: string;
+    is_primary: boolean;
+    sort_order?: number;
+  }>;
+  deletedVariantIds?: string[];
+  deletedImageIds?: string[];
+}): Promise<{ product: any; error?: string }> {
+  try {
+    let savedProduct: any;
+
+    if (params.productId) {
+      // Update existing product
+      savedProduct = await updateProductInDb(params.productId, {
+        name: params.product.name,
+        name_bn: params.product.nameBn || null,
+        slug: params.product.slug,
+        category_id: params.product.category_id || null,
+        status: params.product.status,
+        source: params.product.source,
+        summary: params.product.summary || null,
+        summary_bn: params.product.summaryBn || null,
+        description: params.product.description || null,
+        description_bn: params.product.descriptionBn || null,
+        grade: params.product.grade || null,
+        origin: params.product.origin || null,
+        ingredients: params.product.ingredients || null,
+        storage_instructions: params.product.storage_instructions || null,
+        shelf_life_days: params.product.shelf_life_days || null,
+        tax_rate: params.product.tax_rate ?? 0,
+        is_featured: params.product.is_featured ?? false,
+        seo_title: params.product.seo_title || null,
+        seo_description: params.product.seo_description || null,
+      });
+    } else {
+      // Create new product
+      savedProduct = await createProductInDb({
+        name: params.product.name,
+        nameBn: params.product.nameBn,
+        slug: params.product.slug,
+        category_id: params.product.category_id,
+        status: params.product.status,
+        source: params.product.source,
+        summary: params.product.summary,
+        summaryBn: params.product.summaryBn,
+        description: params.product.description,
+        descriptionBn: params.product.descriptionBn,
+        grade: params.product.grade,
+        origin: params.product.origin,
+        ingredients: params.product.ingredients,
+        storage_instructions: params.product.storage_instructions,
+        shelf_life_days: params.product.shelf_life_days,
+        tax_rate: params.product.tax_rate,
+        is_featured: params.product.is_featured,
+        seo_title: params.product.seo_title,
+        seo_description: params.product.seo_description,
+      });
+    }
+
+    const productId = savedProduct.id;
+
+    // Delete removed variants
+    if (params.deletedVariantIds && params.deletedVariantIds.length > 0) {
+      await supabase
+        .from("product_variants")
+        .delete()
+        .in("id", params.deletedVariantIds);
+    }
+
+    // Upsert variants
+    if (params.variants && params.variants.length > 0) {
+      for (let i = 0; i < params.variants.length; i++) {
+        const v = params.variants[i];
+        const variantPayload = {
+          product_id: productId,
+          sku: v.sku.trim(),
+          name: v.name.trim(),
+          name_bn: v.nameBn?.trim() || null,
+          pack_type: v.pack_type || "jar",
+          net_quantity: Number(v.net_quantity) || 1,
+          net_unit: v.net_unit || "kg",
+          price: Number(v.price) || 0,
+          compare_at_price: v.compare_at_price ? Number(v.compare_at_price) : null,
+          stock_status: v.stock_status || "in_stock",
+          track_inventory: v.track_inventory ?? true,
+          low_stock_threshold: Number(v.low_stock_threshold) || 5,
+          is_default: v.is_default ?? (i === 0),
+          is_active: v.is_active ?? true,
+          sort_order: i,
+        };
+
+        if (v.id) {
+          await supabase
+            .from("product_variants")
+            .update(variantPayload)
+            .eq("id", v.id);
+        } else {
+          await supabase
+            .from("product_variants")
+            .insert([variantPayload]);
+        }
+      }
+    }
+
+    // Delete removed images
+    if (params.deletedImageIds && params.deletedImageIds.length > 0) {
+      await supabase
+        .from("product_images")
+        .delete()
+        .in("id", params.deletedImageIds);
+    }
+
+    // Upsert images
+    if (params.images && params.images.length > 0) {
+      for (let i = 0; i < params.images.length; i++) {
+        const img = params.images[i];
+        const imagePayload = {
+          product_id: productId,
+          storage_path: img.storage_path,
+          alt_text: img.alt_text || null,
+          is_primary: img.is_primary ?? (i === 0),
+          sort_order: img.sort_order ?? i,
+        };
+
+        if (img.id) {
+          await supabase
+            .from("product_images")
+            .update(imagePayload)
+            .eq("id", img.id);
+        } else {
+          await supabase
+            .from("product_images")
+            .insert([imagePayload]);
+        }
+      }
+    }
+
+    return { product: savedProduct };
+  } catch (err: any) {
+    console.error("Error saving product with details:", err);
+    return { product: null, error: err?.message || "Failed to save product" };
+  }
+}
+
+export async function deleteProductSafe(id: string): Promise<{
+  success: boolean;
+  archived: boolean;
+  message: string;
+}> {
+  try {
+    // 1. Check if batches reference this product
+    const { count: batchCount } = await supabase
+      .from("batches")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", id);
+
+    // 2. Check if order_items reference variants of this product
+    const { data: variants } = await supabase
+      .from("product_variants")
+      .select("id")
+      .eq("product_id", id);
+
+    let hasOrderItems = false;
+    if (variants && variants.length > 0) {
+      const varIds = variants.map((v) => v.id);
+      const { count: orderItemsCount } = await supabase
+        .from("order_items")
+        .select("id", { count: "exact", head: true })
+        .in("variant_id", varIds);
+
+      hasOrderItems = (orderItemsCount || 0) > 0;
+    }
+
+    if ((batchCount || 0) > 0 || hasOrderItems) {
+      // Safely archive to maintain integrity
+      await updateProductInDb(id, { status: "archived" });
+      return {
+        success: true,
+        archived: true,
+        message: "Product is referenced in existing orders or inventory batches, so it has been safely archived.",
+      };
+    }
+
+    // 3. Delete image files from storage
+    const { data: images } = await supabase
+      .from("product_images")
+      .select("storage_path")
+      .eq("product_id", id);
+
+    if (images && images.length > 0) {
+      const paths = images.map((img) => img.storage_path).filter((p) => !p.startsWith("http"));
+      if (paths.length > 0) {
+        await supabase.storage.from("catalog-images").remove(paths);
+      }
+    }
+
+    // 4. Delete product row (cascades to product_variants and product_images)
+    const { error: delErr } = await supabase.from("products").delete().eq("id", id);
+    if (delErr) throw delErr;
+
+    return {
+      success: true,
+      archived: false,
+      message: "Product and associated variants deleted successfully.",
+    };
+  } catch (err: any) {
+    console.error("Error deleting product safely:", err);
+    throw err;
+  }
+}
+
 export async function deleteProductInDb(id: string): Promise<boolean> {
-  const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) throw error;
-  return true;
+  const res = await deleteProductSafe(id);
+  return res.success;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,6 +697,25 @@ export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
     }));
   } catch (err) {
     console.error("Error fetching categories from Supabase:", err);
+    return [];
+  }
+}
+
+export async function fetchCategoriesList(): Promise<
+  { id: string; name: string; name_bn?: string | null; slug: string }[]
+> {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name, name_bn, slug")
+      .order("sort_order", { ascending: true });
+    if (error) {
+      console.warn("Categories fetch error:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("fetchCategoriesList error:", err);
     return [];
   }
 }
