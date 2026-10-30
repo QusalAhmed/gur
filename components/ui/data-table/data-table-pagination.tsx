@@ -8,6 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   pageSizeOptions?: number[];
   showSelectedCount?: boolean;
+  isFetching?: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [10, 20, 30, 50],
   showSelectedCount = true,
+  isFetching = false,
 }: DataTablePaginationProps<TData>) {
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   // Use table.getRowCount() which handles server-side manual pagination rowCount option
@@ -123,6 +126,12 @@ export function DataTablePagination<TData>({
           <span className="font-medium text-foreground">{endRow}</span> of{" "}
           <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span>
         </span>
+        {isFetching && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-[11px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Updating...</span>
+          </span>
+        )}
       </div>
 
       {/* Right section: page size + page numbers + navigation */}
@@ -150,8 +159,9 @@ export function DataTablePagination<TData>({
         </div>
 
         {/* Compact page indicator on mobile */}
-        <div className="flex items-center justify-center font-medium md:hidden min-w-[70px] text-xs">
-          {currentPage} / {pageCount}
+        <div className="flex items-center justify-center font-medium md:hidden min-w-[70px] text-xs gap-1.5">
+          <span>{currentPage} / {pageCount}</span>
+          {isFetching && <Loader2 className="h-3 w-3 animate-spin text-amber-600 shrink-0" />}
         </div>
 
         {/* Navigation buttons */}

@@ -2817,6 +2817,13 @@ export function OrdersClient() {
             pageSizeOptions={[5, 10, 20, 50, 100]}
             isLoading={isOrdersLoading && orders.length === 0}
             isFetching={isOrdersFetching}
+            loadingMessage={
+              searchQuery !== debouncedSearch || searchQuery
+                ? "Searching orders..."
+                : isOrdersFetching
+                  ? "Updating orders..."
+                  : "Loading orders..."
+            }
             toolbarPrefix={
               <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap w-full">
                 <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -2825,22 +2832,28 @@ export function OrdersClient() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by order ID, customer name, phone, address..."
-                    className="pl-8 h-9 text-xs w-full bg-background"
+                    className="pl-8 pr-14 h-9 text-xs w-full bg-background"
                   />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setDebouncedSearch("");
-                        setPage(1);
-                        updateUrl({ search: "", page: 1 });
-                      }}
-                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5">
+                    {(isOrdersFetching || searchQuery !== debouncedSearch) && (
+                      <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400" />
+                    )}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setDebouncedSearch("");
+                          setPage(1);
+                          updateUrl({ search: "", page: 1 });
+                        }}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
@@ -2918,7 +2931,9 @@ export function OrdersClient() {
             renderSubRow={renderOrderDetailsSubRow}
             isRowExpanded={(order) => !!expandedRows[order.id]}
             emptyMessage={
-              isOrdersLoading ? "Loading orders from server..." : "No orders match your filter criteria."
+              isOrdersLoading || isOrdersFetching
+                ? "Loading orders from server..."
+                : "No orders match your filter criteria."
             }
             bulkActions={(selectedOrders, clearSelection) => (
               <div className="flex items-center gap-2 flex-wrap">

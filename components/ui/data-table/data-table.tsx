@@ -16,7 +16,7 @@ import {
   OnChangeFn,
   PaginationState,
 } from "@tanstack/react-table";
-import { Search, X, CheckSquare, AlertCircle } from "lucide-react";
+import { Search, X, CheckSquare, AlertCircle, Loader2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -67,6 +67,8 @@ export interface DataTableProps<TData, TValue> {
   onSortingChange?: OnChangeFn<SortingState>;
   isLoading?: boolean;
   isFetching?: boolean;
+  loadingMessage?: string;
+  loadingSkeletonRows?: number;
 }
 
 export function DataTable<TData, TValue>({
@@ -108,6 +110,8 @@ export function DataTable<TData, TValue>({
   onSortingChange,
   isLoading = false,
   isFetching = false,
+  loadingMessage,
+  loadingSkeletonRows,
 }: DataTableProps<TData, TValue>) {
   const activeSearchCol = searchColumn || searchKey;
   const effectivePageSize = pageSize || initialPageSize;
@@ -182,7 +186,7 @@ export function DataTable<TData, TValue>({
     table.resetRowSelection();
   };
 
-  if (!mounted || isLoading) {
+  if (!mounted) {
     return (
       <div className={cn("space-y-3", className)}>
         {/* Top Toolbar Skeleton */}
@@ -229,6 +233,8 @@ export function DataTable<TData, TValue>({
       </div>
     );
   }
+
+  const isInitialOrEmptyLoading = isLoading || (isFetching && (!data || data.length === 0));
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -310,10 +316,20 @@ export function DataTable<TData, TValue>({
 
       {/* Main Table Container */}
       <div className="relative rounded-xl border bg-card shadow-xs overflow-hidden">
-        {/* Sleek top loading progress indicator on background data fetch / page transition */}
-        {isFetching && (
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-amber-500/20 overflow-hidden z-20">
-            <div className="h-full bg-amber-500 animate-pulse w-full" />
+        {/* Sleek top glowing indeterminate progress bar on data fetch / page transition */}
+        {(isFetching || isLoading) && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500/20 overflow-hidden z-30 pointer-events-none">
+            <div className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 animate-table-progress shadow-[0_0_10px_rgba(245,158,11,0.6)]" />
+          </div>
+        )}
+
+        {/* Floating loading badge overlay in the middle of the screen */}
+        {(isFetching || isLoading) && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none transition-all duration-200 animate-in fade-in">
+            <div className="inline-flex items-center gap-2.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-background/95 dark:bg-card/95 border border-amber-500/40 shadow-2xl backdrop-blur-md text-xs sm:text-sm font-semibold text-foreground tracking-wide animate-in zoom-in-95 duration-200 pointer-events-auto">
+              <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>{loadingMessage || "Loading data..."}</span>
+            </div>
           </div>
         )}
 
@@ -337,7 +353,49 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {isInitialOrEmptyLoading ? (
+              // Animated realistic skeleton rows while loading data initially or when empty
+              Array.from({ length: loadingSkeletonRows || Math.min(effectivePageSize, 8) }).map((_, rowIndex) => (
+                <TableRow key={`skeleton-row-${rowIndex}`} className="hover:bg-transparent">
+                  {columns.map((column, colIndex) => {
+                    const isFirst = colIndex === 0;
+                    const isSecond = colIndex === 1;
+                    const isThird = colIndex === 2;
+                    const isFourth = colIndex === 3;
+                    const isLast = colIndex === columns.length - 1;
+
+                    return (
+                      <TableCell
+                        key={`skeleton-cell-${rowIndex}-${colIndex}`}
+                        className="py-3 px-2 sm:px-2.5"
+                      >
+                        {isFirst ? (
+                          <div className="h-4 w-4 rounded bg-muted/60 animate-pulse" />
+                        ) : isSecond ? (
+                          <div className="space-y-1.5">
+                            <div className="h-4 w-24 sm:w-28 rounded bg-muted/70 animate-pulse" />
+                            <div className="h-3 w-16 sm:w-20 rounded bg-muted/40 animate-pulse" />
+                          </div>
+                        ) : isThird ? (
+                          <div className="space-y-1.5">
+                            <div className="h-4 w-32 sm:w-40 rounded bg-muted/70 animate-pulse" />
+                            <div className="h-3 w-20 sm:w-24 rounded bg-muted/40 animate-pulse" />
+                          </div>
+                        ) : isFourth ? (
+                          <div className="h-6 w-20 sm:w-24 rounded-full bg-muted/60 animate-pulse" />
+                        ) : isLast ? (
+                          <div className="flex justify-end">
+                            <div className="h-7 w-16 sm:w-20 rounded-lg bg-muted/60 animate-pulse" />
+                          </div>
+                        ) : (
+                          <div className="h-4 w-20 sm:w-24 rounded bg-muted/50 animate-pulse" />
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => {
                 const isSelected = row.getIsSelected();
                 return (
@@ -350,7 +408,7 @@ export function DataTable<TData, TValue>({
                         isSelected && "bg-amber-500/5 dark:bg-amber-500/10",
                         onRowClick && "cursor-pointer",
                         renderSubRow && (!isRowExpanded || isRowExpanded(row.original)) && "border-b-0 hover:bg-muted/30",
-                        isFetching && "opacity-80"
+                        isFetching && "opacity-45 pointer-events-none transition-opacity duration-200"
                       )}
                     >
                       {row.getVisibleCells().map((cell) => (
@@ -367,7 +425,8 @@ export function DataTable<TData, TValue>({
                         data-state={isSelected && "selected"}
                         className={cn(
                           "border-b border-border/80 transition-colors bg-muted/15 hover:bg-muted/20",
-                          isSelected && "bg-amber-500/5 dark:bg-amber-500/10"
+                          isSelected && "bg-amber-500/5 dark:bg-amber-500/10",
+                          isFetching && "opacity-45 pointer-events-none transition-opacity duration-200"
                         )}
                       >
                         <TableCell
@@ -418,6 +477,7 @@ export function DataTable<TData, TValue>({
             table={table}
             pageSizeOptions={pageSizeOptions}
             showSelectedCount={enableRowSelection}
+            isFetching={isFetching}
           />
         )}
       </div>

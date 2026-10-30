@@ -156,6 +156,44 @@
   scrollbar-width: none;
 }
 
+@keyframes tableProgressIndeterminate {
+  0% {
+    transform: translateX(-100%);
+    width: 35%;
+  }
+  50% {
+    width: 65%;
+  }
+  100% {
+    transform: translateX(320%);
+    width: 35%;
+  }
+}
+
+.animate-table-progress {
+  animation: tableProgressIndeterminate 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes tableShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-table-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245, 158, 11, 0.08) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: tableShimmer 2s infinite linear;
+}
+
 @media print {
   @page {
     size: A4;
