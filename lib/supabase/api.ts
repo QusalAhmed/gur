@@ -1191,6 +1191,25 @@ export async function updateSiteSettingInDb(key: string, value: any): Promise<bo
   return true;
 }
 
+let _cachedOrderPrefix: string | null = null;
+export async function getOrderNumberPrefix(): Promise<string> {
+  if (_cachedOrderPrefix) return _cachedOrderPrefix;
+  try {
+    const { data } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "orders.number_prefix")
+      .single();
+    if (data?.value) {
+      _cachedOrderPrefix = String(data.value).replace(/['"]+/g, "");
+      return _cachedOrderPrefix;
+    }
+  } catch {
+    // fallback
+  }
+  return "MOL";
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GEO DIVISIONS & DISTRICTS (BANGLADESH)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1437,9 +1456,10 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
   const shouldUseDirectInsert = isDraft || !customerName || !normalizedPhone;
 
   if (shouldUseDirectInsert) {
+    const prefix = await getOrderNumberPrefix();
     const orderNumber =
       savedOrder.id ||
-      `MOL-2610-0${1085 + Date.now().toString().slice(-4)}`;
+      `${prefix}-2610-0${1085 + Date.now().toString().slice(-4)}`;
 
     const subtotal = (savedOrder.items || []).reduce(
       (sum, item) => sum + (Number(item.line_total) || (Number(item.quantity) * Number(item.unit_price)) || 0),
@@ -1739,7 +1759,8 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     }
   }
 
-  const orderNumber = orderDetails?.order_number || placeData?.order_number || `MOL-2610-${Date.now().toString().slice(-5)}`;
+  const prefix = await getOrderNumberPrefix();
+  const orderNumber = orderDetails?.order_number || placeData?.order_number || `${prefix}-2610-${Date.now().toString().slice(-5)}`;
 
   const createdResult: Order = {
     id: orderNumber,

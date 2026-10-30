@@ -107,3 +107,15 @@ export function formatDateTime(
 ): string {
   return formatDate(value, { ...options, includeTime: true });
 }
+
+/**
+ * Formats a monetary amount with currency symbol:
+ * Example: `৳ 1,250` or `$ 1,250`
+ */
+export function formatCurrency(
+  amount: number | string | null | undefined,
+  currencySymbol = "৳"
+): string {
+  const num = Number(amount) || 0;
+  return `${currencySymbol} ${num.toLocaleString()}`;
+}

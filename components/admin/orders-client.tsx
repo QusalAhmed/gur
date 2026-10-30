@@ -133,6 +133,7 @@ import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderFormDialog } from "@/components/admin/order-form-dialog";
 import { OrderDetailsSheet } from "@/components/admin/order-details-sheet";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   orderNoteFormSchema,
   orderNoteTextSchema,
@@ -242,6 +243,7 @@ export function OrdersClient() {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status");
   const queryClient = useQueryClient();
+  const { currency, currencySymbol } = useSiteSettings();
 
   // Toast notification context & local fallback (always portaled to document.body at z-[99999])
   const toastContext = useToast();
@@ -3491,14 +3493,14 @@ export function OrdersClient() {
                   return (
                     <FormFieldItem>
                       <div className="flex items-center justify-between">
-                        <FormFieldLabel htmlFor="pay_modal_amount">Amount Paid (BDT ৳)</FormFieldLabel>
+                        <FormFieldLabel htmlFor="pay_modal_amount">Amount Paid ({currency} {currencySymbol})</FormFieldLabel>
                         <span className="text-[11px] font-mono text-muted-foreground">
-                          Due: <span className="text-rose-600 font-bold">৳ {remainingDue.toLocaleString()}</span>
+                          Due: <span className="text-rose-600 font-bold">{currencySymbol} {remainingDue.toLocaleString()}</span>
                         </span>
                       </div>
                       <div className="relative">
                         <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
-                          ৳
+                          {currencySymbol}
                         </span>
                         <Input
                           id="pay_modal_amount"

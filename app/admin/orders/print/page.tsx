@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
 import { fetchOrdersByIdsFromDb } from "@/lib/supabase/api";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 type PaperFormat = "2inch" | "58mm" | "a4";
 
@@ -50,6 +51,17 @@ const DEFAULT_STORE: StoreConfig = {
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { storeName, storeNameBn, address, supportPhone, currencySymbol } = useSiteSettings();
+  const siteUrl = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
+
+  const storeConfig: StoreConfig = React.useMemo(() => ({
+    name: storeNameBn || storeName || DEFAULT_STORE.name,
+    tagline: DEFAULT_STORE.tagline,
+    address: address || DEFAULT_STORE.address,
+    phone: supportPhone || DEFAULT_STORE.phone,
+    website: siteUrl,
+  }), [storeName, storeNameBn, address, supportPhone, siteUrl]);
+
   const idsParam = searchParams.get("ids") || "";
   const initialFormat = (searchParams.get("format") as PaperFormat) || "58mm";
 
@@ -110,7 +122,7 @@ function PrintContent() {
 
       // General website QR
       try {
-        const generalSvg = await QRCode.toString(DEFAULT_STORE.website, {
+        const generalSvg = await QRCode.toString(storeConfig.website, {
           type: "svg",
           margin: 1,
           width: 90,
@@ -119,14 +131,14 @@ function PrintContent() {
             light: "#ffffff",
           },
         });
-        cache[DEFAULT_STORE.website] = generalSvg;
+        cache[storeConfig.website] = generalSvg;
       } catch (e) {
         console.error("Failed to generate store QR code:", e);
       }
 
       // Order specific tracking QR codes
       for (const ord of orders) {
-        const trackUrl = `${DEFAULT_STORE.website}/track?order=${encodeURIComponent(ord.id)}`;
+        const trackUrl = `${storeConfig.website}/track?order=${encodeURIComponent(ord.id)}`;
         try {
           const svg = await QRCode.toString(trackUrl, {
             type: "svg",
@@ -147,7 +159,7 @@ function PrintContent() {
     }
 
     generateQrs();
-  }, [orders]);
+  }, [orders, storeConfig.website]);
 
   // Keyboard shortcut Ctrl+P / Cmd+P
   React.useEffect(() => {
@@ -448,7 +460,7 @@ function PrintContent() {
           className={`space-y-8 print:space-y-0 print:transform-none ${getContainerWidth()}`}
         >
           {orders.map((order, orderIdx) => {
-            const qrSvgString = qrSvgs[order.id] || qrSvgs[DEFAULT_STORE.website] || "";
+            const qrSvgString = qrSvgs[order.id] || qrSvgs[storeConfig.website] || "";
 
             return (
               <div key={order.id} className="relative">
@@ -468,12 +480,12 @@ function PrintContent() {
                   <header className="text-center">
                     {/* Brand Crown / Emblem */}
                     <div className="inline-flex items-center justify-center gap-1 font-black text-[13px] tracking-wider uppercase text-black">
-                      {DEFAULT_STORE.name}
+                      {storeConfig.name}
                     </div>
 
                     {/* Physical Address */}
                     <p className="text-[9.5px] font-light text-black leading-tight pt-0.5">
-                      {DEFAULT_STORE.address}
+                      {storeConfig.address}
                     </p>
                   </header>
 
@@ -489,7 +501,7 @@ function PrintContent() {
                       <span>HELPLINE</span>
                     </div>
                     <div className="font-mono font-black text-[13.5px] sm:text-[14px] tracking-wider leading-tight whitespace-nowrap">
-                      {DEFAULT_STORE.phone}
+                      {storeConfig.phone}
                     </div>
                   </section>
 
@@ -590,7 +602,7 @@ function PrintContent() {
                         <div
                           className="w-[84px] h-[84px] border border-black p-1 bg-white inline-flex items-center justify-center"
                           dangerouslySetInnerHTML={{ __html: qrSvgString }}
-                          title={`Scan to visit ${DEFAULT_STORE.website}`}
+                          title={`Scan to visit ${storeConfig.website}`}
                         />
                         <p className="text-[8px] font-bold uppercase tracking-wider text-black pt-0.5 flex items-center justify-center gap-1">
                           <Globe className="h-2.5 w-2.5 inline" />

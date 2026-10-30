@@ -53,6 +53,7 @@ import {
   FormFieldError,
 } from "@/components/ui/tanstack-form";
 import { cn } from "@/lib/utils";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct } from "@/types/order";
 import {
   orderFormSchema,
@@ -101,6 +102,7 @@ export function OrderFormDialog({
   ordersCount,
   showToast,
 }: OrderFormDialogProps) {
+  const { orderPrefix, currency } = useSiteSettings();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   // Product Selection Modal state (internal to this dialog)
   const [isProductModalOpen, setIsProductModalOpen] = React.useState(false);
@@ -339,7 +341,8 @@ export function OrderFormDialog({
         }
 
         if (mode === "create") {
-          const newId = `MOL-2610-0${1085 + ordersCount}`;
+          const prefix = orderPrefix || "MOL";
+          const newId = `${prefix}-2610-0${1085 + ordersCount}`;
           const createdOrder: Order = {
             id: newId,
             customer: valid.customer.trim(),
@@ -360,7 +363,7 @@ export function OrderFormDialog({
             shipping_total,
             grand_total,
             amount_paid: finalAmountPaid,
-            currency: "BDT",
+            currency: currency || "BDT",
             date: nowStr,
             customer_note: (() => {
               const custNoteInList = notesList.find((n) => n.type === "customer");

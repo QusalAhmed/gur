@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   UiCategoryItem,
   createCategoryInDb,
@@ -79,6 +80,7 @@ export function CategoryFormDialog({
   onError,
 }: CategoryFormDialogProps) {
   const queryClient = useQueryClient();
+  const { storeName } = useSiteSettings();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const isEdit = Boolean(category?.id);
@@ -618,7 +620,7 @@ export function CategoryFormDialog({
                       id="category_seo_title"
                       placeholder={
                         form.getFieldValue("name")
-                          ? `${form.getFieldValue("name")} | Gur Molasses Bangladesh`
+                          ? `${form.getFieldValue("name")} | ${storeName}`
                           : "Custom SEO Meta Title"
                       }
                       value={field.state.value}

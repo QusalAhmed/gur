@@ -69,6 +69,7 @@ import {
   validateWithZod,
 } from "@/lib/validations/order";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import type {
   Order,
   OrderItem,
@@ -162,6 +163,7 @@ export function OrderDetailsSheet({
   isStatusPending = false,
   isNotePending = false,
 }: OrderDetailsSheetProps) {
+  const { storeName, currencySymbol } = useSiteSettings();
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
   const [noteFilterType, setNoteFilterType] = React.useState<string>("all");
   const [activeTab, setActiveTab] = React.useState<string>("notes");
@@ -238,7 +240,7 @@ export function OrderDetailsSheet({
       clean = clean.replace("+", "");
     }
     const text = encodeURIComponent(
-      `Hello ${order.customer || "Valued Customer"}, greetings from Molasses Store regarding your Order #${order.id}.`
+      `Hello ${order.customer || "Valued Customer"}, greetings from ${storeName} regarding your Order #${order.id}.`
     );
     return `https://wa.me/${clean}?text=${text}`;
   };

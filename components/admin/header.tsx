@@ -17,6 +17,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { usePathname, useRouter } from "next/navigation";
 import { useAdminAuth } from "@/components/admin/auth-context";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import { ROLE_CONFIG } from "@/lib/admin-auth";
 import Link from "next/link";
 
@@ -34,10 +35,12 @@ export function AdminHeader() {
   const router = useRouter();
   const breadcrumb = getBreadcrumb(pathname);
   const { user, role, logout } = useAdminAuth();
+  const { email: storeEmail } = useSiteSettings();
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.owner;
   const displayName = user?.name || "Admin Staff";
-  const displayEmail = user?.email || "staff@molassesstore.com";
+  const emailDomain = storeEmail && storeEmail.includes("@") ? storeEmail.split("@")[1] : "molassesstore.com";
+  const displayEmail = user?.email || `staff@${emailDomain}`;
   const initials = user?.initials || displayName.slice(0, 2).toUpperCase();
 
   const handleSignOut = async () => {

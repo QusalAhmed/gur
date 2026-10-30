@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   AreaChart,
   Area,
@@ -259,6 +260,7 @@ const recentOrderColumns: ColumnDef<RecentOrderItem>[] = [
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { storeName } = useSiteSettings();
 
   return (
     <div className="space-y-6">
@@ -272,7 +274,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-sm">
-            Overview and real-time operations performance for Molasses Store
+            Overview and real-time operations performance for {storeName}
           </p>
         </div>
       </motion.div>

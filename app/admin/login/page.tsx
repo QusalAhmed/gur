@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAdminAuth } from "@/components/admin/auth-context";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 function AdminLoginForm() {
   const router = useRouter();
@@ -36,6 +37,11 @@ function AdminLoginForm() {
   const nextUrl = searchParams.get("next") || "/admin";
 
   const { login } = useAdminAuth();
+  const { storeName, storeNameBn, email: storeEmail } = useSiteSettings();
+  const emailDomain =
+    storeEmail && storeEmail.includes("@") && !storeEmail.includes("molassesstore")
+      ? storeEmail.split("@")[1]
+      : "gur.com.bd";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -110,7 +116,7 @@ function AdminLoginForm() {
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2">
                 <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  GUR <span className="text-amber-500">|</span> গুড়
+                  {storeName}
                 </CardTitle>
                 <Badge
                   variant="outline"
@@ -158,7 +164,7 @@ function AdminLoginForm() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="staff@molassesstore.com"
+                    placeholder={`staff@${emailDomain}`}
                     className="pl-9 h-10 bg-muted/30 border-border/60 focus-visible:ring-amber-500/40 text-sm"
                   />
                 </div>

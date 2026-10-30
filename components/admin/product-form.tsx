@@ -40,6 +40,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
 import { cn } from "@/lib/utils";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 interface ProductFormProps {
   initialData?: DbProduct | null;
@@ -113,6 +114,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
   const [activeTab, setActiveTab] = React.useState("general");
   const [toast, setToast] = React.useState<ToastData | null>(null);
+  const { storeName, currency, currencySymbol } = useSiteSettings();
+  const siteOrigin = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
 
   // General Form State
   const [name, setName] = React.useState(initialData?.name || "");
@@ -991,7 +994,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                       {/* Unit Price */}
                       <div>
                         <label className="text-[11px] font-medium text-foreground block mb-1">
-                          Price (BDT ৳) <span className="text-destructive">*</span>
+                          Price ({currency} {currencySymbol}) <span className="text-destructive">*</span>
                         </label>
                         <Input
                           type="number"
@@ -1012,7 +1015,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                       {/* Compare at Price */}
                       <div>
                         <label className="text-[11px] font-medium text-foreground block mb-1">
-                          Compare-at Price (৳)
+                          Compare-at Price ({currencySymbol})
                         </label>
                         <Input
                           type="number"
@@ -1196,7 +1199,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                     SEO Meta Title
                   </label>
                   <Input
-                    placeholder={name ? `${name} | Gur Molasses Bangladesh` : "Custom SEO Title"}
+                    placeholder={name ? `${name} | ${storeName}` : "Custom SEO Title"}
                     value={seoTitle}
                     onChange={(e) => setSeoTitle(e.target.value)}
                     className="h-10 text-sm"
@@ -1223,10 +1226,10 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                   </p>
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground font-mono">
-                      https://gur.com.bd/products/{slug || "sample-product"}
+                      {siteOrigin}/products/{slug || "sample-product"}
                     </p>
                     <p className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
-                      {seoTitle || name || "Product Title Preview"} | GUR Bangladesh
+                      {seoTitle || name || "Product Title Preview"} | {storeName}
                     </p>
                     <p className="text-xs text-muted-foreground line-clamp-2">
                       {seoDescription ||

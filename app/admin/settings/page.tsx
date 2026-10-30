@@ -2,23 +2,72 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Save, Store, Shield, Bell, DollarSign, Truck, Smartphone, Mail, Database, CheckCircle2, RefreshCw } from "lucide-react";
+import {
+  Save,
+  Store,
+  Truck,
+  Smartphone,
+  RefreshCw,
+  CreditCard,
+  PackageCheck,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { fetchSiteSettingsFromDb, updateSiteSettingInDb } from "@/lib/supabase";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/components/ui/toast-notification";
+import { useQueryClient } from "@tanstack/react-query";
+import { getSiteSettingsAction, updateSiteSettingsAction } from "@/actions/settings";
+import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Store Profile State
   const [storeName, setStoreName] = React.useState("Molasses Store");
+  const [storeNameBn, setStoreNameBn] = React.useState("মোলাসেস স্টোর বাংলাদেশ");
   const [currency, setCurrency] = React.useState("BDT");
   const [supportPhone, setSupportPhone] = React.useState("+880 1700-000001");
-  const [whatsapp, setWhatsapp] = React.useState("+880 1700-000001");
+  const [email, setEmail] = React.useState("billing@molassesstore.com");
+  const [address, setAddress] = React.useState(
+    "24/B Industrial Area, Tejgaon Industrial Area, Dhaka-1208, Bangladesh"
+  );
+  const [timezone, setTimezone] = React.useState("Asia/Dhaka");
+  const [language, setLanguage] = React.useState("bn_en");
+
+  // Orders & Stock State
   const [codEnabled, setCodEnabled] = React.useState(true);
   const [guestCheckoutEnabled, setGuestCheckoutEnabled] = React.useState(true);
+  const [autoCancelCodHours, setAutoCancelCodHours] = React.useState("48");
+  const [allowBackorders, setAllowBackorders] = React.useState("no");
+  const [lowStockBulk, setLowStockBulk] = React.useState(10);
+  const [lowStockRetail, setLowStockRetail] = React.useState(20);
+
+  // SMS & Notifications State
+  const [smsGateway, setSmsGateway] = React.useState("greenweb");
+  const [smsSenderId, setSmsSenderId] = React.useState("MOLASSES");
+  const [whatsapp, setWhatsapp] = React.useState("+880 1711-234567");
+  const [smtpServer, setSmtpServer] = React.useState("smtp.sendgrid.net (Port 587)");
+
+  // UI State
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [isDbConnected, setIsDbConnected] = React.useState(false);
@@ -27,25 +76,67 @@ export default function SettingsPage() {
   const loadSettings = React.useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchSiteSettingsFromDb();
-      if (data && Object.keys(data).length > 0) {
-        if (data["store.name"]) setStoreName(data["store.name"]);
-        if (data["store.currency"]) setCurrency(data["store.currency"]);
-        if (data["store.support_phone"]) setSupportPhone(data["store.support_phone"]);
-        if (data["store.whatsapp"]) setWhatsapp(data["store.whatsapp"]);
-        if (typeof data["checkout.cod_enabled"] === "boolean") setCodEnabled(data["checkout.cod_enabled"]);
-        if (typeof data["checkout.guest_checkout_enabled"] === "boolean") setGuestCheckoutEnabled(data["checkout.guest_checkout_enabled"]);
+      const res = await getSiteSettingsAction();
+      if (res.success && res.settings) {
+        const data = res.settings;
+
+        // Store Profile
+        if (data["store.name"] !== undefined) setStoreName(String(data["store.name"]));
+        if (data["store.name_bn"] !== undefined) setStoreNameBn(String(data["store.name_bn"]));
+        if (data["store.currency"] !== undefined) setCurrency(String(data["store.currency"]));
+        if (data["store.support_phone"] !== undefined) setSupportPhone(String(data["store.support_phone"]));
+        if (data["store.email"] !== undefined) setEmail(String(data["store.email"]));
+        if (data["store.address"] !== undefined) setAddress(String(data["store.address"]));
+        if (data["store.timezone"] !== undefined) setTimezone(String(data["store.timezone"]));
+        if (data["store.language"] !== undefined) setLanguage(String(data["store.language"]));
+
+        // Orders & Stock
+        if (typeof data["checkout.cod_enabled"] === "boolean") {
+          setCodEnabled(data["checkout.cod_enabled"]);
+        }
+        if (typeof data["checkout.guest_checkout_enabled"] === "boolean") {
+          setGuestCheckoutEnabled(data["checkout.guest_checkout_enabled"]);
+        }
+        if (data["orders.auto_cancel_cod_hours"] !== undefined) {
+          setAutoCancelCodHours(String(data["orders.auto_cancel_cod_hours"]));
+        }
+        if (data["orders.allow_backorders"] !== undefined) {
+          setAllowBackorders(String(data["orders.allow_backorders"]));
+        }
+        if (data["inventory.low_stock_threshold_bulk"] !== undefined) {
+          setLowStockBulk(Number(data["inventory.low_stock_threshold_bulk"]));
+        }
+        if (data["inventory.low_stock_threshold_retail"] !== undefined) {
+          setLowStockRetail(Number(data["inventory.low_stock_threshold_retail"]));
+        }
+
+        // SMS & Notifications
+        if (data["notifications.sms_gateway"] !== undefined) {
+          setSmsGateway(String(data["notifications.sms_gateway"]));
+        }
+        if (data["notifications.sms_sender_id"] !== undefined) {
+          setSmsSenderId(String(data["notifications.sms_sender_id"]));
+        }
+        if (data["store.whatsapp"] !== undefined) {
+          setWhatsapp(String(data["store.whatsapp"]));
+        }
+        if (data["notifications.smtp_server"] !== undefined) {
+          setSmtpServer(String(data["notifications.smtp_server"]));
+        }
+
         setIsDbConnected(true);
       } else {
         setIsDbConnected(false);
+        showToast(res.error || "Failed to load site settings", "destructive");
       }
-    } catch (e) {
-      console.warn("Failed to load settings from Supabase:", e);
+    } catch (e: any) {
+      console.error("Failed to load settings:", e);
       setIsDbConnected(false);
+      showToast(e?.message || "Failed to connect to settings database", "destructive");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   React.useEffect(() => {
     loadSettings();
@@ -55,19 +146,43 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveMessage(null);
     try {
-      await Promise.all([
-        updateSiteSettingInDb("store.name", storeName),
-        updateSiteSettingInDb("store.currency", currency),
-        updateSiteSettingInDb("store.support_phone", supportPhone),
-        updateSiteSettingInDb("store.whatsapp", whatsapp),
-        updateSiteSettingInDb("checkout.cod_enabled", codEnabled),
-        updateSiteSettingInDb("checkout.guest_checkout_enabled", guestCheckoutEnabled),
-      ]);
-      setSaveMessage("Settings saved successfully!");
-      setTimeout(() => setSaveMessage(null), 3500);
+      const payload = {
+        "store.name": storeName,
+        "store.name_bn": storeNameBn,
+        "store.currency": currency,
+        "store.support_phone": supportPhone,
+        "store.email": email,
+        "store.address": address,
+        "store.timezone": timezone,
+        "store.language": language,
+        "checkout.cod_enabled": codEnabled,
+        "checkout.guest_checkout_enabled": guestCheckoutEnabled,
+        "orders.auto_cancel_cod_hours": autoCancelCodHours,
+        "orders.allow_backorders": allowBackorders,
+        "inventory.low_stock_threshold_bulk": Number(lowStockBulk),
+        "inventory.low_stock_threshold_retail": Number(lowStockRetail),
+        "notifications.sms_gateway": smsGateway,
+        "notifications.sms_sender_id": smsSenderId,
+        "store.whatsapp": whatsapp,
+        "notifications.smtp_server": smtpServer,
+      };
+
+      const res = await updateSiteSettingsAction(payload);
+      if (res.success) {
+        setIsDbConnected(true);
+        queryClient.invalidateQueries({ queryKey: SITE_SETTINGS_QUERY_KEY });
+        setSaveMessage("Settings saved successfully!");
+        showToast("Settings saved to database.", "success");
+        setTimeout(() => setSaveMessage(null), 3500);
+      } else {
+        showToast(res.error || "Could not save settings", "destructive");
+        setSaveMessage("Failed to save settings");
+        setTimeout(() => setSaveMessage(null), 3500);
+      }
     } catch (e: any) {
-      console.warn("Could not save settings:", e);
-      setSaveMessage("Settings saved locally");
+      console.error("Could not save settings:", e);
+      showToast(e?.message || "Error saving settings", "destructive");
+      setSaveMessage("Save error");
       setTimeout(() => setSaveMessage(null), 3500);
     } finally {
       setSaving(false);
@@ -83,14 +198,33 @@ export default function SettingsPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">System & Store Settings</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">System & Store Settings</h1>
+            {isDbConnected ? (
+              <Badge variant="outline" className="border-emerald-500/30 text-emerald-600 bg-emerald-500/10 text-xs">
+                <CheckCircle2 className="h-3 w-3 mr-1 inline" />
+                Live Database
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-amber-500/30 text-amber-600 bg-amber-500/10 text-xs">
+                <AlertCircle className="h-3 w-3 mr-1 inline" />
+                Offline
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm">
-            Configure business registration, tax / BIN credentials, SMS gateways, and inventory alert limits
+            Configure store branding, checkout policies, inventory thresholds, and SMS notification gateways
           </p>
         </div>
         <div className="flex items-center gap-2">
           {saveMessage && (
-            <span className="text-xs text-emerald-600 font-medium animate-pulse">
+            <span
+              className={`text-xs font-medium animate-pulse ${
+                saveMessage.includes("error") || saveMessage.includes("Failed")
+                  ? "text-rose-600"
+                  : "text-emerald-600"
+              }`}
+            >
               {saveMessage}
             </span>
           )}
@@ -98,9 +232,9 @@ export default function SettingsPage() {
             variant="outline"
             size="sm"
             onClick={loadSettings}
-            disabled={loading}
+            disabled={loading || saving}
             className="h-9 cursor-pointer"
-            title="Refresh settings"
+            title="Refresh settings from database"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -109,7 +243,7 @@ export default function SettingsPage() {
             size="sm"
             className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer h-9"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || loading}
           >
             <Save className={`h-4 w-4 mr-2 ${saving ? "animate-spin" : ""}`} />
             {saving ? "Saving..." : "Save Changes"}
@@ -124,14 +258,13 @@ export default function SettingsPage() {
         transition={{ delay: 0.1 }}
       >
         <Tabs defaultValue="general">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[600px] mb-6">
+          <TabsList className="grid w-full grid-cols-3 lg:w-[500px] mb-6">
             <TabsTrigger value="general">Store Profile</TabsTrigger>
-            <TabsTrigger value="tax">Tax & Legal</TabsTrigger>
             <TabsTrigger value="inventory">Orders & Stock</TabsTrigger>
             <TabsTrigger value="notifications">SMS & Outbox</TabsTrigger>
           </TabsList>
 
-          {/* General Tab */}
+          {/* Store Profile Tab */}
           <TabsContent value="general">
             <Card>
               <CardHeader>
@@ -139,7 +272,9 @@ export default function SettingsPage() {
                   <Store className="h-4 w-4 text-amber-600" />
                   Store Identity & Branding
                 </CardTitle>
-                <CardDescription>Public information shown on invoices, receipts, and order confirmations</CardDescription>
+                <CardDescription>
+                  Public information shown on customer storefront, invoices, receipts, and order confirmations
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -148,11 +283,16 @@ export default function SettingsPage() {
                     <Input
                       value={storeName}
                       onChange={(e) => setStoreName(e.target.value)}
+                      placeholder="e.g. Molasses Store"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold font-bangla">প্রতিষ্ঠানের নাম (বাংলা)</label>
-                    <Input defaultValue="মোলাসেস স্টোর বাংলাদেশ" />
+                    <Input
+                      value={storeNameBn}
+                      onChange={(e) => setStoreNameBn(e.target.value)}
+                      placeholder="e.g. মোলাসেস স্টোর বাংলাদেশ"
+                    />
                   </div>
                 </div>
 
@@ -162,42 +302,57 @@ export default function SettingsPage() {
                     <Input
                       value={supportPhone}
                       onChange={(e) => setSupportPhone(e.target.value)}
+                      placeholder="+880 1700-000000"
                       className="font-mono"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Official Invoicing Email</label>
-                    <Input defaultValue="billing@molassesstore.com" />
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="billing@molassesstore.com"
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold">Headquarters Physical Address</label>
-                  <Input defaultValue="24/B Industrial Area, Tejgaon Industrial Area, Dhaka-1208, Bangladesh" />
+                  <Input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Physical address for invoices and business records"
+                  />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3 pt-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Default Currency</label>
-                    <Select defaultValue="bdt">
-                      <SelectTrigger>
+                    <Select value={currency} onValueChange={(val) => setCurrency(val || "BDT")}>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Currency" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="bdt">BDT (৳ Bangladeshi Taka)</SelectItem>
-                        <SelectItem value="usd">USD ($ US Dollar)</SelectItem>
+                        <SelectItem value="BDT">BDT (৳ Bangladeshi Taka)</SelectItem>
+                        <SelectItem value="USD">USD ($ US Dollar)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Timezone</label>
-                    <Input defaultValue="Asia/Dhaka (UTC+6)" disabled className="bg-muted" />
+                    <Input
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      placeholder="Asia/Dhaka"
+                      className="font-mono"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Default Language</label>
-                    <Select defaultValue="bn_en">
-                      <SelectTrigger>
-                        <SelectValue />
+                    <Select value={language} onValueChange={(val) => setLanguage(val || "bn_en")}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Language" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="bn_en">Bilingual (English + Bangla)</SelectItem>
@@ -211,85 +366,78 @@ export default function SettingsPage() {
             </Card>
           </TabsContent>
 
-          {/* Tax Tab */}
-          <TabsContent value="tax">
+          {/* Orders & Stock Tab */}
+          <TabsContent value="inventory" className="space-y-6">
+            {/* Checkout & Payment Policies */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-amber-600" />
-                  Corporate Registration & NBR Compliance
+                  <CreditCard className="h-4 w-4 text-amber-600" />
+                  Checkout & Payment Policies
                 </CardTitle>
-                <CardDescription>National Board of Revenue (NBR) Value Added Tax and Trade Credentials</CardDescription>
+                <CardDescription>
+                  Customer checkout controls, cash on delivery allowance, and automatic order expiration
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">VAT / BIN Registration Number</label>
-                    <Input defaultValue="BIN-001928374-0101" className="font-mono" />
-                    <p className="text-[11px] text-muted-foreground">Appears automatically on standard Mushak 6.3 invoices</p>
+                  {/* COD Toggle Card */}
+                  <div
+                    onClick={() => setCodEnabled(!codEnabled)}
+                    className={`flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                      codEnabled
+                        ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
+                        : "border-border bg-card hover:bg-muted/40"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={codEnabled}
+                      onCheckedChange={(checked) => setCodEnabled(Boolean(checked))}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-0.5">
+                      <label className="text-xs font-semibold cursor-pointer">
+                        Enable Cash on Delivery (COD)
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Permit customers to place orders with payment upon delivery. Disabling forces online payments.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Taxpayer Identification Number (TIN)</label>
-                    <Input defaultValue="TIN-49102938471" className="font-mono" />
-                  </div>
-                </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Trade License Number</label>
-                    <Input defaultValue="TRAD/DNCC/2026/089412" className="font-mono" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">BSTI Certification Number</label>
-                    <Input defaultValue="BSTI-AGRI-2026-0041" className="font-mono" />
+                  {/* Guest Checkout Toggle Card */}
+                  <div
+                    onClick={() => setGuestCheckoutEnabled(!guestCheckoutEnabled)}
+                    className={`flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                      guestCheckoutEnabled
+                        ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
+                        : "border-border bg-card hover:bg-muted/40"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={guestCheckoutEnabled}
+                      onCheckedChange={(checked) => setGuestCheckoutEnabled(Boolean(checked))}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-0.5">
+                      <label className="text-xs font-semibold cursor-pointer">
+                        Allow Guest Checkout
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Allow shoppers to checkout without creating an account or signing in first.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 pt-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Standard Retail VAT Rate</label>
-                    <Input defaultValue="5.0%" className="font-mono" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Bulk Animal Feed VAT Exemption</label>
-                    <Badge variant="secondary" className="bg-green-100 text-green-700 block w-fit mt-1">
-                      Exempted (Feed Grade SRO Clause 4)
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Inventory & Orders Tab */}
-          <TabsContent value="inventory">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-amber-600" />
-                  Inventory Thresholds & Order Automation
-                </CardTitle>
-                <CardDescription>Stock alert triggers, low-inventory notifications, and order lifecycle timeouts</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Low Stock Alert Threshold (Tons)</label>
-                    <Input type="number" defaultValue="10" className="font-mono" />
-                    <p className="text-[11px] text-muted-foreground">Alerts manager when aggregate bulk stock falls below this quantity</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Retail Pack Alert Threshold (Units)</label>
-                    <Input type="number" defaultValue="20" className="font-mono" />
-                    <p className="text-[11px] text-muted-foreground">Triggers low-stock badge for bottles, pails, and jars</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Auto-Cancel Unpaid COD Orders</label>
-                    <Select defaultValue="48">
-                      <SelectTrigger>
+                    <Select
+                      value={autoCancelCodHours}
+                      onValueChange={(val) => setAutoCancelCodHours(val || "48")}
+                    >
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -299,11 +447,18 @@ export default function SettingsPage() {
                         <SelectItem value="never">Never auto-cancel</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Unconfirmed or unreachable COD orders are flagged or cancelled after this time window.
+                    </p>
                   </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Allow Customer Backorders</label>
-                    <Select defaultValue="no">
-                      <SelectTrigger>
+                    <Select
+                      value={allowBackorders}
+                      onValueChange={(val) => setAllowBackorders(val || "no")}
+                    >
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -311,28 +466,79 @@ export default function SettingsPage() {
                         <SelectItem value="yes">Allow backorders with delivery notice</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Controls whether the cart accepts orders for items with zero warehouse inventory.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Inventory Thresholds */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-amber-600" />
+                  Inventory Thresholds & Stock Alerts
+                </CardTitle>
+                <CardDescription>
+                  Stock alert triggers, low-inventory notifications, and warehouse re-order warnings
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Low Stock Alert Threshold (Tons)</label>
+                    <Input
+                      type="number"
+                      value={lowStockBulk}
+                      onChange={(e) => setLowStockBulk(Number(e.target.value))}
+                      className="font-mono"
+                      min={0}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Alerts warehouse management when aggregate bulk raw molasses stock falls below this quantity.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Retail Pack Alert Threshold (Units)</label>
+                    <Input
+                      type="number"
+                      value={lowStockRetail}
+                      onChange={(e) => setLowStockRetail(Number(e.target.value))}
+                      className="font-mono"
+                      min={0}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Triggers low-stock warnings across consumer retail bottles, pails, and jars.
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Notifications Tab */}
+          {/* SMS & Outbox Tab */}
           <TabsContent value="notifications">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Smartphone className="h-4 w-4 text-amber-600" />
-                  SMS & Outbox Delivery Channels (notification_outbox)
+                  SMS & Outbox Delivery Channels
                 </CardTitle>
-                <CardDescription>Configure Onnorokom / Greenweb SMS API, WhatsApp alerts, and transactional email</CardDescription>
+                <CardDescription>
+                  Configure SMS notification gateways, WhatsApp customer service contact, and transactional email server
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">SMS Gateway Provider</label>
-                    <Select defaultValue="greenweb">
-                      <SelectTrigger>
+                    <Select
+                      value={smsGateway}
+                      onValueChange={(val) => setSmsGateway(val || "greenweb")}
+                    >
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -344,19 +550,36 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Masking Sender ID</label>
-                    <Input defaultValue="MOLASSES" className="font-mono" />
+                    <Input
+                      value={smsSenderId}
+                      onChange={(e) => setSmsSenderId(e.target.value)}
+                      placeholder="e.g. MOLASSES"
+                      className="font-mono"
+                    />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">WhatsApp Business Phone</label>
-                    <Input defaultValue="+880 1711-234567" className="font-mono" />
-                    <p className="text-[11px] text-muted-foreground">Connected to Meta WhatsApp Cloud API</p>
+                    <Input
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="+880 1711-000000"
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Used for customer support chat links and instant WhatsApp dispatch notifications.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">SMTP Transactional Server</label>
-                    <Input defaultValue="smtp.sendgrid.net (Port 587)" className="font-mono" />
+                    <label className="text-xs font-semibold">SMTP Transactional Server Host</label>
+                    <Input
+                      value={smtpServer}
+                      onChange={(e) => setSmtpServer(e.target.value)}
+                      placeholder="e.g. smtp.sendgrid.net (Port 587)"
+                      className="font-mono"
+                    />
                   </div>
                 </div>
               </CardContent>

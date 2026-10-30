@@ -29,6 +29,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 import {
   Sidebar,
@@ -359,6 +360,8 @@ function AdminSidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, logout } = useAdminAuth();
+  const { storeName } = useSiteSettings();
+  const initial = storeName.trim().charAt(0).toUpperCase() || "M";
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -368,10 +371,10 @@ function AdminSidebarContent() {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/admin">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-amber-600 text-white">
-                  <span className="text-xs font-bold">M</span>
+                  <span className="text-xs font-bold">{initial}</span>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Molasses Store</span>
+                  <span className="truncate font-semibold">{storeName}</span>
                   <span className="truncate text-xs text-muted-foreground">Admin Panel</span>
                 </div>
               </Link>
