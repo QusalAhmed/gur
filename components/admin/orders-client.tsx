@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import {
   useToast,
@@ -135,7 +135,8 @@ import {
   FormFieldDescription,
 } from "@/components/ui/tanstack-form";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
+import { getOrdersAction } from "@/actions/orders";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderFormDialog } from "@/components/admin/order-form-dialog";
@@ -264,17 +265,305 @@ export function OrdersClient() {
     [toastContext]
   );
 
-  // ─── TANSTACK QUERY: SSR HYDRATED QUERIES ───────────────────────────────────
+  // ─── URL-DRIVEN SERVER-SIDE PAGINATION & FILTER STATE ────────────────────────
+  const pageParam = Math.max(1, Number(searchParams.get("page")) || 1);
+  const pageSizeParam = Number(searchParams.get("pageSize")) || 10;
+  const searchParam = searchParams.get("search") || "";
+  const channelParam = searchParams.get("channel") || "all";
+  const paymentParam = searchParams.get("payment") || "all";
+  const sortByParam = searchParams.get("sortBy") || "placed_at";
+  const sortOrderParam = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
 
+  const [page, setPage] = React.useState<number>(pageParam);
+  const [pageSize, setPageSize] = React.useState<number>(pageSizeParam);
+  const [searchQuery, setSearchQuery] = React.useState<string>(searchParam);
+  const [debouncedSearch, setDebouncedSearch] = React.useState<string>(searchParam);
+  const [selectedTab, setSelectedTab] = React.useState<string>(() => {
+    if (statusParam && validStatusTabs.includes(statusParam)) {
+      return statusParam;
+    }
+    return "all";
+  });
+  const [channelFilter, setChannelFilter] = React.useState<string>(channelParam);
+  const [paymentFilter, setPaymentFilter] = React.useState<string>(paymentParam);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: sortByParam, desc: sortOrderParam === "desc" },
+  ]);
+
+  // Debounce search query by 300ms
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Helper to sync state changes to URL query parameters
+  const updateUrl = React.useCallback(
+    (updates: {
+      page?: number;
+      pageSize?: number;
+      status?: string;
+      channel?: string;
+      payment?: string;
+      search?: string;
+      sortBy?: string;
+      sortOrder?: "asc" | "desc";
+    }) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      const newPage = updates.page !== undefined ? updates.page : page;
+      if (newPage > 1) params.set("page", String(newPage));
+      else params.delete("page");
+
+      const newPageSize = updates.pageSize !== undefined ? updates.pageSize : pageSize;
+      if (newPageSize !== 10) params.set("pageSize", String(newPageSize));
+      else params.delete("pageSize");
+
+      const newStatus = updates.status !== undefined ? updates.status : selectedTab;
+      if (newStatus && newStatus !== "all") params.set("status", newStatus);
+      else params.delete("status");
+
+      const newChannel = updates.channel !== undefined ? updates.channel : channelFilter;
+      if (newChannel && newChannel !== "all") params.set("channel", newChannel);
+      else params.delete("channel");
+
+      const newPayment = updates.payment !== undefined ? updates.payment : paymentFilter;
+      if (newPayment && newPayment !== "all") params.set("payment", newPayment);
+      else params.delete("payment");
+
+      const newSearch = updates.search !== undefined ? updates.search : debouncedSearch;
+      if (newSearch) params.set("search", newSearch);
+      else params.delete("search");
+
+      const currentSort = sorting[0];
+      const newSortBy = updates.sortBy !== undefined ? updates.sortBy : currentSort?.id;
+      const newSortOrder =
+        updates.sortOrder !== undefined ? updates.sortOrder : currentSort?.desc ? "desc" : "asc";
+      if (newSortBy && (newSortBy !== "placed_at" || newSortOrder !== "desc")) {
+        params.set("sortBy", newSortBy);
+        params.set("sortOrder", newSortOrder);
+      } else {
+        params.delete("sortBy");
+        params.delete("sortOrder");
+      }
+
+      const queryString = params.toString();
+      router.push(`/admin/orders${queryString ? `?${queryString}` : ""}`, { scroll: false });
+    },
+    [searchParams, page, pageSize, selectedTab, channelFilter, paymentFilter, debouncedSearch, sorting, router]
+  );
+
+  // Sync state when browser back/forward buttons are pressed
+  React.useEffect(() => {
+    const p = Math.max(1, Number(searchParams.get("page")) || 1);
+    const ps = Number(searchParams.get("pageSize")) || 10;
+    const st = searchParams.get("status") || "all";
+    const ch = searchParams.get("channel") || "all";
+    const pay = searchParams.get("payment") || "all";
+    const s = searchParams.get("search") || "";
+    const sb = searchParams.get("sortBy") || "placed_at";
+    const so = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
+
+    setPage(p);
+    setPageSize(ps);
+    if (validStatusTabs.includes(st)) {
+      setSelectedTab(st);
+    }
+    setChannelFilter(ch);
+    setPaymentFilter(pay);
+    setSearchQuery((prev) => (prev === debouncedSearch ? s : prev));
+    setDebouncedSearch(s);
+    setSorting([{ id: sb, desc: so === "desc" }]);
+  }, [searchParams]);
+
+  // When debounced search query changes and differs from URL, reset page to 1 and update URL
+  React.useEffect(() => {
+    const currentUrlSearch = searchParams.get("search") || "";
+    if (debouncedSearch !== currentUrlSearch) {
+      setPage(1);
+      updateUrl({ search: debouncedSearch, page: 1 });
+    }
+  }, [debouncedSearch, searchParams, updateUrl]);
+
+  const currentSort = sorting[0];
+  const activeSortBy = currentSort?.id || "placed_at";
+  const activeSortOrder: "asc" | "desc" = currentSort?.desc ? "desc" : "asc";
+
+  // ─── TANSTACK QUERY: SERVER ACTION SSR HYDRATED QUERY ───────────────────────
   const {
-    data: orders = [],
+    data: ordersResult,
     isLoading: isOrdersLoading,
     isFetching: isOrdersFetching,
     refetch: refetchOrders,
   } = useQuery({
-    queryKey: ["admin", "orders"],
-    queryFn: fetchOrdersFromDb,
+    queryKey: [
+      "admin",
+      "orders",
+      {
+        page,
+        pageSize,
+        status: selectedTab,
+        channel: channelFilter,
+        payment: paymentFilter,
+        search: debouncedSearch,
+        sortBy: activeSortBy,
+        sortOrder: activeSortOrder,
+      },
+    ],
+    queryFn: () =>
+      getOrdersAction({
+        page,
+        pageSize,
+        status: selectedTab,
+        channel: channelFilter,
+        payment: paymentFilter,
+        search: debouncedSearch,
+        sortBy: activeSortBy,
+        sortOrder: activeSortOrder,
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
+
+  const orders = ordersResult?.orders || [];
+  const totalCount = ordersResult?.totalCount ?? 0;
+  const pageCount = ordersResult?.pageCount ?? 1;
+  const counts = ordersResult?.statusCounts || {
+    all: 0,
+    incomplete_order: 0,
+    pending: 0,
+    confirmed: 0,
+    processing: 0,
+    shipped: 0,
+    delivered: 0,
+    partially_delivered: 0,
+    cancelled: 0,
+    returned: 0,
+  };
+  const totalRevenue = ordersResult?.totalRevenue ?? 0;
+  const filteredOrders = orders;
+
+  // Intelligent Background Prefetching (0ms perceived latency for Next/Prev page)
+  React.useEffect(() => {
+    if (ordersResult?.hasMore || page < pageCount) {
+      queryClient.prefetchQuery({
+        queryKey: [
+          "admin",
+          "orders",
+          {
+            page: page + 1,
+            pageSize,
+            status: selectedTab,
+            channel: channelFilter,
+            payment: paymentFilter,
+            search: debouncedSearch,
+            sortBy: activeSortBy,
+            sortOrder: activeSortOrder,
+          },
+        ],
+        queryFn: () =>
+          getOrdersAction({
+            page: page + 1,
+            pageSize,
+            status: selectedTab,
+            channel: channelFilter,
+            payment: paymentFilter,
+            search: debouncedSearch,
+            sortBy: activeSortBy,
+            sortOrder: activeSortOrder,
+          }),
+      });
+    }
+
+    if (page > 1) {
+      queryClient.prefetchQuery({
+        queryKey: [
+          "admin",
+          "orders",
+          {
+            page: page - 1,
+            pageSize,
+            status: selectedTab,
+            channel: channelFilter,
+            payment: paymentFilter,
+            search: debouncedSearch,
+            sortBy: activeSortBy,
+            sortOrder: activeSortOrder,
+          },
+        ],
+        queryFn: () =>
+          getOrdersAction({
+            page: page - 1,
+            pageSize,
+            status: selectedTab,
+            channel: channelFilter,
+            payment: paymentFilter,
+            search: debouncedSearch,
+            sortBy: activeSortBy,
+            sortOrder: activeSortOrder,
+          }),
+      });
+    }
+  }, [
+    ordersResult,
+    page,
+    pageCount,
+    pageSize,
+    selectedTab,
+    channelFilter,
+    paymentFilter,
+    debouncedSearch,
+    activeSortBy,
+    activeSortOrder,
+    queryClient,
+  ]);
+
+  // TanStack Table Pagination & Sorting bindings
+  const paginationState = React.useMemo<PaginationState>(
+    () => ({
+      pageIndex: page - 1,
+      pageSize,
+    }),
+    [page, pageSize]
+  );
+
+  const handlePaginationChange = React.useCallback(
+    (updaterOrValue: any) => {
+      const nextPagination =
+        typeof updaterOrValue === "function" ? updaterOrValue(paginationState) : updaterOrValue;
+
+      const newPage = nextPagination.pageIndex + 1;
+      const newPageSize = nextPagination.pageSize;
+
+      setPage(newPage);
+      setPageSize(newPageSize);
+
+      updateUrl({
+        page: newPage,
+        pageSize: newPageSize,
+      });
+    },
+    [paginationState, updateUrl]
+  );
+
+  const handleSortingChange = React.useCallback(
+    (updaterOrValue: any) => {
+      const nextSorting =
+        typeof updaterOrValue === "function" ? updaterOrValue(sorting) : updaterOrValue;
+
+      setSorting(nextSorting);
+      setPage(1);
+
+      const s = nextSorting[0];
+      updateUrl({
+        page: 1,
+        sortBy: s?.id || "placed_at",
+        sortOrder: s?.desc ? "desc" : "asc",
+      });
+    },
+    [sorting, updateUrl]
+  );
 
   const { data: catalogProducts = availableCatalogProducts } = useQuery({
     queryKey: ["admin", "catalog-products"],
@@ -708,35 +997,10 @@ export function OrdersClient() {
 
   // ─── FILTER & TAB STATE ──────────────────────────────────────────────────────
 
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedTab, setSelectedTab] = React.useState<string>(() => {
-    if (statusParam && validStatusTabs.includes(statusParam)) {
-      return statusParam;
-    }
-    return "all";
-  });
-  const [channelFilter, setChannelFilter] = React.useState<string>("all");
-  const [paymentFilter, setPaymentFilter] = React.useState<string>("all");
-
-  // Sync tab with URL search parameter
-  React.useEffect(() => {
-    if (statusParam && validStatusTabs.includes(statusParam)) {
-      setSelectedTab(statusParam);
-    } else if (!statusParam) {
-      setSelectedTab("all");
-    }
-  }, [statusParam]);
-
   const handleTabChange = (val: string) => {
     setSelectedTab(val);
-    const params = new URLSearchParams(searchParams.toString());
-    if (val === "all") {
-      params.delete("status");
-    } else {
-      params.set("status", val);
-    }
-    const queryStr = params.toString();
-    router.push(`/admin/orders${queryStr ? `?${queryStr}` : ""}`, { scroll: false });
+    setPage(1);
+    updateUrl({ status: val, page: 1 });
   };
 
   // Horizontally scrollable status tabs ref & overflow indicators
@@ -1230,74 +1494,6 @@ export function OrdersClient() {
       });
     }
   }, [isPaymentOpen, paymentOrder, recordPaymentForm]);
-
-  // Filter logic
-  const filteredOrders = React.useMemo(() => {
-    return orders.filter((order) => {
-      // Tab filter
-      if (selectedTab !== "all" && order.status !== selectedTab) {
-        return false;
-      }
-      // Channel filter
-      if (channelFilter !== "all" && order.channel !== channelFilter) {
-        return false;
-      }
-      // Payment filter
-      if (paymentFilter !== "all" && order.payment !== paymentFilter) {
-        return false;
-      }
-      // Search query
-      if (searchQuery.trim() !== "") {
-        const q = searchQuery.toLowerCase();
-        const matchesId = order.id.toLowerCase().includes(q);
-        const matchesCustomer = (order.customer || "").toLowerCase().includes(q);
-        const matchesPhone = (order.phone || "").toLowerCase().includes(q);
-        const matchesCustomerNote = (order.customer_note || "").toLowerCase().includes(q);
-        const matchesRestNotes = (order.notes || []).some((n) => (n.text || "").toLowerCase().includes(q));
-        const matchesNote = matchesCustomerNote || matchesRestNotes;
-        const matchesItem = (order.items || []).some((i) => i.product_name.toLowerCase().includes(q));
-        const matchesDivision = order.address?.division?.toLowerCase().includes(q) || false;
-        const matchesDistrict = order.address?.district?.toLowerCase().includes(q) || false;
-        const matchesAddress = order.address?.address_line?.toLowerCase().includes(q) || false;
-        if (
-          !matchesId &&
-          !matchesCustomer &&
-          !matchesPhone &&
-          !matchesNote &&
-          !matchesItem &&
-          !matchesDivision &&
-          !matchesDistrict &&
-          !matchesAddress
-        ) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [orders, selectedTab, channelFilter, paymentFilter, searchQuery]);
-
-  // Status counts
-  const counts = React.useMemo(() => {
-    return {
-      all: orders.length,
-      incomplete_order: orders.filter((o) => o.status === "incomplete_order").length,
-      pending: orders.filter((o) => o.status === "pending").length,
-      confirmed: orders.filter((o) => o.status === "confirmed").length,
-      processing: orders.filter((o) => o.status === "processing").length,
-      shipped: orders.filter((o) => o.status === "shipped").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      partially_delivered: orders.filter((o) => o.status === "partially_delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
-      returned: orders.filter((o) => o.status === "returned").length,
-    };
-  }, [orders]);
-
-  // Revenue calculation
-  const totalRevenue = React.useMemo(() => {
-    return orders
-      .filter((o) => o.status !== "cancelled" && o.status !== "returned" && o.status !== "incomplete_order")
-      .reduce((sum, o) => sum + o.grand_total, 0);
-  }, [orders]);
 
   // ─── ROW EXPANSION & COPY HELPERS ─────────────────────────────────────────
   const [expandedRows, setExpandedRows] = React.useState<Record<string, boolean>>({});
@@ -2395,8 +2591,8 @@ export function OrdersClient() {
               <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
               <PackageCheck className="h-4 w-4 text-amber-600" />
             </div>
-            <p className="text-2xl font-bold mt-1">{orders.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Hydrated SSR database records</p>
+            <p className="text-2xl font-bold mt-1">{counts.all.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Database orders total</p>
           </CardContent>
         </Card>
 
@@ -2605,13 +2801,22 @@ export function OrdersClient() {
           {/* TanStack Orders Table with Pagination, Selection, Sorting & View Options */}
           <DataTable
             columns={orderColumns}
-            data={filteredOrders}
+            data={orders}
+            manualPagination={true}
+            pageCount={pageCount}
+            rowCount={totalCount}
+            pagination={paginationState}
+            onPaginationChange={handlePaginationChange}
+            manualSorting={true}
+            sorting={sorting}
+            onSortingChange={handleSortingChange}
             enableGlobalFilter={false}
             enableRowSelection={true}
             enableSorting={true}
             enablePagination={true}
-            initialPageSize={10}
-            pageSizeOptions={[5, 10, 20, 50]}
+            pageSizeOptions={[5, 10, 20, 50, 100]}
+            isLoading={isOrdersLoading && orders.length === 0}
+            isFetching={isOrdersFetching}
             toolbarPrefix={
               <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap w-full">
                 <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -2625,7 +2830,12 @@ export function OrdersClient() {
                   {searchQuery && (
                     <button
                       type="button"
-                      onClick={() => setSearchQuery("")}
+                      onClick={() => {
+                        setSearchQuery("");
+                        setDebouncedSearch("");
+                        setPage(1);
+                        updateUrl({ search: "", page: 1 });
+                      }}
                       className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <X className="h-4 w-4" />
@@ -2637,7 +2847,12 @@ export function OrdersClient() {
                   {/* Channel filter */}
                   <select
                     value={channelFilter}
-                    onChange={(e) => setChannelFilter(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setChannelFilter(val);
+                      setPage(1);
+                      updateUrl({ channel: val, page: 1 });
+                    }}
                     className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                   >
                     <option value="all">All Channels</option>
@@ -2650,7 +2865,12 @@ export function OrdersClient() {
                   {/* Payment filter */}
                   <select
                     value={paymentFilter}
-                    onChange={(e) => setPaymentFilter(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPaymentFilter(val);
+                      setPage(1);
+                      updateUrl({ payment: val, page: 1 });
+                    }}
                     className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                   >
                     <option value="all">All Payments</option>
@@ -2666,9 +2886,12 @@ export function OrdersClient() {
                       size="sm"
                       onClick={() => {
                         setSearchQuery("");
+                        setDebouncedSearch("");
                         setChannelFilter("all");
                         setPaymentFilter("all");
                         setSelectedTab("all");
+                        setPage(1);
+                        updateUrl({ search: "", channel: "all", payment: "all", status: "all", page: 1 });
                       }}
                       className="h-9 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
                     >
@@ -3086,133 +3309,6 @@ export function OrdersClient() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* Left Column: Items, Instructions, Financials (7 cols on lg) */}
                 <div className="lg:col-span-7 space-y-6">
-                  {/* 1. Customer Note for seller (stored in orders.customer_note) */}
-                  {selectedOrder.customer_note && (
-                    <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs relative group">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
-                          <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-                          <span>Customer Note (for Seller, written while ordering):</span>
-                        </p>
-                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditCustomerNote(selectedOrder)}
-                            className="p-1 rounded hover:bg-blue-200/50 text-blue-800 dark:text-blue-300 transition-colors"
-                            title="Edit Customer Note"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleClearCustomerNote(selectedOrder)}
-                            className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors"
-                            title="Clear Customer Note"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-blue-950 dark:text-blue-100 italic whitespace-pre-wrap leading-relaxed">&quot;{selectedOrder.customer_note}&quot;</p>
-                    </div>
-                  )}
-
-                  {/* 2. Delivery Note for delivery man (from notes table) */}
-                  {(() => {
-                    const deliveryNotes = (selectedOrder.notes || []).filter((n) => n.type === "delivery");
-                    if (deliveryNotes.length === 0) return null;
-                    return (
-                      <div className="space-y-2">
-                        {deliveryNotes.map((dn) => (
-                          <div key={dn.id} className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs relative group">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                                <Truck className="h-3.5 w-3.5 text-indigo-600" />
-                                <span>Delivery Note (for Delivery Man):</span>
-                              </p>
-                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditNote(dn, selectedOrder.id)}
-                                  className="p-1 rounded hover:bg-indigo-200/50 text-indigo-800 dark:text-indigo-300 transition-colors"
-                                  title="Edit Delivery Note"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenDeleteNote(
-                                      dn.id,
-                                      selectedOrder.id,
-                                      dn.text,
-                                      dn.type,
-                                      selectedOrder
-                                    )
-                                  }
-                                  className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors cursor-pointer"
-                                  title="Delete Delivery Note"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </div>
-                            <p className="text-indigo-950 dark:text-indigo-100 whitespace-pre-wrap leading-relaxed">{dn.text}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">{dn.author} · {dn.created_at}</p>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-
-                  {/* 3. Packaging Note for checking while packaging (from notes table) */}
-                  {(() => {
-                    const packagingNotes = (selectedOrder.notes || []).filter((n) => n.type === "packaging");
-                    if (packagingNotes.length === 0) return null;
-                    return (
-                      <div className="space-y-2">
-                        {packagingNotes.map((pn) => (
-                          <div key={pn.id} className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs relative group">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
-                                <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
-                                <span>Packaging Note (for checking while packaging):</span>
-                              </p>
-                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditNote(pn, selectedOrder.id)}
-                                  className="p-1 rounded hover:bg-emerald-200/50 text-emerald-800 dark:text-emerald-300 transition-colors cursor-pointer"
-                                  title="Edit Packaging Note"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenDeleteNote(
-                                      pn.id,
-                                      selectedOrder.id,
-                                      pn.text,
-                                      pn.type,
-                                      selectedOrder
-                                    )
-                                  }
-                                  className="p-1 rounded hover:bg-rose-200/50 text-rose-700 dark:text-rose-400 transition-colors cursor-pointer"
-                                  title="Delete Packaging Note"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </div>
-                            <p className="text-emerald-950 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{pn.text}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">{pn.author} · {pn.created_at}</p>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-
                   {/* Cancellation Reason (if cancelled or returned) */}
                   {(selectedOrder.status === "cancelled" || selectedOrder.status === "returned") && selectedOrder.cancel_reason && (
                     <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-xs">
@@ -3536,7 +3632,7 @@ export function OrdersClient() {
                             <span className="font-semibold text-foreground flex items-center gap-1.5">
                               <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
                                 <MessageSquare className="h-3 w-3 mr-1 inline" />
-                                Customer Note (Order Column)
+                                Customer Note
                               </Badge>
                               <span className="text-[11px] text-muted-foreground">{selectedOrder.customer || "Customer"}</span>
                             </span>
@@ -3578,7 +3674,6 @@ export function OrdersClient() {
                         return filteredNotes.map((note) => {
                           const isDeliv = note.type === "delivery";
                           const isPack = note.type === "packaging";
-                          const isInternal = note.type === "internal";
 
                           const bgClass = isDeliv
                             ? "bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
@@ -4691,7 +4786,7 @@ export function OrdersClient() {
               <div className="flex items-center gap-1.5 font-semibold text-foreground">
                 {deletingNoteTarget.type === "customer" ? (
                   <Badge className="text-[10px] py-0 px-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300">
-                    Customer Note (Order Column)
+                    Customer Note
                   </Badge>
                 ) : deletingNoteTarget.type === "delivery" ? (
                   <Badge className="text-[10px] py-0 px-1.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 border-indigo-300">

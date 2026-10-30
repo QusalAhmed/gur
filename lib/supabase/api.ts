@@ -1809,7 +1809,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
   return createdResult;
 }
 
-function formatDbOrderRecord(data: any): Order {
+export function formatDbOrderRecord(data: any): Order {
   const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
   const rawItems = data.order_items || data.items || [];
   const items: OrderItem[] = rawItems.map((it: any, idx: number) => ({

@@ -1,8 +1,8 @@
 import * as React from "react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
+import { getOrdersAction } from "@/actions/orders";
 import {
-  fetchOrdersFromDb,
   fetchCatalogProductsFromDb,
   fetchGeoDivisionsAndDistricts,
   fetchGeoDistricts,
@@ -15,14 +15,51 @@ import OrdersLoading from "./loading";
 // Opt-out of instant navigation validation for dynamic admin prefetch
 export const instant = false;
 
-async function OrdersDataLoader() {
+interface OrdersPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+async function OrdersDataLoader({ searchParams }: OrdersPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const page = Math.max(1, Number(resolvedSearchParams?.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(resolvedSearchParams?.pageSize) || 10));
+  const status = typeof resolvedSearchParams?.status === "string" ? resolvedSearchParams.status : "all";
+  const channel = typeof resolvedSearchParams?.channel === "string" ? resolvedSearchParams.channel : "all";
+  const payment = typeof resolvedSearchParams?.payment === "string" ? resolvedSearchParams.payment : "all";
+  const search = typeof resolvedSearchParams?.search === "string" ? resolvedSearchParams.search : "";
+  const sortBy = typeof resolvedSearchParams?.sortBy === "string" ? resolvedSearchParams.sortBy : "placed_at";
+  const sortOrder = resolvedSearchParams?.sortOrder === "asc" ? "asc" : "desc";
+
   const queryClient = getQueryClient();
 
-  // SSR Prefetch orders, catalog products, and geo data
+  // SSR Prefetch paginated orders with exact URL params, catalog products, and geo data
   await Promise.all([
     queryClient.prefetchQuery({
-      queryKey: ["admin", "orders"],
-      queryFn: fetchOrdersFromDb,
+      queryKey: [
+        "admin",
+        "orders",
+        {
+          page,
+          pageSize,
+          status,
+          channel,
+          payment,
+          search,
+          sortBy,
+          sortOrder,
+        },
+      ],
+      queryFn: () =>
+        getOrdersAction({
+          page,
+          pageSize,
+          status,
+          channel,
+          payment,
+          search,
+          sortBy,
+          sortOrder,
+        }),
     }),
     queryClient.prefetchQuery({
       queryKey: ["admin", "catalog-products"],
@@ -63,10 +100,10 @@ async function OrdersDataLoader() {
   );
 }
 
-export default function OrdersPage() {
+export default function OrdersPage({ searchParams }: OrdersPageProps) {
   return (
     <React.Suspense fallback={<OrdersLoading />}>
-      <OrdersDataLoader />
+      <OrdersDataLoader searchParams={searchParams} />
     </React.Suspense>
   );
 }

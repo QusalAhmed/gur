@@ -13,6 +13,8 @@ import {
   getSortedRowModel,
   useReactTable,
   RowSelectionState,
+  OnChangeFn,
+  PaginationState,
 } from "@tanstack/react-table";
 import { Search, X, CheckSquare, AlertCircle } from "lucide-react";
 import {
@@ -25,7 +27,6 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,18 @@ export interface DataTableProps<TData, TValue> {
   isRowExpanded?: (row: TData) => boolean;
   getRowId?: (row: TData, index: number) => string;
   className?: string;
+
+  // Server-side / controlled pagination & sorting:
+  manualPagination?: boolean;
+  pageCount?: number;
+  rowCount?: number;
+  pagination?: PaginationState;
+  onPaginationChange?: OnChangeFn<PaginationState>;
+  manualSorting?: boolean;
+  sorting?: SortingState;
+  onSortingChange?: OnChangeFn<SortingState>;
+  isLoading?: boolean;
+  isFetching?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -83,6 +96,18 @@ export function DataTable<TData, TValue>({
       ? String(row.id)
       : String(index),
   className,
+
+  // Server-side props
+  manualPagination = false,
+  pageCount,
+  rowCount,
+  pagination: controlledPagination,
+  onPaginationChange,
+  manualSorting = false,
+  sorting: controlledSorting,
+  onSortingChange,
+  isLoading = false,
+  isFetching = false,
 }: DataTableProps<TData, TValue>) {
   const activeSearchCol = searchColumn || searchKey;
   const effectivePageSize = pageSize || initialPageSize;
@@ -93,18 +118,32 @@ export function DataTable<TData, TValue>({
     setMounted(true);
   }, []);
 
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>([]);
+  const [internalPagination, setInternalPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: effectivePageSize,
+  });
+
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [globalFilter, setGlobalFilter] = React.useState("");
 
+  const effectiveSorting = controlledSorting !== undefined ? controlledSorting : internalSorting;
+  const effectivePagination =
+    controlledPagination !== undefined ? controlledPagination : internalPagination;
+
   const table = useReactTable({
     data,
     columns,
     getRowId,
+    manualPagination,
+    pageCount: manualPagination ? pageCount : undefined,
+    rowCount: manualPagination ? rowCount : undefined,
+    manualSorting,
     state: {
-      sorting,
+      sorting: effectiveSorting,
+      pagination: effectivePagination,
       columnFilters,
       columnVisibility,
       rowSelection,
@@ -112,15 +151,17 @@ export function DataTable<TData, TValue>({
     },
     enableRowSelection,
     enableSorting,
-    onSortingChange: setSorting,
+    onSortingChange: onSortingChange ?? setInternalSorting,
+    onPaginationChange: onPaginationChange ?? setInternalPagination,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: enablePagination ? getPaginationRowModel() : undefined,
-    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: manualPagination ? undefined : getFilteredRowModel(),
+    getPaginationRowModel:
+      enablePagination && !manualPagination ? getPaginationRowModel() : undefined,
+    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
     initialState: {
       pagination: {
         pageSize: effectivePageSize,
@@ -141,7 +182,7 @@ export function DataTable<TData, TValue>({
     table.resetRowSelection();
   };
 
-  if (!mounted) {
+  if (!mounted || isLoading) {
     return (
       <div className={cn("space-y-3", className)}>
         {/* Top Toolbar Skeleton */}
@@ -253,7 +294,7 @@ export function DataTable<TData, TValue>({
               variant="ghost"
               size="sm"
               onClick={clearSelection}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
             >
               Clear
             </Button>
@@ -268,7 +309,14 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* Main Table Container */}
-      <div className="rounded-xl border bg-card shadow-xs overflow-hidden">
+      <div className="relative rounded-xl border bg-card shadow-xs overflow-hidden">
+        {/* Sleek top loading progress indicator on background data fetch / page transition */}
+        {isFetching && (
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-amber-500/20 overflow-hidden z-20">
+            <div className="h-full bg-amber-500 animate-pulse w-full" />
+          </div>
+        )}
+
         <Table>
           <TableHeader className="bg-muted/40">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -301,7 +349,8 @@ export function DataTable<TData, TValue>({
                         "transition-colors",
                         isSelected && "bg-amber-500/5 dark:bg-amber-500/10",
                         onRowClick && "cursor-pointer",
-                        renderSubRow && (!isRowExpanded || isRowExpanded(row.original)) && "border-b-0 hover:bg-muted/30"
+                        renderSubRow && (!isRowExpanded || isRowExpanded(row.original)) && "border-b-0 hover:bg-muted/30",
+                        isFetching && "opacity-80"
                       )}
                     >
                       {row.getVisibleCells().map((cell) => (
