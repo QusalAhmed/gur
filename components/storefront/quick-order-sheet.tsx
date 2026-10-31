@@ -100,25 +100,13 @@ export function QuickOrderSheet({
     e.preventDefault();
     setErrorMessage(null);
 
-    // Basic frontend check
-    if (!customerName.trim()) {
-      setErrorMessage(lang === "bn" ? "অনুগ্রহ করে আপনার পুরো নাম লিখুন।" : "Please enter your full name.");
-      return;
-    }
+    // Basic frontend check: Only mobile phone number is mandatory
     const cleanDigits = customerPhone.replace(/[^0-9]/g, "");
     if (cleanDigits.length < 11) {
       setErrorMessage(
         lang === "bn"
           ? "অনুগ্রহ করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
           : "Please enter a valid 11-digit mobile number."
-      );
-      return;
-    }
-    if (!addressLine.trim() || addressLine.trim().length < 5) {
-      setErrorMessage(
-        lang === "bn"
-          ? "অনুগ্রহ করে আপনার সম্পূর্ণ ঠিকানা লিখুন (বাড়ি, রাস্তা, এলাকা বা থানা)।"
-          : "Please enter your complete delivery address."
       );
       return;
     }
@@ -304,10 +292,10 @@ export function QuickOrderSheet({
                           </motion.div>
                         )}
 
-                        {/* 1. Full Name */}
+                        {/* Full Name (Optional) */}
                         <div className="space-y-1">
                           <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
-                            {t.fullNameLabel} <span className="text-red-500">*</span>
+                            {t.fullNameLabel}
                           </label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
@@ -315,7 +303,6 @@ export function QuickOrderSheet({
                             </div>
                             <input
                               type="text"
-                              required
                               value={customerName}
                               onChange={(e) => setCustomerName(e.target.value)}
                               placeholder={t.fullNamePlaceholder}
@@ -324,7 +311,7 @@ export function QuickOrderSheet({
                           </div>
                         </div>
 
-                        {/* 2. Mobile Phone Number */}
+                        {/* Mobile Phone Number (Mandatory) */}
                         <div className="space-y-1">
                           <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
                             {t.phoneLabel} <span className="text-red-500">*</span>
@@ -347,10 +334,10 @@ export function QuickOrderSheet({
                           </p>
                         </div>
 
-                        {/* 3. Delivery Zone Selection (2 Touch Cards) */}
+                        {/* Delivery Zone Selection (2 Touch Cards) */}
                         <div className="space-y-1">
                           <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
-                            {t.zoneLabel} <span className="text-red-500">*</span>
+                            {t.zoneLabel}
                           </label>
                           <div className="grid grid-cols-2 gap-2 sm:gap-3">
                             {/* Inside Dhaka */}
@@ -419,17 +406,16 @@ export function QuickOrderSheet({
                           </div>
                         </div>
 
-                        {/* 4. Complete Address */}
+                        {/* Complete Address (Optional) */}
                         <div className="space-y-1">
                           <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
-                            {t.addressLabel} <span className="text-red-500">*</span>
+                            {t.addressLabel}
                           </label>
                           <div className="relative">
                             <div className="absolute top-2.5 left-3 pointer-events-none text-stone-400">
                               <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" />
                             </div>
                             <textarea
-                              required
                               rows={2}
                               value={addressLine}
                               onChange={(e) => setAddressLine(e.target.value)}

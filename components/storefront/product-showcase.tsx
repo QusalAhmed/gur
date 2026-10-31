@@ -5,6 +5,7 @@ import { Phone, Globe, ShoppingBag } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ContactSection } from "./contact-section";
+import { CheckoutSection } from "./checkout-section";
 import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
 import { CartSheet } from "./cart-sheet";
 import { MobileDock } from "./mobile-dock";
@@ -56,8 +57,9 @@ export function ProductShowcase({
   const displayStoreName = storeName || t.storeName;
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
-  // Total full-screen sections: Section 0 is Contact Section, Section 1..N are products
-  const totalSections = products.length + 1;
+  // Total full-screen sections: Section 0 is Contact Section, Section 1..N are products, Section N+1 is Checkout
+  const checkoutSectionIndex = products.length + 1;
+  const totalSections = products.length + 2;
 
   // Prevent SSR hydration mismatch for client-side state
   useEffect(() => {
@@ -173,12 +175,7 @@ export function ProductShowcase({
   };
 
   const handleCheckoutFromCart = () => {
-    setActiveOrderModal({
-      isOpen: true,
-      product: null,
-      quantity: 1,
-      cartItems,
-    });
+    scrollToSection(checkoutSectionIndex);
   };
 
   const handleCloseOrder = () => {
@@ -230,12 +227,28 @@ export function ProductShowcase({
             type="button"
             onClick={() => scrollToSection(1)}
             className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              activeSectionIndex >= 1
+              activeSectionIndex >= 1 && activeSectionIndex < checkoutSectionIndex
                 ? "bg-white text-amber-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
             {lang === "bn" ? "🍯 পণ্যসমূহ" : "🍯 Products"}
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection(checkoutSectionIndex)}
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSectionIndex === checkoutSectionIndex
+                ? "bg-white text-emerald-800 shadow-xs"
+                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+            }`}
+          >
+            <span>{lang === "bn" ? "🛒 চেকআউট" : "🛒 Checkout"}</span>
+            {isMounted && cartTotalQuantity > 0 && (
+              <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
+                {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
+              </span>
+            )}
           </button>
         </nav>
 
@@ -319,6 +332,19 @@ export function ProductShowcase({
             />
           );
         })}
+
+        {/* Dot N+1: Checkout Section */}
+        <button
+          type="button"
+          onClick={() => scrollToSection(checkoutSectionIndex)}
+          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+            activeSectionIndex === checkoutSectionIndex
+              ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
+              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
+          }`}
+          title={lang === "bn" ? "🛒 চেকআউট" : "🛒 Checkout"}
+          aria-label="Scroll to Checkout"
+        />
       </aside>
 
       {/* Main Full-Screen Snap-Scroll Container */}
@@ -369,6 +395,13 @@ export function ProductShowcase({
             />
           ))
         )}
+
+        {/* Section N+1: Full-Screen Cart Summary (TanStack Table) & Checkout (TanStack Form) */}
+        <CheckoutSection
+          lang={lang}
+          hotline={defaultHotline}
+          onScrollToProducts={() => scrollToSection(1)}
+        />
       </main>
 
       {/* Mobile Floating Island Dock (Eye-catching frosted pill on mobile phones) */}
@@ -377,6 +410,7 @@ export function ProductShowcase({
         onToggleLang={toggleLanguage}
         defaultHotline={defaultHotline}
         storeName={storeName}
+        onCheckoutClick={() => scrollToSection(checkoutSectionIndex)}
       />
 
       {/* Redux Cart Drawer Sheet */}

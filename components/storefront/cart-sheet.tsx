@@ -178,10 +178,10 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                             <button
                               type="button"
                               onClick={() => dispatch(removeFromCart({ productId: item.productId, variantId: item.variantId }))}
-                              className="text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md touch-manipulation transition-colors"
+                              className="text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 p-1.5 rounded-lg touch-manipulation transition-colors border border-rose-200/80 dark:border-rose-900/60"
                               aria-label="Remove item"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                             </button>
                           </div>
 

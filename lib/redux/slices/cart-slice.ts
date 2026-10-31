@@ -11,6 +11,8 @@ export interface CartItem {
   unitPrice: number;
   quantity: number;
   image: string;
+  description?: string;
+  descriptionBn?: string;
 }
 
 export interface CartState {

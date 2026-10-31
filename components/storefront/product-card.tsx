@@ -135,6 +135,8 @@ export function ProductCard({
           unitPrice,
           quantity: newUnit,
           image: currentActiveImage,
+          description: product.summary,
+          descriptionBn: product.summaryBn,
         })
       );
       setJustAdded(true);

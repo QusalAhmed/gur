@@ -14,10 +14,10 @@ export interface StorefrontOrderItem {
 }
 
 export interface StorefrontOrderPayload {
-  customerName: string;
+  customerName?: string;
   customerPhone: string;
   deliveryZone: "inside_dhaka" | "outside_dhaka";
-  addressLine: string;
+  addressLine?: string;
   customerNote?: string;
   // Multiple items from Redux cart
   items?: StorefrontOrderItem[];
@@ -48,14 +48,9 @@ export async function placeStorefrontOrderAction(
   payload: StorefrontOrderPayload
 ): Promise<StorefrontOrderResult> {
   try {
-    const customerName = (payload.customerName || "").trim();
-    if (customerName.length < 2) {
-      return { success: false, error: "অনুগ্রহ করে আপনার পুরো নাম লিখুন (কমপক্ষে ২ অক্ষর)।" };
-    }
-
     const rawPhone = (payload.customerPhone || "").trim();
     const normalizedPhone = normalizeBdPhone(rawPhone);
-    // Validate BD mobile phone: should be +8801[3-9]XXXXXXXX
+    // Validate BD mobile phone: only phone number is mandatory (+8801[3-9]XXXXXXXX)
     if (!normalizedPhone || !/^\+8801[3-9]\d{8}$/.test(normalizedPhone)) {
       return {
         success: false,
@@ -63,13 +58,9 @@ export async function placeStorefrontOrderAction(
       };
     }
 
-    const addressLine = (payload.addressLine || "").trim();
-    if (addressLine.length < 5) {
-      return {
-        success: false,
-        error: "অনুগ্রহ করে আপনার সম্পূর্ণ ডেলিভারি ঠিকানা লিখুন (বাড়ি, রাস্তা, এলাকা বা থানা)।",
-      };
-    }
+    // Name and address are optional: provide respectful fallbacks if omitted by customer
+    const customerName = (payload.customerName || "").trim() || "সম্মানিত গ্রাহক";
+    const addressLine = (payload.addressLine || "").trim() || "ঠিকানা ফোনে নিশ্চিত করা হবে";
 
     // Normalize items: support both multi-item list and legacy single item
     let resolvedItems: StorefrontOrderItem[] = [];

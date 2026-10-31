@@ -15,6 +15,7 @@ interface MobileDockProps {
   onToggleLang: () => void;
   defaultHotline?: string;
   storeName?: string;
+  onCheckoutClick?: () => void;
 }
 
 export function MobileDock({
@@ -22,6 +23,7 @@ export function MobileDock({
   onToggleLang,
   defaultHotline = "01843557389",
   storeName,
+  onCheckoutClick,
 }: MobileDockProps) {
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
@@ -83,11 +85,17 @@ export function MobileDock({
           <span className="font-mono text-xs">{defaultHotline}</span>
         </motion.a>
 
-        {/* 3. Redux Cart Button with Live Bouncing Badge */}
+        {/* 3. Redux Cart Button with Live Bouncing Badge (Clicks jump to Checkout section) */}
         <motion.button
           whileTap={{ scale: 0.92 }}
           type="button"
-          onClick={() => dispatch(openCart())}
+          onClick={() => {
+            if (onCheckoutClick) {
+              onCheckoutClick();
+            } else {
+              dispatch(openCart());
+            }
+          }}
           className="relative inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all touch-manipulation shrink-0"
           aria-label={t.cartTitle}
         >
