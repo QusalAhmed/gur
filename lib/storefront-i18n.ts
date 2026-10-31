@@ -116,6 +116,8 @@ export const STOREFRONT_TEXT = {
     phoneHelpNotePlaceholder: "যেমন: ২ কেজি পাটালি বা ১ বৈয়াম ঝোলা গুড়...",
     phoneHelpSubmitBtn: "আমাকে কল করুন ও অর্ডার নিন",
     phoneHelpSubmitting: "অনুরোধ পাঠানো হচ্ছে...",
+    phoneHelpAutoSubmitting: "স্বয়ংক্রিয়ভাবে জমা হচ্ছে...",
+    phoneHelpAutoSubmitHint: "সঠিক নম্বর লিখলেই স্বয়ংক্রিয়ভাবে অনুরোধ জমা হবে",
     phoneHelpValidBadge: "সঠিক মোবাইল নম্বর",
     phoneHelpInvalidError:
       "অনুগ্রহ করে একটি সঠিক বাংলাদেশী মোবাইল নম্বর লিখুন (উদা: 01XXXXXXXXX বা +8801XXXXXXXXX)।",
@@ -234,6 +236,8 @@ export const STOREFRONT_TEXT = {
     phoneHelpNotePlaceholder: "e.g. 2kg Patali Gur or Liquid Gur...",
     phoneHelpSubmitBtn: "Call Me to Take My Order",
     phoneHelpSubmitting: "Submitting request...",
+    phoneHelpAutoSubmitting: "Submitting automatically...",
+    phoneHelpAutoSubmitHint: "Submits automatically once a valid number is entered",
     phoneHelpValidBadge: "Valid mobile number",
     phoneHelpInvalidError:
       "Please enter a valid Bangladeshi mobile number (e.g. 01XXXXXXXXX or +8801XXXXXXXXX).",

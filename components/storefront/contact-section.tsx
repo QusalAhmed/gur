@@ -17,6 +17,7 @@ import {
   Truck,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
+import { PhoneHelpForm } from "./phone-help-form";
 
 interface ContactSectionProps {
   lang?: StorefrontLang;
@@ -56,6 +57,15 @@ export function ContactSection({
     setTimeout(() => setCopied(false), 2200);
   };
 
+  const handleScrollToHelp = () => {
+    const el = document.getElementById("incomplete-order-form");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    } else if (onScrollToHelp) {
+      onScrollToHelp();
+    }
+  };
+
   const handleScrollDown = () => {
     if (onScrollToProducts) {
       onScrollToProducts();
@@ -86,13 +96,13 @@ export function ContactSection({
     <section
       id="contact"
       data-section-index="0"
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col justify-between pt-3.5 sm:pt-14 pb-18 sm:pb-6 px-3 sm:px-6 md:px-12 relative overflow-y-auto sm:overflow-hidden bg-[#FAF8F5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-14 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#FAF8F5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
     >
       {/* Soft Ambient Warm Glow (Clean & Elegant, no noisy dots) */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-gradient-to-b from-amber-200/40 via-amber-100/15 to-transparent dark:from-amber-950/25 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
 
-      {/* Main Content Area */}
-      <div className="relative z-10 w-full max-w-2xl mx-auto flex-1 flex flex-col justify-center my-auto py-2">
+      {/* Main Content Area: Contact & Incomplete Order Form under the Same Section */}
+      <div className="relative z-10 w-full max-w-2xl mx-auto my-auto py-2">
         {/* Top Heritage Pill & Title */}
         <div className="text-center mb-3 sm:mb-4 px-2 space-y-1 sm:space-y-1.5">
           <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
@@ -258,26 +268,35 @@ export function ContactSection({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>{t.guaranteeBadge}</span>
             </div>
-            {onScrollToHelp && (
-              <button
-                type="button"
-                onClick={onScrollToHelp}
-                className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                <span>
-                  {lang === "bn"
-                    ? "সিস্টেম না বুঝলে শুধু নম্বর দিন ❯"
-                    : "Need Help? Just Leave Phone ❯"}
-                </span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleScrollToHelp}
+              className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <span>
+                {lang === "bn"
+                  ? "সিস্টেম না বুঝলে শুধু নম্বর দিন ❯"
+                  : "Need Help? Just Leave Phone ❯"}
+              </span>
+            </button>
           </div>
         </div>
+
+        {/* Soft Decorative Separator for Normal Scrolling */}
+        <div className="my-5 sm:my-6 border-t border-dashed border-amber-300/80 dark:border-stone-800" />
+
+        {/* Incomplete Order Form Component (Directly under same section) */}
+        <PhoneHelpForm
+          lang={lang}
+          hotline={hotline}
+          storeName={storeName}
+          onScrollToProducts={handleScrollDown}
+        />
       </div>
 
       {/* Bottom Action: "View Products & Order" */}
-      <div className="relative z-10 w-full text-center pt-2 pb-2">
+      <div className="relative z-10 w-full text-center pt-4 pb-4">
         <button
           type="button"
           onClick={handleScrollDown}

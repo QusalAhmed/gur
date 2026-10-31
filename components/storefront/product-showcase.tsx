@@ -6,7 +6,6 @@ import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
 import { ContactSection } from "./contact-section";
-import { PhoneHelpSection } from "./phone-help-section";
 import { CheckoutSection } from "./checkout-section";
 import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
 import { CartSheet } from "./cart-sheet";
@@ -62,13 +61,11 @@ export function ProductShowcase({
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
   // Section mapping:
-  // Section 0: Contact Section
-  // Section 1: Phone Help / Easy Assisted Order Section
-  // Sections 2..(productsStartIndex + effectiveProductCount - 1): Products
+  // Section 0: Contact & Incomplete Order Form (combined under same section with normal scrolling)
+  // Sections 1..effectiveProductCount: Products
   // Section checkoutSectionIndex: Checkout Section
   const contactSectionIndex = 0;
-  const phoneHelpSectionIndex = 1;
-  const productsStartIndex = 2;
+  const productsStartIndex = 1;
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
@@ -115,6 +112,32 @@ export function ProductShowcase({
       if (isScrolling) {
         e.preventDefault();
         return;
+      }
+
+      // If user is hovering over an element that has vertical scroll (e.g. Contact & Incomplete form section),
+      // allow normal native scrolling within the section until it reaches the edge
+      const target = e.target as HTMLElement;
+      const scrollableParent = target?.closest(".overflow-y-auto") as HTMLElement | null;
+      if (scrollableParent && scrollableParent !== container) {
+        const canScroll = scrollableParent.scrollHeight > scrollableParent.clientHeight;
+        if (canScroll) {
+          const atTop = scrollableParent.scrollTop <= 2;
+          const atBottom =
+            Math.abs(
+              scrollableParent.scrollHeight -
+                scrollableParent.clientHeight -
+                scrollableParent.scrollTop
+            ) <= 6;
+
+          // If scrolling down and haven't reached the bottom of inner content, allow normal inner scroll
+          if (e.deltaY > 0 && !atBottom) {
+            return;
+          }
+          // If scrolling up and haven't reached the top of inner content, allow normal inner scroll
+          if (e.deltaY < 0 && !atTop) {
+            return;
+          }
+        }
       }
 
       const height = container.clientHeight || window.innerHeight;
@@ -222,36 +245,24 @@ export function ProductShowcase({
           </div>
         </button>
 
-        {/* Desktop Navigation Links: Contact, Phone Help, Products & Checkout */}
+        {/* Desktop Navigation Links: Contact & Phone Order, Products & Checkout */}
         <nav className="hidden lg:flex items-center gap-1 bg-amber-200/60 dark:bg-stone-800/70 p-1 rounded-full border border-amber-300/60 dark:border-stone-700">
           <button
             type="button"
             onClick={() => scrollToSection(contactSectionIndex)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === contactSectionIndex
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
             <Phone className="w-3.5 h-3.5" />
-            <span>{lang === "bn" ? "যোগাযোগ" : "Contact"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection(phoneHelpSectionIndex)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === phoneHelpSectionIndex
-                ? "bg-white text-emerald-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{lang === "bn" ? "সহজ ফোন অর্ডার" : "Phone Help"}</span>
+            <span>{lang === "bn" ? "যোগাযোগ ও অর্ডার" : "Contact & Order"}</span>
           </button>
           <button
             type="button"
             onClick={() => scrollToSection(productsStartIndex)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex >= productsStartIndex && activeSectionIndex < checkoutSectionIndex
                 ? "bg-white text-amber-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
@@ -263,7 +274,7 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => scrollToSection(checkoutSectionIndex)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
@@ -327,7 +338,7 @@ export function ProductShowcase({
 
       {/* Bead / Dot Pagination (Visible on Tablets & Desktops for easy jumping) */}
       <aside className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col items-center gap-3 bg-amber-950/15 dark:bg-stone-900/40 backdrop-blur-md p-2 rounded-full border border-amber-300/40 select-none">
-        {/* Dot 0: Contact Section */}
+        {/* Dot 0: Contact & Incomplete Order Help Section */}
         <button
           type="button"
           onClick={() => scrollToSection(contactSectionIndex)}
@@ -336,24 +347,11 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={lang === "bn" ? "যোগাযোগ" : "Contact"}
-          aria-label="Scroll to Contact"
+          title={lang === "bn" ? "যোগাযোগ ও অর্ডার" : "Contact & Order"}
+          aria-label="Scroll to Contact & Order"
         />
 
-        {/* Dot 1: Phone Help Section */}
-        <button
-          type="button"
-          onClick={() => scrollToSection(phoneHelpSectionIndex)}
-          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
-            activeSectionIndex === phoneHelpSectionIndex
-              ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
-              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
-          }`}
-          title={lang === "bn" ? "সহজ ফোন অর্ডার" : "Easy Phone Order"}
-          aria-label="Scroll to Easy Phone Order"
-        />
-
-        {/* Dots 2..N: Product Cards or Skeleton */}
+        {/* Dots 1..N: Product Cards or Skeleton */}
         {isLoading ? (
           <button
             type="button"
@@ -419,24 +417,15 @@ export function ProductShowcase({
         className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth touch-pan-y overscroll-y-contain flex flex-col"
         style={{ scrollSnapType: "y mandatory" }}
       >
-        {/* Section 0: Full-Screen Contact Section */}
+        {/* Section 0: Full-Screen Contact & Incomplete Order Help Section (Combined) */}
         <ContactSection
           lang={lang}
           hotline={defaultHotline}
           storeName={storeName}
           onScrollToProducts={() => scrollToSection(productsStartIndex)}
-          onScrollToHelp={() => scrollToSection(phoneHelpSectionIndex)}
         />
 
-        {/* Section 1: Full-Screen Easy Phone Order / Help Section (Below Contact Section) */}
-        <PhoneHelpSection
-          lang={lang}
-          hotline={defaultHotline}
-          storeName={storeName}
-          onScrollToProducts={() => scrollToSection(productsStartIndex)}
-        />
-
-        {/* Sections 2..N: Full-Screen Products or Skeleton */}
+        {/* Sections 1..N: Full-Screen Products or Skeleton */}
         {isLoading ? (
           <ProductCardSkeleton />
         ) : products.length === 0 ? (
