@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import {
   ShoppingBag,
   Trash2,
@@ -50,6 +50,8 @@ import {
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
 import { useCreateOrderMutation } from "@/hooks/use-order";
+import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-order";
+import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
 
@@ -87,10 +89,14 @@ export function CheckoutSection({
   const grandTotal = displaySubtotal + (displayCartItems.length > 0 ? deliveryCharge : 0);
   const rawHotline = hotline.replace(/[^0-9]/g, "");
 
+  const clearDraftRef = React.useRef<() => void>(() => {});
+  const draftOrderIdRef = React.useRef<string | null>(null);
+
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (result, variables) => {
-      // Clear the Redux cart upon confirmed placement
+      // Clear draft tracking & Redux cart upon confirmed placement
+      clearDraftRef.current?.();
       dispatch(clearCart());
 
       // Redirect to dedicated order confirmation page
@@ -282,11 +288,10 @@ export function CheckoutSection({
   // 2. TanStack Form Configuration for 1-Step Checkout
   // =========================================================================
   const validatePhone = (value: string) => {
-    const cleaned = (value || "").replace(/[^0-9]/g, "");
-    if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
+    if (!isValidBdPhone(value)) {
       return lang === "bn"
-        ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
-        : "Enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).";
+        ? "সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX, 1XXXXXXXXX বা +8801XXXXXXXXX)।"
+        : "Enter a valid mobile number (e.g. 017XXXXXXXX, 1XXXXXXXXX, or +8801XXXXXXXXX).";
     }
     return undefined;
   };
@@ -319,13 +324,10 @@ export function CheckoutSection({
 
       // 3. Fallback: Phone is the primary mandatory field
       const phoneInput = document.getElementById("customerPhone") as HTMLInputElement | null;
-      if (phoneInput) {
-        const cleaned = (phoneInput.value || "").replace(/[^0-9]/g, "");
-        if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
-          phoneInput.focus();
-          phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
+      if (phoneInput && !isValidBdPhone(phoneInput.value)) {
+        phoneInput.focus();
+        phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
       }
     });
   };
@@ -349,8 +351,10 @@ export function CheckoutSection({
       setSubmissionError(null);
       try {
         await createOrderMutation.mutateAsync({
+          orderId: draftOrderIdRef.current || undefined,
+          status: "pending",
           customerName: value.customerName?.trim() || undefined,
-          customerPhone: value.customerPhone.trim(),
+          customerPhone: parseBdPhone(value.customerPhone).local || value.customerPhone.trim(),
           deliveryZone,
           addressLine: value.addressLine?.trim() || undefined,
           customerNote: value.customerNote?.trim() || undefined,
@@ -368,6 +372,29 @@ export function CheckoutSection({
       }
     },
   });
+
+  const formValues = useStore(form.store, (state) => state.values);
+
+  // Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
+  const { draftOrderId, triggerSyncNow, clearDraft } = useAutoSyncIncompleteOrder({
+    customerPhone: formValues.customerPhone,
+    customerName: formValues.customerName,
+    addressLine: formValues.addressLine,
+    customerNote: formValues.customerNote,
+    deliveryZone,
+    items: cartItems.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      variantId: item.variantId,
+      variantName: item.variantName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })),
+    enabled: mounted,
+  });
+
+  draftOrderIdRef.current = draftOrderId;
+  clearDraftRef.current = clearDraft;
 
 return (
   <section
@@ -571,7 +598,10 @@ return (
                       type="text"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
+                      onBlur={() => {
+                        field.handleBlur();
+                        triggerSyncNow();
+                      }}
                       placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
                       className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
                     />
@@ -606,8 +636,11 @@ return (
                         aria-invalid={hasError ? "true" : undefined}
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        placeholder="01XXXXXXXXX"
+                        onBlur={() => {
+                          field.handleBlur();
+                          triggerSyncNow();
+                        }}
+                        placeholder="01XXXXXXXXX / 1XXXXXXXXX"
                         className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${
                           hasError
                             ? "border-rose-500 focus:border-rose-600 focus:ring-rose-400/40 ring-1 ring-rose-400/40"
@@ -678,7 +711,10 @@ return (
                     rows={2}
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
+                    onBlur={() => {
+                      field.handleBlur();
+                      triggerSyncNow();
+                    }}
                     placeholder={
                       lang === "bn"
                         ? "বাড়ি নং, রোড নং, এলাকা বা থানা ও জেলার নাম (ঐচ্ছিক)..."
@@ -707,6 +743,10 @@ return (
                     type="text"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={() => {
+                      field.handleBlur();
+                      triggerSyncNow();
+                    }}
                     placeholder={
                       lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
                     }

@@ -7,6 +7,8 @@ import { X, Check, ShieldCheck, MapPin, Phone, PhoneCall, User, Home, Truck, Loa
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { type StorefrontOrderResult } from "@/actions/storefront-order";
 import { useCreateOrderMutation } from "@/hooks/use-order";
+import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-order";
+import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { OrderSuccessView } from "./order-success-view";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearCart, CartItem } from "@/lib/redux/slices/cart-slice";
@@ -82,10 +84,34 @@ export function QuickOrderSheet({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [orderResult, setOrderResult] = useState<StorefrontOrderResult | null>(null);
 
+  const formattedItems = React.useMemo(
+    () =>
+      resolvedItems.map((i) => ({
+        productId: i.productId,
+        productName: lang === "bn" ? i.productNameBn || i.productName : i.productName,
+        variantId: i.variantId,
+        variantName: lang === "bn" ? i.variantNameBn || i.variantName : i.variantName,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      })),
+    [resolvedItems, lang]
+  );
+
+  // Auto-sync incomplete orders when valid phone is entered and on changes
+  const { draftOrderId, triggerSyncNow, clearDraft } = useAutoSyncIncompleteOrder({
+    customerPhone,
+    customerName,
+    addressLine,
+    deliveryZone,
+    items: formattedItems,
+    enabled: isOpen,
+  });
+
   // TanStack Query Mutation for Order Creation
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (res) => {
-      // Clear Redux cart on successful order
+      // Clear draft tracking & Redux cart on successful order
+      clearDraft();
       dispatch(clearCart());
       setOrderResult(res);
     },
@@ -103,6 +129,7 @@ export function QuickOrderSheet({
   const grandTotal = subtotal + shippingFee;
 
   const handleResetForm = () => {
+    clearDraft();
     setCustomerName("");
     setCustomerPhone("");
     setAddressLine("");
@@ -116,13 +143,12 @@ export function QuickOrderSheet({
     e.preventDefault();
     setErrorMessage(null);
 
-    // Basic frontend check: Only mobile phone number is mandatory
-    const cleanDigits = customerPhone.replace(/[^0-9]/g, "");
-    if (cleanDigits.length < 11 || !cleanDigits.startsWith("01")) {
+    // Basic frontend check: supports +8801XXXXXXXXX, 8801XXXXXXXXX, 01XXXXXXXXX, 1XXXXXXXXX
+    if (!isValidBdPhone(customerPhone)) {
       setErrorMessage(
         lang === "bn"
-          ? "অনুগ্রহ করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
-          : "Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX)."
+          ? "অনুগ্রহ করে সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX, 1XXXXXXXXX বা +8801XXXXXXXXX)।"
+          : "Please enter a valid mobile number (e.g. 017XXXXXXXX, 1XXXXXXXXX, or +8801XXXXXXXXX)."
       );
       requestAnimationFrame(() => {
         const phoneInput = document.getElementById("quickOrderPhone") as HTMLInputElement | null;
@@ -135,24 +161,19 @@ export function QuickOrderSheet({
     }
 
     try {
-        await createOrderMutation.mutateAsync({
-          customerName,
-          customerPhone,
-          deliveryZone,
-          addressLine,
-          items: resolvedItems.map((i) => ({
-            productId: i.productId,
-            productName: lang === "bn" ? i.productNameBn || i.productName : i.productName,
-            variantId: i.variantId,
-            variantName: lang === "bn" ? i.variantNameBn || i.variantName : i.variantName,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-          })),
-        });
-  } catch {
-    // Handled in createOrderMutation.onError
-  }
-};
+      await createOrderMutation.mutateAsync({
+        orderId: draftOrderId || undefined,
+        status: "pending",
+        customerName,
+        customerPhone: parseBdPhone(customerPhone).local || customerPhone.trim(),
+        deliveryZone,
+        addressLine,
+        items: formattedItems,
+      });
+    } catch {
+      // Handled in createOrderMutation.onError
+    }
+  };
 
 return (
   <AnimatePresence>
@@ -328,6 +349,7 @@ return (
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
+                      onBlur={triggerSyncNow}
                       placeholder={t.fullNamePlaceholder}
                       className="w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-medium transition-colors shadow-sm touch-manipulation"
                     />
@@ -350,6 +372,7 @@ return (
                       aria-invalid={!!errorMessage}
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
+                      onBlur={triggerSyncNow}
                       placeholder={t.phonePlaceholder}
                       className={`w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 bg-white dark:bg-stone-800 focus:outline-none font-mono font-medium transition-colors shadow-sm touch-manipulation ${
                         errorMessage
@@ -449,6 +472,7 @@ return (
                       rows={2}
                       value={addressLine}
                       onChange={(e) => setAddressLine(e.target.value)}
+                      onBlur={triggerSyncNow}
                       placeholder={t.addressPlaceholder}
                       className="w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-medium transition-colors shadow-sm resize-none touch-manipulation"
                     />

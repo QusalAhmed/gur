@@ -103,6 +103,35 @@ export const STOREFRONT_TEXT = {
     hoursHeading: "যোগাযোগের সময়",
     hoursText: "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা",
     viewProductsBtn: "পণ্যগুলো দেখুন ও অর্ডার করুন",
+    // Phone Order Help Section
+    phoneHelpBadge: "সহজ ১-ট্যাপে ফোন অর্ডার",
+    phoneHelpTitle: "অর্ডার করতে সমস্যা হচ্ছে? শুধু আপনার নম্বর দিন!",
+    phoneHelpSubtitle:
+      "অনলাইন সিস্টেম না বুঝলে বা অর্ডার করতে কষ্ট হলে কোনো চিন্তা নেই। নিচে শুধু আপনার মোবাইল নম্বরটি লিখে পাঠিয়ে দিন, আমাদের প্রতিনিধি নিজেই সরাসরি কল করে আপনার পছন্দ জেনে অর্ডারটি চূড়ান্ত করে নেবেন।",
+    phoneHelpInputLabel: "আপনার মোবাইল নম্বরটি লিখুন",
+    phoneHelpInputPlaceholder: "01XXXXXXXXX বা 1XXXXXXXXX",
+    phoneHelpNameLabel: "আপনার নাম (ঐচ্ছিক)",
+    phoneHelpNamePlaceholder: "উদা: মোঃ আব্দুর রহিম",
+    phoneHelpNoteLabel: "কোন গুড় কতটুকু চান? (ঐচ্ছিক)",
+    phoneHelpNotePlaceholder: "যেমন: ২ কেজি পাটালি বা ১ বৈয়াম ঝোলা গুড়...",
+    phoneHelpSubmitBtn: "আমাকে কল করুন ও অর্ডার নিন",
+    phoneHelpSubmitting: "অনুরোধ পাঠানো হচ্ছে...",
+    phoneHelpValidBadge: "সঠিক মোবাইল নম্বর",
+    phoneHelpInvalidError:
+      "অনুগ্রহ করে একটি সঠিক বাংলাদেশী মোবাইল নম্বর লিখুন (উদা: 01XXXXXXXXX বা +8801XXXXXXXXX)।",
+    phoneHelpOrCallDirect: "অথবা জরুরি প্রয়োজনে সরাসরি হটলাইনে ডায়াল করুন:",
+    phoneHelpTrustCall: "আমরাই আপনাকে সরাসরি কল করব",
+    phoneHelpTrustCod: "ক্যাশ অন ডেলিভারি (পণ্য পেয়ে টাকা দিন)",
+    phoneHelpTrustPure: "১০০% খাঁটি রাজশাহীর খেজুর গুড়",
+    // Success Modal
+    phoneHelpModalTitle: "ধন্যবাদ! আপনার অনুরোধ সফলভাবে পেয়েছি",
+    phoneHelpModalDesc:
+      "আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে কল করে আপনার পছন্দের গুড় ও ডেলিভারির ঠিকানা জেনে নেবেন।",
+    phoneHelpModalNumberLabel: "গৃহীত মোবাইল নম্বর:",
+    phoneHelpModalOrderRefLabel: "অনুরোধ রেফারেন্স নং:",
+    phoneHelpModalCloseBtn: "ঠিক আছে",
+    phoneHelpModalBrowseBtn: "পণ্যগুলো ঘুরে দেখুন",
+    phoneHelpModalCallHotline: "হটলাইনে কল করুন",
   },
   en: {
     storeName: "Pure Molasses Store",
@@ -192,6 +221,35 @@ export const STOREFRONT_TEXT = {
     hoursHeading: "Support Hours",
     hoursText: "Daily 8:00 AM - 10:00 PM",
     viewProductsBtn: "View Products & Order",
+    // Phone Order Help Section
+    phoneHelpBadge: "Easy 1-Tap Phone Order",
+    phoneHelpTitle: "Trouble ordering online? Just leave your phone number!",
+    phoneHelpSubtitle:
+      "Don't worry if online ordering feels confusing. Simply submit your mobile number below, and our team will call you back directly to assist and take your order.",
+    phoneHelpInputLabel: "Enter your mobile number",
+    phoneHelpInputPlaceholder: "01XXXXXXXXX or +8801XXXXXXXXX",
+    phoneHelpNameLabel: "Your Name (Optional)",
+    phoneHelpNamePlaceholder: "e.g. John Doe",
+    phoneHelpNoteLabel: "Any preference or quantity? (Optional)",
+    phoneHelpNotePlaceholder: "e.g. 2kg Patali Gur or Liquid Gur...",
+    phoneHelpSubmitBtn: "Call Me to Take My Order",
+    phoneHelpSubmitting: "Submitting request...",
+    phoneHelpValidBadge: "Valid mobile number",
+    phoneHelpInvalidError:
+      "Please enter a valid Bangladeshi mobile number (e.g. 01XXXXXXXXX or +8801XXXXXXXXX).",
+    phoneHelpOrCallDirect: "Or call our hotline directly:",
+    phoneHelpTrustCall: "We will call you back promptly",
+    phoneHelpTrustCod: "Cash on Delivery (Pay upon delivery)",
+    phoneHelpTrustPure: "100% Pure & Authentic Molasses",
+    // Success Modal
+    phoneHelpModalTitle: "Thank You! Request Received",
+    phoneHelpModalDesc:
+      "Our representative will call your number shortly to help you finalize your order and delivery address.",
+    phoneHelpModalNumberLabel: "Submitted Phone:",
+    phoneHelpModalOrderRefLabel: "Request Reference No:",
+    phoneHelpModalCloseBtn: "Close",
+    phoneHelpModalBrowseBtn: "Browse Products",
+    phoneHelpModalCallHotline: "Call Hotline",
   },
 } as const;
 

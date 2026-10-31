@@ -1,13 +1,7 @@
 import { z } from "zod";
+import { BD_PHONE_REGEX } from "@/lib/phone";
 
-/**
- * Bangladeshi phone number regex:
- * Accepts:
- * - Local 11-digit numbers: 013XXXXXXXX to 019XXXXXXXX
- * - Country code +88 prefix: +8801XXXXXXXXX or 8801XXXXXXXXX
- * Automatically strips whitespace and dashes before validation.
- */
-const BD_PHONE_REGEX = /^(?:\+?88)?01[3-9]\d{8}$/;
+export { BD_PHONE_REGEX };
 
 /**
  * Customer Name: Required, 2 to 100 characters, trimmed.

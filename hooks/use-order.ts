@@ -4,8 +4,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getOrderAction } from "@/actions/orders";
 import {
   placeStorefrontOrderAction,
+  syncStorefrontIncompleteOrderAction,
+  submitAssistedPhoneOrderAction,
   type StorefrontOrderPayload,
   type StorefrontOrderResult,
+  type AssistedPhoneOrderPayload,
 } from "@/actions/storefront-order";
 import type { Order } from "@/types/order";
 
@@ -80,4 +83,69 @@ export function useCreateOrderMutation(options?: UseCreateOrderOptions) {
     },
   });
 }
+
+export interface UseSyncIncompleteOrderOptions {
+  onSuccess?: (result: StorefrontOrderResult, variables: Omit<StorefrontOrderPayload, "status">) => void;
+  onError?: (error: Error, variables: Omit<StorefrontOrderPayload, "status">) => void;
+}
+
+/**
+ * Custom TanStack Query mutation hook to silently record or update an incomplete order.
+ */
+export function useSyncIncompleteOrderMutation(options?: UseSyncIncompleteOrderOptions) {
+  const queryClient = useQueryClient();
+
+  return useMutation<StorefrontOrderResult, Error, Omit<StorefrontOrderPayload, "status">>({
+    mutationKey: ["sync-incomplete-order"],
+    mutationFn: async (payload) => {
+      const res = await syncStorefrontIncompleteOrderAction(payload);
+      if (!res.success) {
+        throw new Error(res.error || "Failed to sync incomplete order");
+      }
+      return res;
+    },
+    onSuccess: (result, variables) => {
+      // Invalidate admin orders queries so administrative screens immediately pick up the draft lead
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      options?.onSuccess?.(result, variables);
+    },
+    onError: (error, variables) => {
+      options?.onError?.(error, variables);
+    },
+  });
+}
+
+export interface UseSubmitAssistedPhoneOrderOptions {
+  onSuccess?: (result: StorefrontOrderResult, variables: AssistedPhoneOrderPayload) => void;
+  onError?: (error: Error, variables: AssistedPhoneOrderPayload) => void;
+}
+
+/**
+ * Custom TanStack Query mutation hook for submitting quick assisted phone orders.
+ */
+export function useSubmitAssistedPhoneOrderMutation(options?: UseSubmitAssistedPhoneOrderOptions) {
+  const queryClient = useQueryClient();
+
+  return useMutation<StorefrontOrderResult, Error, AssistedPhoneOrderPayload>({
+    mutationKey: ["submit-assisted-phone-order"],
+    mutationFn: async (payload) => {
+      const res = await submitAssistedPhoneOrderAction(payload);
+      if (!res.success) {
+        throw new Error(res.error || "Failed to submit assisted phone order");
+      }
+      return res;
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (result.orderNumber) {
+        queryClient.invalidateQueries({ queryKey: ORDER_QUERY_KEY(result.orderNumber) });
+      }
+      options?.onSuccess?.(result, variables);
+    },
+    onError: (error, variables) => {
+      options?.onError?.(error, variables);
+    },
+  });
+}
+
 

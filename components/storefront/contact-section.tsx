@@ -24,6 +24,7 @@ interface ContactSectionProps {
   storeName?: string;
   address?: string;
   onScrollToProducts?: () => void;
+  onScrollToHelp?: () => void;
 }
 
 export function ContactSection({
@@ -32,6 +33,7 @@ export function ContactSection({
   storeName,
   address = "বাঘা, রাজশাহী",
   onScrollToProducts,
+  onScrollToHelp,
 }: ContactSectionProps) {
   const [copied, setCopied] = useState(false);
   const t = STOREFRONT_TEXT[lang];
@@ -256,6 +258,20 @@ export function ContactSection({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>{t.guaranteeBadge}</span>
             </div>
+            {onScrollToHelp && (
+              <button
+                type="button"
+                onClick={onScrollToHelp}
+                className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                <span>
+                  {lang === "bn"
+                    ? "সিস্টেম না বুঝলে শুধু নম্বর দিন ❯"
+                    : "Need Help? Just Leave Phone ❯"}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1346,13 +1346,21 @@ export async function fetchGeoDistricts(divisionId?: number): Promise<DbGeoDistr
 // ORDER CREATION & DATABASE SYNC
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function normalizeBdPhone(phone: string): string {
-  let cleaned = (phone || "").replace(/[\s\-\(\)]/g, "");
-  if (!cleaned) return "";
-  if (cleaned.startsWith("+")) return cleaned;
-  if (cleaned.startsWith("0")) return "+88" + cleaned;
-  return "+880" + cleaned;
-}
+import {
+  normalizeBdPhone,
+  parseBdPhone,
+  isValidBdPhone,
+  toLocalBdPhone,
+  BD_PHONE_REGEX,
+} from "@/lib/phone";
+
+export {
+  normalizeBdPhone,
+  parseBdPhone,
+  isValidBdPhone,
+  toLocalBdPhone,
+  BD_PHONE_REGEX,
+};
 
 export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
   try {
