@@ -83,9 +83,16 @@ export function SteadfastBulkDialog({
                 </div>
 
                 {res.success ? (
-                  <p className="text-[11px] text-muted-foreground font-mono">
-                    Tracking: {res.trackingCode || "N/A"}
-                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-muted-foreground font-mono">
+                      Tracking: {res.trackingCode || "N/A"}
+                    </p>
+                    {res.itemDescription && (
+                      <p className="text-[10.5px] text-muted-foreground font-mono truncate max-w-[280px] sm:max-w-md" title={res.itemDescription}>
+                        Items: {res.itemDescription}
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-[11px] text-destructive leading-snug">
                     {res.error || "Booking failed"}

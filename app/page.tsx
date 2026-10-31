@@ -1,69 +1,179 @@
-import Image from "next/image";
+import { Suspense } from "react";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabase } from "@/lib/supabase/client";
+import { ProductShowcase } from "@/components/storefront/product-showcase";
+import { StorefrontProduct } from "@/components/storefront/product-card";
 
-export default function Home() {
+export const instant = false;
+
+function resolveProductImage(storageUrl?: string): string {
+  if (storageUrl && (storageUrl.startsWith("http://") || storageUrl.startsWith("https://"))) {
+    return storageUrl;
+  }
+  // Generic placeholder if no image was uploaded in Supabase storage
+  return "/images/products/blackstrap-drum.jpg";
+}
+
+async function getStorefrontData(): Promise<{
+  products: StorefrontProduct[];
+  hotline: string;
+  storeName: string;
+  storeSubtitle: string;
+}> {
+  const client = supabaseAdmin || supabase;
+
+  // 1. Fetch site settings for store name and support phone
+  let hotline = "01843557389";
+  let storeName = "খেজুরের খাটি গুড়";
+  let storeSubtitle = "গ্রামের গাছিদের তৈরি খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+
+  try {
+    const { data: settings } = await client
+      .from("site_settings")
+      .select("key, value")
+      .in("key", ["store.support_phone", "store.name_bn", "store.name"]);
+
+    if (settings) {
+      for (const row of settings) {
+        const cleanVal = String(row.value || "").replace(/^["']|["']$/g, "").trim();
+        if (!cleanVal) continue;
+        if (row.key === "store.support_phone") hotline = cleanVal;
+        if (row.key === "store.name_bn" || row.key === "store.name") storeName = cleanVal;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch site_settings:", err);
+  }
+
+  // 2. Fetch real active products, variants, and primary images from Supabase
+  let realProducts: StorefrontProduct[] = [];
+
+  try {
+    const [prodRes, varRes, imgRes] = await Promise.all([
+      client
+        .from("products")
+        .select("id, name, name_bn, summary, summary_bn, origin, rating_avg, rating_count, sort_order")
+        .eq("status", "active")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false }),
+      client
+        .from("product_variants")
+        .select("id, product_id, name, name_bn, price, net_quantity, net_unit, stock_status")
+        .order("price", { ascending: true }),
+      client
+        .from("product_images")
+        .select("product_id, storage_path, is_primary, sort_order")
+        .order("is_primary", { ascending: false })
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    const variantsByProduct = new Map<string, any[]>();
+    if (varRes.data) {
+      for (const v of varRes.data) {
+        const list = variantsByProduct.get(v.product_id) || [];
+        list.push({
+          id: v.id,
+          name: v.name,
+          nameBn: v.name_bn || v.name,
+          price: Number(v.price) || 0,
+          netQuantity: v.net_quantity,
+          netUnit: v.net_unit,
+          stockStatus: v.stock_status,
+        });
+        variantsByProduct.set(v.product_id, list);
+      }
+    }
+
+    const imagesByProduct = new Map<string, string[]>();
+    if (imgRes.data) {
+      for (const img of imgRes.data) {
+        let pubUrl = img.storage_path;
+        if (pubUrl && !pubUrl.startsWith("http")) {
+          const { data } = client.storage.from("catalog-images").getPublicUrl(img.storage_path);
+          pubUrl = data?.publicUrl || "";
+        }
+        if (pubUrl) {
+          const list = imagesByProduct.get(img.product_id) || [];
+          if (img.is_primary) {
+            list.unshift(pubUrl);
+          } else {
+            list.push(pubUrl);
+          }
+          imagesByProduct.set(img.product_id, list);
+        }
+      }
+    }
+
+    if (prodRes.data && prodRes.data.length > 0) {
+      realProducts = prodRes.data.map((p) => {
+        const productImgs = imagesByProduct.get(p.id) || [];
+        const resolvedImgs =
+          productImgs.length > 0 ? productImgs : [resolveProductImage()];
+        const primaryImg = resolvedImgs[0];
+        const variants = (variantsByProduct.get(p.id) || [
+          {
+            id: `v-${p.id}`,
+            name: "1 Pack",
+            nameBn: "১ প্যাক",
+            price: 700,
+          },
+        ]).sort((a, b) => Number(a.price) - Number(b.price));
+
+        return {
+          id: p.id,
+          name: p.name,
+          nameBn: p.name_bn || p.name,
+          summary: p.summary,
+          summaryBn: p.summary_bn,
+          image: primaryImg,
+          images: resolvedImgs,
+          origin: p.origin,
+          ratingAvg: Number(p.rating_avg) || 5,
+          ratingCount: Number(p.rating_count) || 1,
+          variants,
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Error fetching real products from Supabase DB in app/page.tsx:", err);
+  }
+
+  return {
+    products: realProducts,
+    hotline,
+    storeName,
+    storeSubtitle,
+  };
+}
+
+async function StorefrontContent() {
+  const { products, hotline, storeName, storeSubtitle } = await getStorefrontData();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <ProductShowcase
+      products={products}
+      defaultHotline={hotline}
+      storeName={storeName}
+      storeSubtitle={storeSubtitle}
+    />
+  );
+}
+
+function StorefrontLoading() {
+  return (
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-[#fdfbf7] dark:bg-stone-950 text-amber-950 dark:text-amber-100">
+      <div className="w-16 h-16 rounded-full bg-amber-200 dark:bg-stone-800 flex items-center justify-center text-3xl animate-bounce shadow-lg">
+        🍯
+      </div>
+      <p className="mt-4 font-bold text-lg">দোকানের পণ্য লোড হচ্ছে...</p>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<StorefrontLoading />}>
+      <StorefrontContent />
+    </Suspense>
   );
 }

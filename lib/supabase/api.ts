@@ -16,6 +16,7 @@ import {
 } from "./types";
 import type { Order, OrderItem, CatalogProduct, OrderEvent, OrderNote, OrderNoteType } from "@/types/order";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatSteadfastItemDescription } from "@/lib/steadfast";
 import {
   parseDatabaseError,
   DatabaseOperationError,
@@ -3089,7 +3090,7 @@ export async function bulkUpdateOrderStatusInDb(
   // Select all required validation fields including courier and items
   const { data: dbOrders, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, order_number, status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
+    .select("id, order_number, status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id, sku, product_name, variant_name, quantity, unit_price, line_total, variant_id)")
     .in("order_number", orderIds);
 
   if (fetchErr) {
@@ -3248,17 +3249,62 @@ export async function bulkUpdateOrderStatusInDb(
   // 4. Insert timeline events into public.order_events for each updated order
   if (updatedOrders && updatedOrders.length > 0) {
     try {
-      const eventRows = updatedOrders.map((o) => ({
-        order_id: o.id,
-        event_type: "status_changed",
-        to_value: newStatus,
-        message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)${
-          dbStatus === "cancelled" && batchNote ? `: ${batchNote.trim()}` : ""
-        }${courierName ? ` (Courier: ${courierName.trim()})` : ""}`,
-      }));
+      const eventRows = updatedOrders.map((o) => {
+        const matchingDbOrder = eligibleOrders.find((eo) => eo.order_number === o.order_number);
+        const itemDesc = matchingDbOrder?.order_items
+          ? formatSteadfastItemDescription(matchingDbOrder.order_items as any)
+          : "";
+        return {
+          order_id: o.id,
+          event_type: "status_changed",
+          to_value: newStatus,
+          message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)${
+            itemDesc ? ` • Items: ${itemDesc}` : ""
+          }${dbStatus === "cancelled" && batchNote ? `: ${batchNote.trim()}` : ""}${
+            courierName ? ` (Courier: ${courierName.trim()})` : ""
+          }`,
+        };
+      });
       await supabase.from("order_events").insert(eventRows);
     } catch (eventErr) {
       console.warn("Could not record timeline events for bulk orders:", eventErr);
+    }
+  }
+
+  // 5. If moving to processing in bulk, record a packaging note with items checklist for packing
+  if (newStatus === "processing" && updatedOrders && updatedOrders.length > 0) {
+    const packagingNotes: {
+      order_id: string;
+      order_number: string;
+      type: string;
+      author: string;
+      note: string;
+      created_at: string;
+    }[] = [];
+
+    for (const o of updatedOrders) {
+      const matchingDbOrder = eligibleOrders.find((eo) => eo.order_number === o.order_number);
+      const itemDesc = matchingDbOrder?.order_items
+        ? formatSteadfastItemDescription(matchingDbOrder.order_items as any)
+        : "";
+      if (itemDesc) {
+        packagingNotes.push({
+          order_id: o.id,
+          order_number: o.order_number,
+          type: "packaging",
+          author: "System / Order Processing",
+          note: `[Packaging Checklist]: ${itemDesc}`,
+          created_at: nowIso,
+        });
+      }
+    }
+
+    if (packagingNotes.length > 0) {
+      try {
+        await supabase.from("order_notes").insert(packagingNotes);
+      } catch (packErr) {
+        console.warn("Could not record packaging checklist notes for processing orders:", packErr);
+      }
     }
   }
 

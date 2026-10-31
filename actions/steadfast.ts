@@ -392,21 +392,19 @@ export async function bookSteadfastBulkParcelsAction(
     .select("order_number, courier_consignment_id, courier_tracking_code, courier_tracking_url, order_items(id, sku, product_name, variant_name, quantity, unit_price, line_total, variant_id)")
     .in("order_number", orderIds);
 
-  const existingBookedMap = new Map<
+  const dbOrdersMap = new Map<
     string,
     { consignmentId?: string; trackingCode?: string; trackingUrl?: string; orderItems?: any[] }
   >();
 
   if (dbOrders) {
     for (const d of dbOrders) {
-      if (d.courier_consignment_id || d.courier_tracking_code) {
-        existingBookedMap.set(d.order_number, {
-          consignmentId: d.courier_consignment_id || undefined,
-          trackingCode: d.courier_tracking_code || undefined,
-          trackingUrl: d.courier_tracking_url || undefined,
-          orderItems: (d as any).order_items || undefined,
-        });
-      }
+      dbOrdersMap.set(d.order_number, {
+        consignmentId: d.courier_consignment_id || undefined,
+        trackingCode: d.courier_tracking_code || undefined,
+        trackingUrl: d.courier_tracking_url || undefined,
+        orderItems: (d as any).order_items || undefined,
+      });
     }
   }
 
@@ -415,7 +413,7 @@ export async function bookSteadfastBulkParcelsAction(
   const results: BulkBookingItemResult[] = [];
 
   for (const o of orders) {
-    const dbInfo = existingBookedMap.get(o.id);
+    const dbInfo = dbOrdersMap.get(o.id);
     const alreadyBooked =
       Boolean(o.courier_consignment_id) ||
       Boolean(o.courier_tracking_code) ||
@@ -473,21 +471,23 @@ export async function bookSteadfastBulkParcelsAction(
     const codAmount = calculateCodAmount(o);
     const invoice = (o.id || "").trim();
 
-    const orderItems: OrderItem[] =
+    const rawItems =
       Array.isArray(o.items) && o.items.length > 0
         ? o.items
-        : Array.isArray(dbInfo?.orderItems)
-        ? dbInfo.orderItems.map((it: any, idx: number) => ({
-            id: it.id || `db-${idx}`,
-            sku: it.sku || "",
-            product_name: it.product_name || "",
-            variant_name: it.variant_name || "",
-            quantity: Number(it.quantity) || 1,
-            unit_price: Number(it.unit_price) || 0,
-            line_total: Number(it.line_total) || 0,
-            variant_id: it.variant_id,
-          }))
+        : Array.isArray(dbInfo?.orderItems) && dbInfo.orderItems.length > 0
+        ? dbInfo.orderItems
         : [];
+
+    const orderItems: OrderItem[] = rawItems.map((it: any, idx: number) => ({
+      id: it.id || `db-${idx}`,
+      sku: it.sku || "",
+      product_name: it.product_name || "",
+      variant_name: it.variant_name || "",
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+      line_total: Number(it.line_total) || 0,
+      variant_id: it.variant_id,
+    }));
 
     const itemDescription = formatSteadfastItemDescription(orderItems);
     const totalLot = calculateSteadfastTotalLot(orderItems);
@@ -515,12 +515,22 @@ export async function bookSteadfastBulkParcelsAction(
 
     if (itemDescription) {
       payload.item_description = itemDescription;
+      payload.order_description = itemDescription;
+      payload.description = itemDescription;
     }
     if (totalLot > 0) {
       payload.total_lot = totalLot;
     }
 
-    validItems.push({ order: o, payload, itemDescription, totalLot });
+    validItems.push({
+      order: {
+        ...o,
+        items: orderItems,
+      },
+      payload,
+      itemDescription,
+      totalLot,
+    });
   }
 
   if (validItems.length === 0) {
@@ -583,13 +593,22 @@ export async function bookSteadfastBulkParcelsAction(
             .select("id");
 
           const matchingOrderUuid = updatedOrderRows?.[0]?.id;
-          // Record order timeline event
+          // Record order timeline event & delivery note with parcel items
           if (matchingOrderUuid) {
             await client.from("order_events").insert({
               order_id: matchingOrderUuid,
               event_type: "courier_consignment_created",
               message: `Steadfast Consignment #${consignmentId} created (Tracking: ${trackingCode})${matchingValidItem?.itemDescription ? ` • Items: ${matchingValidItem.itemDescription}` : ""}`,
               actor_id: null,
+            }).select().maybeSingle();
+
+            await client.from("order_notes").insert({
+              order_id: matchingOrderUuid,
+              order_number: orderId,
+              type: "delivery",
+              note: `Steadfast Consignment ID: ${consignmentId} | Tracking: ${trackingCode} | Link: ${trackingLink}${matchingValidItem?.itemDescription ? ` | Parcel Items: ${matchingValidItem.itemDescription}` : ""}`,
+              author: "Steadfast Courier Bot",
+              is_internal: true,
             }).select().maybeSingle();
           }
 
