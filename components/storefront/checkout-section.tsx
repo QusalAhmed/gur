@@ -679,7 +679,7 @@ return (
                     </>
                   ) : (
                     <span className="flex items-center gap-2">
-                      {cartItems.length > 0 ? (
+                      {displayCartItems.length > 0 ? (
                         <>
                           <span>
                             {lang === "bn"
