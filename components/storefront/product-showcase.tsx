@@ -34,6 +34,7 @@ export function ProductShowcase({
   const cartSubtotal = useAppSelector(selectCartSubtotal);
 
   const [lang, setLang] = useState<StorefrontLang>("bn");
+  const [isMounted, setIsMounted] = useState(false);
   const [activeOrderModal, setActiveOrderModal] = useState<{
     isOpen: boolean;
     product: SelectedProductData | null;
@@ -52,6 +53,11 @@ export function ProductShowcase({
   const t = STOREFRONT_TEXT[lang];
   const displayStoreName = storeName || t.storeName;
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
+
+  // Prevent SSR hydration mismatch for client-side state
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Track active product index on scroll
   useEffect(() => {
@@ -132,12 +138,12 @@ export function ProductShowcase({
             >
               <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" />
               <span className="hidden sm:inline">{t.cartTitle}</span>
-              {cartTotalQuantity > 0 && (
+              {isMounted && cartTotalQuantity > 0 && (
                 <span className="bg-amber-600 text-white text-[11px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
                   {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
                 </span>
               )}
-              {cartSubtotal > 0 && (
+              {isMounted && cartSubtotal > 0 && (
                 <span className="hidden md:inline font-mono text-emerald-700 dark:text-emerald-400 text-xs">
                   ({formatStorePrice(cartSubtotal, lang)})
                 </span>

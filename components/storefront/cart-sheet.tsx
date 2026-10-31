@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
@@ -29,8 +29,13 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
   const items = useAppSelector(selectCartItems);
   const totalQuantity = useAppSelector(selectCartTotalQuantity);
   const subtotal = useAppSelector(selectCartSubtotal);
+  const [isMounted, setIsMounted] = useState(false);
 
   const t = STOREFRONT_TEXT[lang];
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Close on Escape key
   useEffect(() => {
@@ -47,6 +52,8 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
     dispatch(closeCart());
     onProceedToCheckout();
   };
+
+  if (!isMounted) return null;
 
   return (
     <AnimatePresence>
