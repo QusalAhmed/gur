@@ -15,20 +15,35 @@ import {
   Truck,
   ShieldCheck,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { useOrder } from "@/hooks/use-order";
 
 function OrderConfirmedContent() {
   const searchParams = useSearchParams();
   const [copied, setCopied] = useState(false);
 
-  const orderNumber = searchParams.get("orderNumber") || "GUR-ORDER";
-  const grandTotal = Number(searchParams.get("total")) || 0;
-  const customerName = searchParams.get("name") || "সম্মানিত গ্রাহক";
-  const customerPhone = searchParams.get("phone") || "";
-  const deliveryZone = searchParams.get("zone") || "inside_dhaka";
+  const queryOrderNumber = searchParams.get("orderNumber") || "";
+  const paramTotal = Number(searchParams.get("total")) || 0;
+  const paramName = searchParams.get("name") || "";
+  const paramPhone = searchParams.get("phone") || "";
+  const paramZone = searchParams.get("zone") || "inside_dhaka";
   const hotline = "01843557389";
   const rawHotline = hotline.replace(/[^0-9]/g, "");
+
+  // TanStack Query to fetch the single order from the database
+  const { data: order, isLoading } = useOrder(queryOrderNumber, {
+    enabled: Boolean(queryOrderNumber),
+  });
+
+  const orderNumber = order?.order_number || queryOrderNumber || "GUR-ORDER";
+  const grandTotal = order ? Number(order.grand_total) : paramTotal;
+  const customerName = order?.customer || paramName || "সম্মানিত গ্রাহক";
+  const customerPhone = order?.phone || paramPhone || "";
+  const deliveryZone = (order?.address?.division?.toLowerCase().includes("dhaka")
+    ? "inside_dhaka"
+    : paramZone) as "inside_dhaka" | "outside_dhaka";
 
   const handleCopyOrderNumber = () => {
     if (navigator?.clipboard) {
@@ -120,6 +135,27 @@ function OrderConfirmedContent() {
                 {deliveryZone === "inside_dhaka" ? "ঢাকার ভিতরে (হোম ডেলিভারি)" : "ঢাকার বাইরে (কুরিয়ার হোম ডেলিভারি)"}
               </span>
             </div>
+
+            {/* Ordered Items List (rendered when fetched via TanStack Query) */}
+            {order?.items && order.items.length > 0 && (
+              <div className="pt-2 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-1.5">
+                <span className="text-[11px] font-bold text-stone-600 dark:text-stone-400 block">
+                  অর্ডারের পণ্যসমূহ ({toBnNumber(order.items.length)}টি):
+                </span>
+                <div className="space-y-1">
+                  {order.items.map((item, idx) => (
+                    <div key={item.id || idx} className="flex justify-between items-center text-xs">
+                      <span className="text-stone-800 dark:text-stone-200 font-medium">
+                        {item.product_name} {item.variant_name ? `(${item.variant_name})` : ""} × {toBnNumber(item.quantity)}
+                      </span>
+                      <span className="font-mono font-bold text-amber-950 dark:text-amber-100">
+                        {formatStorePrice(item.line_total || item.unit_price * item.quantity, "bn")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Total Payable COD */}
             <div className="flex items-center justify-between pt-2 border-t border-dashed border-amber-300/80 dark:border-stone-700">

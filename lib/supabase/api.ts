@@ -1895,6 +1895,7 @@ export function formatDbOrderRecord(data: any): Order {
 
   return {
     id: data.order_number,
+    order_number: data.order_number || data.id,
     customer: data.customer_name || "",
     phone: custPhone,
     alternative_phone: data.customer_alternative_phone || data.shipping_address?.alternative_phone || "",

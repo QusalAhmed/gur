@@ -98,9 +98,9 @@ export function ProductCard({
   const imagesList = product.images && product.images.length > 0 ? product.images : [product.image];
   const hasMultipleImages = imagesList.length > 1;
 
-  // Autoplay plugin instance with 5 second interval and pause on touch/hover
+  // Autoplay plugin instance with 2 second interval and pause on touch/hover
   const autoplayPlugin = useRef(
-    Autoplay({ delay: 5000, stopOnInteraction: true, stopOnMouseEnter: true })
+    Autoplay({ delay: 2000, stopOnInteraction: false, stopOnMouseEnter: true })
   );
 
   // Track active slide in carousel
@@ -240,8 +240,8 @@ export function ProductCard({
                     type="button"
                     onClick={() => carouselApi?.scrollTo(dotIdx)}
                     className={`h-2 rounded-full transition-all touch-manipulation ${currentSlide === dotIdx
-                        ? "w-6 bg-amber-400"
-                        : "w-2 bg-white/60 hover:bg-white/90"
+                      ? "w-6 bg-amber-400"
+                      : "w-2 bg-white/60 hover:bg-white/90"
                       }`}
                     aria-label={`Go to slide ${dotIdx + 1}`}
                   />
@@ -444,11 +444,10 @@ export function ProductCard({
                   key={preset}
                   type="button"
                   onClick={() => handleSetUnit(preset)}
-                  className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${
-                    currentUnit === preset
+                  className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${currentUnit === preset
                       ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                       : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
-                  }`}
+                    }`}
                 >
                   {lang === "bn" ? `${toBnNumber(preset)}টি` : preset}
                 </button>
@@ -458,23 +457,23 @@ export function ProductCard({
         )}
       </div>
 
-          {/* Bottom Scroll Hint: If not last product */}
-          <div className="relative z-10 w-full text-center py-1">
-            {index < totalProducts - 1 ? (
-              <motion.div
-                animate={{ y: [0, 4, 0] }}
-                transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800/80 dark:text-amber-400/80"
-              >
-                <span>{t.scrollHint}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </motion.div>
-            ) : (
-              <div className="text-[11px] text-amber-900/60 dark:text-amber-400/60 font-medium">
-                {t.guaranteeBadge}
-              </div>
-            )}
+      {/* Bottom Scroll Hint: If not last product */}
+      <div className="relative z-10 w-full text-center py-1">
+        {index < totalProducts - 1 ? (
+          <motion.div
+            animate={{ y: [0, 4, 0] }}
+            transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800/80 dark:text-amber-400/80"
+          >
+            <span>{t.scrollHint}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </motion.div>
+        ) : (
+          <div className="text-[11px] text-amber-900/60 dark:text-amber-400/60 font-medium">
+            {t.guaranteeBadge}
           </div>
-        </section>
-        );
+        )}
+      </div>
+    </section>
+  );
 }

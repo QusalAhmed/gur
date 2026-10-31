@@ -223,3 +223,53 @@ export async function getOrdersAction(params: GetOrdersParams = {}): Promise<Get
     totalRevenue,
   };
 }
+
+/**
+ * Server Action: Fetches a single order by either its UUID or order_number,
+ * including related order_items, order_events, and order_notes.
+ */
+export async function getOrderAction(idOrNumber: string): Promise<Order | null> {
+  if (!idOrNumber || !idOrNumber.trim()) return null;
+
+  const client = supabaseAdmin || supabase;
+  const cleanId = idOrNumber.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+
+  const fullSelect = `
+    *,
+    order_items (*),
+    order_events (*),
+    order_notes (*)
+  `;
+
+  let query = client.from("orders").select(fullSelect);
+  if (isUuid) {
+    query = query.eq("id", cleanId);
+  } else {
+    query = query.eq("order_number", cleanId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    // If order_notes relation is missing in schema cache, fallback without order_notes
+    let fallbackQuery = client.from("orders").select(`
+      *,
+      order_items (*),
+      order_events (*)
+    `);
+    if (isUuid) {
+      fallbackQuery = fallbackQuery.eq("id", cleanId);
+    } else {
+      fallbackQuery = fallbackQuery.eq("order_number", cleanId);
+    }
+    const fallbackRes = await fallbackQuery.maybeSingle();
+    if (fallbackRes.error || !fallbackRes.data) {
+      return null;
+    }
+    return formatDbOrderRecord(fallbackRes.data);
+  }
+
+  if (!data) return null;
+  return formatDbOrderRecord(data);
+}

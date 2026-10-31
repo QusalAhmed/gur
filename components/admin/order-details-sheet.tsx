@@ -85,6 +85,7 @@ import {
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { updateOrderInDb } from "@/lib/supabase/api";
+import { useOrder } from "@/hooks/use-order";
 import type {
   Order,
   OrderItem,
@@ -161,7 +162,7 @@ function getNextStatusLabel(status: Order["status"]): string | null {
 export function OrderDetailsSheet({
   open,
   onOpenChange,
-  order,
+  order: propOrder,
   ordersList = [],
   onSelectOrder,
   onEditOrder,
@@ -180,6 +181,15 @@ export function OrderDetailsSheet({
   isStatusPending = false,
   isNotePending = false,
 }: OrderDetailsSheetProps) {
+  // TanStack Query to get and cache the single order
+  const { data: fetchedOrder } = useOrder(propOrder?.id, {
+    enabled: open && Boolean(propOrder?.id),
+    initialData: propOrder,
+    staleTime: 1000 * 15,
+  });
+
+  const order = fetchedOrder || propOrder;
+
   const { storeName, currencySymbol } = useSiteSettings();
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
   const [noteFilterType, setNoteFilterType] = React.useState<string>("all");
@@ -507,9 +517,8 @@ export function OrderDetailsSheet({
               <div className="hidden md:flex items-center gap-2">
                 {renderChannelBadge()}
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize whitespace-nowrap ${
-                    statusStyles[order.status] || "bg-muted text-muted-foreground"
-                  }`}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize whitespace-nowrap ${statusStyles[order.status] || "bg-muted text-muted-foreground"
+                    }`}
                 >
                   {order.status.replace(/_/g, " ")}
                 </span>
@@ -563,9 +572,8 @@ export function OrderDetailsSheet({
             <div className="flex items-center gap-2 flex-wrap">
               {renderChannelBadge()}
               <span
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize whitespace-nowrap ${
-                  statusStyles[order.status] || "bg-muted text-muted-foreground"
-                }`}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize whitespace-nowrap ${statusStyles[order.status] || "bg-muted text-muted-foreground"
+                  }`}
               >
                 {order.status.replace(/_/g, " ")}
               </span>
@@ -1034,11 +1042,10 @@ export function OrderDetailsSheet({
                           variant="outline"
                           disabled={isRecreatingSteadfast}
                           onClick={() => setIsRecreateModalOpen(true)}
-                          className={`w-full h-7 text-xs font-medium border ${
-                            diffResult.hasDiff
+                          className={`w-full h-7 text-xs font-medium border ${diffResult.hasDiff
                               ? "bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-400 hover:bg-amber-500/25"
                               : "border-border/70 hover:bg-muted text-muted-foreground"
-                          }`}
+                            }`}
                         >
                           <RefreshCw className={`h-3 w-3 mr-1.5 ${isRecreatingSteadfast ? "animate-spin" : ""}`} />
                           {diffResult.hasDiff
