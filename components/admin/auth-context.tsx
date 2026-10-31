@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminUser, AdminRole } from "@/lib/admin-auth";
+import { updateAdminProfileAction } from "@/actions/admin-profile";
 
 interface AdminAuthContextType {
   user: AdminUser | null;
@@ -16,6 +17,12 @@ interface AdminAuthContextType {
     redirectTo?: string;
   }) => Promise<{ success: boolean; error?: string; user?: AdminUser }>;
   logout: () => Promise<void>;
+  updateUser: (updatedFields: Partial<AdminUser>) => void;
+  saveProfile: (params: {
+    name: string;
+    avatarUrl: string;
+    phone?: string;
+  }) => Promise<{ success: boolean; error?: string; user?: AdminUser }>;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
@@ -128,6 +135,36 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUser = useCallback((updatedFields: Partial<AdminUser>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedFields };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, []);
+
+  const saveProfile = useCallback(
+    async (params: { name: string; avatarUrl: string; phone?: string }) => {
+      try {
+        const res = await updateAdminProfileAction(params);
+        if (res.success && res.user) {
+          setUser(res.user);
+          if (typeof window !== "undefined") {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(res.user));
+          }
+          return { success: true, user: res.user };
+        }
+        return { success: false, error: res.error || "Failed to save profile" };
+      } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to update profile" };
+      }
+    },
+    []
+  );
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -151,6 +188,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         login,
         logout,
+        updateUser,
+        saveProfile,
       }}
     >
       {children}

@@ -101,13 +101,13 @@ export async function getOrdersAction(params: GetOrdersParams = {}): Promise<Get
       q = q.eq("payment_status", payment);
     }
 
-    // Search filter across order ID, customer name, phone, customer note, shipping method
+    // Search filter across order ID, customer name, phone, alternative phone, customer note, shipping method
     if (rawSearch) {
       // Remove characters that conflict with PostgREST URL filter grammar
       const cleanTerm = rawSearch.replace(/[,()]/g, "").trim();
       if (cleanTerm) {
         q = q.or(
-          `order_number.ilike.%${cleanTerm}%,customer_name.ilike.%${cleanTerm}%,customer_phone.ilike.%${cleanTerm}%,customer_note.ilike.%${cleanTerm}%,shipping_method_name.ilike.%${cleanTerm}%`
+          `order_number.ilike.%${cleanTerm}%,customer_name.ilike.%${cleanTerm}%,customer_phone.ilike.%${cleanTerm}%,customer_alternative_phone.ilike.%${cleanTerm}%,shipping_phone.ilike.%${cleanTerm}%,customer_note.ilike.%${cleanTerm}%,shipping_method_name.ilike.%${cleanTerm}%`
         );
       }
     }

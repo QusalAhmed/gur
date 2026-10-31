@@ -1448,8 +1448,12 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
 
   // 1. Clean Phone Number (never auto-fill a dummy number)
   const normalizedPhone = normalizeBdPhone(savedOrder.phone);
-  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const normalizedAltPhone = savedOrder.alternative_phone ? normalizeBdPhone(savedOrder.alternative_phone) : "";
+  const rawShippingPhone = savedOrder.address?.phone || savedOrder.shipping_phone || savedOrder.phone;
+  const normalizedShippingPhone = rawShippingPhone ? normalizeBdPhone(rawShippingPhone) : "";
   const customerName = (savedOrder.customer || "").trim();
+  const recipientName = (savedOrder.address?.recipient_name || savedOrder.recipient_name || customerName).trim();
+  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
 
   // If this is a draft (incomplete or pending) order, or if customer name or phone is left blank,
   // insert directly into the orders and order_items tables so no dummy fields are auto-filled.
@@ -1473,11 +1477,16 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
       id: orderNumber,
       customer: customerName,
       phone: normalizedPhone,
+      alternative_phone: normalizedAltPhone,
+      shipping_phone: normalizedShippingPhone || normalizedPhone,
+      recipient_name: recipientName || customerName,
       email: savedOrder.email ? savedOrder.email.trim() : "",
       address: {
         division: savedOrder.address?.division || "",
         district: savedOrder.address?.district || "",
         address_line: savedOrder.address?.address_line || "",
+        recipient_name: recipientName || customerName,
+        phone: normalizedShippingPhone || normalizedPhone,
       },
       status: savedOrder.status,
       payment: savedOrder.payment || "unpaid",
@@ -1532,13 +1541,16 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         currency: "BDT",
         customer_name: customerName || null,
         customer_phone: normalizedPhone || null,
+        customer_alternative_phone: normalizedAltPhone || null,
+        shipping_phone: normalizedShippingPhone || normalizedPhone || null,
         customer_email: savedOrder.email ? savedOrder.email.trim() : null,
         shipping_address: {
           division: savedOrder.address?.division || "",
           district: savedOrder.address?.district || "",
           address_line: savedOrder.address?.address_line || "",
-          phone: normalizedPhone || "",
-          recipient_name: customerName || "",
+          phone: normalizedShippingPhone || normalizedPhone || "",
+          alternative_phone: normalizedAltPhone || "",
+          recipient_name: recipientName || customerName || "",
         },
         subtotal,
         discount_total: discountTotal,
@@ -1724,8 +1736,8 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
       email: savedOrder.email ? savedOrder.email.trim() : undefined,
     },
     p_shipping_address: {
-      recipient_name: customerName,
-      phone: normalizedPhone,
+      recipient_name: recipientName || customerName,
+      phone: normalizedShippingPhone || normalizedPhone,
       district_id: districtId,
       address_line: savedOrder.address?.address_line?.trim() || "",
     },
@@ -1765,12 +1777,17 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
   const createdResult: Order = {
     id: orderNumber,
     customer: orderDetails?.customer_name || customerName || "",
-    phone: orderDetails?.shipping_address?.phone || normalizedPhone,
+    phone: normalizedPhone,
+    alternative_phone: orderDetails?.shipping_address?.alternative_phone || orderDetails?.customer_alternative_phone || normalizedAltPhone || "",
+    shipping_phone: normalizedShippingPhone || normalizedPhone,
+    recipient_name: recipientName || customerName,
     email: savedOrder.email || "",
     address: {
       division: orderDetails?.shipping_address?.division || savedOrder.address?.division || "",
       district: orderDetails?.shipping_address?.district || savedOrder.address?.district || "",
       address_line: orderDetails?.shipping_address?.address_line || savedOrder.address?.address_line || "",
+      recipient_name: recipientName || customerName,
+      phone: normalizedShippingPhone || normalizedPhone,
     },
     status: savedOrder.status || (orderDetails?.status as any) || "pending",
     payment: (orderDetails?.payment_status as any) || savedOrder.payment || "unpaid",
@@ -1827,6 +1844,24 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     public_token: placeData?.public_token,
   };
 
+  const postRpcUpdate: Record<string, any> = {};
+  if (normalizedAltPhone) {
+    postRpcUpdate.customer_alternative_phone = normalizedAltPhone;
+  }
+  if (normalizedShippingPhone) {
+    postRpcUpdate.shipping_phone = normalizedShippingPhone;
+  }
+  if (Object.keys(postRpcUpdate).length > 0 && orderNumber) {
+    try {
+      await supabase
+        .from("orders")
+        .update(postRpcUpdate)
+        .eq("order_number", orderNumber);
+    } catch (e) {
+      console.warn("Could not set phone fields on newly created RPC order:", e);
+    }
+  }
+
   return createdResult;
 }
 
@@ -1853,15 +1888,24 @@ export function formatDbOrderRecord(data: any): Order {
     created_at: formatDateTime(ev.created_at || ev.at) || formatDateTime(nowStr),
   }));
 
+  const custPhone = data.customer_phone || data.shipping_address?.phone || "";
+  const shipPhone = data.shipping_phone || data.shipping_address?.phone || custPhone;
+  const recipName = data.shipping_address?.recipient_name || data.customer_name || "";
+
   return {
     id: data.order_number,
     customer: data.customer_name || "",
-    phone: data.shipping_address?.phone || data.customer_phone || "",
+    phone: custPhone,
+    alternative_phone: data.customer_alternative_phone || data.shipping_address?.alternative_phone || "",
+    shipping_phone: shipPhone,
+    recipient_name: recipName,
     email: data.customer_email || "",
     address: {
       division: data.shipping_address?.division || "",
       district: data.shipping_address?.district || "",
       address_line: data.shipping_address?.address_line || "",
+      recipient_name: recipName,
+      phone: shipPhone,
     },
     status: (data.status as any) || "pending",
     payment: (data.payment_status as any) || "unpaid",
@@ -1884,6 +1928,11 @@ export function formatDbOrderRecord(data: any): Order {
     })(),
     cancel_reason: data.cancel_reason || "",
     courier_name: data.shipping_method_name || "",
+    courier_consignment_id: data.courier_consignment_id ? String(data.courier_consignment_id) : undefined,
+    courier_tracking_code: data.courier_tracking_code || undefined,
+    courier_tracking_url: data.courier_tracking_url || undefined,
+    courier_invoice: data.courier_invoice || undefined,
+    courier_payload_snapshot: data.courier_payload_snapshot || null,
     items,
     notes: Array.isArray(data.order_notes)
       ? data.order_notes
@@ -2046,10 +2095,16 @@ export async function updateOrderInDb(
   updatedOrder.notes = deduplicatedNotes;
 
   const normalizedPhone = updatedOrder.phone ? normalizeBdPhone(updatedOrder.phone) : null;
+  const normalizedAltPhone = updatedOrder.alternative_phone ? normalizeBdPhone(updatedOrder.alternative_phone) : null;
+  const rawShippingPhone = updatedOrder.address?.phone || updatedOrder.shipping_phone || updatedOrder.phone;
+  const normalizedShippingPhone = rawShippingPhone ? normalizeBdPhone(rawShippingPhone) : normalizedPhone;
+  const recipientName = (updatedOrder.address?.recipient_name || updatedOrder.recipient_name || updatedOrder.customer || "").trim();
 
   const updatePayload: Record<string, any> = {
     customer_name: updatedOrder.customer ? updatedOrder.customer.trim() : null,
     customer_phone: normalizedPhone,
+    customer_alternative_phone: normalizedAltPhone,
+    shipping_phone: normalizedShippingPhone,
     customer_email: updatedOrder.email ? updatedOrder.email.trim() : null,
     status: dbStatus,
     payment_status: updatedOrder.payment,
@@ -2065,12 +2120,28 @@ export async function updateOrderInDb(
     attribution: {},
     cancel_reason: updatedOrder.cancel_reason || null,
     shipping_method_name: updatedOrder.courier_name || null,
+    ...(updatedOrder.courier_consignment_id !== undefined
+      ? { courier_consignment_id: updatedOrder.courier_consignment_id || null }
+      : {}),
+    ...(updatedOrder.courier_tracking_code !== undefined
+      ? { courier_tracking_code: updatedOrder.courier_tracking_code || null }
+      : {}),
+    ...(updatedOrder.courier_tracking_url !== undefined
+      ? { courier_tracking_url: updatedOrder.courier_tracking_url || null }
+      : {}),
+    ...(updatedOrder.courier_invoice !== undefined
+      ? { courier_invoice: updatedOrder.courier_invoice || null }
+      : {}),
+    ...(updatedOrder.courier_payload_snapshot !== undefined
+      ? { courier_payload_snapshot: updatedOrder.courier_payload_snapshot || null }
+      : {}),
     shipping_address: updatedOrder.address
       ? {
           division: updatedOrder.address.division || "",
           district: updatedOrder.address.district || "",
           address_line: updatedOrder.address.address_line || "",
           phone: normalizedPhone || updatedOrder.phone || "",
+          alternative_phone: normalizedAltPhone || updatedOrder.alternative_phone || "",
           recipient_name: updatedOrder.customer || "",
         }
       : undefined,
@@ -3232,7 +3303,7 @@ export async function bulkAssignCourierInDb(
   // 1. Fetch current orders from DB to validate courier assignment eligibility
   const { data: dbOrders, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, order_number, status")
+    .select("id, order_number, status, courier_consignment_id, courier_tracking_code")
     .in("order_number", orderIds);
 
   if (fetchErr) {
@@ -3262,6 +3333,11 @@ export async function bulkAssignCourierInDb(
       skippedOrders.push({
         id: o.order_number,
         reason: "Order is already delivered and courier partner cannot be reassigned",
+      });
+    } else if (o.courier_consignment_id) {
+      skippedOrders.push({
+        id: o.order_number,
+        reason: `Order is already booked with courier (Consignment #${o.courier_consignment_id}) and cannot be reassigned`,
       });
     } else {
       eligibleOrders.push(o);
@@ -3361,7 +3437,7 @@ export async function bulkDeleteOrdersInDb(orderIds: string[]): Promise<BulkDele
   // 1. Fetch current orders from DB to validate deletability
   const { data: dbOrders, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, order_number, status")
+    .select("id, order_number, status, courier_consignment_id, courier_tracking_code")
     .in("order_number", orderIds);
 
   if (fetchErr) {

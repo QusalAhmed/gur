@@ -16,6 +16,8 @@ export interface SiteSettingsMap {
   "store.address"?: string;
   "store.timezone"?: string;
   "store.language"?: string;
+  "store.logo_url"?: string;
+  "store.favicon_url"?: string;
 
   // Checkout & Orders
   "checkout.cod_enabled"?: boolean;
@@ -178,4 +180,31 @@ export async function updateSiteSettingsAction(
     };
   }
 }
+
+/**
+ * Loads public site settings (branding, store details, etc.) without requiring admin authentication.
+ * Safe for use in public layouts, store headers, and metadata generation.
+ */
+export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("site_settings")
+      .select("key, value")
+      .eq("is_public", true);
+
+    if (error || !data) {
+      return {};
+    }
+
+    const map: Partial<SiteSettingsMap> = {};
+    for (const row of data) {
+      map[row.key as keyof SiteSettingsMap] = row.value;
+    }
+    return map;
+  } catch (err) {
+    console.error("Error fetching public site settings:", err);
+    return {};
+  }
+}
+
 

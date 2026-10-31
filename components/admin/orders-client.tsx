@@ -83,6 +83,24 @@ import {
   type BulkCourierUpdateResult,
   type BulkDeleteResult,
 } from "@/lib/supabase";
+import {
+  updateOrderStatusWithSteadfastAction,
+  bookSteadfastBulkParcelsAction,
+  recreateSteadfastParcelAction,
+  type BulkBookSteadfastResult,
+} from "@/actions/steadfast";
+import {
+  buildSteadfastPayloadSnapshot,
+  detectSteadfastPayloadDiff,
+  computeNextSteadfastInvoice,
+  type SteadfastDiffItem,
+  type SteadfastPayloadSnapshot,
+} from "@/lib/steadfast";
+import { SteadfastFailureDialog } from "@/components/admin/steadfast-failure-dialog";
+import { SteadfastBulkDialog } from "@/components/admin/steadfast-bulk-dialog";
+import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
+import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
+import { useBatchSteadfastDeliveryRecords } from "@/hooks/use-steadfast-delivery-record";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -422,6 +440,16 @@ export function OrdersClient() {
   });
 
   const orders = ordersResult?.orders || [];
+
+  // Batch preload known delivery reports from DB for visible table rows (primary, alt & shipping phones)
+  const visiblePhones = React.useMemo(
+    () =>
+      orders
+        .flatMap((o) => [o.phone, o.alternative_phone, o.shipping_phone, o.address?.phone])
+        .filter(Boolean) as string[],
+    [orders]
+  );
+  useBatchSteadfastDeliveryRecords(visiblePhones);
   const totalCount = ordersResult?.totalCount ?? 0;
   const pageCount = ordersResult?.pageCount ?? 1;
   const counts = ordersResult?.statusCounts || {
@@ -650,6 +678,7 @@ export function OrdersClient() {
       eventMsg,
       currentOrder,
       courierName,
+      forceWithoutCourier,
     }: {
       orderId: string;
       newStatus: Order["status"];
@@ -657,10 +686,60 @@ export function OrdersClient() {
       eventMsg?: string;
       currentOrder?: Order;
       courierName?: string;
+      forceWithoutCourier?: boolean;
     }) => {
-      return await updateOrderStatusInDb(orderId, newStatus, cancelReason, eventMsg, currentOrder, courierName);
+      const isSteadfast = (courierName || currentOrder?.courier_name || "").toLowerCase().includes("steadfast");
+
+      // Auto-book parcel if order is moving to processing with Steadfast Courier
+      if (newStatus === "processing" && isSteadfast && !forceWithoutCourier) {
+        const steadfastRes = await updateOrderStatusWithSteadfastAction({
+          orderId,
+          newStatus,
+          courierName: courierName || currentOrder?.courier_name || "Steadfast Courier",
+          cancelReason,
+          eventMsg,
+          currentOrder,
+          forceWithoutCourier: false,
+        });
+
+        if (!steadfastRes.success) {
+          if (steadfastRes.requiresPrompt) {
+            setSteadfastFailureState({
+              isOpen: true,
+              order: steadfastRes.order || currentOrder || null,
+              errorMessage: steadfastRes.error || "Failed to book parcel with Steadfast Courier.",
+              fieldErrors: steadfastRes.fieldErrors,
+              pendingParams: {
+                orderId,
+                newStatus,
+                cancelReason,
+                eventMsg,
+                currentOrder,
+                courierName: courierName || currentOrder?.courier_name || "Steadfast Courier",
+              },
+            });
+            return null;
+          }
+          throw new Error(steadfastRes.error || "Failed to update order status");
+        }
+
+        return {
+          order: steadfastRes.order!,
+          bookedWithSteadfast: steadfastRes.bookedWithSteadfast,
+          consignment: steadfastRes.consignment,
+        };
+      }
+
+      const updated = await updateOrderStatusInDb(orderId, newStatus, cancelReason, eventMsg, currentOrder, courierName);
+      return {
+        order: updated,
+        bookedWithSteadfast: false,
+        consignment: undefined,
+      };
     },
-    onSuccess: (updated) => {
+    onSuccess: (result) => {
+      if (!result || !result.order) return;
+      const updated = result.order;
       queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
         old.map((o) => (o.id === updated.id ? updated : o))
       );
@@ -676,7 +755,16 @@ export function OrdersClient() {
       );
       setIsStatusOpen(false);
       setStatusError(null);
-      showToast(`Order ${updated.id} status changed to ${updated.status.replace(/_/g, " ").toUpperCase()} and synced!`, "success");
+
+      if (result.bookedWithSteadfast && result.consignment) {
+        showToast(
+          `Order ${updated.id} moved to PROCESSING & booked with Steadfast! (Consignment: #${result.consignment.consignment_id}, Tracking: ${result.consignment.tracking_code})`,
+          "success",
+          { duration: 8000 }
+        );
+      } else {
+        showToast(`Order ${updated.id} status changed to ${updated.status.replace(/_/g, " ").toUpperCase()} and synced!`, "success");
+      }
     },
     onError: (err: any) => {
       console.error("Failed to update status:", err);
@@ -827,6 +915,21 @@ export function OrdersClient() {
       batchNote?: string;
       courierName?: string;
     }): Promise<BulkStatusUpdateResult> => {
+      // If advancing to processing with Steadfast Courier in bulk, call Steadfast Bulk API
+      const isSteadfast = (courierName || "").toLowerCase().includes("steadfast");
+      if (targetStatus === "processing" && isSteadfast) {
+        const selectedOrdersList = orders.filter((o) => orderIds.includes(o.id));
+        if (selectedOrdersList.length > 0) {
+          try {
+            const bulkBookingRes = await bookSteadfastBulkParcelsAction(selectedOrdersList);
+            setSteadfastBulkResult(bulkBookingRes);
+            setIsSteadfastBulkOpen(true);
+          } catch (bulkErr) {
+            console.error("Steadfast bulk booking error:", bulkErr);
+          }
+        }
+      }
+
       return await bulkUpdateOrderStatusInDb(orderIds, targetStatus, batchNote, courierName);
     },
     onSuccess: (result, variables) => {
@@ -1117,6 +1220,36 @@ export function OrdersClient() {
 
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
   const [bulkDeleteError, setBulkDeleteError] = React.useState<ParsedDatabaseError | null>(null);
+
+  // Steadfast Auto-booking Failure & Bulk Results States
+  const [steadfastFailureState, setSteadfastFailureState] = React.useState<{
+    isOpen: boolean;
+    order: Order | null;
+    errorMessage: string;
+    fieldErrors?: Record<string, string[]>;
+    pendingParams?: {
+      orderId: string;
+      newStatus: Order["status"];
+      cancelReason?: string;
+      eventMsg?: string;
+      currentOrder?: Order;
+      courierName?: string;
+    };
+  }>({
+    isOpen: false,
+    order: null,
+    errorMessage: "",
+  });
+
+  const [steadfastBulkResult, setSteadfastBulkResult] = React.useState<BulkBookSteadfastResult | null>(null);
+  const [isSteadfastBulkOpen, setIsSteadfastBulkOpen] = React.useState(false);
+
+  const [pendingRecreateOrder, setPendingRecreateOrder] = React.useState<{
+    savedOrder: Order;
+    diffItems: SteadfastDiffItem[];
+    nextInvoice: string;
+  } | null>(null);
+  const [isRecreatingOrder, setIsRecreatingOrder] = React.useState(false);
 
   // Derive live, up-to-date versions of statusOrder and bulkSelectedOrders from TanStack Query orders
   const effectiveStatusOrder = React.useMemo(() => {
@@ -1526,9 +1659,103 @@ export function OrdersClient() {
   const handleSaveOrder = async (savedOrder: Order, mode: "create" | "edit") => {
     if (mode === "create") {
       await createOrderMutation.mutateAsync(savedOrder);
-    } else {
-      await updateOrderMutation.mutateAsync(savedOrder);
+      return;
     }
+
+    const existingOrder = orders.find((o) => o.id === savedOrder.id) || orderModalState.order;
+    const hasConsignment = Boolean(
+      savedOrder.courier_consignment_id ||
+      existingOrder?.courier_consignment_id
+    );
+
+    // Check if this order was already booked with courier and has delivery/parcel changes
+    if (hasConsignment) {
+      const currentSnapshot = buildSteadfastPayloadSnapshot(savedOrder);
+      const baselineSnapshot: SteadfastPayloadSnapshot | null =
+        (existingOrder?.courier_payload_snapshot as SteadfastPayloadSnapshot) ||
+        (savedOrder.courier_payload_snapshot as SteadfastPayloadSnapshot) ||
+        (existingOrder ? buildSteadfastPayloadSnapshot(existingOrder) : null);
+
+      if (baselineSnapshot) {
+        const diff = detectSteadfastPayloadDiff(currentSnapshot, baselineSnapshot);
+
+        if (diff.hasDiff) {
+          const currentInvoice =
+            existingOrder?.courier_invoice ||
+            savedOrder.courier_invoice ||
+            savedOrder.id;
+          const nextInvoice = computeNextSteadfastInvoice(savedOrder.id, currentInvoice);
+
+          const orderToRecreate: Order = {
+            ...savedOrder,
+            courier_consignment_id:
+              savedOrder.courier_consignment_id || existingOrder?.courier_consignment_id,
+            courier_tracking_code:
+              savedOrder.courier_tracking_code || existingOrder?.courier_tracking_code,
+            courier_tracking_url:
+              savedOrder.courier_tracking_url || existingOrder?.courier_tracking_url,
+            courier_invoice: currentInvoice,
+            courier_name:
+              savedOrder.courier_name ||
+              existingOrder?.courier_name ||
+              "Steadfast Courier",
+            courier_payload_snapshot: baselineSnapshot,
+          };
+
+          setPendingRecreateOrder({
+            savedOrder: orderToRecreate,
+            diffItems: diff.diffItems,
+            nextInvoice,
+          });
+          return;
+        }
+      }
+    }
+
+    await updateOrderMutation.mutateAsync(savedOrder);
+  };
+
+  const handleConfirmRecreateInOrdersClient = async () => {
+    if (!pendingRecreateOrder) return;
+    setIsRecreatingOrder(true);
+    try {
+      const res = await recreateSteadfastParcelAction({
+        orderId: pendingRecreateOrder.savedOrder.id,
+        updatedOrder: pendingRecreateOrder.savedOrder,
+      });
+
+      if (res.success && res.order) {
+        const finalOrder = res.order;
+        queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
+          old.map((o) => (o.id === finalOrder.id ? finalOrder : o))
+        );
+        queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+        if (selectedOrder?.id === finalOrder.id) {
+          setSelectedOrder(finalOrder);
+        }
+        setPendingRecreateOrder(null);
+        showToast(
+          `Parcel recreated successfully with Steadfast Courier (${res.consignment?.tracking_code || finalOrder.courier_tracking_code || "Consignment Updated"}).`,
+          "success"
+        );
+      } else {
+        showToast(
+          res.error || "Failed to recreate parcel with Steadfast Courier.",
+          "destructive"
+        );
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to connect to Steadfast Courier.", "destructive");
+    } finally {
+      setIsRecreatingOrder(false);
+    }
+  };
+
+  const handleSaveWithoutRecreateInOrdersClient = async () => {
+    if (!pendingRecreateOrder) return;
+    await updateOrderMutation.mutateAsync(pendingRecreateOrder.savedOrder);
+    setPendingRecreateOrder(null);
+    showToast("Order changes saved without updating courier parcel.", "info");
   };
 
   // Next status determination
@@ -1683,6 +1910,25 @@ export function OrdersClient() {
     });
   };
 
+  // Steadfast Failure Dialog Decision Handlers
+  const handleForceSteadfastProcess = () => {
+    if (!steadfastFailureState.pendingParams) return;
+    const params = steadfastFailureState.pendingParams;
+    setSteadfastFailureState((prev) => ({ ...prev, isOpen: false }));
+    updateStatusMutation.mutate({
+      ...params,
+      forceWithoutCourier: true,
+    });
+  };
+
+  const handleFixSteadfastDetails = () => {
+    const orderToFix = steadfastFailureState.order;
+    setSteadfastFailureState((prev) => ({ ...prev, isOpen: false }));
+    if (orderToFix) {
+      handleOpenEdit(orderToFix);
+    }
+  };
+
   // Open Add Note Dialog
   const handleOpenNote = (order: Order, defaultType: OrderNoteType = "internal") => {
     setNoteOrder(order);
@@ -1783,6 +2029,9 @@ export function OrdersClient() {
       "Order ID",
       "Customer",
       "Phone",
+      "Alternative Phone",
+      "Recipient Name",
+      "Shipping Phone",
       "District",
       "Address",
       "Items Count",
@@ -1805,10 +2054,15 @@ export function OrdersClient() {
       const delivNotes = (o.notes || []).filter((n) => n.type === "delivery").map((n) => n.text).join(" | ");
       const packNotes = (o.notes || []).filter((n) => n.type === "packaging").map((n) => n.text).join(" | ");
       const staffNotes = (o.notes || []).filter((n) => n.type === "internal").map((n) => n.text).join(" | ");
+      const recipientName = o.address?.recipient_name || o.recipient_name || o.customer || "";
+      const shippingPhone = o.address?.phone || o.shipping_phone || o.phone || "";
       return [
         o.id,
         `"${o.customer || ""}"`,
         `"${o.phone || ""}"`,
+        `"${o.alternative_phone || ""}"`,
+        `"${recipientName.replace(/"/g, '""')}"`,
+        `"${shippingPhone}"`,
         `"${o.address?.district || ""}"`,
         `"${(o.address?.address_line || "").replace(/"/g, '""')}"`,
         (o.items || []).length,
@@ -1971,11 +2225,49 @@ export function OrdersClient() {
                 </div>
               )}
 
+              {/* Steadfast Delivery Record below customer phone */}
+              {order.phone && (
+                <div>
+                  <SteadfastDeliveryRecordBadge phone={order.phone} variant="compact" />
+                </div>
+              )}
+
+              {/* Alternative phone with click-to-call and 1-click copy (exact same font, size & styling as primary phone) */}
+              {order.alternative_phone && (
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-xs">
+                    <a
+                      href={`tel:${order.alternative_phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                    >
+                      <Phone className="h-3 w-3 text-amber-600 shrink-0" />
+                      <span>{order.alternative_phone}</span>
+                    </a>
+                    <span className="text-[10px] text-muted-foreground font-normal">(Alt)</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyToClipboard(order.alternative_phone!, "Alternative phone");
+                      }}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                      title="Copy alternative phone"
+                    >
+                      <Copy className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                  <div>
+                    <SteadfastDeliveryRecordBadge phone={order.alternative_phone} variant="compact" />
+                  </div>
+                </div>
+              )}
+
               {/* Destination: District Badge + Address Line */}
               <div className="space-y-0.5">
                 {district && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50">
-                    <MapPin className="h-2.5 w-2.5 text-rose-500 shrink-0" />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-900/50">
+                    <MapPin className="h-2.5 w-2.5 text-sky-500 shrink-0" />
                     {district}
                   </span>
                 )}
@@ -1985,6 +2277,57 @@ export function OrdersClient() {
                   </p>
                 )}
               </div>
+
+              {/* Distinct Shipping Recipient Info (when ordering for someone else) */}
+              {(() => {
+                const isDiff = Boolean(
+                  (order.address?.phone && order.address.phone !== order.phone) ||
+                  (order.shipping_phone && order.shipping_phone !== order.phone) ||
+                  (order.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+                  (order.recipient_name && order.recipient_name !== order.customer)
+                );
+                if (!isDiff) return null;
+
+                const recipientName = order.address?.recipient_name || order.recipient_name || "Recipient";
+                const shipPhone = order.address?.phone || order.shipping_phone;
+
+                return (
+                  <div className="p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1">
+                    <div className="flex items-center gap-1 font-semibold text-[10px] text-amber-800 dark:text-amber-300">
+                      <User className="h-3 w-3 shrink-0 text-amber-600" />
+                      <span className="truncate">Ship to: {recipientName}</span>
+                    </div>
+                    {shipPhone && (
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`tel:${shipPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[11px] font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                        >
+                          <Phone className="h-2.5 w-2.5 text-amber-600 shrink-0" />
+                          <span>{shipPhone}</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(shipPhone, "Shipping phone");
+                          }}
+                          className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                          title="Copy shipping phone"
+                        >
+                          <Copy className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    )}
+                    {shipPhone && (
+                      <div>
+                        <SteadfastDeliveryRecordBadge phone={shipPhone} variant="compact" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Customer Checkout Delivery Instruction - Full Note Display */}
               {order.customer_note && (
@@ -2394,6 +2737,22 @@ export function OrdersClient() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs">
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
             <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Delivery Address</span>
+            {(() => {
+              const isDiff = Boolean(
+                (order.address?.phone && order.address.phone !== order.phone) ||
+                (order.shipping_phone && order.shipping_phone !== order.phone) ||
+                (order.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+                (order.recipient_name && order.recipient_name !== order.customer)
+              );
+              if (!isDiff) return null;
+              const rName = order.address?.recipient_name || order.recipient_name || "Recipient";
+              const rPhone = order.address?.phone || order.shipping_phone;
+              return (
+                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                  Ship to: {rName} {rPhone ? `(${rPhone})` : ""}
+                </p>
+              );
+            })()}
             <p className="font-medium text-foreground truncate">
               {order.address?.district}, {order.address?.division}
             </p>
@@ -2971,6 +3330,9 @@ export function OrdersClient() {
                       "Date",
                       "Customer",
                       "Phone",
+                      "Alternative Phone",
+                      "Recipient Name",
+                      "Shipping Phone",
                       "Status",
                       "Payment",
                       "Method",
@@ -2978,18 +3340,25 @@ export function OrdersClient() {
                       "Fulfillment",
                       "Grand Total (BDT)",
                     ];
-                    const rows = selectedOrders.map((o) => [
-                      o.id,
-                      formatDate(o.date),
-                      `"${o.customer.replace(/"/g, '""')}"`,
-                      `"${o.phone}"`,
-                      o.status,
-                      o.payment,
-                      o.method,
-                      o.courier_name || "",
-                      o.fulfillment,
-                      o.grand_total,
-                    ]);
+                    const rows = selectedOrders.map((o) => {
+                      const recipientName = o.address?.recipient_name || o.recipient_name || o.customer || "";
+                      const shippingPhone = o.address?.phone || o.shipping_phone || o.phone || "";
+                      return [
+                        o.id,
+                        formatDate(o.date),
+                        `"${o.customer.replace(/"/g, '""')}"`,
+                        `"${o.phone}"`,
+                        `"${o.alternative_phone || ""}"`,
+                        `"${recipientName.replace(/"/g, '""')}"`,
+                        `"${shippingPhone}"`,
+                        o.status,
+                        o.payment,
+                        o.method,
+                        o.courier_name || "",
+                        o.fulfillment,
+                        o.grand_total,
+                      ];
+                    });
                     const csvContent =
                       "data:text/csv;charset=utf-8," +
                       [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -3057,6 +3426,10 @@ export function OrdersClient() {
         onClearCustomerNote={handleClearCustomerNote}
         isStatusPending={updateStatusMutation.isPending}
         isNotePending={addNoteMutation.isPending}
+        onUpdateOrder={(updated) => {
+          setSelectedOrder(updated);
+          queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+        }}
       />
 
       {/* ========================================================================= */}
@@ -4569,6 +4942,38 @@ export function OrdersClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ========================================================================= */}
+      {/* STEADFAST COURIER AUTOMATION DIALOGS */}
+      {/* ========================================================================= */}
+      <SteadfastFailureDialog
+        isOpen={steadfastFailureState.isOpen}
+        onClose={() => setSteadfastFailureState((prev) => ({ ...prev, isOpen: false }))}
+        order={steadfastFailureState.order}
+        errorMessage={steadfastFailureState.errorMessage}
+        fieldErrors={steadfastFailureState.fieldErrors}
+        onForceProcess={handleForceSteadfastProcess}
+        onFixDetails={handleFixSteadfastDetails}
+        isProcessing={updateStatusMutation.isPending}
+      />
+
+      <SteadfastBulkDialog
+        isOpen={isSteadfastBulkOpen}
+        onClose={() => setIsSteadfastBulkOpen(false)}
+        result={steadfastBulkResult}
+      />
+
+      {/* Steadfast Recreate Parcel Confirmation Dialog */}
+      <SteadfastRecreateDialog
+        isOpen={Boolean(pendingRecreateOrder)}
+        onClose={() => setPendingRecreateOrder(null)}
+        order={pendingRecreateOrder?.savedOrder || null}
+        diffItems={pendingRecreateOrder?.diffItems || []}
+        nextInvoice={pendingRecreateOrder?.nextInvoice || ""}
+        onConfirmRecreate={handleConfirmRecreateInOrdersClient}
+        onSaveWithoutRecreate={handleSaveWithoutRecreateInOrdersClient}
+        isProcessing={isRecreatingOrder}
+      />
     </div>
   );
 }

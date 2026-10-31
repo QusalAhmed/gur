@@ -2,12 +2,29 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, UserCheck, Key, Lock, MoreHorizontal, Download, Trash2, Shield, UserCog } from "lucide-react";
+import { Plus, UserCheck, Key, Lock, MoreHorizontal, Download, Trash2, Shield, UserCog, Save, User } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +35,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
+import { getStaffDirectoryAction, saveStaffMemberAction } from "@/actions/admin-profile";
 
 export interface StaffItem {
   id: string;
@@ -31,6 +49,7 @@ export interface StaffItem {
   twoFactor: boolean;
   status: "active" | "inactive";
   lastLogin: string;
+  avatarUrl?: string;
 }
 
 const initialStaff: StaffItem[] = [
@@ -124,6 +143,88 @@ const roleStyles: Record<string, string> = {
 
 export default function StaffPage() {
   const [staff, setStaff] = React.useState<StaffItem[]>(initialStaff);
+  const [isStaffDialogOpen, setIsStaffDialogOpen] = React.useState(false);
+  const [editingStaff, setEditingStaff] = React.useState<StaffItem | null>(null);
+
+  React.useEffect(() => {
+    getStaffDirectoryAction().then((res) => {
+      if (res.success && res.staff.length > 0) {
+        setStaff((prev) => {
+          const map = new Map(prev.map((s) => [s.id, s]));
+          for (const s of res.staff) {
+            map.set(s.id, { ...(map.get(s.id) || {}), ...s });
+          }
+          return Array.from(map.values());
+        });
+      }
+    });
+  }, []);
+
+  const handleOpenInvite = () => {
+    setEditingStaff({
+      id: `STF-00${staff.length + 1}`,
+      name: "",
+      initials: "NM",
+      email: "",
+      phone: "+8801700000000",
+      role: "support",
+      department: "Customer Support",
+      assignedWarehouse: "WH-DHK-01 (Tejgaon Central)",
+      twoFactor: false,
+      status: "active",
+      lastLogin: "Never",
+      avatarUrl: "",
+    });
+    setIsStaffDialogOpen(true);
+  };
+
+  const handleOpenEdit = (s: StaffItem) => {
+    setEditingStaff({ ...s });
+    setIsStaffDialogOpen(true);
+  };
+
+  const handleSaveStaff = async () => {
+    if (!editingStaff) return;
+    const name = editingStaff.name.trim() || "Team Member";
+    const initials = name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "TM";
+
+    const toSave: StaffItem = {
+      ...editingStaff,
+      name,
+      initials,
+    };
+
+    setStaff((prev) => {
+      const idx = prev.findIndex((item) => item.id === toSave.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = toSave;
+        return copy;
+      }
+      return [toSave, ...prev];
+    });
+    setIsStaffDialogOpen(false);
+
+    // Persist staff details and avatar to database
+    try {
+      await saveStaffMemberAction({
+        id: toSave.id,
+        name: toSave.name,
+        email: toSave.email,
+        phone: toSave.phone,
+        role: toSave.role,
+        department: toSave.department,
+        avatarUrl: toSave.avatarUrl,
+      });
+    } catch (e) {
+      console.warn("Could not save staff to DB:", e);
+    }
+  };
 
   const handleExportCSV = (selected: StaffItem[]) => {
     const list = selected.length > 0 ? selected : staff;
@@ -178,6 +279,9 @@ export default function StaffPage() {
         return (
           <div className="flex items-center gap-3 min-w-[190px]">
             <Avatar className="h-8 w-8 ring-1 ring-border">
+              {s.avatarUrl && (
+                <AvatarImage src={s.avatarUrl} alt={s.name} className="object-cover" />
+              )}
               <AvatarFallback className="bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs font-bold">
                 {s.initials}
               </AvatarFallback>
@@ -274,9 +378,9 @@ export default function StaffPage() {
                 <span className="sr-only">Open actions</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => alert(`Edit role permissions for ${s.name}`)}>
-                <UserCog className="h-3.5 w-3.5 mr-2" /> Edit Permissions
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => handleOpenEdit(s)}>
+                <UserCog className="h-3.5 w-3.5 mr-2" /> Edit Member
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => alert(`Password reset link sent to ${s.email}`)}>
                 <Key className="h-3.5 w-3.5 mr-2" /> Reset Password
@@ -316,22 +420,7 @@ export default function StaffPage() {
         <Button
           size="sm"
           className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-          onClick={() => {
-            const newStf: StaffItem = {
-              id: `STF-00${staff.length + 1}`,
-              name: "New Team Member",
-              initials: "NM",
-              email: `member${staff.length + 1}@molassesstore.com`,
-              phone: "+8801700112233",
-              role: "manager",
-              department: "Warehouse Operations",
-              assignedWarehouse: "WH-DHK-01",
-              twoFactor: true,
-              status: "active",
-              lastLogin: "Never",
-            };
-            setStaff((prev) => [newStf, ...prev]);
-          }}
+          onClick={handleOpenInvite}
         >
           <Plus className="h-4 w-4 mr-2" />
           Invite Staff
@@ -446,6 +535,129 @@ export default function StaffPage() {
           emptyMessage="No staff members found matching your search."
         />
       </motion.div>
+
+      {/* Add / Edit Staff Dialog */}
+      <Dialog open={isStaffDialogOpen} onOpenChange={setIsStaffDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingStaff?.name ? `Edit Member: ${editingStaff.name}` : "Invite Staff Member"}
+            </DialogTitle>
+            <DialogDescription>
+              Configure profile details, avatar image, and system role for this team member.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingStaff && (
+            <div className="space-y-4 py-2">
+              <div className="flex flex-col items-center gap-2">
+                <ImageUploader
+                  bucket="catalog-images"
+                  folder="avatars"
+                  multiple={false}
+                  value={editingStaff.avatarUrl ? [editingStaff.avatarUrl] : []}
+                  onChange={(items) => {
+                    const first = items[0];
+                    setEditingStaff((prev) =>
+                      prev ? { ...prev, avatarUrl: first?.url || first?.path || "" } : null
+                    );
+                  }}
+                  onRemove={() =>
+                    setEditingStaff((prev) => (prev ? { ...prev, avatarUrl: "" } : null))
+                  }
+                  label="Upload Profile Photo"
+                  description="Square avatar photo"
+                  aspectRatio="square"
+                />
+                <span className="text-xs text-muted-foreground">Upload profile picture (auto-compressed)</span>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">Full Name</label>
+                <Input
+                  value={editingStaff.name}
+                  onChange={(e) =>
+                    setEditingStaff((prev) => (prev ? { ...prev, name: e.target.value } : null))
+                  }
+                  placeholder="e.g. Tanvir Ahmed"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-foreground">Email Address</label>
+                  <Input
+                    type="email"
+                    value={editingStaff.email}
+                    onChange={(e) =>
+                      setEditingStaff((prev) => (prev ? { ...prev, email: e.target.value } : null))
+                    }
+                    placeholder="name@company.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-foreground">Phone Number</label>
+                  <Input
+                    value={editingStaff.phone}
+                    onChange={(e) =>
+                      setEditingStaff((prev) => (prev ? { ...prev, phone: e.target.value } : null))
+                    }
+                    placeholder="+8801..."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">System Role</label>
+                <Select
+                  value={editingStaff.role}
+                  onValueChange={(val) => {
+                    if (val) {
+                      setEditingStaff((prev) =>
+                        prev ? { ...prev, role: val as StaffItem["role"] } : null
+                      );
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owner">Owner (Full Admin Access)</SelectItem>
+                    <SelectItem value="admin">Administrator (Full Store Access)</SelectItem>
+                    <SelectItem value="manager">Manager (Inventory & Orders)</SelectItem>
+                    <SelectItem value="editor">Editor (Products & Content)</SelectItem>
+                    <SelectItem value="support">Customer Support (Read-only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">Department</label>
+                <Input
+                  value={editingStaff.department}
+                  onChange={(e) =>
+                    setEditingStaff((prev) => (prev ? { ...prev, department: e.target.value } : null))
+                  }
+                  placeholder="e.g. Logistics & Warehouse"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStaffDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleSaveStaff}
+            >
+              Save Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

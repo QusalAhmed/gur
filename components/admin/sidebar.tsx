@@ -50,7 +50,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 interface NavSubItem {
   title: string;
@@ -360,8 +360,16 @@ function AdminSidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, logout } = useAdminAuth();
-  const { storeName } = useSiteSettings();
-  const initial = storeName.trim().charAt(0).toUpperCase() || "M";
+  const { storeName, logoUrl } = useSiteSettings();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const displayStoreName = mounted ? storeName : "GUR";
+  const displayLogoUrl = mounted ? logoUrl : "";
+  const initial = displayStoreName.trim().charAt(0).toUpperCase() || "G";
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -370,11 +378,25 @@ function AdminSidebarContent() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/admin">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-amber-600 text-white">
-                  <span className="text-xs font-bold">{initial}</span>
+                <div
+                  className={`flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden shrink-0 ${
+                    displayLogoUrl
+                      ? "bg-muted/40 border border-border/50"
+                      : "bg-amber-600 text-white"
+                  }`}
+                >
+                  {displayLogoUrl ? (
+                    <img
+                      src={displayLogoUrl}
+                      alt={displayStoreName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-xs font-bold">{initial}</span>
+                  )}
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{storeName}</span>
+                  <span className="truncate font-semibold">{displayStoreName}</span>
                   <span className="truncate text-xs text-muted-foreground">Admin Panel</span>
                 </div>
               </Link>
@@ -434,14 +456,23 @@ function AdminSidebarContent() {
             <div className="flex items-center gap-1.5 p-1 w-full">
               <SidebarMenuButton size="lg" className="flex-1 min-w-0">
                 <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                  {mounted && user?.avatarUrl && (
+                    <AvatarImage
+                      src={user.avatarUrl}
+                      alt={user.name}
+                      className="rounded-lg object-cover"
+                    />
+                  )}
                   <AvatarFallback className="rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold text-xs">
-                    {user?.initials || "AO"}
+                    {mounted && user?.initials ? user.initials : "AO"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                  <span className="truncate font-semibold">{user?.name || "Admin Owner"}</span>
+                  <span className="truncate font-semibold">
+                    {mounted && user?.name ? user.name : "Admin Owner"}
+                  </span>
                   <span className="truncate text-xs text-muted-foreground capitalize">
-                    {user?.role || "owner"}
+                    {mounted && user?.role ? user.role : "owner"}
                   </span>
                 </div>
               </SidebarMenuButton>

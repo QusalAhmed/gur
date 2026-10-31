@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { QueryProvider } from "@/components/providers/query-provider";
+import { BrandFavicon } from "@/components/brand-favicon";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,8 +23,6 @@ export const metadata: Metadata = {
     "Pure sugarcane and date palm molasses (ঝোলা গুড়, পাটালি গুড়) manufacturing, retail, and B2B wholesale distribution platform in Bangladesh.",
 };
 
-import { QueryProvider } from "@/components/providers/query-provider";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,9 +35,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans">
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <BrandFavicon />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );
 }
+
+
 

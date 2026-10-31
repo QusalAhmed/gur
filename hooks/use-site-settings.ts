@@ -27,6 +27,8 @@ export interface ParsedSiteSettings {
   smsGateway: string;
   smsSenderId: string;
   smtpServer: string;
+  logoUrl: string;
+  faviconUrl: string;
   isLoading: boolean;
   isError: boolean;
   refetch: () => Promise<any>;
@@ -55,6 +57,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsMap = {
   "notifications.sms_gateway": "greenweb",
   "notifications.sms_sender_id": "MOLASSES",
   "notifications.smtp_server": "smtp.sendgrid.net (Port 587)",
+  "store.logo_url": "",
+  "store.favicon_url": "",
 };
 
 export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSettings, "isLoading" | "isError" | "refetch"> {
@@ -97,6 +101,8 @@ export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSett
     smsGateway: String(merged["notifications.sms_gateway"] || DEFAULT_SITE_SETTINGS["notifications.sms_gateway"]),
     smsSenderId: String(merged["notifications.sms_sender_id"] || DEFAULT_SITE_SETTINGS["notifications.sms_sender_id"]),
     smtpServer: String(merged["notifications.smtp_server"] || DEFAULT_SITE_SETTINGS["notifications.smtp_server"]),
+    logoUrl: String(merged["store.logo_url"] || ""),
+    faviconUrl: String(merged["store.favicon_url"] || ""),
   };
 }
 

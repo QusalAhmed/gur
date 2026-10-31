@@ -56,6 +56,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDateTime } from "@/lib/utils";
+import { SteadfastBalanceCard } from "@/components/admin/steadfast-balance-card";
 
 export interface TransactionItem {
   id: string;
@@ -529,6 +530,18 @@ export default function PaymentsPage() {
             <p className="text-xs text-muted-foreground mt-0.5">Gateway uptimes optimal</p>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Courier Remittance & Merchant Balance */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+      >
+        <div className="lg:col-span-2">
+          <SteadfastBalanceCard />
+        </div>
       </motion.div>
 
       {/* Analytics Charts */}

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
@@ -37,7 +37,17 @@ function AdminLoginForm() {
   const nextUrl = searchParams.get("next") || "/admin";
 
   const { login } = useAdminAuth();
-  const { storeName, storeNameBn, email: storeEmail } = useSiteSettings();
+  const { storeName, storeNameBn, email: storeEmail, logoUrl } = useSiteSettings();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const displayStoreName = mounted ? storeName : "GUR";
+  const displayStoreNameBn = mounted && storeNameBn ? storeNameBn : "গুড় - খাটি গুড় ও চিটাগুড়ের অনলাইন প্ল্যাটফর্ম";
+  const displayLogoUrl = mounted ? logoUrl : "";
+
   const emailDomain =
     storeEmail && storeEmail.includes("@") && !storeEmail.includes("molassesstore")
       ? storeEmail.split("@")[1]
@@ -110,13 +120,27 @@ function AdminLoginForm() {
         <Card className="border-border/50 bg-background/85 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden ring-1 ring-white/10">
           {/* Card Header with Brand Details */}
           <CardHeader className="text-center pb-4 pt-6 px-6 sm:px-8">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-black shadow-lg shadow-amber-500/25 mb-3">
-              <ShieldCheck className="h-7 w-7 stroke-[2.2]" />
+            <div
+              className={`mx-auto flex items-center justify-center rounded-2xl shadow-lg mb-3 overflow-hidden transition-all ${
+                displayLogoUrl
+                  ? "h-16 w-16 bg-muted/40 border border-border/60 shadow-amber-500/10"
+                  : "h-14 w-14 bg-gradient-to-tr from-amber-600 to-amber-400 text-black shadow-amber-500/25"
+              }`}
+            >
+              {displayLogoUrl ? (
+                <img
+                  src={displayLogoUrl}
+                  alt={displayStoreName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <ShieldCheck className="h-7 w-7 stroke-[2.2]" />
+              )}
             </div>
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2">
                 <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  {storeName}
+                  {displayStoreName}
                 </CardTitle>
                 <Badge
                   variant="outline"

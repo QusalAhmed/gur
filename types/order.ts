@@ -43,11 +43,16 @@ export interface Order {
   id: string;
   customer: string;
   phone: string;
+  alternative_phone?: string;
+  shipping_phone?: string;
+  recipient_name?: string;
   email: string;
   address: {
     division: string;
     district: string;
     address_line: string;
+    recipient_name?: string;
+    phone?: string;
   };
   status:
     | "incomplete_order"
@@ -73,6 +78,11 @@ export interface Order {
   customer_note?: string;
   cancel_reason?: string;
   courier_name?: string;
+  courier_consignment_id?: string;
+  courier_tracking_code?: string;
+  courier_tracking_url?: string;
+  courier_invoice?: string;
+  courier_payload_snapshot?: Record<string, any> | null;
   items: OrderItem[];
   notes: OrderNote[];
   events: OrderEvent[];

@@ -10,6 +10,7 @@ export interface AdminUser {
   assignedWarehouse?: string;
   initials: string;
   twoFactor?: boolean;
+  avatarUrl?: string;
 }
 
 export interface SessionPayload {

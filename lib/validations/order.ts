@@ -39,6 +39,57 @@ export const orderPhoneSchema = z
   );
 
 /**
+ * Customer Alternative Phone: Optional valid Bangladeshi mobile phone number.
+ */
+export const orderAlternativePhoneSchema = z
+  .string()
+  .transform((v) => (v || "").replace(/[\s-]/g, ""))
+  .pipe(
+    z
+      .string()
+      .regex(
+        BD_PHONE_REGEX,
+        "Please enter a valid Bangladeshi phone number (e.g. 017XXXXXXXX or +88017XXXXXXXX)"
+      )
+      .or(z.literal(""))
+  )
+  .optional()
+  .default("");
+
+/**
+ * Shipping / Recipient Phone: Optional unless ordering for another person.
+ */
+export const orderShippingPhoneSchema = z
+  .string()
+  .transform((v) => (v || "").replace(/[\s-]/g, ""))
+  .pipe(
+    z
+      .string()
+      .regex(
+        BD_PHONE_REGEX,
+        "Please enter a valid Bangladeshi phone number (e.g. 017XXXXXXXX or +88017XXXXXXXX)"
+      )
+      .or(z.literal(""))
+  )
+  .optional()
+  .default("");
+
+/**
+ * Recipient Name: Optional name of the recipient if ordering for someone else.
+ */
+export const orderRecipientNameSchema = z
+  .string()
+  .transform((v) => (v || "").trim())
+  .pipe(
+    z
+      .string()
+      .max(100, "Recipient name must not exceed 100 characters")
+      .or(z.literal(""))
+  )
+  .optional()
+  .default("");
+
+/**
  * Customer Email: Optional, but if provided must be a valid email format.
  */
 export const orderEmailSchema = z
@@ -270,7 +321,11 @@ export const orderFormSchema = z
   .object({
     customer: z.string().transform((v) => (v || "").trim()).default(""),
     phone: z.string().transform((v) => (v || "").replace(/[\s-]/g, "")).default(""),
+    alternative_phone: orderAlternativePhoneSchema,
     email: orderEmailSchema,
+    different_shipping_recipient: z.boolean().default(false),
+    shipping_recipient_name: orderRecipientNameSchema,
+    shipping_phone: orderShippingPhoneSchema,
     division: z.string().transform((v) => (v || "").trim()).default(""),
     district: z.string().transform((v) => (v || "").trim()).default(""),
     address_line: z.string().transform((v) => (v || "").trim()).default(""),
@@ -314,6 +369,52 @@ export const orderFormSchema = z
           code: z.ZodIssueCode.custom,
           message: "Please enter a valid Bangladeshi phone number (e.g. 017XXXXXXXX or +88017XXXXXXXX)",
           path: ["phone"],
+        });
+      }
+    }
+
+    // Validate alternative phone if provided
+    if (data.alternative_phone) {
+      const cleanPhone = (data.phone || "").replace(/[\s-]/g, "");
+      const cleanAlt = (data.alternative_phone || "").replace(/[\s-]/g, "");
+      if (cleanAlt && !BD_PHONE_REGEX.test(cleanAlt)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid Bangladeshi alternative phone number (e.g. 017XXXXXXXX)",
+          path: ["alternative_phone"],
+        });
+      }
+      if (cleanPhone && cleanAlt && cleanPhone === cleanAlt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Alternative phone cannot be identical to the primary phone number",
+          path: ["alternative_phone"],
+        });
+      }
+    }
+
+    // Validate different shipping recipient details if toggle is enabled
+    if (data.different_shipping_recipient) {
+      const cleanShipPhone = (data.shipping_phone || "").replace(/[\s-]/g, "");
+      if (!cleanShipPhone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Shipping phone number is required when shipping to another person",
+          path: ["shipping_phone"],
+        });
+      } else if (!BD_PHONE_REGEX.test(cleanShipPhone)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid Bangladeshi shipping phone number (e.g. 017XXXXXXXX)",
+          path: ["shipping_phone"],
+        });
+      }
+
+      if (!data.shipping_recipient_name || data.shipping_recipient_name.trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Recipient name is required (minimum 2 characters)",
+          path: ["shipping_recipient_name"],
         });
       }
     }

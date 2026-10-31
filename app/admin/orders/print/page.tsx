@@ -38,6 +38,7 @@ interface StoreConfig {
   address: string;
   phone: string;
   website: string;
+  logoUrl?: string;
 }
 
 const DEFAULT_STORE: StoreConfig = {
@@ -51,7 +52,7 @@ const DEFAULT_STORE: StoreConfig = {
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { storeName, storeNameBn, address, supportPhone, currencySymbol } = useSiteSettings();
+  const { storeName, storeNameBn, address, supportPhone, currencySymbol, logoUrl } = useSiteSettings();
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
 
   const storeConfig: StoreConfig = React.useMemo(() => ({
@@ -60,7 +61,8 @@ function PrintContent() {
     address: address || DEFAULT_STORE.address,
     phone: supportPhone || DEFAULT_STORE.phone,
     website: siteUrl,
-  }), [storeName, storeNameBn, address, supportPhone, siteUrl]);
+    logoUrl,
+  }), [storeName, storeNameBn, address, supportPhone, siteUrl, logoUrl]);
 
   const idsParam = searchParams.get("ids") || "";
   const initialFormat = (searchParams.get("format") as PaperFormat) || "58mm";
@@ -478,6 +480,15 @@ function PrintContent() {
                   {/* 1. BUSINESS NAME AND ADDRESS */}
                   {/* ============================================================= */}
                   <header className="text-center">
+                    {storeConfig.logoUrl && (
+                      <div className="flex justify-center mb-1">
+                        <img
+                          src={storeConfig.logoUrl}
+                          alt={storeConfig.name}
+                          className="h-7 w-auto max-w-[120px] object-contain"
+                        />
+                      </div>
+                    )}
                     {/* Brand Crown / Emblem */}
                     <div className="inline-flex items-center justify-center gap-1 font-black text-[13px] tracking-wider uppercase text-black">
                       {storeConfig.name}

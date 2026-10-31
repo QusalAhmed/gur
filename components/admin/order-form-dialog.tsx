@@ -33,9 +33,11 @@ import {
   addOrderNoteInDb,
 } from "@/lib/supabase";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
+import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +61,9 @@ import {
   orderFormSchema,
   orderCustomerSchema,
   orderPhoneSchema,
+  orderAlternativePhoneSchema,
+  orderShippingPhoneSchema,
+  orderRecipientNameSchema,
   orderEmailSchema,
   orderDivisionSchema,
   orderDistrictSchema,
@@ -254,6 +259,15 @@ export function OrderFormDialog({
     defaultValues: {
       customer: (mode === "edit" && order?.customer ? order.customer : "") || "",
       phone: (mode === "edit" && order?.phone ? order.phone : "") || "",
+      alternative_phone: (mode === "edit" && order?.alternative_phone ? order.alternative_phone : "") || "",
+      different_shipping_recipient: mode === "edit" && Boolean(
+        (order?.shipping_phone && order.shipping_phone !== order.phone) ||
+        (order?.address?.phone && order.address.phone !== order.phone) ||
+        (order?.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+        (order?.recipient_name && order.recipient_name !== order.customer)
+      ),
+      shipping_recipient_name: (mode === "edit" ? (order?.address?.recipient_name || order?.recipient_name || "") : "") || "",
+      shipping_phone: (mode === "edit" ? (order?.address?.phone || order?.shipping_phone || "") : "") || "",
       email: (mode === "edit" && order?.email ? order.email : "") || "",
       division: (mode === "edit" && order?.address?.division ? order.address.division : "") || "",
       district: (mode === "edit" && order?.address?.district ? order.address.district : "") || "",
@@ -343,15 +357,27 @@ export function OrderFormDialog({
         if (mode === "create") {
           const prefix = orderPrefix || "MOL";
           const newId = `${prefix}-2610-0${1085 + ordersCount}`;
+          const effectiveRecipientName = valid.different_shipping_recipient
+            ? (valid.shipping_recipient_name?.trim() || valid.customer.trim())
+            : valid.customer.trim();
+          const effectiveShippingPhone = valid.different_shipping_recipient
+            ? (valid.shipping_phone?.trim() || valid.phone.trim())
+            : valid.phone.trim();
+
           const createdOrder: Order = {
             id: newId,
             customer: valid.customer.trim(),
             phone: valid.phone,
+            alternative_phone: valid.alternative_phone || "",
+            shipping_phone: effectiveShippingPhone,
+            recipient_name: effectiveRecipientName,
             email: valid.email || "",
             address: {
               division: valid.division || "",
               district: valid.district || "",
               address_line: valid.address_line || "",
+              recipient_name: effectiveRecipientName,
+              phone: effectiveShippingPhone,
             },
             status: valid.status,
             payment: valid.payment,
@@ -470,15 +496,28 @@ export function OrderFormDialog({
             ? newNoteClean
             : valid.customer_note || "";
 
+          const effectiveRecipientName = valid.different_shipping_recipient
+            ? (valid.shipping_recipient_name?.trim() || valid.customer.trim())
+            : valid.customer.trim();
+          const effectiveShippingPhone = valid.different_shipping_recipient
+            ? (valid.shipping_phone?.trim() || valid.phone.trim())
+            : valid.phone.trim();
+
           const updatedOrder: Order = {
             ...order,
             customer: valid.customer.trim(),
             phone: valid.phone,
+            alternative_phone: valid.alternative_phone || "",
+            shipping_phone: effectiveShippingPhone,
+            recipient_name: effectiveRecipientName,
             email: valid.email || "",
             address: {
+              ...(order.address || {}),
               division: valid.division || "",
               district: valid.district || "",
               address_line: valid.address_line || "",
+              recipient_name: effectiveRecipientName,
+              phone: effectiveShippingPhone,
             },
             status: valid.status,
             payment: valid.payment,
@@ -491,7 +530,7 @@ export function OrderFormDialog({
             grand_total,
             amount_paid: finalAmountPaid,
             customer_note: finalCustomerNote,
-            courier_name: valid.courier_name || "",
+            courier_name: valid.courier_name || order.courier_name || "",
             cancel_reason: valid.cancel_reason || "",
             items: valid.items as OrderItem[],
             notes: updatedNotes,
@@ -541,9 +580,22 @@ export function OrderFormDialog({
         }
         setNotesList(initialList);
 
+        const isDiffRecipient = Boolean(
+          (order.shipping_phone && order.shipping_phone !== order.phone) ||
+          (order.address?.phone && order.address.phone !== order.phone) ||
+          (order.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+          (order.recipient_name && order.recipient_name !== order.customer)
+        );
+        const recipientName = order.address?.recipient_name || order.recipient_name || "";
+        const shipPhone = order.address?.phone || order.shipping_phone || "";
+
         form.reset({
           customer: order.customer || "",
           phone: order.phone || "",
+          alternative_phone: order.alternative_phone || "",
+          different_shipping_recipient: isDiffRecipient,
+          shipping_recipient_name: isDiffRecipient ? recipientName : "",
+          shipping_phone: isDiffRecipient ? shipPhone : "",
           email: order.email || "",
           division: order.address?.division || "",
           district: order.address?.district || "",
@@ -569,6 +621,10 @@ export function OrderFormDialog({
         form.reset({
           customer: "",
           phone: "",
+          alternative_phone: "",
+          different_shipping_recipient: false,
+          shipping_recipient_name: "",
+          shipping_phone: "",
           email: "",
           division: "",
           district: "",
@@ -889,8 +945,8 @@ export function OrderFormDialog({
                   </span>
                 </div>
 
-                {/* Row 1: Customer Name & Phone Number */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Row 1: Customer Name & Contact Phone Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <form.Field
                     name="customer"
                     validators={{
@@ -985,6 +1041,64 @@ export function OrderFormDialog({
                           placeholder="+88017XXXXXXXX"
                         />
                         <FormFieldError errors={field.state.meta.errors} />
+                        {/* Steadfast Delivery Record below customer phone */}
+                        <SteadfastDeliveryRecordBadge phone={field.state.value} variant="inline" />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
+
+                  <form.Field
+                    name="alternative_phone"
+                    validators={{
+                      onChangeListenTo: ["phone"],
+                      onBlurListenTo: ["phone"],
+                      onChange: ({ value }) => {
+                        const cleaned = (value || "").replace(/[\s-]/g, "");
+                        if (!cleaned) return undefined;
+                        const phone = form.getFieldValue("phone");
+                        const cleanPhone = (phone || "").replace(/[\s-]/g, "");
+                        if (cleanPhone && cleaned === cleanPhone) {
+                          return "Alternative phone cannot be identical to primary phone";
+                        }
+                        return validateWithZod(orderAlternativePhoneSchema)({ value: cleaned });
+                      },
+                      onBlur: ({ value }) => {
+                        const cleaned = (value || "").replace(/[\s-]/g, "");
+                        if (!cleaned) return undefined;
+                        const phone = form.getFieldValue("phone");
+                        const cleanPhone = (phone || "").replace(/[\s-]/g, "");
+                        if (cleanPhone && cleaned === cleanPhone) {
+                          return "Alternative phone cannot be identical to primary phone";
+                        }
+                        return validateWithZod(orderAlternativePhoneSchema)({ value: cleaned });
+                      },
+                      onSubmit: ({ value }) => {
+                        const cleaned = (value || "").replace(/[\s-]/g, "");
+                        if (!cleaned) return undefined;
+                        const phone = form.getFieldValue("phone");
+                        const cleanPhone = (phone || "").replace(/[\s-]/g, "");
+                        if (cleanPhone && cleaned === cleanPhone) {
+                          return "Alternative phone cannot be identical to primary phone";
+                        }
+                        return validateWithZod(orderAlternativePhoneSchema)({ value: cleaned });
+                      },
+                    }}
+                  >
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_alternative_phone">
+                          Alternative Phone (Optional)
+                        </FormFieldLabel>
+                        <Input
+                          id="order_form_alternative_phone"
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          placeholder="+88018XXXXXXXX"
+                        />
+                        <FormFieldError errors={field.state.meta.errors} />
+                        {/* Steadfast Delivery Record below alternative phone */}
+                        <SteadfastDeliveryRecordBadge phone={field.state.value} variant="inline" />
                       </FormFieldItem>
                     )}
                   </form.Field>
@@ -1186,6 +1300,88 @@ export function OrderFormDialog({
                     </FormFieldItem>
                   )}
                 </form.Field>
+
+                {/* Ship to different recipient toggle & fields */}
+                <div className="pt-3 border-t border-border/70">
+                  <form.Field name="different_shipping_recipient">
+                    {(field) => (
+                      <div className="space-y-3">
+                        <label
+                          htmlFor="order_form_different_recipient"
+                          className="flex items-center gap-2.5 cursor-pointer text-xs sm:text-sm font-medium text-foreground select-none hover:text-foreground/80 transition-colors"
+                        >
+                          <Checkbox
+                            id="order_form_different_recipient"
+                            checked={Boolean(field.state.value)}
+                            onCheckedChange={(checked) => field.handleChange(Boolean(checked))}
+                          />
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span>Ship to another recipient / different person</span>
+                            <span className="text-[11px] text-muted-foreground font-normal">
+                              (Recipient name & phone for delivery)
+                            </span>
+                          </span>
+                        </label>
+
+                        {field.state.value && (
+                          <div className="p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-3 animate-in fade-in-50 duration-200">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <form.Field
+                                name="shipping_recipient_name"
+                                validators={{
+                                  onChange: validateWithZod(orderRecipientNameSchema),
+                                  onBlur: validateWithZod(orderRecipientNameSchema),
+                                }}
+                              >
+                                {(subField) => (
+                                  <FormFieldItem>
+                                    <FormFieldLabel htmlFor="order_form_shipping_recipient_name" required>
+                                      Recipient Name
+                                    </FormFieldLabel>
+                                    <Input
+                                      id="order_form_shipping_recipient_name"
+                                      placeholder="e.g. Rahima Begum"
+                                      value={subField.state.value}
+                                      onChange={(e) => subField.handleChange(e.target.value)}
+                                      onBlur={subField.handleBlur}
+                                    />
+                                    <FormFieldError errors={subField.state.meta.errors} />
+                                  </FormFieldItem>
+                                )}
+                              </form.Field>
+
+                              <form.Field
+                                name="shipping_phone"
+                                validators={{
+                                  onChange: validateWithZod(orderShippingPhoneSchema),
+                                  onBlur: validateWithZod(orderShippingPhoneSchema),
+                                }}
+                              >
+                                {(subField) => (
+                                  <FormFieldItem>
+                                    <FormFieldLabel htmlFor="order_form_shipping_phone" required>
+                                      Shipping Phone Number
+                                    </FormFieldLabel>
+                                    <Input
+                                      id="order_form_shipping_phone"
+                                      placeholder="01XXXXXXXXX"
+                                      value={subField.state.value}
+                                      onChange={(e) => subField.handleChange(e.target.value)}
+                                      onBlur={subField.handleBlur}
+                                    />
+                                    <FormFieldError errors={subField.state.meta.errors} />
+                                    {/* Steadfast Delivery Record badge for shipping phone */}
+                                    <SteadfastDeliveryRecordBadge phone={subField.state.value} variant="inline" />
+                                  </FormFieldItem>
+                                )}
+                              </form.Field>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </form.Field>
+                </div>
               </div>
 
               {/* ORDER STATUS & CHANNEL SECTION (BELOW CUSTOMER & DESTINATION DETAILS) */}

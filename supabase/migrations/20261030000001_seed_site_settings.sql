@@ -11,6 +11,10 @@ insert into public.site_settings (key, value, description, is_public) values
   ('inventory.low_stock_threshold_retail', '20',                                                                           'Low stock alert threshold for retail packs in units',       false),
   ('notifications.sms_gateway',           '"greenweb"',                                                                   'SMS gateway provider',                                      false),
   ('notifications.sms_sender_id',         '"MOLASSES"',                                                                   'Sender ID / Masking name for SMS',                          false),
-  ('notifications.smtp_server',           '"smtp.sendgrid.net (Port 587)"',                                               'SMTP transactional email server endpoint',                  false)
+  ('notifications.smtp_server',           '"smtp.sendgrid.net (Port 587)"',                                               'SMTP transactional email server endpoint',                  false),
+  ('store.logo_url',                      '""',                                                                           'Public URL of store business logo',                         true),
+  ('store.favicon_url',                   '""',                                                                           'Public URL of store browser favicon icon',                  true),
+  ('admin.root_avatar_url',               '""',                                                                           'Root administrator profile avatar URL',                     false),
+  ('admin.root_name',                     '"Administrator"',                                                              'Root administrator display name',                           false)
 on conflict (key) do nothing;
 

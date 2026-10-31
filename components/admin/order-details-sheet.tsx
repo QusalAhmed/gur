@@ -9,6 +9,7 @@ import {
   Copy,
   Check,
   Phone,
+  PhoneCall,
   Mail,
   MapPin,
   Truck,
@@ -32,6 +33,7 @@ import {
   DollarSign,
   User,
   ShoppingBag,
+  Package,
   RotateCcw,
   CheckCircle2,
   CircleDot,
@@ -70,6 +72,19 @@ import {
 } from "@/lib/validations/order";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
+import {
+  bookSteadfastParcelAction,
+  recreateSteadfastParcelAction,
+} from "@/actions/steadfast";
+import {
+  formatSteadfastItemDescription,
+  detectSteadfastPayloadDiff,
+  buildSteadfastPayloadSnapshot,
+  computeNextSteadfastInvoice,
+} from "@/lib/steadfast";
+import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
+import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
+import { updateOrderInDb } from "@/lib/supabase/api";
 import type {
   Order,
   OrderItem,
@@ -92,6 +107,7 @@ export interface OrderDetailsSheetProps {
   onPrintInvoice: (orders: Order[]) => void;
   onDeleteOrder: (order: Order) => void;
   catalogProducts?: CatalogProduct[];
+  onUpdateOrder?: (order: Order) => void;
   onAddNote: (orderId: string, note: OrderNote, currentOrder: Order) => Promise<void> | void;
   onEditNote: (note: OrderNote, orderId: string) => void;
   onDeleteNote: (noteId: string, orderId: string, noteText: string, noteType: OrderNoteType, order: Order) => void;
@@ -155,6 +171,7 @@ export function OrderDetailsSheet({
   onPrintInvoice,
   onDeleteOrder,
   catalogProducts = [],
+  onUpdateOrder,
   onAddNote,
   onEditNote,
   onDeleteNote,
@@ -167,6 +184,86 @@ export function OrderDetailsSheet({
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
   const [noteFilterType, setNoteFilterType] = React.useState<string>("all");
   const [activeTab, setActiveTab] = React.useState<string>("notes");
+  const [isBookingSteadfast, setIsBookingSteadfast] = React.useState(false);
+  const [isRecreatingSteadfast, setIsRecreatingSteadfast] = React.useState(false);
+  const [isRecreateModalOpen, setIsRecreateModalOpen] = React.useState(false);
+  const [steadfastError, setSteadfastError] = React.useState<string | null>(null);
+
+  const payloadSnapshot = React.useMemo(() => {
+    if (!order) return null;
+    return buildSteadfastPayloadSnapshot(order);
+  }, [order]);
+
+  const diffResult = React.useMemo(() => {
+    if (!order || !payloadSnapshot || !order.courier_consignment_id) {
+      return { hasDiff: false, diffItems: [], summary: "" };
+    }
+    return detectSteadfastPayloadDiff(payloadSnapshot, order.courier_payload_snapshot as any);
+  }, [order, payloadSnapshot]);
+
+  const nextRevisionInvoice = React.useMemo(() => {
+    if (!order) return "";
+    return computeNextSteadfastInvoice(order.id, order.courier_invoice);
+  }, [order]);
+
+  const handleConfirmRecreate = async () => {
+    if (!order) return;
+    setIsRecreatingSteadfast(true);
+    setSteadfastError(null);
+    try {
+      const res = await recreateSteadfastParcelAction({
+        orderId: order.id,
+        updatedOrder: order,
+      });
+
+      if (res.success && res.order) {
+        if (onUpdateOrder) {
+          onUpdateOrder(res.order);
+        }
+        setIsRecreateModalOpen(false);
+      } else {
+        setSteadfastError(res.error || "Failed to recreate parcel in Steadfast Courier.");
+      }
+    } catch (err: any) {
+      setSteadfastError(err.message || "Failed to connect to Steadfast Courier.");
+    } finally {
+      setIsRecreatingSteadfast(false);
+    }
+  };
+
+  const handleBookSteadfast = async () => {
+    if (!order) return;
+    if (order.courier_consignment_id || order.courier_tracking_code) {
+      setSteadfastError(`Order is already booked with courier (Consignment #${order.courier_consignment_id || "Assigned"}). Duplicate booking prevented.`);
+      return;
+    }
+    setIsBookingSteadfast(true);
+    setSteadfastError(null);
+    try {
+      const res = await bookSteadfastParcelAction(order);
+      if (res.success && res.consignment) {
+        const c = res.consignment;
+        const updated = await updateOrderInDb({
+          ...order,
+          courier_name: "Steadfast Courier",
+          courier_consignment_id: String(c.consignment_id),
+          courier_tracking_code: c.tracking_code,
+          courier_tracking_url: c.tracking_link,
+          courier_invoice: c.invoice,
+          courier_payload_snapshot: buildSteadfastPayloadSnapshot(order, undefined, c.invoice),
+        });
+        if (onUpdateOrder) {
+          onUpdateOrder(updated);
+        }
+      } else {
+        setSteadfastError(res.error || "Failed to book parcel with Steadfast");
+      }
+    } catch (err: any) {
+      setSteadfastError(err.message || "Failed to connect to Steadfast");
+    } finally {
+      setIsBookingSteadfast(false);
+    }
+  };
 
   // Reset filter when opening or changing orders
   React.useEffect(() => {
@@ -231,16 +328,17 @@ export function OrderDetailsSheet({
   };
 
   // WhatsApp launcher generator
-  const getWhatsAppUrl = () => {
-    if (!order?.phone) return "#";
-    let clean = order.phone.replace(/[^0-9+]/g, "");
+  const getWhatsAppUrl = (targetPhone?: string) => {
+    const raw = targetPhone || order?.phone;
+    if (!raw) return "#";
+    let clean = raw.replace(/[^0-9+]/g, "");
     if (clean.startsWith("01")) {
       clean = "88" + clean;
     } else if (clean.startsWith("+88")) {
       clean = clean.replace("+", "");
     }
     const text = encodeURIComponent(
-      `Hello ${order.customer || "Valued Customer"}, greetings from ${storeName} regarding your Order #${order.id}.`
+      `Hello ${order?.customer || "Valued Customer"}, greetings from ${storeName} regarding your Order #${order?.id}.`
     );
     return `https://wa.me/${clean}?text=${text}`;
   };
@@ -248,6 +346,15 @@ export function OrderDetailsSheet({
   // Courier format copy
   const handleCopyCourierFormat = () => {
     if (!order) return;
+    const recipientName = order.address?.recipient_name || order.recipient_name || order.customer || "Customer";
+    const recipientPhone = order.address?.phone || order.shipping_phone || order.phone;
+    const isDifferentRecipient = Boolean(
+      (order.address?.phone && order.address.phone !== order.phone) ||
+      (order.shipping_phone && order.shipping_phone !== order.phone) ||
+      (order.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+      (order.recipient_name && order.recipient_name !== order.customer)
+    );
+
     const addressParts = [
       order.address?.address_line,
       order.address?.district,
@@ -257,8 +364,10 @@ export function OrderDetailsSheet({
       .join(", ");
 
     const text = [
-      `Name: ${order.customer || "Customer"}`,
-      `Phone: ${order.phone}`,
+      `Recipient: ${recipientName}`,
+      `Phone: ${recipientPhone}`,
+      isDifferentRecipient ? `Ordered By: ${order.customer} (${order.phone})` : null,
+      order.alternative_phone && order.alternative_phone !== recipientPhone ? `Alt Phone: ${order.alternative_phone}` : null,
       `Address: ${addressParts || "N/A"}`,
       order.courier_name ? `Courier: ${order.courier_name}` : null,
       order.customer_note ? `Note: ${order.customer_note}` : null,
@@ -367,97 +476,121 @@ export function OrderDetailsSheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-[56rem] h-full p-0 flex flex-col gap-0 overflow-hidden bg-background shadow-2xl border-l"
+        className="w-full max-w-none h-[100dvh] inset-0 data-[side=right]:inset-0 md:data-[side=right]:inset-y-0 md:data-[side=right]:right-0 md:data-[side=right]:left-auto md:w-[80vw] md:max-w-none md:h-full p-0 flex flex-col gap-0 overflow-hidden bg-background shadow-2xl border-0 md:border-l"
       >
         {/* ========================================================================= */}
         {/* 1. STICKY HEADER */}
         {/* ========================================================================= */}
-        <div className="px-5 py-3.5 border-b bg-card/60 backdrop-blur-md shrink-0 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-mono text-base sm:text-lg font-bold text-amber-700 dark:text-amber-400 truncate">
-                {order.id}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopy(order.id, "order-id")}
-                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
-                title="Copy Order ID"
-              >
-                {copiedKey === "order-id" ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </button>
+        <div className="px-4 sm:px-5 py-3 md:py-3.5 border-b bg-card/60 backdrop-blur-md shrink-0">
+          {/* Top Row: Order ID, copy, queue navigation and close button */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-mono text-base sm:text-lg font-bold text-amber-700 dark:text-amber-400 truncate">
+                  {order.id}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(order.id, "order-id")}
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                  title="Copy Order ID"
+                >
+                  {copiedKey === "order-id" ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+
+              {/* Desktop/Tablet badges shown inline next to ID */}
+              <div className="hidden md:flex items-center gap-2">
+                {renderChannelBadge()}
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize whitespace-nowrap ${
+                    statusStyles[order.status] || "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {order.status.replace(/_/g, " ")}
+                </span>
+              </div>
             </div>
 
-            {renderChannelBadge()}
+            {/* Right Header: Queue Switcher & Close */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {ordersList && ordersList.length > 1 && (
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-muted/50 rounded-lg p-0.5 border">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-md cursor-pointer"
+                    disabled={!hasPrev}
+                    onClick={handlePrevOrder}
+                    title="Previous Order (Left Arrow)"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-[11px] font-mono px-1 sm:px-1.5 text-muted-foreground select-none">
+                    {currentIndex + 1} / {ordersList.length}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-md cursor-pointer"
+                    disabled={!hasNext}
+                    onClick={handleNextOrder}
+                    title="Next Order (Right Arrow)"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
 
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize whitespace-nowrap ${statusStyles[order.status] || "bg-muted text-muted-foreground"
-                }`}
-            >
-              {order.status.replace(/_/g, " ")}
-            </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
+                onClick={() => onOpenChange(false)}
+                title="Close Panel (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
-          {/* Right Header: Queue Switcher & Close */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {ordersList.length > 1 && (
-              <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 border">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-md cursor-pointer"
-                  disabled={!hasPrev}
-                  onClick={handlePrevOrder}
-                  title="Previous Order (Left Arrow)"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-[11px] font-mono px-1.5 text-muted-foreground select-none">
-                  {currentIndex + 1} / {ordersList.length}
-                </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-md cursor-pointer"
-                  disabled={!hasNext}
-                  onClick={handleNextOrder}
-                  title="Next Order (Right Arrow)"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+          {/* Mobile Second Tier: Status & Channel Badges */}
+          <div className="flex md:hidden items-center justify-between gap-2 pt-2.5 mt-2 border-t border-border/40">
+            <div className="flex items-center gap-2 flex-wrap">
+              {renderChannelBadge()}
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize whitespace-nowrap ${
+                  statusStyles[order.status] || "bg-muted text-muted-foreground"
+                }`}
+              >
+                {order.status.replace(/_/g, " ")}
+              </span>
+            </div>
+            {order.isFromDb && (
+              <span className="text-emerald-700 dark:text-emerald-400 font-medium text-[11px] flex items-center gap-1 shrink-0">
+                <CheckCircle2 className="h-3 w-3" />
+                Synced
+              </span>
             )}
-
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
-              onClick={() => onOpenChange(false)}
-              title="Close Panel (Esc)"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
         {/* Sub-header meta bar */}
-        <div className="px-5 py-2 bg-muted/20 border-b flex items-center justify-between text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-2">
+        <div className="px-4 sm:px-5 py-2 bg-muted/20 border-b flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span>Placed: {formatDate(order.date)}</span>
             <span>•</span>
             <span>Currency: {order.currency}</span>
             {order.isFromDb && (
-              <>
+              <span className="hidden md:inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium">
                 <span>•</span>
-                <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Synced
-                </span>
-              </>
+                <CheckCircle2 className="h-3 w-3" />
+                Synced
+              </span>
             )}
           </div>
 
@@ -488,7 +621,7 @@ export function OrderDetailsSheet({
         {/* ========================================================================= */}
         {/* 2. SCROLLABLE BODY CONTENT */}
         {/* ========================================================================= */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3.5 sm:py-4 space-y-4 sm:space-y-5">
           {/* Status Pipeline or Exception Banner */}
           {isCancelledOrReturned ? (
             <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">
@@ -620,6 +753,51 @@ export function OrderDetailsSheet({
                     </div>
                   </div>
 
+                  {/* Steadfast Delivery Record below customer phone */}
+                  {order.phone && (
+                    <SteadfastDeliveryRecordBadge phone={order.phone} variant="expanded" />
+                  )}
+
+                  {/* Alternative Phone if present (exact same font, size & styling as primary phone) */}
+                  {order.alternative_phone && (
+                    <div className="pt-2 border-t border-dashed mt-2 space-y-1.5">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                          <a href={`tel:${order.alternative_phone}`} className="hover:underline text-foreground font-mono font-medium">
+                            {order.alternative_phone}
+                          </a>
+                          <span className="text-[11px] text-muted-foreground font-normal">(Alt)</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(order.alternative_phone!, "alt_phone")}
+                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                            title="Copy Alternative Phone"
+                          >
+                            {copiedKey === "alt_phone" ? (
+                              <Check className="h-3 w-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </button>
+                          <a
+                            href={getWhatsAppUrl(order.alternative_phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            title="Chat on WhatsApp (Alternative Phone)"
+                          >
+                            <Share2 className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </div>
+                      {/* Steadfast Delivery Record for alternative phone */}
+                      <SteadfastDeliveryRecordBadge phone={order.alternative_phone} variant="expanded" />
+                    </div>
+                  )}
+
                   {order.email && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Mail className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -661,6 +839,73 @@ export function OrderDetailsSheet({
                   </Button>
                 </div>
 
+                {/* When order is shipped to a different recipient */}
+                {(() => {
+                  const isDiff = Boolean(
+                    (order.address?.phone && order.address.phone !== order.phone) ||
+                    (order.shipping_phone && order.shipping_phone !== order.phone) ||
+                    (order.address?.recipient_name && order.address.recipient_name !== order.customer) ||
+                    (order.recipient_name && order.recipient_name !== order.customer)
+                  );
+                  if (!isDiff) return null;
+
+                  const shipRecipient = order.address?.recipient_name || order.recipient_name || "Recipient";
+                  const shipPhone = order.address?.phone || order.shipping_phone;
+
+                  return (
+                    <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-1.5 mb-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          Delivery Recipient (Ordered for someone else)
+                        </span>
+                      </div>
+                      <div className="pt-0.5">
+                        <p className="font-semibold text-foreground text-sm">
+                          {shipRecipient}
+                        </p>
+                      </div>
+                      {shipPhone && (
+                        <div className="space-y-1.5 pt-1 border-t border-amber-500/10">
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span className="flex items-center gap-1.5">
+                              <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                              <a href={`tel:${shipPhone}`} className="hover:underline text-foreground font-mono font-medium">
+                                {shipPhone}
+                              </a>
+                              <span className="text-[10px] text-muted-foreground font-normal">(Shipping)</span>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(shipPhone, "ship_phone")}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                                title="Copy Shipping Phone"
+                              >
+                                {copiedKey === "ship_phone" ? (
+                                  <Check className="h-3 w-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </button>
+                              <a
+                                href={getWhatsAppUrl(shipPhone)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                title="Chat on WhatsApp (Shipping Phone)"
+                              >
+                                <Share2 className="h-3 w-3" />
+                              </a>
+                            </div>
+                          </div>
+                          <SteadfastDeliveryRecordBadge phone={shipPhone} variant="expanded" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">
                     {[order.address?.district, order.address?.division].filter(Boolean).join(", ") || (
@@ -675,12 +920,145 @@ export function OrderDetailsSheet({
                 </div>
 
                 {order.courier_name && (
-                  <div className="pt-1.5 flex items-center gap-1.5 border-t border-border/50 text-[11px]">
-                    <Truck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                    <span className="text-muted-foreground">Courier:</span>
-                    <Badge variant="outline" className="font-semibold text-amber-800 dark:text-amber-300 border-amber-300 bg-amber-500/10">
-                      {order.courier_name}
-                    </Badge>
+                  <div className="pt-2 space-y-2 border-t border-border/50 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                        <span className="text-muted-foreground">Courier:</span>
+                        <Badge variant="outline" className="font-semibold text-amber-800 dark:text-amber-300 border-amber-300 bg-amber-500/10">
+                          {order.courier_name}
+                        </Badge>
+                      </div>
+
+                      {order.courier_tracking_url && (
+                        <a
+                          href={order.courier_tracking_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                        >
+                          Live Tracking
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+
+                    {order.courier_name.toLowerCase().includes("steadfast") && (
+                      <div className="p-2 rounded-md bg-amber-500/5 border border-amber-500/20 text-[11px] space-y-1">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span className="font-medium text-foreground flex items-center gap-1">
+                            <Package className="h-3 w-3 text-amber-600 shrink-0" />
+                            Parcel Description (Steadfast):
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {formatSteadfastItemDescription(order.items).length}/255 chars
+                          </span>
+                        </div>
+                        <p className="text-foreground/90 font-medium leading-relaxed font-mono text-[10.5px]">
+                          {formatSteadfastItemDescription(order.items) || "No product items"}
+                        </p>
+                      </div>
+                    )}
+
+                    {order.courier_consignment_id && (
+                      <div className="p-2 rounded-md bg-muted/40 border border-border/60 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Consignment ID:</span>
+                          <div className="flex items-center gap-1 font-mono font-medium text-foreground">
+                            <span>#{order.courier_consignment_id}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(order.courier_consignment_id!, "consignment-id")}
+                              className="text-muted-foreground hover:text-foreground p-0.5"
+                              title="Copy Consignment ID"
+                            >
+                              {copiedKey === "consignment-id" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {order.courier_tracking_code && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Tracking Code:</span>
+                            <div className="flex items-center gap-1 font-mono font-medium text-foreground">
+                              <span>{order.courier_tracking_code}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(order.courier_tracking_code!, "tracking-code")}
+                                className="text-muted-foreground hover:text-foreground p-0.5"
+                                title="Copy Tracking Code"
+                              >
+                                {copiedKey === "tracking-code" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {steadfastError && (
+                      <div className="p-2 rounded-md bg-destructive/10 text-destructive text-[11px] leading-tight">
+                        {steadfastError}
+                      </div>
+                    )}
+
+                    {(order.courier_consignment_id || order.courier_tracking_code) ? (
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>Booked with Courier</span>
+                          </div>
+                          {order.courier_invoice && (
+                            <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                              Inv: {order.courier_invoice}
+                            </span>
+                          )}
+                        </div>
+
+                        {diffResult.hasDiff && (
+                          <div className="p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+                            <div className="flex items-center gap-1.5 font-semibold">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                              <span>Courier Info Out of Sync</span>
+                            </div>
+                            <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
+                              {diffResult.summary}
+                            </p>
+                          </div>
+                        )}
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isRecreatingSteadfast}
+                          onClick={() => setIsRecreateModalOpen(true)}
+                          className={`w-full h-7 text-xs font-medium border ${
+                            diffResult.hasDiff
+                              ? "bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-400 hover:bg-amber-500/25"
+                              : "border-border/70 hover:bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          <RefreshCw className={`h-3 w-3 mr-1.5 ${isRecreatingSteadfast ? "animate-spin" : ""}`} />
+                          {diffResult.hasDiff
+                            ? `Recreate in Steadfast (${diffResult.diffItems.length} changes)`
+                            : "Recreate Parcel with Steadfast"}
+                        </Button>
+                      </div>
+                    ) : order.courier_name.toLowerCase().includes("steadfast") ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={isBookingSteadfast}
+                        onClick={handleBookSteadfast}
+                        className="w-full h-7 text-xs bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300 hover:bg-amber-500/20 font-medium"
+                      >
+                        <Truck className={`h-3 w-3 mr-1.5 ${isBookingSteadfast ? "animate-spin" : ""}`} />
+                        {isBookingSteadfast ? "Booking with Steadfast..." : "Book with Steadfast Courier"}
+                      </Button>
+                    ) : null}
                   </div>
                 )}
               </CardContent>
@@ -730,7 +1108,7 @@ export function OrderDetailsSheet({
                     </Button>
                   </div>
                 ) : (
-                  <div className="rounded-xl border overflow-hidden bg-card">
+                  <div className="rounded-xl border overflow-x-auto bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/40 text-[11px]">
@@ -1207,60 +1585,63 @@ export function OrderDetailsSheet({
         {/* ========================================================================= */}
         {/* 3. STICKY BOTTOM ACTION DOCK */}
         {/* ========================================================================= */}
-        <div className="px-5 py-3 border-t bg-card/80 backdrop-blur-md shrink-0 flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+        <div className="px-4 sm:px-5 py-2.5 sm:py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t bg-card/90 backdrop-blur-md shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          {/* Primary / Advance + Status Group */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {nextStatusLabel && (
               <Button
                 size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs h-8 cursor-pointer shadow-xs"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs h-8 cursor-pointer shadow-xs flex-1 sm:flex-initial truncate"
                 disabled={isStatusPending}
                 onClick={() => onQuickAdvanceStatus(order)}
               >
-                <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-                {nextStatusLabel}
+                <ArrowRight className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                <span className="truncate">{nextStatusLabel}</span>
               </Button>
             )}
 
             <Button
               size="sm"
               variant="outline"
-              className="text-xs h-8 cursor-pointer"
+              className="text-xs h-8 cursor-pointer shrink-0"
               onClick={() => onUpdateStatus(order)}
+              title="Change Order Status"
             >
-              <RefreshCw className="h-3.5 w-3.5 mr-1 text-amber-600" />
-              Status
+              <RefreshCw className="h-3.5 w-3.5 sm:mr-1 text-amber-600" />
+              <span className="hidden xs:inline sm:inline">Status</span>
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Secondary Actions Group */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">
             <Button
               size="sm"
               variant="outline"
-              className="text-xs h-8 cursor-pointer"
+              className="text-xs h-8 cursor-pointer flex-1 sm:flex-initial"
               onClick={() => {
                 onOpenChange(false);
                 onEditOrder(order);
               }}
             >
-              <Edit className="h-3.5 w-3.5 mr-1 text-blue-600" />
-              Edit
+              <Edit className="h-3.5 w-3.5 sm:mr-1 text-blue-600" />
+              <span>Edit</span>
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              className="text-xs h-8 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 cursor-pointer"
+              className="text-xs h-8 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 cursor-pointer flex-1 sm:flex-initial"
               onClick={() => onPrintInvoice([order])}
               title="Print 58mm thermal sticker label"
             >
-              <Printer className="h-3.5 w-3.5 mr-1 text-amber-600" />
-              58mm Label
+              <Printer className="h-3.5 w-3.5 sm:mr-1 text-amber-600" />
+              <span className="hidden sm:inline">58mm </span>Label
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              className="text-xs h-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+              className="text-xs h-8 text-destructive hover:bg-destructive/10 cursor-pointer px-2.5 sm:px-3 shrink-0"
               onClick={() => {
                 onDeleteOrder(order);
               }}
@@ -1271,6 +1652,18 @@ export function OrderDetailsSheet({
           </div>
         </div>
       </SheetContent>
+      <SteadfastRecreateDialog
+        isOpen={isRecreateModalOpen}
+        onClose={() => setIsRecreateModalOpen(false)}
+        order={order}
+        diffItems={diffResult.diffItems}
+        nextInvoice={nextRevisionInvoice}
+        onConfirmRecreate={handleConfirmRecreate}
+        onSaveWithoutRecreate={async () => {
+          setIsRecreateModalOpen(false);
+        }}
+        isProcessing={isRecreatingSteadfast}
+      />
     </Sheet>
   );
 }

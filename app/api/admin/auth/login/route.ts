@@ -6,6 +6,7 @@ import {
   AdminRole,
 } from "@/lib/admin-auth";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: NextRequest) {
@@ -37,12 +38,32 @@ export async function POST(req: NextRequest) {
       trimmedEmail === envAdminEmail &&
       password === envAdminPassword
     ) {
+      let rootAvatar: string | undefined;
+      let rootName = "Administrator";
+      try {
+        const { data: rootSetting } = await supabaseAdmin
+          .from("site_settings")
+          .select("key, value")
+          .in("key", ["admin.root_avatar_url", "admin.root_name"]);
+        if (rootSetting) {
+          for (const s of rootSetting) {
+            if (s.key === "admin.root_avatar_url" && s.value) {
+              rootAvatar = typeof s.value === "string" ? s.value.replace(/^"|"$/g, "") : s.value;
+            }
+            if (s.key === "admin.root_name" && s.value) {
+              rootName = typeof s.value === "string" ? s.value.replace(/^"|"$/g, "") : s.value;
+            }
+          }
+        }
+      } catch (err) {}
+
       authenticatedUser = {
         id: "admin-root",
-        name: "Administrator",
+        name: rootName,
         email: envAdminEmail,
         role: "owner",
-        initials: "AD",
+        initials: rootName.slice(0, 2).toUpperCase(),
+        avatarUrl: rootAvatar,
       };
     }
 
@@ -108,9 +129,27 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Fetch persistent profile photo & full name from public.profiles
+      let profileAvatarUrl: string | undefined = userMeta.avatar_url || userMeta.avatarUrl;
+      let profileFullName: string | undefined = userMeta.full_name || userMeta.name;
+
+      try {
+        const { data: profileRecord } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name, avatar_path, phone")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (profileRecord) {
+          if (profileRecord.avatar_path) profileAvatarUrl = profileRecord.avatar_path;
+          if (profileRecord.full_name) profileFullName = profileRecord.full_name;
+        }
+      } catch (profErr) {
+        console.warn("Could not query profiles table:", profErr);
+      }
+
       const fullName =
-        userMeta.full_name ||
-        userMeta.name ||
+        profileFullName ||
         data.user.email?.split("@")[0] ||
         "Staff Member";
 
@@ -131,6 +170,7 @@ export async function POST(req: NextRequest) {
         phone: data.user.phone || undefined,
         initials,
         twoFactor: Boolean(userMeta.twoFactor),
+        avatarUrl: profileAvatarUrl,
       };
     }
 

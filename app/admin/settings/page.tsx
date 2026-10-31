@@ -12,7 +12,9 @@ import {
   PackageCheck,
   CheckCircle2,
   AlertCircle,
+  Image as ImageIcon,
 } from "lucide-react";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +54,8 @@ export default function SettingsPage() {
   );
   const [timezone, setTimezone] = React.useState("Asia/Dhaka");
   const [language, setLanguage] = React.useState("bn_en");
+  const [logoUrl, setLogoUrl] = React.useState("");
+  const [faviconUrl, setFaviconUrl] = React.useState("");
 
   // Orders & Stock State
   const [codEnabled, setCodEnabled] = React.useState(true);
@@ -89,6 +93,8 @@ export default function SettingsPage() {
         if (data["store.address"] !== undefined) setAddress(String(data["store.address"]));
         if (data["store.timezone"] !== undefined) setTimezone(String(data["store.timezone"]));
         if (data["store.language"] !== undefined) setLanguage(String(data["store.language"]));
+        if (data["store.logo_url"] !== undefined) setLogoUrl(String(data["store.logo_url"] || ""));
+        if (data["store.favicon_url"] !== undefined) setFaviconUrl(String(data["store.favicon_url"] || ""));
 
         // Orders & Stock
         if (typeof data["checkout.cod_enabled"] === "boolean") {
@@ -155,6 +161,8 @@ export default function SettingsPage() {
         "store.address": address,
         "store.timezone": timezone,
         "store.language": language,
+        "store.logo_url": logoUrl,
+        "store.favicon_url": faviconUrl,
         "checkout.cod_enabled": codEnabled,
         "checkout.guest_checkout_enabled": guestCheckoutEnabled,
         "orders.auto_cancel_cod_hours": autoCancelCodHours,
@@ -265,7 +273,67 @@ export default function SettingsPage() {
           </TabsList>
 
           {/* Store Profile Tab */}
-          <TabsContent value="general">
+          <TabsContent value="general" className="space-y-6">
+            {/* Store Brand Assets (Logo & Favicon) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-amber-600" />
+                  Store Brand Assets (Logo & Favicon)
+                </CardTitle>
+                <CardDescription>
+                  Upload your official company emblem, transparent logo, and browser favicon
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {/* Business Logo */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold block">Business Logo</label>
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      Shown on login portal, sidebar navigation, invoices, and receipts (PNG, WebP, or SVG recommended)
+                    </p>
+                    <ImageUploader
+                      value={logoUrl ? [logoUrl] : []}
+                      onChange={(items) => {
+                        const first = items[0];
+                        setLogoUrl(first?.url || first?.path || "");
+                      }}
+                      onRemove={() => setLogoUrl("")}
+                      multiple={false}
+                      bucket="catalog-images"
+                      folder="branding/logo"
+                      label="Upload Business Logo"
+                      description="Click or drag company logo (PNG, JPG, WebP)"
+                      aspectRatio="auto"
+                    />
+                  </div>
+
+                  {/* Browser Favicon */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold block">Store Favicon / Web App Icon</label>
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      Shown on browser tabs and desktop bookmarks (Square PNG, ICO, or SVG recommended)
+                    </p>
+                    <ImageUploader
+                      value={faviconUrl ? [faviconUrl] : []}
+                      onChange={(items) => {
+                        const first = items[0];
+                        setFaviconUrl(first?.url || first?.path || "");
+                      }}
+                      onRemove={() => setFaviconUrl("")}
+                      multiple={false}
+                      bucket="catalog-images"
+                      folder="branding/favicon"
+                      label="Upload Store Favicon"
+                      description="Square icon (64x64 or 128x128 recommended)"
+                      aspectRatio="square"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">

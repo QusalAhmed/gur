@@ -245,6 +245,8 @@ export interface DbOrder {
   user_id?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
+  customer_alternative_phone?: string | null;
+  shipping_phone?: string | null;
   customer_email?: string | null;
   shipping_address: Record<string, any>;
   billing_address?: Record<string, any> | null;
@@ -261,6 +263,11 @@ export interface DbOrder {
   customer_note?: string | null;
   cancel_reason?: string | null;
   courier_name?: string | null;
+  courier_consignment_id?: string | null;
+  courier_tracking_code?: string | null;
+  courier_tracking_url?: string | null;
+  courier_invoice?: string | null;
+  courier_payload_snapshot?: any;
   channel: string;
   created_at: string;
   updated_at: string;
