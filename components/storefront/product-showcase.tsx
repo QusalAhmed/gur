@@ -6,6 +6,7 @@ import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
 import { CartSheet } from "./cart-sheet";
+import { MobileDock } from "./mobile-dock";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
@@ -110,8 +111,8 @@ export function ProductShowcase({
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-amber-50 dark:bg-stone-950 font-sans">
-      {/* Sticky Header: Store Title, Hotline Call Pill & Language Switcher */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-14 sm:h-16 px-3 sm:px-6 md:px-8 bg-amber-100/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-amber-200/70 dark:border-stone-800 flex items-center justify-between shadow-sm">
+      {/* Sticky Header: Desktop / Tablet Only (Hidden on mobile phones to maximize vertical space) */}
+      <header className="fixed top-0 left-0 right-0 z-40 h-14 sm:h-16 px-3 sm:px-6 md:px-8 bg-amber-100/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-amber-200/70 dark:border-stone-800 hidden sm:flex items-center justify-between shadow-sm">
         {/* Logo & Store Title */}
         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0 text-base sm:text-lg">
@@ -230,6 +231,14 @@ export function ProductShowcase({
           ))}
         </main>
       )}
+
+      {/* Mobile Floating Island Dock (Eye-catching frosted pill on mobile phones) */}
+      <MobileDock
+        lang={lang}
+        onToggleLang={toggleLanguage}
+        defaultHotline={defaultHotline}
+        storeName={storeName}
+      />
 
       {/* Redux Cart Drawer Sheet */}
       <CartSheet lang={lang} onProceedToCheckout={handleCheckoutFromCart} />

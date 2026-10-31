@@ -165,7 +165,7 @@ export function ProductCard({
       : product.summary || "Traditional pure artisanal jaggery crafted by village artisans.";
 
   return (
-    <section className="h-[100dvh] min-h-[580px] w-full snap-start snap-always flex flex-col justify-between pt-15 sm:pt-18 pb-3 sm:pb-4 px-2.5 xs:px-3 sm:px-6 md:px-12 relative overflow-y-auto sm:overflow-hidden bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none">
+    <section className="h-[100dvh] min-h-[580px] w-full snap-start snap-always flex flex-col justify-between pt-3.5 sm:pt-18 pb-16 sm:pb-4 px-2.5 xs:px-3 sm:px-6 md:px-12 relative overflow-y-auto sm:overflow-hidden bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none">
       {/* Subtle Rustic Texture Backdrop Lines */}
       <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />
 
