@@ -18,7 +18,7 @@ export interface StorefrontOrderPayload {
   status?: "incomplete_order" | "pending"; // Default: "pending" on submission, "incomplete_order" on auto-save
   customerName?: string;
   customerPhone: string;
-  deliveryZone: "inside_dhaka" | "outside_dhaka";
+  deliveryZone?: "inside_dhaka" | "outside_dhaka";
   addressLine?: string;
   customerNote?: string;
   // Multiple items from Redux cart
@@ -72,10 +72,6 @@ export async function placeStorefrontOrderAction(
     const targetStatus: "incomplete_order" | "pending" = payload.status || "pending";
     const isIncomplete = targetStatus === "incomplete_order";
 
-    // Name and address: respectful fallbacks for missing optional info
-    const customerName = (payload.customerName || "").trim() || (isIncomplete ? "সম্মানিত গ্রাহক (খসড়া)" : "সম্মানিত গ্রাহক");
-    const addressLine = (payload.addressLine || "").trim() || (isIncomplete ? "" : "ঠিকানা ফোনে নিশ্চিত করা হবে");
-
     // Normalize items: support both multi-item list and legacy single item
     let resolvedItems: StorefrontOrderItem[] = [];
     if (payload.items && payload.items.length > 0) {
@@ -103,35 +99,41 @@ export async function placeStorefrontOrderAction(
     const hasItems = resolvedItems.length > 0;
     const subtotal = hasItems
       ? Math.round(
-          resolvedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100
-        ) / 100
+        resolvedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100
+      ) / 100
       : 0;
 
+    const hasDeliveryZone = Boolean(payload.deliveryZone);
     const isDhaka = payload.deliveryZone === "inside_dhaka";
-    const shippingFee = hasItems ? (isDhaka ? 70 : 130) : 0;
-    const grandTotal = Math.round((subtotal + shippingFee) * 100) / 100;
+    const shippingFee = hasItems && hasDeliveryZone ? (isDhaka ? 70 : 130) : 0;
+    const shippingMethodName = hasDeliveryZone
+      ? isDhaka
+        ? "কুরিয়ার হোম ডেলিভারি (ঢাকার ভেতরে - ৳৭০)"
+        : "কুরিয়ার হোম ডেলিভারি (ঢাকার বাইরে - ৳১৩০)"
+      : null;
 
     const client = supabaseAdmin || supabase;
-
-    const customerNote = payload.customerNote?.trim()
-      ? payload.customerNote.trim()
-      : isIncomplete
-        ? "ওয়েবসাইট থেকে খসড়া অর্ডার (Incomplete Lead - ফোনের মাধ্যমে সংগ্রহ)"
-        : hasItems
-          ? "ওয়েবসাইট থেকে সরাসরি গ্রাহকের অর্ডার (Cash on Delivery)"
-          : "সরাসরি ফোন অর্ডারের অনুরোধ (কোনো পণ্য নির্বাচিত ছিল না - ফোনে কথা বলে পণ্য নির্ধারণ করা হবে)";
 
     // =========================================================================
     // Deduplication Strategy:
     // 1. Try finding by provided orderId (if UUID is valid)
     // 2. Fallback: Find recent incomplete_order with same phone in last 24 hours
     // =========================================================================
-    let existingOrder: { id: string; order_number: string; status: string } | null = null;
+    let existingOrder: {
+      id: string;
+      order_number: string;
+      status: string;
+      customer_name?: string | null;
+      customer_note?: string | null;
+      shipping_address?: Record<string, any> | null;
+      shipping_method_name?: string | null;
+      shipping_total?: number | null;
+    } | null = null;
 
     if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
       const { data: foundById } = await client
         .from("orders")
-        .select("id, order_number, status")
+        .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total")
         .eq("id", payload.orderId)
         .maybeSingle();
 
@@ -144,7 +146,7 @@ export async function placeStorefrontOrderAction(
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: foundByPhone } = await client
         .from("orders")
-        .select("id, order_number, status")
+        .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total")
         .eq("customer_phone", normalizedPhone)
         .eq("status", "incomplete_order")
         .gte("created_at", oneDayAgo)
@@ -156,6 +158,57 @@ export async function placeStorefrontOrderAction(
         existingOrder = foundByPhone;
       }
     }
+
+    // =========================================================================
+    // Strict Customer Data SSOT:
+    // Only store data the customer explicitly entered. Never inject default names,
+    // synthesized customer notes, or placeholder addresses into database fields.
+    // =========================================================================
+    const resolvedCustomerName =
+      payload.customerName !== undefined
+        ? payload.customerName.trim() || null
+        : existingOrder?.customer_name || null;
+
+    const resolvedAddressLine =
+      payload.addressLine !== undefined
+        ? payload.addressLine.trim() || null
+        : existingOrder?.shipping_address?.address_line || null;
+
+    const resolvedCustomerNote =
+      payload.customerNote !== undefined
+        ? payload.customerNote.trim() || null
+        : existingOrder?.customer_note || null;
+
+    const existingShippingAddress = existingOrder?.shipping_address;
+    const resolvedDistrict = hasDeliveryZone
+      ? isDhaka
+        ? "Dhaka"
+        : "Outside Dhaka"
+      : existingShippingAddress?.district || "";
+
+    const resolvedDivision = hasDeliveryZone
+      ? isDhaka
+        ? "Dhaka"
+        : "Bangladesh"
+      : existingShippingAddress?.division || "";
+
+    const resolvedShippingMethodName = hasDeliveryZone
+      ? shippingMethodName
+      : existingOrder?.shipping_method_name || null;
+
+    const resolvedShippingFee = hasDeliveryZone
+      ? shippingFee
+      : (existingOrder?.shipping_total ?? shippingFee);
+
+    const finalGrandTotal = Math.round((subtotal + resolvedShippingFee) * 100) / 100;
+
+    const shippingAddress: Record<string, any> = {
+      phone: normalizedPhone,
+      recipient_name: resolvedCustomerName || "",
+      address_line: resolvedAddressLine || "",
+      district: resolvedDistrict,
+      division: resolvedDivision,
+    };
 
     let orderDbId: string;
     let orderNumber: string;
@@ -169,25 +222,17 @@ export async function placeStorefrontOrderAction(
       // Update the existing draft order
       const updatePayload: Record<string, any> = {
         status: targetStatus,
-        customer_name: customerName,
+        customer_name: resolvedCustomerName,
         customer_phone: normalizedPhone,
         shipping_phone: normalizedPhone,
-        shipping_address: {
-          address_line: addressLine,
-          district: isDhaka ? "Dhaka" : "Outside Dhaka",
-          division: isDhaka ? "Dhaka" : "Bangladesh",
-          recipient_name: customerName,
-          phone: normalizedPhone,
-        },
-        shipping_method_name: isDhaka
-          ? "কুরিয়ার হোম ডেলিভারি (ঢাকার ভেতরে - ৳৭০)"
-          : "কুরিয়ার হোম ডেলিভারি (ঢাকার বাইরে - ৳১৩০)",
+        shipping_address: shippingAddress,
+        shipping_method_name: resolvedShippingMethodName,
         subtotal,
-        shipping_total: shippingFee,
+        shipping_total: resolvedShippingFee,
         tax_total: 0,
         discount_total: 0,
-        grand_total: grandTotal,
-        customer_note: customerNote,
+        grand_total: finalGrandTotal,
+        customer_note: resolvedCustomerNote,
         attribution: {
           source: "direct_storefront_web",
           client_timestamp: new Date().toISOString(),
@@ -223,7 +268,7 @@ export async function placeStorefrontOrderAction(
             {
               order_id: orderDbId,
               event_type: "confirmed",
-              message: `গ্রাহক খসড়া অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, ক্যাশ অন ডেলিভারি, মোট ৳${grandTotal})।`,
+              message: `গ্রাহক খসড়া অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${finalGrandTotal})।`,
               actor: "Web Customer",
             },
           ]);
@@ -244,26 +289,18 @@ export async function placeStorefrontOrderAction(
         fulfillment_status: "unfulfilled",
         payment_method: "cod",
         currency: "BDT",
-        customer_name: customerName,
+        customer_name: resolvedCustomerName,
         customer_phone: normalizedPhone,
         shipping_phone: normalizedPhone,
-        shipping_address: {
-          address_line: addressLine,
-          district: isDhaka ? "Dhaka" : "Outside Dhaka",
-          division: isDhaka ? "Dhaka" : "Bangladesh",
-          recipient_name: customerName,
-          phone: normalizedPhone,
-        },
-        shipping_method_name: isDhaka
-          ? "কুরিয়ার হোম ডেলিভারি (ঢাকার ভেতরে - ৳৭০)"
-          : "কুরিয়ার হোম ডেলিভারি (ঢাকার বাইরে - ৳১৩০)",
+        shipping_address: shippingAddress,
+        shipping_method_name: resolvedShippingMethodName,
         subtotal,
-        shipping_total: shippingFee,
+        shipping_total: resolvedShippingFee,
         tax_total: 0,
         discount_total: 0,
-        grand_total: grandTotal,
+        grand_total: finalGrandTotal,
         amount_paid: 0,
-        customer_note: customerNote,
+        customer_note: resolvedCustomerNote,
         attribution: {
           source: "direct_storefront_web",
           client_timestamp: new Date().toISOString(),
@@ -292,10 +329,8 @@ export async function placeStorefrontOrderAction(
       // Log initial event
       try {
         const initialEventMessage = isIncomplete
-          ? `ওয়েবসাইট থেকে অসম্পূর্ণ অর্ডার (Incomplete Lead) সংগৃহীত হয়েছে (ফোন: ${normalizedPhone})।`
-          : hasItems
-            ? `ওয়েবসাইট থেকে সরাসরি অর্ডার গ্রহণ করা হয়েছে (${resolvedItems.length}টি আইটেম, ক্যাশ অন ডেলিভারি, মোট ৳${grandTotal})।`
-            : `ওয়েবসাইট থেকে ফোন অর্ডারের অনুরোধ গ্রহণ করা হয়েছে (কোনো পণ্য নির্বাচিত ছিল না)।`;
+          ?`অসম্পূর্ণ অর্ডার সংরক্ষিত (ফোন: ${normalizedPhone})`
+          : `নতুন অর্ডার গ্রহণ করা হয়েছে (${resolvedItems.length}টি আইটেম, মোট ৳${finalGrandTotal})`;
 
         await client.from("order_events").insert([
           {
@@ -368,10 +403,10 @@ export async function placeStorefrontOrderAction(
       orderId: orderDbId,
       orderNumber: orderNumber,
       status: targetStatus,
-      grandTotal,
+      grandTotal: finalGrandTotal,
       subtotal,
-      shippingTotal: shippingFee,
-      customerName,
+      shippingTotal: resolvedShippingFee,
+      customerName: resolvedCustomerName || undefined,
       phone: normalizedPhone,
       deliveryZone: payload.deliveryZone,
     };
@@ -407,28 +442,20 @@ export interface AssistedPhoneOrderPayload {
 
 /**
  * Dedicated server action for visitors who don't understand the ordering system
- * or cannot complete checkout online. Submits customer phone number with pending status
- * and notifies admins/staff to immediately call them back and fulfill the order.
+ * or cannot complete checkout online. Submits customer phone number with pending status.
+ * Strictly stores only customer inputs without injecting default/synthetic text.
  */
 export async function submitAssistedPhoneOrderAction(
   payload: AssistedPhoneOrderPayload
 ): Promise<StorefrontOrderResult> {
-  const noteParts: string[] = [];
-  if (payload.customerNote?.trim()) {
-    noteParts.push(`[গ্রাহকের পছন্দ/পরিমাণ]: ${payload.customerNote.trim()}`);
-  }
-  noteParts.push(
-    "সহজ ফোন সহায়তা অর্ডার: গ্রাহক ওয়েবসাইট সিস্টেম না বুঝে সরাসরি ফোন নম্বর জমা দিয়েছেন। অবিলম্বে ফোনে কথা বলে গুড়ের প্রকার, পরিমাণ ও ডেলিভারি ঠিকানা নিশ্চিত করুন।"
-  );
-
   return placeStorefrontOrderAction({
     orderId: payload.orderId,
     status: "pending",
     customerPhone: payload.customerPhone,
-    customerName: payload.customerName?.trim() || "সহায়তাপ্রার্থী গ্রাহক (ফোন অর্ডার)",
-    customerNote: noteParts.join(" | "),
-    deliveryZone: payload.deliveryZone || "inside_dhaka",
-    addressLine: "সরাসরি ফোনে কথা বলে ঠিকানা নেওয়া হবে",
+    customerName: payload.customerName?.trim() || undefined,
+    customerNote: payload.customerNote?.trim() || undefined,
+    deliveryZone: payload.deliveryZone,
+    addressLine: undefined,
     items: payload.items || [],
   });
 }
