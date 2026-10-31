@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { X, Check, ShieldCheck, MapPin, Phone, User, Home, Truck, Loader2 } from "lucide-react";
+import { X, Check, ShieldCheck, MapPin, Phone, PhoneCall, User, Home, Truck, Loader2, AlertCircle, Info, ArrowRight } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { placeStorefrontOrderAction, StorefrontOrderResult } from "@/actions/storefront-order";
 import { OrderSuccessView } from "./order-success-view";
@@ -214,8 +214,8 @@ export function QuickOrderSheet({
                           {/* Selected Items Summary Card */}
                           {resolvedItems.length === 0 ? (
                             <div className="bg-amber-100/70 dark:bg-stone-800/80 border border-amber-300/80 dark:border-stone-700 rounded-xl sm:rounded-2xl p-3 shadow-sm flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-900/60 flex items-center justify-center text-amber-800 dark:text-amber-200 shrink-0 text-lg">
-                                📞
+                              <div className="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-900/60 flex items-center justify-center text-amber-800 dark:text-amber-200 shrink-0">
+                                <PhoneCall className="w-5 h-5" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-100">
@@ -298,7 +298,7 @@ export function QuickOrderSheet({
                             animate={{ opacity: 1, y: 0 }}
                             className="bg-red-50 dark:bg-red-950/60 border-2 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-medium flex items-center gap-2"
                           >
-                            <span className="text-base">⚠️</span>
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
                             <span>{errorMessage}</span>
                           </motion.div>
                         )}
@@ -340,8 +340,9 @@ export function QuickOrderSheet({
                               className="w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-mono font-medium transition-colors shadow-sm touch-manipulation"
                             />
                           </div>
-                          <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 italic">
-                            ℹ️ {t.phoneHelp}
+                          <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 italic flex items-center gap-1">
+                            <Info className="w-3.5 h-3.5 inline text-amber-700 dark:text-amber-400 shrink-0" />
+                            <span>{t.phoneHelp}</span>
                           </p>
                         </div>
 
@@ -479,7 +480,10 @@ export function QuickOrderSheet({
                             <span>{t.processingOrder}</span>
                           </>
                         ) : resolvedItems.length === 0 ? (
-                          <span>{lang === "bn" ? "অর্ডার নিশ্চিত করুন (কল অনুরোধ) ➔" : "Confirm Phone Order ➔"}</span>
+                          <span className="flex items-center justify-center gap-2">
+                            <span>{lang === "bn" ? "অর্ডার নিশ্চিত করুন (কল অনুরোধ)" : "Confirm Phone Order"}</span>
+                            <ArrowRight className="w-5 h-5" />
+                          </span>
                         ) : (
                           <>
                             <span>{t.confirmOrderBtn}</span>

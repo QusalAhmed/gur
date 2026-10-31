@@ -94,7 +94,7 @@ export function ContactSection({
         {/* Top Heritage Pill & Title */}
         <div className="text-center mb-3 sm:mb-4 px-2 space-y-1 sm:space-y-1.5">
           <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
-            <span>🍯</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
             <span>{displayName}</span>
             <span className="opacity-40">•</span>
             <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{t.authenticityBadge}</span>
@@ -260,7 +260,7 @@ export function ContactSection({
         </div>
       </div>
 
-      {/* Bottom Action: "View Products & Order ↓" */}
+      {/* Bottom Action: "View Products & Order" */}
       <div className="relative z-10 w-full text-center pt-2 pb-2">
         <button
           type="button"

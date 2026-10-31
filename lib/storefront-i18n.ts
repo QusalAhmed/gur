@@ -53,7 +53,7 @@ export const STOREFRONT_TEXT = {
     subtotal: "পণ্যের মূল্য:",
     deliveryCharge: "ডেলিভারি চার্জ:",
     totalAmount: "সর্বমোট প্রদেয়:",
-    confirmOrderBtn: "অর্ডার নিশ্চিত করুন ➔",
+    confirmOrderBtn: "অর্ডার নিশ্চিত করুন",
     processingOrder: "অর্ডার প্রসেস হচ্ছে...",
     cancelBtn: "ফিরে যান",
     // Success view
@@ -102,7 +102,7 @@ export const STOREFRONT_TEXT = {
     locationText: "বাঘা, রাজশাহী (ঐতিহ্যবাহী খাঁটি গুড়ের এলাকা)",
     hoursHeading: "যোগাযোগের সময়",
     hoursText: "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা",
-    viewProductsBtn: "পণ্যগুলো দেখুন ও অর্ডার করুন ↓",
+    viewProductsBtn: "পণ্যগুলো দেখুন ও অর্ডার করুন",
   },
   en: {
     storeName: "Pure Molasses Store",
@@ -142,7 +142,7 @@ export const STOREFRONT_TEXT = {
     subtotal: "Item Price:",
     deliveryCharge: "Delivery Fee:",
     totalAmount: "Total Payable:",
-    confirmOrderBtn: "Confirm Order ➔",
+    confirmOrderBtn: "Confirm Order",
     processingOrder: "Processing your order...",
     cancelBtn: "Go Back",
     // Success view
@@ -191,7 +191,7 @@ export const STOREFRONT_TEXT = {
     locationText: "Bagha, Rajshahi (Authentic Date Palm Belt, Bangladesh)",
     hoursHeading: "Support Hours",
     hoursText: "Daily 8:00 AM - 10:00 PM",
-    viewProductsBtn: "View Products & Order ↓",
+    viewProductsBtn: "View Products & Order",
   },
 } as const;
 

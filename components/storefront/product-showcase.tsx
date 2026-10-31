@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Phone, Globe, ShoppingBag } from "lucide-react";
+import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ContactSection } from "./contact-section";
@@ -197,8 +197,8 @@ export function ProductShowcase({
           className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2 text-left cursor-pointer active:scale-95 transition-transform"
           title="যোগাযোগ ও হোমপেইজ"
         >
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0 text-base sm:text-lg">
-            🍯
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" />
           </div>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base md:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight truncate">
@@ -215,24 +215,26 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => scrollToSection(0)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === 0
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
-            {lang === "bn" ? "📞 যোগাযোগ" : "📞 Contact"}
+            <Phone className="w-3.5 h-3.5" />
+            <span>{lang === "bn" ? "যোগাযোগ" : "Contact"}</span>
           </button>
           <button
             type="button"
             onClick={() => scrollToSection(1)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex >= 1 && activeSectionIndex < checkoutSectionIndex
                 ? "bg-white text-amber-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
-            {lang === "bn" ? "🍯 পণ্যসমূহ" : "🍯 Products"}
+            <Package className="w-3.5 h-3.5" />
+            <span>{lang === "bn" ? "পণ্যসমূহ" : "Products"}</span>
           </button>
           <button
             type="button"
@@ -243,7 +245,8 @@ export function ProductShowcase({
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
-            <span>{lang === "bn" ? "🛒 চেকআউট" : "🛒 Checkout"}</span>
+            <ShoppingCart className="w-3.5 h-3.5" />
+            <span>{lang === "bn" ? "চেকআউট" : "Checkout"}</span>
             {isMounted && cartTotalQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
                 {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
@@ -309,7 +312,7 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={lang === "bn" ? "📞 যোগাযোগ" : "📞 Contact"}
+          title={lang === "bn" ? "যোগাযোগ" : "Contact"}
           aria-label="Scroll to Contact"
         />
 
@@ -327,7 +330,7 @@ export function ProductShowcase({
                   ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
                   : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
               }`}
-              title={lang === "bn" ? p.nameBn || p.name : p.name}
+              title={p.nameBn || p.name}
               aria-label={`Scroll to product ${idx + 1}`}
             />
           );
@@ -342,7 +345,7 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={lang === "bn" ? "🛒 চেকআউট" : "🛒 Checkout"}
+          title={lang === "bn" ? "চেকআউট" : "Checkout"}
           aria-label="Scroll to Checkout"
         />
       </aside>
@@ -364,8 +367,8 @@ export function ProductShowcase({
         {/* Sections 1..N: Full-Screen Products (1 Product per screen, changes on scroll) */}
         {products.length === 0 ? (
           <section className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
-            <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-stone-800 flex items-center justify-center text-4xl mb-4 shadow-md">
-              🍯
+            <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-stone-800 flex items-center justify-center mb-4 shadow-md text-amber-700 dark:text-amber-400">
+              <Package className="w-10 h-10" />
             </div>
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-950 dark:text-amber-100">
               {lang === "bn" ? "নতুন পণ্য শীঘ্রই আসছে" : "Fresh Stock Coming Soon"}

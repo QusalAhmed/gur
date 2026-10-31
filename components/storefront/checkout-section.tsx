@@ -20,14 +20,17 @@ import {
   ShieldCheck,
   Truck,
   Phone,
+  PhoneCall,
   User,
   MapPin,
   FileText,
   Loader2,
   ArrowRight,
+  ArrowUp,
   ChevronUp,
   Sparkles,
   AlertCircle,
+  Leaf,
 } from "lucide-react";
 import {
   StorefrontLang,
@@ -423,8 +426,8 @@ export function CheckoutSection({
                 </div>
 
                 <div className="text-center py-2 sm:py-4 px-1">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full bg-gradient-to-tr from-amber-200 to-amber-100 dark:from-stone-800 dark:to-stone-700 flex items-center justify-center text-3xl sm:text-4xl shadow-md mb-3">
-                    🍯
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full bg-gradient-to-tr from-amber-200 to-amber-100 dark:from-stone-800 dark:to-stone-700 flex items-center justify-center text-amber-800 dark:text-amber-200 shadow-md mb-3">
+                    <PhoneCall className="w-7 h-7 sm:w-8 sm:h-8" />
                   </div>
                   <h4 className="font-black text-base sm:text-xl text-amber-950 dark:text-amber-100">
                     {lang === "bn" ? "কোনো পণ্য নির্বাচন করেননি?" : "No products selected yet?"}
@@ -440,7 +443,9 @@ export function CheckoutSection({
                     onClick={onScrollToProducts}
                     className="mt-4 inline-flex items-center gap-2 bg-amber-100 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-amber-900 dark:text-amber-100 font-bold text-xs sm:text-sm py-2.5 px-5 rounded-xl border border-amber-300/80 dark:border-stone-700 transition-all cursor-pointer touch-manipulation"
                   >
-                    <span>{lang === "bn" ? "🍯 গুড় দেখতে উপরে যান ↑" : "Browse Our Collection ↑"}</span>
+                    <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                    <span>{lang === "bn" ? "গুড় দেখতে উপরে যান" : "Browse Our Collection"}</span>
+                    <ArrowUp className="w-4 h-4 text-amber-700 dark:text-amber-300" />
                   </button>
                 </div>
               </div>
@@ -679,17 +684,27 @@ export function CheckoutSection({
                         <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
                       </>
                     ) : (
-                      <>
-                        <span>
-                          {cartItems.length > 0
-                            ? lang === "bn"
-                              ? `অর্ডার নিশ্চিত করুন (${formatStorePrice(grandTotal, lang)})`
-                              : `Confirm Order (${formatStorePrice(grandTotal, lang)})`
-                            : lang === "bn"
-                              ? "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি) ➔"
-                              : "Confirm Order (Cash on Delivery) ➔"}
-                        </span>
-                      </>
+                      <span className="flex items-center gap-2">
+                        {cartItems.length > 0 ? (
+                          <>
+                            <span>
+                              {lang === "bn"
+                                ? `অর্ডার নিশ্চিত করুন (${formatStorePrice(grandTotal, lang)})`
+                                : `Confirm Order (${formatStorePrice(grandTotal, lang)})`}
+                            </span>
+                            <ArrowRight className="w-5 h-5" />
+                          </>
+                        ) : (
+                          <>
+                            <span>
+                              {lang === "bn"
+                                ? "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি)"
+                                : "Confirm Order (Cash on Delivery)"}
+                            </span>
+                            <ArrowRight className="w-5 h-5" />
+                          </>
+                        )}
+                      </span>
                     )}
                   </motion.button>
                 )}
@@ -700,10 +715,13 @@ export function CheckoutSection({
       </div>
 
       {/* Footer Support Guarantee Note */}
-      <div className="relative z-10 w-full text-center py-1 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold">
-        {lang === "bn"
-          ? "🌿 সরাসরি গাছিদের প্রস্তুত করা খাঁটি খেজুরের গুড় • কোনো কৃত্রিম চিনি বা কেমিক্যাল নেই"
-          : "🌿 Pure Artisanal Date Jaggery Directly From Village Artisans • No Added Sugar or Chemicals"}
+      <div className="relative z-10 w-full text-center py-1 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
+        <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span>
+          {lang === "bn"
+            ? "সরাসরি গাছিদের প্রস্তুত করা খাঁটি খেজুরের গুড় • কোনো কৃত্রিম চিনি বা কেমিক্যাল নেই"
+            : "Pure Artisanal Date Jaggery Directly From Village Artisans • No Added Sugar or Chemicals"}
+        </span>
       </div>
     </section>
   );

@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Truck,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 
@@ -57,7 +58,8 @@ function OrderConfirmedContent() {
         </Link>
 
         <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
-          <span>🍯 খাঁটি খেজুরের গুড়</span>
+          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+          <span>খাঁটি খেজুরের গুড়</span>
         </div>
       </header>
 
@@ -77,8 +79,9 @@ function OrderConfirmedContent() {
           </div>
 
           <div>
-            <h1 className="text-xl sm:text-3xl font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight">
-              ধন্যবাদ! আপনার অর্ডারটি গ্রহণ করা হয়েছে 🎉
+            <h1 className="text-xl sm:text-3xl font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight flex items-center justify-center gap-2">
+              <span>ধন্যবাদ! আপনার অর্ডারটি গ্রহণ করা হয়েছে</span>
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600 dark:text-amber-400 shrink-0" />
             </h1>
             <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1.5 max-w-md mx-auto leading-relaxed">
               প্রিয় <span className="font-bold text-stone-900 dark:text-stone-100">{customerName}</span>, আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে (<span className="font-mono font-bold">{customerPhone}</span>) কল করে ডেলিভারি ও ঠিকানা নিশ্চিত করবেন।

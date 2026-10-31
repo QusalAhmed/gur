@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "motion/react";
-import { Phone, ShoppingBag, Globe } from "lucide-react";
+import { Phone, ShoppingBag, Globe, Sparkles } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, toBnNumber } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -61,8 +61,8 @@ export function MobileDock({
           className="flex items-center gap-1.5 min-w-0 pl-1 pr-1.5 text-left active:scale-95 transition-transform touch-manipulation cursor-pointer"
           title="যোগাযোগ ও তথ্য দেখুন"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0 text-sm">
-            🍯
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
+            <Sparkles className="w-4 h-4 text-amber-100" />
           </div>
           <div className="min-w-0 hidden xs:block">
             <span className="block font-black text-xs text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
