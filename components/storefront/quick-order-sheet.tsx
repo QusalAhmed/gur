@@ -118,12 +118,19 @@ export function QuickOrderSheet({
 
     // Basic frontend check: Only mobile phone number is mandatory
     const cleanDigits = customerPhone.replace(/[^0-9]/g, "");
-    if (cleanDigits.length < 11) {
+    if (cleanDigits.length < 11 || !cleanDigits.startsWith("01")) {
       setErrorMessage(
         lang === "bn"
           ? "অনুগ্রহ করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
-          : "Please enter a valid 11-digit mobile number."
+          : "Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX)."
       );
+      requestAnimationFrame(() => {
+        const phoneInput = document.getElementById("quickOrderPhone") as HTMLInputElement | null;
+        if (phoneInput) {
+          phoneInput.focus();
+          phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
       return;
     }
 
@@ -337,12 +344,18 @@ return (
                       <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" />
                     </div>
                     <input
+                      id="quickOrderPhone"
                       type="tel"
                       required
+                      aria-invalid={!!errorMessage}
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       placeholder={t.phonePlaceholder}
-                      className="w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-mono font-medium transition-colors shadow-sm touch-manipulation"
+                      className={`w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 bg-white dark:bg-stone-800 focus:outline-none font-mono font-medium transition-colors shadow-sm touch-manipulation ${
+                        errorMessage
+                          ? "border-rose-500 focus:border-rose-600 ring-1 ring-rose-400/40"
+                          : "border-amber-300 dark:border-stone-700 focus:border-amber-600 dark:focus:border-amber-400"
+                      }`}
                     />
                   </div>
                   <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 italic flex items-center gap-1">

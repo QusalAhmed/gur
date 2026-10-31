@@ -281,6 +281,55 @@ export function CheckoutSection({
   // =========================================================================
   // 2. TanStack Form Configuration for 1-Step Checkout
   // =========================================================================
+  const validatePhone = (value: string) => {
+    const cleaned = (value || "").replace(/[^0-9]/g, "");
+    if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
+      return lang === "bn"
+        ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
+        : "Enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).";
+    }
+    return undefined;
+  };
+
+  const focusFirstInvalidField = (formApi?: any) => {
+    requestAnimationFrame(() => {
+      // 1. Inspect known fields in visual DOM order
+      const fieldNames = ["customerPhone", "customerName", "addressLine", "customerNote"];
+      if (formApi?.getFieldMeta) {
+        for (const name of fieldNames) {
+          const meta = formApi.getFieldMeta(name);
+          if (meta?.errors && meta.errors.length > 0) {
+            const el = document.getElementById(name) || document.querySelector<HTMLElement>(`[name="${name}"]`);
+            if (el) {
+              el.focus();
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              return;
+            }
+          }
+        }
+      }
+
+      // 2. Query any input marked with aria-invalid="true"
+      const invalidEl = document.querySelector<HTMLElement>('input[aria-invalid="true"], textarea[aria-invalid="true"]');
+      if (invalidEl) {
+        invalidEl.focus();
+        invalidEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      // 3. Fallback: Phone is the primary mandatory field
+      const phoneInput = document.getElementById("customerPhone") as HTMLInputElement | null;
+      if (phoneInput) {
+        const cleaned = (phoneInput.value || "").replace(/[^0-9]/g, "");
+        if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
+          phoneInput.focus();
+          phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+      }
+    });
+  };
+
   const form = useForm({
     defaultValues: {
       customerName: "",
@@ -288,27 +337,35 @@ export function CheckoutSection({
       addressLine: "",
       customerNote: "",
     },
+    onSubmitInvalid: ({ formApi }) => {
+      focusFirstInvalidField(formApi);
+    },
     onSubmit: async ({ value }) => {
+      const phoneErr = validatePhone(value.customerPhone);
+      if (phoneErr) {
+        focusFirstInvalidField(form);
+        return;
+      }
       setSubmissionError(null);
       try {
-          await createOrderMutation.mutateAsync({
-            customerName: value.customerName?.trim() || undefined,
-            customerPhone: value.customerPhone.trim(),
-            deliveryZone,
-            addressLine: value.addressLine?.trim() || undefined,
-            customerNote: value.customerNote?.trim() || undefined,
-            items: cartItems.map((item) => ({
-              productId: item.productId,
-              productName: item.productName,
-              variantId: item.variantId,
-              variantName: item.variantName,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-            })),
-});
+        await createOrderMutation.mutateAsync({
+          customerName: value.customerName?.trim() || undefined,
+          customerPhone: value.customerPhone.trim(),
+          deliveryZone,
+          addressLine: value.addressLine?.trim() || undefined,
+          customerNote: value.customerNote?.trim() || undefined,
+          items: cartItems.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            variantId: item.variantId,
+            variantName: item.variantName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          })),
+        });
       } catch {
-  // Error handling is handled in createOrderMutation.onError
-}
+        // Error handling is handled in createOrderMutation.onError
+      }
     },
   });
 
@@ -488,7 +545,11 @@ return (
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              form.handleSubmit();
+              form.handleSubmit().then(() => {
+                if (!form.state.isValid) {
+                  focusFirstInvalidField(form);
+                }
+              });
             }}
             className="space-y-4"
           >
@@ -506,6 +567,7 @@ return (
                     </label>
                     <input
                       id="customerName"
+                      name="customerName"
                       type="text"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -521,38 +583,41 @@ return (
               <form.Field
                 name="customerPhone"
                 validators={{
-                  onChange: ({ value }) => {
-                    const cleaned = (value || "").replace(/[^0-9]/g, "");
-                    if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
-                      return lang === "bn"
-                        ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
-                        : "Enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).";
-                    }
-                    return undefined;
-                  },
+                  onChange: ({ value }) => validatePhone(value),
+                  onBlur: ({ value }) => validatePhone(value),
+                  onSubmit: ({ value }) => validatePhone(value),
                 }}
               >
-                {(field) => (
-                  <div>
-                    <label
-                      htmlFor="customerPhone"
-                      className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
-                    >
-                      <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
-                      <span>{lang === "bn" ? "মোবাইল নম্বর *" : "Mobile Number *"}</span>
-                    </label>
-                    <input
-                      id="customerPhone"
-                      type="tel"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                      placeholder="01XXXXXXXXX"
-                      className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
-                    />
-                    <FormFieldError field={field} />
-                  </div>
-                )}
+                {(field) => {
+                  const hasError = Boolean(field.state.meta.errors && field.state.meta.errors.length > 0);
+                  return (
+                    <div>
+                      <label
+                        htmlFor="customerPhone"
+                        className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
+                      >
+                        <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
+                        <span>{lang === "bn" ? "মোবাইল নম্বর *" : "Mobile Number *"}</span>
+                      </label>
+                      <input
+                        id="customerPhone"
+                        name="customerPhone"
+                        type="tel"
+                        aria-invalid={hasError ? "true" : undefined}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        placeholder="01XXXXXXXXX"
+                        className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${
+                          hasError
+                            ? "border-rose-500 focus:border-rose-600 focus:ring-rose-400/40 ring-1 ring-rose-400/40"
+                            : "border-stone-300 dark:border-stone-700 focus:ring-amber-500"
+                        }`}
+                      />
+                      <FormFieldError field={field} />
+                    </div>
+                  );
+                }}
               </form.Field>
             </div>
 
@@ -663,13 +728,13 @@ return (
 
             {/* Submit Action Button */}
             <form.Subscribe
-              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              selector={(state) => [state.isSubmitting]}
             >
-              {([canSubmit]) => (
+              {([isSubmittingState]) => (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   type="submit"
-                  disabled={isSubmitting || !canSubmit}
+                  disabled={isSubmitting || isSubmittingState}
                   className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-50 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
                 >
                   {isSubmitting ? (
