@@ -7,7 +7,7 @@ import {
 } from "@/actions/storefront-products";
 import { STOREFRONT_PRODUCTS_QUERY_KEY } from "@/lib/storefront-query";
 import { StorefrontProductsClient } from "./storefront-products-client";
-import { Sparkles, Loader2 } from "lucide-react";
+import { ProductShowcase } from "./product-showcase";
 
 export function resolveProductImage(storageUrl?: string): string {
   if (storageUrl && (storageUrl.startsWith("http://") || storageUrl.startsWith("https://"))) {
@@ -18,15 +18,12 @@ export function resolveProductImage(storageUrl?: string): string {
 
 export function ProductLoading() {
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-[#fdfbf7] dark:bg-stone-950 text-amber-950 dark:text-amber-100 select-none">
-      <div className="w-16 h-16 rounded-full bg-amber-200 dark:bg-stone-800 flex items-center justify-center text-amber-800 dark:text-amber-200 shadow-lg">
-        <Sparkles className="w-8 h-8 animate-pulse" />
-      </div>
-      <p className="mt-4 font-bold text-lg flex items-center gap-2">
-        <Loader2 className="w-4 h-4 animate-spin text-amber-700 dark:text-amber-300" />
-        <span>দোকানের পণ্য লোড হচ্ছে...</span>
-      </p>
-    </div>
+    <ProductShowcase
+      products={[]}
+      defaultHotline="01843557389"
+      storeName="খেজুরের খাঁটি গুড়"
+      isLoading={true}
+    />
   );
 }
 
@@ -34,10 +31,14 @@ export async function Product() {
   const queryClient = getQueryClient();
 
   // Prefetch storefront products into TanStack Query cache on SSR
-  await queryClient.prefetchQuery({
-    queryKey: STOREFRONT_PRODUCTS_QUERY_KEY,
-    queryFn: getStorefrontProductsAction,
-  });
+  try {
+    await queryClient.prefetchQuery({
+      queryKey: STOREFRONT_PRODUCTS_QUERY_KEY,
+      queryFn: getStorefrontProductsAction,
+    });
+  } catch (err) {
+    console.error("Failed to prefetch storefront products on SSR:", err);
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

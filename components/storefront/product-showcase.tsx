@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
+import { ProductCardSkeleton } from "./product-card-skeleton";
 import { ContactSection } from "./contact-section";
 import { CheckoutSection } from "./checkout-section";
 import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
@@ -23,6 +24,7 @@ interface ProductShowcaseProps {
   defaultHotline?: string;
   storeName?: string;
   storeSubtitle?: string;
+  isLoading?: boolean;
 }
 
 export function ProductShowcase({
@@ -30,6 +32,7 @@ export function ProductShowcase({
   defaultHotline = "01843557389",
   storeName,
   storeSubtitle,
+  isLoading = false,
 }: ProductShowcaseProps) {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
@@ -57,9 +60,10 @@ export function ProductShowcase({
   const displayStoreName = storeName || t.storeName;
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
-  // Total full-screen sections: Section 0 is Contact Section, Section 1..N are products, Section N+1 is Checkout
-  const checkoutSectionIndex = products.length + 1;
-  const totalSections = products.length + 2;
+  // Total full-screen sections: Section 0 is Contact Section, Section 1..N are products (or 1 skeleton when loading/empty), Section N+1 is Checkout
+  const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
+  const checkoutSectionIndex = effectiveProductCount + 1;
+  const totalSections = effectiveProductCount + 2;
 
   // Prevent SSR hydration mismatch for client-side state
   useEffect(() => {
@@ -316,25 +320,51 @@ export function ProductShowcase({
           aria-label="Scroll to Contact"
         />
 
-        {/* Dots 1..N: Product Cards */}
-        {products.map((p, idx) => {
-          const sIdx = idx + 1;
-          const isActive = activeSectionIndex === sIdx;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => scrollToSection(sIdx)}
-              className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
-                isActive
-                  ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
-                  : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
-              }`}
-              title={p.nameBn || p.name}
-              aria-label={`Scroll to product ${idx + 1}`}
-            />
-          );
-        })}
+        {/* Dots 1..N: Product Cards or Skeleton */}
+        {isLoading ? (
+          <button
+            type="button"
+            onClick={() => scrollToSection(1)}
+            className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer animate-pulse ${
+              activeSectionIndex === 1
+                ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
+                : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
+            }`}
+            title={lang === "bn" ? "পণ্য (লোড হচ্ছে...)" : "Products (Loading...)"}
+            aria-label="Scroll to Products"
+          />
+        ) : products.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => scrollToSection(1)}
+            className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+              activeSectionIndex === 1
+                ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
+                : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
+            }`}
+            title={lang === "bn" ? "পণ্য" : "Products"}
+            aria-label="Scroll to Products"
+          />
+        ) : (
+          products.map((p, idx) => {
+            const sIdx = idx + 1;
+            const isActive = activeSectionIndex === sIdx;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => scrollToSection(sIdx)}
+                className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+                  isActive
+                    ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
+                    : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
+                }`}
+                title={p.nameBn || p.name}
+                aria-label={`Scroll to product ${idx + 1}`}
+              />
+            );
+          })
+        )}
 
         {/* Dot N+1: Checkout Section */}
         <button
@@ -364,8 +394,10 @@ export function ProductShowcase({
           onScrollToProducts={() => scrollToSection(1)}
         />
 
-        {/* Sections 1..N: Full-Screen Products (1 Product per screen, changes on scroll) */}
-        {products.length === 0 ? (
+        {/* Sections 1..N: Full-Screen Products or Skeleton */}
+        {isLoading ? (
+          <ProductCardSkeleton />
+        ) : products.length === 0 ? (
           <section className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
             <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-stone-800 flex items-center justify-center mb-4 shadow-md text-amber-700 dark:text-amber-400">
               <Package className="w-10 h-10" />
