@@ -260,15 +260,6 @@ export function CheckoutSection({
     onSubmit: async ({ value }) => {
       setSubmissionError(null);
 
-      if (cartItems.length === 0) {
-        setSubmissionError(
-          lang === "bn"
-            ? "আপনার কার্ট বর্তমানে খালি। অনুগ্রহ করে পণ্য যোগ করুন।"
-            : "Your cart is currently empty. Please add items before checking out."
-        );
-        return;
-      }
-
       setIsSubmitting(true);
       try {
         const orderPayload = {
@@ -332,43 +323,23 @@ export function CheckoutSection({
     >
       {/* Main Content Area */}
       <div className="relative z-10 w-full max-w-5xl mx-auto flex-1 my-2 sm:my-3">
-        {displayCartItems.length === 0 ? (
-          /* Empty Cart State */
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-white/70 dark:bg-stone-900/70 backdrop-blur-md rounded-3xl border border-amber-200/80 dark:border-stone-800 shadow-xl shadow-amber-950/5 max-w-lg mx-auto">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-amber-200 to-amber-100 dark:from-stone-800 dark:to-stone-700 flex items-center justify-center text-3xl sm:text-4xl shadow-md mb-3">
-              🍯
-            </div>
-            <h3 className="text-lg sm:text-2xl font-black text-amber-950 dark:text-amber-100">
-              {lang === "bn" ? "আপনার কার্ট বর্তমানে খালি" : "Your Shopping Cart is Empty"}
-            </h3>
-            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1 max-w-sm leading-relaxed">
-              {lang === "bn"
-                ? "খাঁটি ঐতিহ্যবাহী গুড় অর্ডার করতে আমাদের পণ্য তালিকা থেকে আপনার পছন্দের গুড় কার্টে যোগ করুন।"
-                : "Select your preferred authentic handcrafted jaggery from our catalog to place an order."}
-            </p>
-
-            <button
-              type="button"
-              onClick={onScrollToProducts}
-              className="mt-5 inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 text-white font-black py-3 sm:py-3.5 px-6 rounded-2xl shadow-lg hover:scale-102 active:scale-98 transition-all text-sm sm:text-base touch-manipulation cursor-pointer"
-            >
-              <span>{lang === "bn" ? "🍯 গুড় পছন্দ করতে উপরে যান" : "Browse Our Molasses Collection ↑"}</span>
-            </button>
-
-            <div className="mt-4 pt-3 border-t border-stone-200 dark:border-stone-800 w-full flex items-center justify-center gap-2 text-xs text-stone-600 dark:text-stone-400">
-              <Phone className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{lang === "bn" ? "সরাসরি ফোনে অর্ডার:" : "Direct Phone Order:"}</span>
-              <a href={`tel:${rawHotline}`} className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline">
-                {hotline}
-              </a>
-            </div>
-          </div>
-        ) : (
-          /* Active Cart State: Split Layout (Desktop 2-Col, Mobile Stacked) */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5 items-start">
-            {/* Left Column (5 Cols): Interactive TanStack Table Cart Summary */}
-            <div className="lg:col-span-5 bg-white/85 dark:bg-stone-900/85 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3 sm:p-4 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
+          {/* Left Column (5 Cols): Either Selected Items Table OR Direct Phone Order Assistance */}
+          {displayCartItems.length > 0 ? (
+            <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
               <div>
+                <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-stone-200 dark:border-stone-800">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="w-5 h-5 text-amber-700 dark:text-amber-400" />
+                    <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100">
+                      {lang === "bn" ? "নির্বাচিত পণ্যসমূহ" : "Selected Items"}
+                    </h3>
+                  </div>
+                  <span className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-bold">
+                    {lang === "bn" ? `${toBnNumber(displayCartItems.length)} পদের গুড়` : `${displayCartItems.length} products`}
+                  </span>
+                </div>
+
                 {/* TanStack Table Element */}
                 <div className="overflow-x-auto w-full">
                   <table className="w-full text-left border-collapse">
@@ -376,10 +347,10 @@ export function CheckoutSection({
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr
                           key={headerGroup.id}
-                          className="border-b border-stone-200 dark:border-stone-800 text-[11px] font-bold text-stone-500 uppercase tracking-wider"
+                          className="border-b border-stone-200 dark:border-stone-800 text-xs font-bold text-stone-500 uppercase tracking-wider"
                         >
                           {headerGroup.headers.map((header) => (
-                            <th key={header.id} className="pb-1.5 pr-2">
+                            <th key={header.id} className="pb-2 pr-2">
                               {header.isPlaceholder
                                 ? null
                                 : flexRender(header.column.columnDef.header, header.getContext())}
@@ -392,7 +363,7 @@ export function CheckoutSection({
                       {table.getRowModel().rows.map((row) => (
                         <tr key={row.id} className="hover:bg-amber-50/50 dark:hover:bg-stone-800/40 transition-colors">
                           {row.getVisibleCells().map((cell) => (
-                            <td key={cell.id} className="py-2 pr-2">
+                            <td key={cell.id} className="py-2.5 pr-2">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </td>
                           ))}
@@ -404,17 +375,17 @@ export function CheckoutSection({
               </div>
 
               {/* Price Breakdown & Grand Total Card */}
-              <div className="mt-3 pt-2.5 border-t border-stone-200 dark:border-stone-800 space-y-1.5 text-xs">
+              <div className="mt-3 pt-3 border-t border-stone-200 dark:border-stone-800 space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
-                  <span>{lang === "bn" ? "পণ্যের মোট মূল্য:" : "Items Subtotal:"}</span>
-                  <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                  <span className="font-semibold">{lang === "bn" ? "পণ্যের মোট মূল্য:" : "Items Subtotal:"}</span>
+                  <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base">
                     {formatStorePrice(displaySubtotal, lang)}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
-                  <div className="flex items-center gap-1">
-                    <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <Truck className="w-4 h-4 text-emerald-600" />
                     <span>
                       {lang === "bn" ? "ডেলিভারি চার্জ:" : "Delivery Charge:"} (
                       {deliveryZone === "inside_dhaka"
@@ -427,252 +398,305 @@ export function CheckoutSection({
                       )
                     </span>
                   </div>
-                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
                     {formatStorePrice(deliveryCharge, lang)}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-dashed border-stone-300 dark:border-stone-700 text-sm sm:text-base font-black text-amber-950 dark:text-amber-100">
+                <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-black text-amber-950 dark:text-amber-100">
                   <span>{lang === "bn" ? "সর্বমোট প্রদেয়:" : "Total Payable (COD):"}</span>
-                  <span className="font-mono text-base sm:text-lg text-emerald-700 dark:text-emerald-400">
+                  <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
                     {formatStorePrice(grandTotal, lang)}
                   </span>
                 </div>
               </div>
             </div>
-
-            {/* Right Column (7 Cols): Responsive TanStack Checkout Form */}
-            <div className="lg:col-span-7 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5">
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-stone-200 dark:border-stone-800">
-                <div>
-                  <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <span>{lang === "bn" ? "১-ক্লিকে ক্যাশ অন ডেলিভারি অর্ডার" : "1-Click Cash on Delivery Order"}</span>
-                    <Sparkles className="w-4 h-4 text-amber-600" />
+          ) : (
+            /* When 0 products selected: Helpful direct order prompt */
+            <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-stone-200 dark:border-stone-800">
+                  <ShoppingBag className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100">
+                    {lang === "bn" ? "সরাসরি ফোন অর্ডার" : "Direct Phone Order"}
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                </div>
+
+                <div className="text-center py-2 sm:py-4 px-1">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full bg-gradient-to-tr from-amber-200 to-amber-100 dark:from-stone-800 dark:to-stone-700 flex items-center justify-center text-3xl sm:text-4xl shadow-md mb-3">
+                    🍯
+                  </div>
+                  <h4 className="font-black text-base sm:text-xl text-amber-950 dark:text-amber-100">
+                    {lang === "bn" ? "কোনো পণ্য নির্বাচন করেননি?" : "No products selected yet?"}
+                  </h4>
+                  <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 mt-2 leading-relaxed font-medium">
                     {lang === "bn"
-                      ? "কোন অগ্রিম টাকা লাগবে না, পণ্য হাতে পেয়ে দেখে টাকা পরিশোধ করবেন।"
-                      : "No advance payment required. Inspect your order and pay cash upon delivery."}
+                      ? "কোনো সমস্যা নেই! শুধু আপনার মোবাইল নম্বর লিখে নিচের বাটনে চাপ দিন। আমাদের প্রতিনিধি সরাসরি ফোন করে আপনার পছন্দের গুড় ও পরিমাণ জেনে নিবেন।"
+                      : "No problem! Just enter your mobile number and submit. Our team will call you to confirm your desired molasses and pack size."}
                   </p>
+
+                  <button
+                    type="button"
+                    onClick={onScrollToProducts}
+                    className="mt-4 inline-flex items-center gap-2 bg-amber-100 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-amber-900 dark:text-amber-100 font-bold text-xs sm:text-sm py-2.5 px-5 rounded-xl border border-amber-300/80 dark:border-stone-700 transition-all cursor-pointer touch-manipulation"
+                  >
+                    <span>{lang === "bn" ? "🍯 গুড় দেখতে উপরে যান ↑" : "Browse Our Collection ↑"}</span>
+                  </button>
                 </div>
               </div>
 
-              {submissionError && (
-                <div className="mb-3 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                  <span>{submissionError}</span>
+              <div className="mt-4 pt-3 border-t border-stone-200 dark:border-stone-800 space-y-2 text-xs sm:text-sm text-stone-700 dark:text-stone-300 font-medium">
+                <div className="flex items-center justify-between">
+                  <span>{lang === "bn" ? "পণ্যের পরিমাণ:" : "Items Quantity:"}</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-400">
+                    {lang === "bn" ? "ফোনে কথা বলে ঠিক হবে" : "Decided over phone"}
+                  </span>
                 </div>
-              )}
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  form.handleSubmit();
-                }}
-                className="space-y-3"
-              >
-                {/* Name & Mobile Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <form.Field name="customerName">
-                    {(field) => (
-                      <div>
-                        <label
-                          htmlFor="customerName"
-                          className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1 flex items-center gap-1"
-                        >
-                          <User className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-                          <span>{lang === "bn" ? "আপনার নাম (ঐচ্ছিক)" : "Full Name (Optional)"}</span>
-                        </label>
-                        <input
-                          id="customerName"
-                          type="text"
-                          value={field.state.value}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          onBlur={field.handleBlur}
-                          placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
-                          className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-semibold rounded-xl border border-stone-300 dark:border-stone-700 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
-                        />
-                        <FormFieldError field={field} />
-                      </div>
-                    )}
-                  </form.Field>
-
-                  <form.Field
-                    name="customerPhone"
-                    validators={{
-                      onChange: ({ value }) => {
-                        const cleaned = (value || "").replace(/[^0-9]/g, "");
-                        if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
-                          return lang === "bn"
-                            ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
-                            : "Enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).";
-                        }
-                        return undefined;
-                      },
-                    }}
-                  >
-                    {(field) => (
-                      <div>
-                        <label
-                          htmlFor="customerPhone"
-                          className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1 flex items-center gap-1"
-                        >
-                          <Phone className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-                          <span>{lang === "bn" ? "মোবাইল নম্বর *" : "Mobile Number *"}</span>
-                        </label>
-                        <input
-                          id="customerPhone"
-                          type="tel"
-                          value={field.state.value}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          onBlur={field.handleBlur}
-                          placeholder="01XXXXXXXXX"
-                          className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-xs sm:text-sm font-semibold rounded-xl border border-stone-300 dark:border-stone-700 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
-                        />
-                        <FormFieldError field={field} />
-                      </div>
-                    )}
-                  </form.Field>
+                <div className="flex items-center justify-between">
+                  <span>{lang === "bn" ? "পেমেন্ট:" : "Payment:"}</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {lang === "bn" ? "ক্যাশ অন ডেলিভারি (পণ্য পেয়ে টাকা)" : "Cash on Delivery"}
+                  </span>
                 </div>
+              </div>
+            </div>
+          )}
 
-                {/* Delivery Zone Selection Pills */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5 flex items-center gap-1">
-                    <Truck className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-                    <span>{lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryZone("inside_dhaka")}
-                      className={`p-2 sm:p-2.5 rounded-xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
-                        ? "border-emerald-600 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 shadow-xs"
-                        : "border-stone-200 dark:border-stone-700 bg-stone-50/60 dark:bg-stone-800/60 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
-                        }`}
-                    >
-                      <span className="font-bold text-xs sm:text-sm">
-                        {lang === "bn" ? "ঢাকার ভিতরে" : "Inside Dhaka"}
-                      </span>
-                      <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        {lang === "bn" ? "চার্জ ৳৭০" : "Fee ৳70"}
-                      </span>
-                    </button>
+          {/* Right Column (7 Cols): Responsive TanStack Checkout Form (Larger Senior-Friendly Typography) */}
+          <div className="lg:col-span-7 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-200 dark:border-stone-800">
+              <div>
+                <h3 className="font-black text-lg sm:text-xl text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <span>{lang === "bn" ? "ক্যাশ অন ডেলিভারি অর্ডার ফরম" : "Cash on Delivery Order Form"}</span>
+                  <Sparkles className="w-5 h-5 text-amber-600" />
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1 font-medium">
+                  {lang === "bn"
+                    ? "কোন অগ্রিম টাকা লাগবে না, পার্সেল হাতে পেয়ে গুড় দেখে টাকা পরিশোধ করবেন।"
+                    : "No advance payment required. Inspect your order and pay cash upon delivery."}
+                </p>
+              </div>
+            </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryZone("outside_dhaka")}
-                      className={`p-2 sm:p-2.5 rounded-xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
-                        ? "border-emerald-600 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 shadow-xs"
-                        : "border-stone-200 dark:border-stone-700 bg-stone-50/60 dark:bg-stone-800/60 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
-                        }`}
-                    >
-                      <span className="font-bold text-xs sm:text-sm">
-                        {lang === "bn" ? "ঢাকার বাইরে" : "Outside Dhaka"}
-                      </span>
-                      <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        {lang === "bn" ? "চার্জ ৳১৩০" : "Fee ৳130"}
-                      </span>
-                    </button>
-                  </div>
-                </div>
+            {submissionError && (
+              <div className="mb-4 p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-sm font-semibold flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+                <span>{submissionError}</span>
+              </div>
+            )}
 
-                {/* Address Line */}
-                <form.Field name="addressLine">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                form.handleSubmit();
+              }}
+              className="space-y-4"
+            >
+              {/* Name & Mobile Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <form.Field name="customerName">
                   {(field) => (
                     <div>
                       <label
-                        htmlFor="addressLine"
-                        className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1 flex items-center gap-1"
+                        htmlFor="customerName"
+                        className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
                       >
-                        <MapPin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-                        <span>{lang === "bn" ? "সম্পূর্ণ ডেলিভারি ঠিকানা (ঐচ্ছিক)" : "Full Delivery Address (Optional)"}</span>
+                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
+                        <span>{lang === "bn" ? "আপনার নাম (ঐচ্ছিক)" : "Full Name (Optional)"}</span>
                       </label>
-                      <textarea
-                        id="addressLine"
-                        rows={2}
+                      <input
+                        id="customerName"
+                        type="text"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
                         onBlur={field.handleBlur}
-                        placeholder={
-                          lang === "bn"
-                            ? "বাড়ি নং, রোড নং, এলাকা বা থানা ও জেলার নাম (ঐচ্ছিক)..."
-                            : "House, Road, Area, Thana or District name (optional)..."
-                        }
-                        className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-xs sm:text-sm font-semibold rounded-xl border border-stone-300 dark:border-stone-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-none"
+                        placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
+                        className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
                       />
                       <FormFieldError field={field} />
                     </div>
                   )}
                 </form.Field>
 
-                {/* Customer Note (Optional) */}
-                <form.Field name="customerNote">
+                <form.Field
+                  name="customerPhone"
+                  validators={{
+                    onChange: ({ value }) => {
+                      const cleaned = (value || "").replace(/[^0-9]/g, "");
+                      if (!cleaned || cleaned.length !== 11 || !cleaned.startsWith("01")) {
+                        return lang === "bn"
+                          ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
+                          : "Enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).";
+                      }
+                      return undefined;
+                    },
+                  }}
+                >
                   {(field) => (
                     <div>
                       <label
-                        htmlFor="customerNote"
-                        className="block text-xs font-bold text-stone-600 dark:text-stone-400 mb-1 flex items-center gap-1"
+                        htmlFor="customerPhone"
+                        className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
                       >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>{lang === "bn" ? "বিশেষ নির্দেশনা (ঐচ্ছিক)" : "Special Note (Optional)"}</span>
+                        <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
+                        <span>{lang === "bn" ? "মোবাইল নম্বর *" : "Mobile Number *"}</span>
                       </label>
                       <input
-                        id="customerNote"
-                        type="text"
+                        id="customerPhone"
+                        type="tel"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder={
-                          lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
-                        }
-                        className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-xs rounded-xl border border-stone-300 dark:border-stone-700 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        onBlur={field.handleBlur}
+                        placeholder="01XXXXXXXXX"
+                        className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
                       />
+                      <FormFieldError field={field} />
                     </div>
                   )}
                 </form.Field>
+              </div>
 
-                {/* Reassurance Banner */}
-                <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 rounded-xl p-2 flex items-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>
-                    {lang === "bn"
-                      ? "১০০% ক্যাশ অন ডেলিভারি: পার্সেল খুলে গুড় দেখে টাকা পরিশোধের নিশ্চয়তা।"
-                      : "100% Cash on Delivery: Inspect your jaggery package before making payment."}
-                  </span>
+              {/* Delivery Zone Selection Pills */}
+              <div>
+                <label className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-2 flex items-center gap-1.5">
+                  <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
+                  <span>{lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryZone("inside_dhaka")}
+                    className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
+                      ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
+                      : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+                      }`}
+                  >
+                    <span className="font-extrabold text-sm sm:text-base">
+                      {lang === "bn" ? "ঢাকার ভিতরে" : "Inside Dhaka"}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                      {lang === "bn" ? "চার্জ ৳৭০" : "Fee ৳70"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryZone("outside_dhaka")}
+                    className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
+                      ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
+                      : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+                      }`}
+                  >
+                    <span className="font-extrabold text-sm sm:text-base">
+                      {lang === "bn" ? "ঢাকার বাইরে" : "Outside Dhaka"}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                      {lang === "bn" ? "চার্জ ৳১৩০" : "Fee ৳130"}
+                    </span>
+                  </button>
                 </div>
+              </div>
 
-                {/* Submit Action Button */}
-                <form.Subscribe
-                  selector={(state) => [state.canSubmit, state.isSubmitting]}
-                >
-                  {([canSubmit]) => (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      type="submit"
-                      disabled={isSubmitting || !canSubmit}
-                      className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-50 text-white font-black py-3 sm:py-3.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-sm sm:text-base touch-manipulation cursor-pointer"
+              {/* Address Line */}
+              <form.Field name="addressLine">
+                {(field) => (
+                  <div>
+                    <label
+                      htmlFor="addressLine"
+                      className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>
-                            {lang === "bn"
+                      <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
+                      <span>{lang === "bn" ? "সম্পূর্ণ ডেলিভারি ঠিকানা (ঐচ্ছিক)" : "Full Delivery Address (Optional)"}</span>
+                    </label>
+                    <textarea
+                      id="addressLine"
+                      rows={2}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder={
+                        lang === "bn"
+                          ? "বাড়ি নং, রোড নং, এলাকা বা থানা ও জেলার নাম (ঐচ্ছিক)..."
+                          : "House, Road, Area, Thana or District name (optional)..."
+                      }
+                      className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-none"
+                    />
+                    <FormFieldError field={field} />
+                  </div>
+                )}
+              </form.Field>
+
+              {/* Customer Note (Optional) */}
+              <form.Field name="customerNote">
+                {(field) => (
+                  <div>
+                    <label
+                      htmlFor="customerNote"
+                      className="block text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300 mb-1.5 flex items-center gap-1.5"
+                    >
+                      <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                      <span>{lang === "bn" ? "বিশেষ নির্দেশনা (ঐচ্ছিক)" : "Special Note (Optional)"}</span>
+                    </label>
+                    <input
+                      id="customerNote"
+                      type="text"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder={
+                        lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
+                      }
+                      className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                )}
+              </form.Field>
+
+              {/* Reassurance Banner */}
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 rounded-2xl p-3 flex items-center gap-2.5 text-xs sm:text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>
+                  {lang === "bn"
+                    ? "১০০% ক্যাশ অন ডেলিভারি: পার্সেল খুলে গুড় দেখে টাকা পরিশোধের নিশ্চয়তা।"
+                    : "100% Cash on Delivery: Inspect your jaggery package before making payment."}
+                </span>
+              </div>
+
+              {/* Submit Action Button */}
+              <form.Subscribe
+                selector={(state) => [state.canSubmit, state.isSubmitting]}
+              >
+                {([canSubmit]) => (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
+                    disabled={isSubmitting || !canSubmit}
+                    className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-50 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {cartItems.length > 0
+                            ? lang === "bn"
                               ? `অর্ডার নিশ্চিত করুন (${formatStorePrice(grandTotal, lang)})`
-                              : `Confirm Order (${formatStorePrice(grandTotal, lang)})`}
-                          </span>
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                </form.Subscribe>
-              </form>
-            </div>
+                              : `Confirm Order (${formatStorePrice(grandTotal, lang)})`
+                            : lang === "bn"
+                              ? "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি) ➔"
+                              : "Confirm Order (Cash on Delivery) ➔"}
+                        </span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
+              </form.Subscribe>
+            </form>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Footer Support Guarantee Note */}

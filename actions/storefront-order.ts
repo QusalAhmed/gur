@@ -86,16 +86,12 @@ export async function placeStorefrontOrderAction(
       ];
     }
 
-    if (resolvedItems.length === 0) {
-      return {
-        success: false,
-        error: "অর্ডারে কোনো পণ্য নির্বাচন করা হয়নি।",
-      };
-    }
-
-    const subtotal = Math.round(
-      resolvedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100
-    ) / 100;
+    const hasItems = resolvedItems.length > 0;
+    const subtotal = hasItems
+      ? Math.round(
+          resolvedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100
+        ) / 100
+      : 0;
 
     const isDhaka = payload.deliveryZone === "inside_dhaka";
     const shippingFee = isDhaka ? 70 : 130;
@@ -105,6 +101,12 @@ export async function placeStorefrontOrderAction(
     const orderNumber = `${prefix}-2610-${Date.now().toString().slice(-5)}`;
 
     const client = supabaseAdmin || supabase;
+
+    const customerNote = payload.customerNote?.trim()
+      ? payload.customerNote.trim()
+      : hasItems
+        ? "ওয়েবসাইট থেকে সরাসরি গ্রাহকের অর্ডার (Cash on Delivery)"
+        : "সরাসরি ফোন অর্ডারের অনুরোধ (কোনো পণ্য নির্বাচিত ছিল না - ফোনে কথা বলে পণ্য নির্ধারণ করা হবে)";
 
     const dbInsertPayload: Record<string, any> = {
       order_number: orderNumber,
@@ -133,10 +135,11 @@ export async function placeStorefrontOrderAction(
       discount_total: 0,
       grand_total: grandTotal,
       amount_paid: 0,
-      customer_note: payload.customerNote?.trim() || "ওয়েবসাইট থেকে সরাসরি গ্রাহকের অর্ডার (Cash on Delivery)",
+      customer_note: customerNote,
       attribution: {
         source: "direct_storefront_web",
         client_timestamp: new Date().toISOString(),
+        zero_items_phone_order: !hasItems,
       },
     };
 
@@ -185,11 +188,15 @@ export async function placeStorefrontOrderAction(
 
       // 3. Insert order placed event
       try {
+        const eventMessage = hasItems
+          ? `ওয়েবসাইট থেকে সরাসরি অর্ডার গ্রহণ করা হয়েছে (${resolvedItems.length}টি আইটেম, ক্যাশ অন ডেলিভারি, মোট ৳${grandTotal})।`
+          : `ওয়েবসাইট থেকে ফোন অর্ডারের অনুরোধ গ্রহণ করা হয়েছে (কোনো পণ্য নির্বাচিত ছিল না - ফোনে কথা বলে পণ্য নিশ্চিত করা হবে)।`;
+
         await client.from("order_events").insert([
           {
             order_id: orderDbId,
             event_type: "placed",
-            message: `ওয়েবসাইট থেকে সরাসরি অর্ডার গ্রহণ করা হয়েছে (${resolvedItems.length}টি আইটেম, ক্যাশ অন ডেলিভারি, মোট ৳${grandTotal})।`,
+            message: eventMessage,
             actor: "Web Customer",
           },
         ]);

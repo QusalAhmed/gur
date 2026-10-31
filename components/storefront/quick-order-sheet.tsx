@@ -83,7 +83,7 @@ export function QuickOrderSheet({
   const [orderResult, setOrderResult] = useState<StorefrontOrderResult | null>(null);
 
   const subtotal = resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const shippingFee = deliveryZone === "inside_dhaka" ? 70 : 130;
+  const shippingFee = resolvedItems.length === 0 ? 0 : (deliveryZone === "inside_dhaka" ? 70 : 130);
   const grandTotal = subtotal + shippingFee;
 
   const handleResetForm = () => {
@@ -108,11 +108,6 @@ export function QuickOrderSheet({
           ? "অনুগ্রহ করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX)।"
           : "Please enter a valid 11-digit mobile number."
       );
-      return;
-    }
-
-    if (resolvedItems.length === 0) {
-      setErrorMessage(lang === "bn" ? "অর্ডারে কোনো পণ্য নেই।" : "No items to order.");
       return;
     }
 
@@ -217,7 +212,23 @@ export function QuickOrderSheet({
                 {/* Scrollable Form Fields */}
                 <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4 space-y-3.5 sm:space-y-4">
                           {/* Selected Items Summary Card */}
-                          {resolvedItems.length === 1 ? (
+                          {resolvedItems.length === 0 ? (
+                            <div className="bg-amber-100/70 dark:bg-stone-800/80 border border-amber-300/80 dark:border-stone-700 rounded-xl sm:rounded-2xl p-3 shadow-sm flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-900/60 flex items-center justify-center text-amber-800 dark:text-amber-200 shrink-0 text-lg">
+                                📞
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-100">
+                                  {lang === "bn" ? "সরাসরি ফোন অর্ডার" : "Direct Phone Order"}
+                                </h4>
+                                <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-300">
+                                  {lang === "bn"
+                                    ? "কোনো পণ্য সিলেক্ট করেননি। শুধু মোবাইল নম্বর দিলেই আমরা কল করে পণ্য ও অর্ডার নিশ্চিত করব।"
+                                    : "No product selected. Submit your phone number and we will call you to confirm."}
+                                </p>
+                              </div>
+                            </div>
+                          ) : resolvedItems.length === 1 ? (
                             <div className="bg-amber-100/70 dark:bg-stone-800/80 border border-amber-300/80 dark:border-stone-700 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex items-center gap-2.5 sm:gap-3.5 shadow-sm">
                               <div className="w-14 h-14 sm:w-16 sm:h-16 relative rounded-lg sm:rounded-xl overflow-hidden bg-amber-200 dark:bg-stone-700 shrink-0 border border-amber-300/60">
                                 <Image
@@ -441,18 +452,20 @@ export function QuickOrderSheet({
 
                     {/* Sticky Bottom Action Bar with Total Bill & Submit CTA */}
                     <div className="bg-amber-100/95 dark:bg-stone-900/95 backdrop-blur-md border-t border-amber-200/90 dark:border-stone-800 px-4 py-3 sm:px-6 sm:py-4 shadow-lg shrink-0">
-                      <div className="flex justify-between items-center mb-2 text-xs sm:text-sm">
-                        <div className="text-stone-600 dark:text-stone-300">
-                          <span>{t.subtotal} {formatStorePrice(subtotal, lang)}</span>
-                          <span className="mx-1.5">•</span>
-                          <span>{t.deliveryCharge} {formatStorePrice(shippingFee, lang)}</span>
+                      {resolvedItems.length > 0 && (
+                        <div className="flex justify-between items-center mb-2 text-xs sm:text-sm">
+                          <div className="text-stone-600 dark:text-stone-300">
+                            <span>{t.subtotal} {formatStorePrice(subtotal, lang)}</span>
+                            <span className="mx-1.5">•</span>
+                            <span>{t.deliveryCharge} {formatStorePrice(shippingFee, lang)}</span>
+                          </div>
+                          <div className="font-black text-base sm:text-lg text-amber-950 dark:text-amber-100">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-mono">
+                              {formatStorePrice(grandTotal, lang)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="font-black text-base sm:text-lg text-amber-950 dark:text-amber-100">
-                          <span className="text-emerald-700 dark:text-emerald-400 font-mono">
-                            {formatStorePrice(grandTotal, lang)}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Big Tactile Submit Button */}
                       <button
@@ -465,6 +478,8 @@ export function QuickOrderSheet({
                             <Loader2 className="w-5 h-5 animate-spin" />
                             <span>{t.processingOrder}</span>
                           </>
+                        ) : resolvedItems.length === 0 ? (
+                          <span>{lang === "bn" ? "অর্ডার নিশ্চিত করুন (কল অনুরোধ) ➔" : "Confirm Phone Order ➔"}</span>
                         ) : (
                           <>
                             <span>{t.confirmOrderBtn}</span>
