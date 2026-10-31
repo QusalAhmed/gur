@@ -22,6 +22,7 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
+import { SlidingNumber } from "@/components/ui/sliding-number";
 
 export interface StorefrontVariant {
   id: string;
@@ -258,6 +259,28 @@ export function ProductCard({
               />
             </div>
           )}
+
+          {/* Eye-Catching Floating Selected Quantity Badge on Image */}
+          {displayUnit > 0 && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: -6 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 22 }}
+              className="absolute top-2.5 right-2.5 z-30 bg-emerald-600/95 dark:bg-emerald-700/95 backdrop-blur-md text-white px-3 py-1 rounded-full shadow-[0_6px_16px_rgba(5,150,105,0.4)] border border-emerald-300/80 flex items-center gap-1.5 select-none pointer-events-none"
+            >
+              <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-200" />
+              <div className="flex items-center gap-1 font-black text-xs sm:text-sm">
+                <SlidingNumber
+                  value={currentUnit}
+                  isBengali={lang === "bn"}
+                  className="font-mono font-black"
+                />
+                <span className="text-[11px] sm:text-xs font-bold text-emerald-100">
+                  {lang === "bn" ? "টি কার্টে" : "in cart"}
+                </span>
+              </div>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Artisanal Clay/Wood Shelf Pedestal Bar */}
@@ -341,8 +364,8 @@ export function ProductCard({
                 <span className="text-[10px] sm:text-[11px] block text-amber-200 font-semibold leading-tight">
                   {lang === "bn" ? "পরিমাণ" : "Qty"}
                 </span>
-                <span className="font-mono text-sm sm:text-base font-black text-white leading-tight">
-                  {lang === "bn" ? "০" : "0"}
+                <span className="font-mono text-sm sm:text-base font-black text-white leading-tight flex items-center justify-center min-w-[16px]">
+                  <SlidingNumber value={0} isBengali={lang === "bn"} />
                 </span>
               </div>
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-amber-900 flex items-center justify-center font-black shadow-md text-base sm:text-lg group-hover:scale-110 transition-transform">
@@ -355,32 +378,45 @@ export function ProductCard({
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 text-white rounded-2xl p-1.5 sm:p-2 shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 flex items-center justify-between gap-2"
+              className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 text-white rounded-2xl p-2 sm:p-2.5 shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 flex items-center justify-between gap-2"
             >
               {/* Decrease Quantity / Remove from Cart */}
               <motion.button
                 whileTap={{ scale: 0.85 }}
                 type="button"
                 onClick={() => handleSetUnit(currentUnit - 1)}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white font-black text-lg transition-all touch-manipulation cursor-pointer shrink-0"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white font-black text-xl transition-all touch-manipulation cursor-pointer shrink-0 shadow-sm"
                 aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
               >
-                <Minus className="w-5 h-5 stroke-[3]" />
+                <Minus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               </motion.button>
 
-              {/* Center Display: Selected Quantity & Live Price in Cart */}
-              <div className="flex-1 flex flex-col items-center justify-center text-center px-1">
-                <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black tracking-tight">
-                  <Check className="w-4 h-4 text-emerald-200 stroke-[3]" />
-                  <span>
-                    {lang === "bn"
-                      ? `${toBnNumber(currentUnit)}টি কার্টে যুক্ত`
-                      : `${currentUnit} in Cart`}
+              {/* Center Display: Highly Visible Sliding Quantity & Live Subtotal */}
+              <div className="flex-1 flex items-center justify-center gap-2 sm:gap-3 px-1 min-w-0">
+                {/* Prominent High-Contrast Quantity Box with SlidingNumber */}
+                <div className="flex items-center gap-1.5 bg-black/35 dark:bg-black/55 px-3 sm:px-4 py-1.5 rounded-xl border border-white/25 shadow-inner shrink-0">
+                  <span className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white flex items-center justify-center min-w-[24px]">
+                    <SlidingNumber
+                      value={currentUnit}
+                      isBengali={lang === "bn"}
+                      className="font-mono font-black"
+                    />
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-emerald-200">
+                    {lang === "bn" ? "টি" : currentUnit > 1 ? "items" : "item"}
                   </span>
                 </div>
-                <span className="text-[11px] sm:text-xs text-emerald-100 font-mono font-bold mt-0.5">
-                  {formatStorePrice(unitPrice * currentUnit, lang)}
-                </span>
+
+                {/* Status & Live Subtotal */}
+                <div className="flex flex-col text-left min-w-0">
+                  <div className="flex items-center gap-1 text-[11px] sm:text-xs text-emerald-200 font-semibold leading-tight">
+                    <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300 shrink-0" />
+                    <span className="truncate">{lang === "bn" ? "কার্টে যুক্ত" : "In Cart"}</span>
+                  </div>
+                  <span className="text-sm sm:text-base font-black font-mono text-white leading-tight mt-0.5 truncate">
+                    {formatStorePrice(unitPrice * currentUnit, lang)}
+                  </span>
+                </div>
               </div>
 
               {/* Increase Quantity / Add to Cart */}
@@ -388,10 +424,10 @@ export function ProductCard({
                 whileTap={{ scale: 0.85 }}
                 type="button"
                 onClick={() => handleSetUnit(currentUnit + 1)}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white hover:bg-emerald-50 active:bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-lg shadow-md transition-all touch-manipulation cursor-pointer shrink-0"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white hover:bg-emerald-50 active:bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xl shadow-md transition-all touch-manipulation cursor-pointer shrink-0"
                 aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
               >
-                <Plus className="w-5 h-5 stroke-[3]" />
+                <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               </motion.button>
             </motion.div>
 
