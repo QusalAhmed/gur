@@ -4,7 +4,7 @@ import React, { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   CheckCircle2,
   Copy,
@@ -107,13 +107,15 @@ function OrderConfirmedSkeleton() {
 
       {/* Header Bar */}
       <header className="relative z-10 max-w-2xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>দোকানে ফিরে যান</span>
-        </Link>
+        <motion.div whileHover={{ x: -2 }} transition={{ duration: 0.15 }}>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>দোকানে ফিরে যান</span>
+          </Link>
+        </motion.div>
 
         <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
@@ -334,13 +336,15 @@ function OrderConfirmedContent() {
 
       {/* Header Bar */}
       <header className="relative z-10 max-w-2xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>দোকানে ফিরে যান</span>
-        </Link>
+        <motion.div whileHover={{ x: -2 }} transition={{ duration: 0.15 }}>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>দোকানে ফিরে যান</span>
+          </Link>
+        </motion.div>
 
         <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
@@ -397,12 +401,24 @@ function OrderConfirmedContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-xl rounded-3xl border border-amber-200/90 dark:border-stone-800 shadow-2xl shadow-amber-950/10 p-5 sm:p-8 text-center space-y-5"
           >
-            {/* Animated Success Badge (0ms instant) */}
-            <div className="relative inline-flex items-center justify-center">
+            {/* Animated Success Badge with Spring & Radar Aura */}
+            <motion.div
+              initial={{ scale: 0, rotate: -25 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", damping: 14, stiffness: 220, delay: 0.05 }}
+              className="relative inline-flex items-center justify-center"
+            >
+              {/* Subtle expanding ping aura */}
+              <motion.span
+                initial={{ scale: 0.85, opacity: 0.6 }}
+                animate={{ scale: 1.45, opacity: 0 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                className="absolute inset-0 rounded-full border-2 border-emerald-400/50 pointer-events-none"
+              />
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-lg ring-8 ring-emerald-50 dark:ring-emerald-900/30">
                 <CheckCircle2 className="w-9 h-9 sm:w-11 sm:h-11 stroke-[2.5]" />
               </div>
-            </div>
+            </motion.div>
 
             <div>
               <h1 className="text-xl sm:text-3xl font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight flex items-center justify-center gap-2">
@@ -436,7 +452,12 @@ function OrderConfirmedContent() {
             </div>
 
             {/* Order Details & Summary Card */}
-            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.08 }}
+              className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3 shadow-xs"
+            >
               {/* Order Number Row */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-amber-200/60 dark:border-stone-700/60">
                 <span className="text-xs sm:text-sm font-semibold text-stone-600 dark:text-stone-400">
@@ -449,14 +470,40 @@ function OrderConfirmedContent() {
                     <span className="font-mono font-black text-xs sm:text-sm text-amber-950 dark:text-amber-100">
                       {order?.order_number || "GUR-ORDER"}
                     </span>
-                    <button
+                    <motion.button
                       type="button"
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={handleCopyOrderNumber}
                       className="p-1 rounded-lg hover:bg-amber-200/60 dark:hover:bg-stone-700 transition-colors text-amber-900 dark:text-amber-300 cursor-pointer"
                       title="অর্ডার নম্বর কপি করুন"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                      <AnimatePresence mode="wait" initial={false}>
+                        {copied ? (
+                          <motion.span
+                            key="check"
+                            initial={{ scale: 0.4, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.4, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="inline-block text-emerald-600"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </motion.span>
+                        ) : (
+                          <motion.span
+                            key="copy"
+                            initial={{ scale: 0.4, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.4, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="inline-block"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
                   </div>
                 )}
               </div>
@@ -531,7 +578,13 @@ function OrderConfirmedContent() {
                           const itemImg = resolveRealProductImage(item);
                           const total = item.line_total || item.unit_price * item.quantity;
                           return (
-                            <tr key={item.id || idx} className="hover:bg-amber-50/50 dark:hover:bg-stone-800/40 transition-colors">
+                            <motion.tr
+                              key={item.id || idx}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.25, delay: idx * 0.05 + 0.1 }}
+                              className="hover:bg-amber-50/50 dark:hover:bg-stone-800/40 transition-colors"
+                            >
                               <td className="py-2.5 pr-2">
                                 <div className="flex items-start gap-2.5 sm:gap-3">
                                   {/* Product Thumbnail Image */}
@@ -593,7 +646,7 @@ function OrderConfirmedContent() {
                                   ({formatStorePrice(item.unit_price, "bn")} × {toBnNumber(item.quantity)})
                                 </span>
                               </td>
-                            </tr>
+                            </motion.tr>
                           );
                         })}
                       </tbody>
@@ -648,10 +701,15 @@ function OrderConfirmedContent() {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Section 1: ডেলিভারি ঠিকানা ও প্রাপকের তথ্য (Delivery Address & Recipient Card) */}
-            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.16 }}
+              className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3 shadow-xs"
+            >
               <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
                 <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                   <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -752,10 +810,15 @@ function OrderConfirmedContent() {
                   <span>WhatsApp-এ মেসেজ পাঠান</span>
                 </a>
               </div>
-            </div>
+            </motion.div>
 
             {/* Section 2: অর্ডার পরবর্তী ধাপসমূহ (Next Steps / Delivery Progress Timeline) */}
-            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3.5">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.24 }}
+              className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3.5 shadow-xs"
+            >
               <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
                 <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                   <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -789,8 +852,13 @@ function OrderConfirmedContent() {
 
                 {/* Step 2: কনফার্মেশন কল */}
                 <div className="relative flex items-start gap-3 pl-1">
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 z-10 shadow-sm ring-4 ring-white dark:ring-stone-800 animate-pulse">
-                    <PhoneCall className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <div className="relative w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 z-10 shadow-sm ring-4 ring-white dark:ring-stone-800">
+                    <motion.span
+                      animate={{ scale: [1, 1.45, 1], opacity: [0.65, 0, 0.65] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 rounded-full bg-amber-400"
+                    />
+                    <PhoneCall className="w-3 h-3 sm:w-3.5 sm:h-3.5 relative z-10" />
                   </div>
                   <div className="flex-1 bg-white/90 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-amber-300 dark:border-amber-700/60 shadow-xs">
                     <div className="flex items-center justify-between gap-1">
@@ -837,10 +905,15 @@ function OrderConfirmedContent() {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Section 3: ১০০% নিরাপদ ডেলিভারি ও রিপ্লেসমেন্ট গ্যারান্টি (Replacement & Quality Guarantee) */}
-            <div className="bg-gradient-to-br from-emerald-50/80 via-white/80 to-emerald-50/60 dark:from-emerald-950/40 dark:via-stone-900/60 dark:to-emerald-950/30 rounded-2xl sm:rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 p-4 sm:p-5 text-left space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.32 }}
+              className="bg-gradient-to-br from-emerald-50/80 via-white/80 to-emerald-50/60 dark:from-emerald-950/40 dark:via-stone-900/60 dark:to-emerald-950/30 rounded-2xl sm:rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 p-4 sm:p-5 text-left space-y-3 shadow-xs"
+            >
               <div className="flex items-center justify-between pb-2 border-b border-emerald-200/80 dark:border-emerald-800/60">
                 <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-emerald-950 dark:text-emerald-200">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -853,7 +926,11 @@ function OrderConfirmedContent() {
 
               <div className="grid grid-cols-1 gap-2.5 text-xs sm:text-sm">
                 {/* Guarantee item 1: 100% Pure */}
-                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50 shadow-xs"
+                >
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                     <Sparkles className="w-4 h-4" />
                   </div>
@@ -865,10 +942,14 @@ function OrderConfirmedContent() {
                       কোনো চিনি, কৃত্রিম রং, হাইড্রোজ বা রাসায়নিক প্রিজারভেটিভ নেই। ভেজাল প্রমাণে ১০০% মূল্য ফেরত।
                     </p>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Guarantee item 2: Instant Replacement */}
-                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50 shadow-xs"
+                >
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                     <RotateCcw className="w-4 h-4" />
                   </div>
@@ -880,10 +961,14 @@ function OrderConfirmedContent() {
                       কুরিয়ারে পরিবহনের সময় পাত্র ভেঙে গেলে বা কোনো ক্ষতি হলে কোনো প্রশ্ন ছাড়াই নতুন গুড় পাঠানো হবে।
                     </p>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Guarantee item 3: Open box check */}
-                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50 shadow-xs"
+                >
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                     <PackageCheck className="w-4 h-4" />
                   </div>
@@ -895,12 +980,17 @@ function OrderConfirmedContent() {
                       ডেলিভারিম্যানের সামনে প্যাকেট খুলে ঘ্রাণ ও গুণমান পরীক্ষা করে সন্তুষ্ট হলে তবেই মূল্য পরিশোধ করুন।
                     </p>
                   </div>
-                </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Section 4: প্রাকৃতিক গুড় ভালো ও ফ্রেশ রাখার নিয়ম (Storage & Care Tips) */}
-            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.40 }}
+              className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3 shadow-xs"
+            >
               <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
                 <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                   <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -913,7 +1003,11 @@ function OrderConfirmedContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs sm:text-sm">
                 {/* Tip 1 */}
-                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1 shadow-xs"
+                >
                   <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
                     <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">১</span>
                     <span>বায়ুরোধী পাত্রে রাখুন</span>
@@ -921,10 +1015,14 @@ function OrderConfirmedContent() {
                   <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
                     গুড় খোলার পর সবসময় শুকনো এয়ারটাইট কাঁচের পাত্র বা ফুড-গ্রেড বক্সে মুখ বন্ধ করে রাখুন।
                   </p>
-                </div>
+                </motion.div>
 
                 {/* Tip 2 */}
-                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1 shadow-xs"
+                >
                   <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
                     <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">২</span>
                     <span>শুকনো চামচ ব্যবহার করুন</span>
@@ -932,10 +1030,14 @@ function OrderConfirmedContent() {
                   <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
                     গুড় নেওয়ার সময় কখনো ভেজা হাত বা ভেজা চামচ ব্যবহার করবেন না, এতে গুড় দ্রুত নষ্ট হতে পারে।
                   </p>
-                </div>
+                </motion.div>
 
                 {/* Tip 3 */}
-                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1 shadow-xs"
+                >
                   <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
                     <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">৩</span>
                     <span>শীতল ও শুষ্ক স্থান</span>
@@ -943,10 +1045,14 @@ function OrderConfirmedContent() {
                   <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
                     সরাসরি রোদ ও স্যাঁতসেঁতে পরিবেশ এড়িয়ে ঠান্ডা ও শুষ্ক জায়গায় গুড়ের পাত্র রাখুন।
                   </p>
-                </div>
+                </motion.div>
 
                 {/* Tip 4 */}
-                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1 shadow-xs"
+                >
                   <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
                     <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">৪</span>
                     <span>নরমাল ফ্রিজে সংরক্ষণ</span>
@@ -954,47 +1060,61 @@ function OrderConfirmedContent() {
                   <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
                     ঝোলা গুড় বা নলেন গুড়ের প্রাকৃতিক সুবাস ও স্বাদ দীর্ঘদিন অটুট রাখতে সাধারণ ফ্রিজে রাখা ভালো।
                   </p>
-                </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Cash on Delivery Reassurance Notice */}
-            <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 rounded-xl p-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300 text-left">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>কোন অগ্রিম টাকা দেওয়া লাগবে না। পার্সেল খুলে পরীক্ষা করার পর ডেলিভারিম্যানকে টাকা দিন।</span>
-            </div>
+            {/* Cash on Delivery Notice & CTA Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.48 }}
+              className="space-y-4"
+            >
+              {/* Cash on Delivery Reassurance Notice */}
+              <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 rounded-xl p-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300 text-left">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>কোন অগ্রিম টাকা দেওয়া লাগবে না। পার্সেল খুলে পরীক্ষা করার পর ডেলিভারিম্যানকে টাকা দিন।</span>
+              </div>
 
-            {/* Quick Direct Communication Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-              <a
-                href={`tel:${RAW_HOTLINE}`}
-                className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all text-xs sm:text-sm"
-              >
-                <Phone className="w-4 h-4" />
-                <span>সরাসরি ফোনে কথা বলুন</span>
-              </a>
+              {/* Quick Direct Communication Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                <motion.a
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  href={`tel:${RAW_HOTLINE}`}
+                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all text-xs sm:text-sm cursor-pointer"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>সরাসরি ফোনে কথা বলুন</span>
+                </motion.a>
 
-              <a
-                href={`https://wa.me/88${RAW_HOTLINE}?text=${whatsappMessage}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all text-xs sm:text-sm"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>WhatsApp চ্যাট করুন</span>
-              </a>
-            </div>
+                <motion.a
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  href={`https://wa.me/88${RAW_HOTLINE}?text=${whatsappMessage}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all text-xs sm:text-sm cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>WhatsApp চ্যাট করুন</span>
+                </motion.a>
+              </div>
 
-            {/* Return to Shop Button */}
-            <div className="pt-2">
-              <Link
-                href="/"
-                className="inline-flex items-center gap-2 text-stone-600 dark:text-stone-400 hover:text-amber-800 dark:hover:text-amber-300 font-bold text-xs sm:text-sm transition-colors"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>আরও গুড় দেখতে দোকানে ফিরে যান</span>
-              </Link>
-            </div>
+              {/* Return to Shop Button */}
+              <div className="pt-2">
+                <motion.div whileHover={{ x: -3 }} transition={{ duration: 0.15 }} className="inline-block">
+                  <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 text-stone-600 dark:text-stone-400 hover:text-amber-800 dark:hover:text-amber-300 font-bold text-xs sm:text-sm transition-colors"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>আরও গুড় দেখতে দোকানে ফিরে যান</span>
+                  </Link>
+                </motion.div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </div>
