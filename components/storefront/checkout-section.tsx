@@ -31,7 +31,9 @@ import {
   Sparkles,
   AlertCircle,
   Leaf,
+  CheckCircle2,
 } from "lucide-react";
+import { useToast } from "@/components/ui/toast-notification";
 import {
   StorefrontLang,
   STOREFRONT_TEXT,
@@ -81,15 +83,17 @@ export function CheckoutSection({
   const displaySubtotal = mounted ? cartSubtotal : 0;
   const displayTotalQuantity = mounted ? cartTotalQuantity : 0;
 
+  const toast = useToast();
   const [deliveryZone, setDeliveryZone] = useState<"inside_dhaka" | "outside_dhaka">("inside_dhaka");
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
 
   const t = STOREFRONT_TEXT[lang];
   const deliveryCharge = deliveryZone === "inside_dhaka" ? 70 : 130;
   const grandTotal = displaySubtotal + (displayCartItems.length > 0 ? deliveryCharge : 0);
   const rawHotline = hotline.replace(/[^0-9]/g, "");
 
-  const clearDraftRef = React.useRef<() => void>(() => {});
+  const clearDraftRef = React.useRef<() => void>(() => { });
   const draftOrderIdRef = React.useRef<string | null>(null);
 
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
@@ -98,6 +102,21 @@ export function CheckoutSection({
       // Clear draft tracking & Redux cart upon confirmed placement
       clearDraftRef.current?.();
       dispatch(clearCart());
+
+      const successMsg = lang === "bn"
+        ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${result.orderNumber})`
+        : `Your order has been stored successfully in database! (Order #${result.orderNumber})`;
+
+      setSubmissionSuccess(successMsg);
+      setSubmissionError(null);
+
+      // Trigger floating toast notification
+      if (toast.isAvailable) {
+        toast.showToast(successMsg, "success", {
+          title: lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Stored Successfully",
+          duration: 6000,
+        });
+      }
 
       // Redirect to dedicated order confirmation page
       const queryParams = new URLSearchParams({
@@ -111,295 +130,302 @@ export function CheckoutSection({
       router.push(`/order-confirmed?${queryParams.toString()}`);
     },
     onError: (err) => {
-      setSubmissionError(
+      const errMsg =
         err.message ||
         (lang === "bn"
           ? "অর্ডার প্রসেসিংয়ে সমস্যা হয়েছে। সরাসরি ফোনে যোগাযোগ করুন।"
-          : "An unexpected error occurred. Please contact us via phone.")
-      );
-    },
+          : "An unexpected error occurred. Please contact us via phone.");
+  setSubmissionError(errMsg);
+  setSubmissionSuccess(null);
+
+  if (toast.isAvailable) {
+    toast.showToast(errMsg, "destructive", {
+      title: lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
+    });
+  }
+},
   });
 
-  const isSubmitting = createOrderMutation.isPending;
+const isSubmitting = createOrderMutation.isPending;
 
-  // =========================================================================
-  // 1. TanStack Table Configuration for Cart Summary (Clean 2-Column Structure)
-  // =========================================================================
-  const columnHelper = createColumnHelper<CartItem>();
+// =========================================================================
+// 1. TanStack Table Configuration for Cart Summary (Clean 2-Column Structure)
+// =========================================================================
+const columnHelper = createColumnHelper<CartItem>();
 
-  const columns = useMemo<ColumnDef<CartItem, any>[]>(
-    () => [
-      // Column 1: Compound Item Card (Image, Title, Description, Unit Price, Pack, Stepper, Delete)
-      columnHelper.display({
-        id: "itemDetails",
-        header: lang === "bn" ? "পণ্যের বিবরণ ও পরিমাণ" : "Item & Quantity",
-        cell: (info) => {
-          const item = info.row.original;
-          const name = lang === "bn" ? item.productNameBn || item.productName : item.productName;
-          const variant = lang === "bn" ? item.variantNameBn || item.variantName : item.variantName;
-          const desc =
-            (lang === "bn" ? item.descriptionBn || item.description : item.description) ||
-            (lang === "bn"
-              ? "গাছিদের সংগ্রহ করা তাজা ও নির্ভেজাল ঐতিহ্যবাহী খাঁটি গুড়।"
-              : "Authentic artisanal pure handcrafted date jaggery.");
+const columns = useMemo<ColumnDef<CartItem, any>[]>(
+  () => [
+    // Column 1: Compound Item Card (Image, Title, Description, Unit Price, Pack, Stepper, Delete)
+    columnHelper.display({
+      id: "itemDetails",
+      header: lang === "bn" ? "পণ্যের বিবরণ ও পরিমাণ" : "Item & Quantity",
+      cell: (info) => {
+        const item = info.row.original;
+        const name = lang === "bn" ? item.productNameBn || item.productName : item.productName;
+        const variant = lang === "bn" ? item.variantNameBn || item.variantName : item.variantName;
+        const desc =
+          (lang === "bn" ? item.descriptionBn || item.description : item.description) ||
+          (lang === "bn"
+            ? "গাছিদের সংগ্রহ করা তাজা ও নির্ভেজাল ঐতিহ্যবাহী খাঁটি গুড়।"
+            : "Authentic artisanal pure handcrafted date jaggery.");
 
-          return (
-            <div className="flex items-start gap-2.5 sm:gap-3.5 py-2.5 pr-2">
-              {/* Product Thumbnail Image */}
-              <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
-                <Image
-                  src={item.image || "/images/products/blackstrap-drum.jpg"}
-                  alt={name}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 640px) 56px, 64px"
-                />
+        return (
+          <div className="flex items-start gap-2.5 sm:gap-3.5 py-2.5 pr-2">
+            {/* Product Thumbnail Image */}
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
+              <Image
+                src={item.image || "/images/products/blackstrap-drum.jpg"}
+                alt={name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 56px, 64px"
+              />
+            </div>
+
+            {/* Product Info & Controls Stack */}
+            <div className="flex-1 min-w-0 space-y-1">
+              {/* Title & Pack Badge */}
+              <div className="flex items-baseline gap-1.5 flex-wrap">
+                <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-tight">
+                  {name}
+                </span>
+                <span className="inline-block bg-amber-100/90 dark:bg-stone-800 text-amber-900 dark:text-amber-300 font-bold text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-md border border-amber-200/80 dark:border-stone-700">
+                  {variant}
+                </span>
               </div>
 
-              {/* Product Info & Controls Stack */}
-              <div className="flex-1 min-w-0 space-y-1">
-                {/* Title & Pack Badge */}
-                <div className="flex items-baseline gap-1.5 flex-wrap">
-                  <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-tight">
-                    {name}
-                  </span>
-                  <span className="inline-block bg-amber-100/90 dark:bg-stone-800 text-amber-900 dark:text-amber-300 font-bold text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-md border border-amber-200/80 dark:border-stone-700">
-                    {variant}
-                  </span>
-                </div>
+              {/* 1-to-2 Line Description */}
+              <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 line-clamp-1 sm:line-clamp-2 leading-relaxed">
+                {desc}
+              </p>
 
-                {/* 1-to-2 Line Description */}
-                <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 line-clamp-1 sm:line-clamp-2 leading-relaxed">
-                  {desc}
-                </p>
+              {/* Unit Price */}
+              <div className="text-[11px] sm:text-xs text-amber-800/90 dark:text-amber-400 font-semibold">
+                <span>{lang === "bn" ? "দর: " : "Unit Price: "}</span>
+                <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
+                  {formatStorePrice(item.unitPrice, lang)}
+                </span>
+                <span className="text-[10px] text-stone-500"> / {lang === "bn" ? "প্যাক" : "pack"}</span>
+              </div>
 
-                {/* Unit Price */}
-                <div className="text-[11px] sm:text-xs text-amber-800/90 dark:text-amber-400 font-semibold">
-                  <span>{lang === "bn" ? "দর: " : "Unit Price: "}</span>
-                  <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
-                    {formatStorePrice(item.unitPrice, lang)}
-                  </span>
-                  <span className="text-[10px] text-stone-500"> / {lang === "bn" ? "প্যাক" : "pack"}</span>
-                </div>
-
-                {/* Bottom Controls: Interactive Quantity Stepper + Remove Button */}
-                <div className="flex items-center gap-2 pt-1">
-                  {/* Stepper with - and + */}
-                  <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 rounded-xl p-1 border border-stone-300/80 dark:border-stone-700 shadow-inner">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        dispatch(
-                          decrementQuantity({
-                            productId: item.productId,
-                            variantId: item.variantId,
-                          })
-                        )
-                      }
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
-                      aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
-                    >
-                      <Minus className="w-3.5 h-3.5 stroke-[3]" />
-                    </button>
-
-                    <div className="min-w-[28px] text-center font-mono font-black text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center justify-center px-1">
-                      <SlidingNumber value={item.quantity} isBengali={lang === "bn"} />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        dispatch(
-                          incrementQuantity({
-                            productId: item.productId,
-                            variantId: item.variantId,
-                          })
-                        )
-                      }
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
-                      aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    </button>
-                  </div>
-
-                  {/* Remove Button */}
+              {/* Bottom Controls: Interactive Quantity Stepper + Remove Button */}
+              <div className="flex items-center gap-2 pt-1">
+                {/* Stepper with - and + */}
+                <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 rounded-xl p-1 border border-stone-300/80 dark:border-stone-700 shadow-inner">
                   <button
                     type="button"
                     onClick={() =>
                       dispatch(
-                        removeFromCart({
+                        decrementQuantity({
                           productId: item.productId,
                           variantId: item.variantId,
                         })
                       )
                     }
-                    className="inline-flex items-center gap-1 py-1 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
-                    title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
+                    aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                    <span className="hidden sm:inline text-[11px] font-medium text-rose-600 dark:text-rose-400">
-                      {lang === "bn" ? "বাতিল" : "Remove"}
-                    </span>
+                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                  </button>
+
+                  <div className="min-w-[28px] text-center font-mono font-black text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center justify-center px-1">
+                    <SlidingNumber value={item.quantity} isBengali={lang === "bn"} />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      dispatch(
+                        incrementQuantity({
+                          productId: item.productId,
+                          variantId: item.variantId,
+                        })
+                      )
+                    }
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
+                    aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
                   </button>
                 </div>
+
+                {/* Remove Button */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    dispatch(
+                      removeFromCart({
+                        productId: item.productId,
+                        variantId: item.variantId,
+                      })
+                    )
+                  }
+                  className="inline-flex items-center gap-1 py-1 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
+                  title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <span className="hidden sm:inline text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                    {lang === "bn" ? "বাতিল" : "Remove"}
+                  </span>
+                </button>
               </div>
             </div>
-          );
-        },
-      }),
-
-      // Column 2: Total Price with Live Calculation Subtitle
-      columnHelper.display({
-        id: "totalPrice",
-        header: () => (
-          <div className="text-right">
-            {lang === "bn" ? "মোট মূল্য" : "Total Price"}
           </div>
-        ),
-        cell: (info) => {
-          const item = info.row.original;
-          const total = item.quantity * item.unitPrice;
-          const formattedUnit = formatStorePrice(item.unitPrice, lang);
-          const formattedQty = lang === "bn" ? toBnNumber(item.quantity) : item.quantity;
-          return (
-            <div className="text-right py-2.5 pl-2">
-              <span className="block font-mono text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
-                {formatStorePrice(total, lang)}
-              </span>
-              <span className="block font-mono text-[11px] text-stone-500 dark:text-stone-400 mt-1 whitespace-nowrap">
-                ({formattedUnit} × {formattedQty})
-              </span>
-            </div>
-          );
-        },
-      }),
-    ],
-    [lang, dispatch, columnHelper]
-  );
+        );
+      },
+    }),
 
-  const table = useReactTable({
-    data: displayCartItems,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  });
+    // Column 2: Total Price with Live Calculation Subtitle
+    columnHelper.display({
+      id: "totalPrice",
+      header: () => (
+        <div className="text-right">
+          {lang === "bn" ? "মোট মূল্য" : "Total Price"}
+        </div>
+      ),
+      cell: (info) => {
+        const item = info.row.original;
+        const total = item.quantity * item.unitPrice;
+        const formattedUnit = formatStorePrice(item.unitPrice, lang);
+        const formattedQty = lang === "bn" ? toBnNumber(item.quantity) : item.quantity;
+        return (
+          <div className="text-right py-2.5 pl-2">
+            <span className="block font-mono text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
+              {formatStorePrice(total, lang)}
+            </span>
+            <span className="block font-mono text-[11px] text-stone-500 dark:text-stone-400 mt-1 whitespace-nowrap">
+              ({formattedUnit} × {formattedQty})
+            </span>
+          </div>
+        );
+      },
+    }),
+  ],
+  [lang, dispatch, columnHelper]
+);
 
-  // =========================================================================
-  // 2. TanStack Form Configuration for 1-Step Checkout
-  // =========================================================================
-  const validatePhone = (value: string) => {
-    if (!isValidBdPhone(value)) {
-      return lang === "bn"
-        ? "সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX, 1XXXXXXXXX বা +8801XXXXXXXXX)।"
-        : "Enter a valid mobile number (e.g. 017XXXXXXXX, 1XXXXXXXXX, or +8801XXXXXXXXX).";
-    }
-    return undefined;
-  };
+const table = useReactTable({
+  data: displayCartItems,
+  columns,
+  getCoreRowModel: getCoreRowModel(),
+});
 
-  const focusFirstInvalidField = (formApi?: any) => {
-    requestAnimationFrame(() => {
-      // 1. Inspect known fields in visual DOM order
-      const fieldNames = ["customerPhone", "customerName", "addressLine", "customerNote"];
-      if (formApi?.getFieldMeta) {
-        for (const name of fieldNames) {
-          const meta = formApi.getFieldMeta(name);
-          if (meta?.errors && meta.errors.length > 0) {
-            const el = document.getElementById(name) || document.querySelector<HTMLElement>(`[name="${name}"]`);
-            if (el) {
-              el.focus();
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-              return;
-            }
+// =========================================================================
+// 2. TanStack Form Configuration for 1-Step Checkout
+// =========================================================================
+const validatePhone = (value: string) => {
+  if (!isValidBdPhone(value)) {
+    return lang === "bn"
+      ? "সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX, 1XXXXXXXXX বা +8801XXXXXXXXX)।"
+      : "Enter a valid mobile number (e.g. 017XXXXXXXX, 1XXXXXXXXX, or +8801XXXXXXXXX).";
+  }
+  return undefined;
+};
+
+const focusFirstInvalidField = (formApi?: any) => {
+  requestAnimationFrame(() => {
+    // 1. Inspect known fields in visual DOM order
+    const fieldNames = ["customerPhone", "customerName", "addressLine", "customerNote"];
+    if (formApi?.getFieldMeta) {
+      for (const name of fieldNames) {
+        const meta = formApi.getFieldMeta(name);
+        if (meta?.errors && meta.errors.length > 0) {
+          const el = document.getElementById(name) || document.querySelector<HTMLElement>(`[name="${name}"]`);
+          if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
           }
         }
       }
+    }
 
-      // 2. Query any input marked with aria-invalid="true"
-      const invalidEl = document.querySelector<HTMLElement>('input[aria-invalid="true"], textarea[aria-invalid="true"]');
-      if (invalidEl) {
-        invalidEl.focus();
-        invalidEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
+    // 2. Query any input marked with aria-invalid="true"
+    const invalidEl = document.querySelector<HTMLElement>('input[aria-invalid="true"], textarea[aria-invalid="true"]');
+    if (invalidEl) {
+      invalidEl.focus();
+      invalidEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
-      // 3. Fallback: Phone is the primary mandatory field
-      const phoneInput = document.getElementById("customerPhone") as HTMLInputElement | null;
-      if (phoneInput && !isValidBdPhone(phoneInput.value)) {
-        phoneInput.focus();
-        phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-    });
-  };
-
-  const form = useForm({
-    defaultValues: {
-      customerName: "",
-      customerPhone: "",
-      addressLine: "",
-      customerNote: "",
-    },
-    onSubmitInvalid: ({ formApi }) => {
-      focusFirstInvalidField(formApi);
-    },
-    onSubmit: async ({ value }) => {
-      const phoneErr = validatePhone(value.customerPhone);
-      if (phoneErr) {
-        focusFirstInvalidField(form);
-        return;
-      }
-      setSubmissionError(null);
-
-      // Ensure any pending or in-flight auto-sync settles before finalizing
-      await awaitInFlightSync();
-
-      try {
-        await createOrderMutation.mutateAsync({
-          orderId: draftOrderIdRef.current || undefined,
-          status: "pending",
-          customerName: value.customerName?.trim() || undefined,
-          customerPhone: parseBdPhone(value.customerPhone).local || value.customerPhone.trim(),
-          deliveryZone,
-          addressLine: value.addressLine?.trim() || undefined,
-          customerNote: value.customerNote?.trim() || undefined,
-          items: cartItems.map((item) => ({
-            productId: item.productId,
-            productName: item.productName,
-            variantId: item.variantId,
-            variantName: item.variantName,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-          })),
-        });
-      } catch {
-        // Error handling is handled in createOrderMutation.onError
-      }
-    },
+    // 3. Fallback: Phone is the primary mandatory field
+    const phoneInput = document.getElementById("customerPhone") as HTMLInputElement | null;
+    if (phoneInput && !isValidBdPhone(phoneInput.value)) {
+      phoneInput.focus();
+      phoneInput.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
   });
+};
 
-  const formValues = useStore(form.store, (state) => state.values);
+const form = useForm({
+  defaultValues: {
+    customerName: "",
+    customerPhone: "",
+    addressLine: "",
+    customerNote: "",
+  },
+  onSubmitInvalid: ({ formApi }) => {
+    focusFirstInvalidField(formApi);
+  },
+  onSubmit: async ({ value }) => {
+    const phoneErr = validatePhone(value.customerPhone);
+    if (phoneErr) {
+      focusFirstInvalidField(form);
+      return;
+    }
+    setSubmissionError(null);
 
-  // Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
-  const { draftOrderId, triggerSyncNow, cancelPendingSync, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
-    customerPhone: formValues.customerPhone,
-    customerName: formValues.customerName,
-    addressLine: formValues.addressLine,
-    customerNote: formValues.customerNote,
-    deliveryZone,
-    items: cartItems.map((item) => ({
-      productId: item.productId,
-      productName: item.productName,
-      variantId: item.variantId,
-      variantName: item.variantName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-    })),
-    enabled: mounted && !isSubmitting,
-    isSubmitting,
-  });
+    // Ensure any pending or in-flight auto-sync settles before finalizing
+    await awaitInFlightSync();
 
-  draftOrderIdRef.current = draftOrderId;
-  clearDraftRef.current = clearDraft;
+    try {
+      await createOrderMutation.mutateAsync({
+        orderId: draftOrderIdRef.current || undefined,
+        status: "pending",
+        customerName: value.customerName?.trim() || undefined,
+        customerPhone: parseBdPhone(value.customerPhone).local || value.customerPhone.trim(),
+        deliveryZone,
+        addressLine: value.addressLine?.trim() || undefined,
+        customerNote: value.customerNote?.trim() || undefined,
+        items: cartItems.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          variantId: item.variantId,
+          variantName: item.variantName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+      });
+    } catch {
+      // Error handling is handled in createOrderMutation.onError
+    }
+  },
+});
+
+const formValues = useStore(form.store, (state) => state.values);
+
+// Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
+const { draftOrderId, triggerSyncNow, cancelPendingSync, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
+  customerPhone: formValues.customerPhone,
+  customerName: formValues.customerName,
+  addressLine: formValues.addressLine,
+  customerNote: formValues.customerNote,
+  deliveryZone,
+  items: cartItems.map((item) => ({
+    productId: item.productId,
+    productName: item.productName,
+    variantId: item.variantId,
+    variantName: item.variantName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+  })),
+  enabled: mounted && !isSubmitting,
+  isSubmitting,
+});
+
+draftOrderIdRef.current = draftOrderId;
+clearDraftRef.current = clearDraft;
 
 return (
   <section
@@ -566,6 +592,20 @@ return (
             </div>
           </div>
 
+          {submissionSuccess && (
+            <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border-2 border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 text-sm font-bold flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div className="flex-1">
+                <p className="font-extrabold text-emerald-800 dark:text-emerald-300">
+                  {lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে!" : "Order Confirmed!"}
+                </p>
+                <p className="text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-200 mt-0.5">
+                  {submissionSuccess}
+                </p>
+              </div>
+            </div>
+          )}
+
           {submissionError && (
             <div className="mb-4 p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-sm font-semibold flex items-center gap-2.5">
               <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
@@ -646,11 +686,10 @@ return (
                           triggerSyncNow();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"
-                        className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${
-                          hasError
+                        className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${hasError
                             ? "border-rose-500 focus:border-rose-600 focus:ring-rose-400/40 ring-1 ring-rose-400/40"
                             : "border-stone-300 dark:border-stone-700 focus:ring-amber-500"
-                        }`}
+                          }`}
                       />
                       <FormFieldError field={field} />
                     </div>

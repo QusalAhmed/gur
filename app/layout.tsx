@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { StoreProvider } from "@/components/providers/store-provider";
+import { ToastProvider } from "@/components/ui/toast-notification";
 import { BrandFavicon } from "@/components/brand-favicon";
 
 const geistSans = Geist({
@@ -46,8 +47,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">
         <StoreProvider>
           <QueryProvider>
-            <BrandFavicon />
-            {children}
+            <ToastProvider>
+              <BrandFavicon />
+              {children}
+            </ToastProvider>
           </QueryProvider>
         </StoreProvider>
       </body>
