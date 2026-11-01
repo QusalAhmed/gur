@@ -347,13 +347,29 @@ export function ProductCard({
 
       {/* Bottom Control Deck: Clean Quantity Selector (Default 0, auto-sync to cart) */}
       <div className="relative z-10 w-full max-w-lg mx-auto bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5">
-        {/* Price & Pack Size Selector: Shows Unit Price on Top & Total Price Below */}
+        {/* Price & Pack Size Selector: Shows Unit Price on Top & Total Price Below (when quantity > 0) */}
         <div className="flex items-center justify-between gap-2 px-1">
           <div>
             {/* Unit Price */}
             <div className="flex items-center gap-1 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
-              <span>{lang === "bn" ? "একক দর:" : "Unit Price:"}</span>
-              <span className="font-mono">{formatStorePrice(unitPrice, lang)}</span>
+              <span>
+                {displayUnit > 0
+                  ? lang === "bn"
+                    ? "একক দর:"
+                    : "Unit Price:"
+                  : lang === "bn"
+                    ? "মূল্য:"
+                    : "Price:"}
+              </span>
+              <span
+                className={`font-mono ${
+                  displayUnit > 0
+                    ? "text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200"
+                    : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
+                }`}
+              >
+                {formatStorePrice(unitPrice, lang)}
+              </span>
               {selectedVariant.name && (
                 <span className="text-[10px] sm:text-[11px] text-amber-700/70 dark:text-amber-400/70 font-normal">
                   / {lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}
@@ -361,18 +377,28 @@ export function ProductCard({
               )}
             </div>
 
-            {/* Total Price (Displayed directly below Unit Price) */}
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
-                {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
-              </span>
-              <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
-                {formatStorePrice(unitPrice * (displayUnit > 0 ? displayUnit : 1), lang)}
-              </span>
-              <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                ({lang === "bn" ? `${toBnNumber(displayUnit > 0 ? displayUnit : 1)}টি` : `${displayUnit > 0 ? displayUnit : 1} ${displayUnit > 1 ? "packs" : "pack"}`})
-              </span>
-            </div>
+            {/* Total Price: Hidden when quantity is 0 */}
+            <AnimatePresence>
+              {displayUnit > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -4 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -4 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="flex items-baseline gap-1.5 mt-0.5 overflow-hidden"
+                >
+                  <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
+                    {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
+                  </span>
+                  <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
+                    {formatStorePrice(unitPrice * displayUnit, lang)}
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                    ({lang === "bn" ? `${toBnNumber(displayUnit)}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {sortedVariants.length > 1 && (
