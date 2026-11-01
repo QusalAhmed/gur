@@ -189,9 +189,65 @@ export async function placeStorefrontOrderAction(
       const client = supabaseAdmin || supabase;
 
       // =========================================================================
-      // Fast Deduplication Strategy:
-      // 1. If explicit orderId is given, fetch by ID directly.
-      // 2. Otherwise find recent incomplete_order with same phone in last 24 hours.
+      // Tier 1: Database-Level Atomic Transaction via PostgreSQL RPC
+      // If public.process_storefront_order is available, the entire order creation,
+      // deduplication, row-locking, and item sync execute inside a single ACID
+      // transaction. If any error occurs, PostgreSQL rolls back completely so
+      // no partial or corrupted rows are written to the database.
+      // =========================================================================
+      try {
+        const rpcPayload = {
+          p_order_id: payload.orderId && UUID_REGEX.test(payload.orderId) ? payload.orderId : null,
+          p_status: targetStatus,
+          p_customer_phone: normalizedPhone,
+          p_customer_name: payload.customerName !== undefined ? (payload.customerName.trim() || null) : null,
+          p_delivery_zone: payload.deliveryZone || null,
+          p_address_line: payload.addressLine !== undefined ? (payload.addressLine.trim() || null) : null,
+          p_customer_note: payload.customerNote !== undefined ? (payload.customerNote.trim() || null) : null,
+          p_items: resolvedItems.map((item) => ({
+            product_id: item.productId,
+            product_name: item.productName || "খেজুরের খাঁটি গুড়",
+            variant_id: item.variantId,
+            variant_name: item.variantName || "1 Pack",
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+          })),
+        };
+
+        const { data: rpcData, error: rpcErr } = await client.rpc("process_storefront_order", rpcPayload);
+
+        if (!rpcErr && rpcData?.success) {
+          return {
+            success: true,
+            orderId: rpcData.order_id,
+            orderNumber: rpcData.order_number,
+            status: rpcData.status,
+            grandTotal: Number(rpcData.grand_total) || 0,
+            subtotal: Number(rpcData.subtotal) || 0,
+            shippingTotal: Number(rpcData.shipping_total) || 0,
+            customerName: rpcData.customer_name || undefined,
+            phone: rpcData.phone,
+            deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
+          };
+        }
+
+        // If the error was a database business validation error raised by the RPC (e.g. code P0001)
+        if (rpcErr && rpcErr.code === "P0001") {
+          return {
+            success: false,
+            error: rpcErr.message || "অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে। ডাটাবেজে কোনো পরিবর্তন করা হয়নি।",
+          };
+        }
+      } catch (rpcCallErr) {
+        // Fall through to compensating rollback fallback
+      }
+
+      // =========================================================================
+      // Tier 2: Application-Level Compensating Transaction (Saga Rollback Pattern)
+      // Active if the RPC procedure has not yet been applied to the remote database.
+      // Guarantees that if order_items or any subsequent step fails, all mutations
+      // are immediately rolled back (deleted or restored to snapshot) so the DB
+      // never retains a partial or broken order.
       // =========================================================================
       let existingOrder: {
         id: string;
@@ -202,12 +258,14 @@ export async function placeStorefrontOrderAction(
         shipping_address?: Record<string, any> | null;
         shipping_method_name?: string | null;
         shipping_total?: number | null;
+        subtotal?: number | null;
+        grand_total?: number | null;
       } | null = null;
 
       if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
         const { data: foundById } = await client
           .from("orders")
-          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total")
+          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
           .eq("id", payload.orderId)
           .maybeSingle();
 
@@ -220,7 +278,7 @@ export async function placeStorefrontOrderAction(
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { data: foundByPhone } = await client
           .from("orders")
-          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total")
+          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
           .eq("customer_phone", normalizedPhone)
           .eq("status", "incomplete_order")
           .gte("created_at", oneDayAgo)
@@ -236,6 +294,16 @@ export async function placeStorefrontOrderAction(
       // If existing order is already confirmed/shipped/delivered/etc., do not overwrite it. Treat as fresh order.
       if (existingOrder && !["incomplete_order", "pending"].includes(existingOrder.status)) {
         existingOrder = null;
+      }
+
+      // Snapshot existing line items for rollback if an existing order is being updated
+      let previousItemsSnapshot: any[] = [];
+      if (existingOrder) {
+        const { data: oldItems } = await client
+          .from("order_items")
+          .select("id, order_id, product_id, variant_id, sku, product_name, variant_name, quantity, unit_price")
+          .eq("order_id", existingOrder.id);
+        previousItemsSnapshot = oldItems || [];
       }
 
       // Safeguard status transitions: prevent backwards transition from pending to incomplete_order
@@ -340,20 +408,6 @@ export async function placeStorefrontOrderAction(
             error: updateErr.message || "অর্ডার আপডেট করতে সমস্যা হয়েছে।",
           };
         }
-
-        // Fire-and-forget transition event if promoting from incomplete to pending
-        if (previousStatus === "incomplete_order" && finalStatus === "pending") {
-          Promise.resolve(
-            client.from("order_events").insert([
-              {
-                order_id: orderDbId,
-                event_type: "placed",
-                to_value: "pending",
-                message: `গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
-              },
-            ])
-          ).catch(() => {});
-        }
       } else {
         // Create a brand new order record.
         // Omit order_number so PostgreSQL trigger trg_orders_number automatically assigns sequence.
@@ -444,8 +498,57 @@ export async function placeStorefrontOrderAction(
 
         const { error: itemsErr } = await client.from("order_items").insert(itemRows);
         if (itemsErr) {
-          console.error("Storefront order items insert error:", itemsErr);
+          console.error("Storefront order items insert error, triggering compensating rollback:", itemsErr);
+
+          if (!existingOrder) {
+            // Compensating rollback for brand new order: Delete the order row completely
+            await client.from("orders").delete().eq("id", orderDbId);
+            return {
+              success: false,
+              error: "অর্ডার আইটেম সংরক্ষণ করতে সমস্যা হয়েছে। ডাটাবেজে কোনো অসম্পূর্ণ তথ্য রাখা হয়নি।",
+            };
+          } else {
+            // Compensating rollback for existing order: Restore pre-update order snapshot and line items
+            await client
+              .from("orders")
+              .update({
+                status: existingOrder.status,
+                customer_name: existingOrder.customer_name,
+                shipping_address: existingOrder.shipping_address,
+                shipping_method_name: existingOrder.shipping_method_name,
+                shipping_total: existingOrder.shipping_total,
+                subtotal: existingOrder.subtotal,
+                grand_total: existingOrder.grand_total,
+                customer_note: existingOrder.customer_note,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", orderDbId);
+
+            await client.from("order_items").delete().eq("order_id", orderDbId);
+            if (previousItemsSnapshot.length > 0) {
+              await client.from("order_items").insert(previousItemsSnapshot);
+            }
+
+            return {
+              success: false,
+              error: "অর্ডার আইটেম আপডেট করতে সমস্যা হয়েছে। পূর্বের ডাটা অপরিবর্তিত রাখা হয়েছে।",
+            };
+          }
         }
+      }
+
+      // Fire-and-forget transition event ONLY after items and order were successfully written
+      if (existingOrder && existingOrder.status === "incomplete_order" && finalStatus === "pending") {
+        Promise.resolve(
+          client.from("order_events").insert([
+            {
+              order_id: orderDbId,
+              event_type: "placed",
+              to_value: "pending",
+              message: `গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
+            },
+          ])
+        ).catch(() => {});
       }
 
       return {
