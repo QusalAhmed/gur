@@ -20,6 +20,9 @@ export interface StorefrontOrderPayload {
   customerPhone: string;
   deliveryZone?: "inside_dhaka" | "outside_dhaka";
   addressLine?: string;
+  division?: string;
+  district?: string;
+  courierName?: string;
   customerNote?: string;
   // Multiple items from Redux cart
   items?: StorefrontOrderItem[];
@@ -180,10 +183,8 @@ export async function placeStorefrontOrderAction(
       const hasDeliveryZone = Boolean(payload.deliveryZone);
       const isDhaka = payload.deliveryZone === "inside_dhaka";
       const baseShippingFee = hasItems && hasDeliveryZone ? (isDhaka ? 70 : 130) : 0;
-      const shippingMethodName = hasDeliveryZone
-        ? isDhaka
-          ? "কুরিয়ার হোম ডেলিভারি (ঢাকার ভেতরে - ৳৭০)"
-          : "কুরিয়ার হোম ডেলিভারি (ঢাকার বাইরে - ৳১৩০)"
+      const shippingMethodName = payload.courierName
+        ? payload.courierName.trim()
         : null;
 
       const client = supabaseAdmin || supabase;
@@ -204,6 +205,9 @@ export async function placeStorefrontOrderAction(
           p_delivery_zone: payload.deliveryZone || null,
           p_address_line: payload.addressLine !== undefined ? (payload.addressLine.trim() || null) : null,
           p_customer_note: payload.customerNote !== undefined ? (payload.customerNote.trim() || null) : null,
+          p_division: payload.division !== undefined ? (payload.division.trim() || null) : null,
+          p_district: payload.district !== undefined ? (payload.district.trim() || null) : null,
+          p_courier_name: payload.courierName !== undefined ? (payload.courierName.trim() || null) : null,
           p_items: resolvedItems.map((item) => ({
             product_id: item.productId,
             product_name: item.productName || "খেজুরের খাঁটি গুড়",
@@ -329,21 +333,20 @@ export async function placeStorefrontOrderAction(
           : existingOrder?.customer_note || null;
 
       const existingShippingAddress = existingOrder?.shipping_address;
-      const resolvedDistrict = hasDeliveryZone
-        ? isDhaka
-          ? "Dhaka"
-          : "Outside Dhaka"
-        : existingShippingAddress?.district || "";
+      const resolvedDistrict =
+        payload.district !== undefined
+          ? (payload.district.trim() || "")
+          : (existingShippingAddress?.district || "");
 
-      const resolvedDivision = hasDeliveryZone
-        ? isDhaka
-          ? "Dhaka"
-          : "Bangladesh"
-        : existingShippingAddress?.division || "";
+      const resolvedDivision =
+        payload.division !== undefined
+          ? (payload.division.trim() || "")
+          : (existingShippingAddress?.division || "");
 
-      const resolvedShippingMethodName = hasDeliveryZone
-        ? shippingMethodName
-        : existingOrder?.shipping_method_name || null;
+      const resolvedShippingMethodName =
+        payload.courierName !== undefined
+          ? (payload.courierName.trim() || null)
+          : (existingOrder?.shipping_method_name || null);
 
       const resolvedShippingFee = hasItems
         ? (hasDeliveryZone ? baseShippingFee : (existingOrder?.shipping_total ?? baseShippingFee))

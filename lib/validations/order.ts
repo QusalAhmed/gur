@@ -99,20 +99,22 @@ export const orderEmailSchema = z
   .default("");
 
 /**
- * Geo Division: Required non-empty string.
+ * Geo Division: Optional geographic division string.
  */
 export const orderDivisionSchema = z
   .string()
   .transform((v) => (v || "").trim())
-  .pipe(z.string().min(1, "Please select a geographic division"));
+  .optional()
+  .default("");
 
 /**
- * Geo District: Required non-empty string.
+ * Geo District: Optional delivery district string.
  */
 export const orderDistrictSchema = z
   .string()
   .transform((v) => (v || "").trim())
-  .pipe(z.string().min(1, "Please select or type a delivery district"));
+  .optional()
+  .default("");
 
 /**
  * Street / Delivery Address: Required, minimum 3 characters.
@@ -290,8 +292,6 @@ export function isFieldRequiredForStatus(
     fieldName === "items" ||
     fieldName === "channel" ||
     fieldName === "method" ||
-    fieldName === "division" ||
-    fieldName === "district" ||
     fieldName === "address_line" ||
     fieldName === "shipping_total"
   ) {
@@ -436,22 +436,6 @@ export const orderFormSchema = z
           code: z.ZodIssueCode.custom,
           message: "Street delivery address is required (at least 3 characters)",
           path: ["address_line"],
-        });
-      }
-
-      if (!data.division || !data.division.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Please select a geographic division",
-          path: ["division"],
-        });
-      }
-
-      if (!data.district || !data.district.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Please select or type a delivery district",
-          path: ["district"],
         });
       }
 

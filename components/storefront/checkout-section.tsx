@@ -142,8 +142,8 @@ export function CheckoutSection({
           shipping_fee: result.shippingTotal,
           address: {
             address_line1: variables.addressLine || null,
-            district: variables.deliveryZone === "inside_dhaka" ? "Dhaka" : null,
-            division: variables.deliveryZone === "inside_dhaka" ? "Dhaka" : null,
+            district: variables.district || null,
+            division: variables.division || null,
           },
           items: variables.items?.map((item, idx) => ({
             id: `item-${idx}`,

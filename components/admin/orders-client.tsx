@@ -1696,9 +1696,9 @@ export function OrdersClient() {
               savedOrder.courier_tracking_url || existingOrder?.courier_tracking_url,
             courier_invoice: currentInvoice,
             courier_name:
-              savedOrder.courier_name ||
-              existingOrder?.courier_name ||
-              "Steadfast Courier",
+              savedOrder.courier_name ??
+              existingOrder?.courier_name ??
+              "",
             courier_payload_snapshot: baselineSnapshot,
           };
 

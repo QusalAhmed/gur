@@ -6,6 +6,8 @@
 --              in a partial or corrupted state.
 -- =============================================================================
 
+DROP FUNCTION IF EXISTS public.process_storefront_order(uuid, text, text, text, text, text, text, jsonb);
+
 CREATE OR REPLACE FUNCTION public.process_storefront_order(
   p_order_id          uuid DEFAULT NULL,
   p_status            text DEFAULT 'pending', -- 'incomplete_order' or 'pending'
@@ -14,7 +16,10 @@ CREATE OR REPLACE FUNCTION public.process_storefront_order(
   p_delivery_zone     text DEFAULT NULL,     -- 'inside_dhaka' or 'outside_dhaka'
   p_address_line      text DEFAULT NULL,
   p_customer_note     text DEFAULT NULL,
-  p_items             jsonb DEFAULT '[]'::jsonb
+  p_items             jsonb DEFAULT '[]'::jsonb,
+  p_division          text DEFAULT NULL,
+  p_district          text DEFAULT NULL,
+  p_courier_name      text DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 VOLATILE
@@ -100,23 +105,19 @@ BEGIN
   v_resolved_customer_note := coalesce(nullif(trim(p_customer_note), ''), v_existing.customer_note);
   v_resolved_address_line  := coalesce(nullif(trim(p_address_line), ''), (v_existing.shipping_address ->> 'address_line'));
 
-  -- Delivery zone & shipping fee resolution
+  -- Preserve division, district, courier name without setting default values when left empty
+  v_resolved_district      := coalesce(nullif(trim(p_district), ''), (v_existing.shipping_address ->> 'district'), '');
+  v_resolved_division      := coalesce(nullif(trim(p_division), ''), (v_existing.shipping_address ->> 'division'), '');
+  v_resolved_method_name   := coalesce(nullif(trim(p_courier_name), ''), v_existing.shipping_method_name);
+
+  -- Delivery zone & shipping fee resolution (sets shipping fee ONLY, never injects dummy division/district/courier)
   IF p_delivery_zone IS NOT NULL AND trim(p_delivery_zone) <> '' THEN
     IF p_delivery_zone = 'inside_dhaka' THEN
-      v_resolved_district := 'Dhaka';
-      v_resolved_division := 'Dhaka';
       v_base_shipping := 70;
-      v_resolved_method_name := 'কুরিয়ার হোম ডেলিভারি (ঢাকার ভেতরে - ৳৭০)';
     ELSE
-      v_resolved_district := 'Outside Dhaka';
-      v_resolved_division := 'Bangladesh';
       v_base_shipping := 130;
-      v_resolved_method_name := 'কুরিয়ার হোম ডেলিভারি (ঢাকার বাইরে - ৳১৩০)';
     END IF;
-  ELSIF v_existing.id IS NOT NULL AND v_existing.shipping_address IS NOT NULL THEN
-    v_resolved_district := coalesce(v_existing.shipping_address ->> 'district', '');
-    v_resolved_division := coalesce(v_existing.shipping_address ->> 'division', '');
-    v_resolved_method_name := v_existing.shipping_method_name;
+  ELSIF v_existing.id IS NOT NULL THEN
     v_base_shipping := coalesce(v_existing.shipping_total, 0);
   END IF;
 
@@ -311,5 +312,5 @@ BEGIN
 END $$;
 
 -- Allow anon and authenticated roles to execute the procedure
-GRANT EXECUTE ON FUNCTION public.process_storefront_order(uuid, text, text, text, text, text, text, jsonb) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.process_storefront_order(uuid, text, text, text, text, text, text, jsonb, text, text, text) TO anon, authenticated, service_role;
 
