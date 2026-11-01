@@ -134,7 +134,7 @@ export function QuickOrderSheet({
   const isSubmitting = createOrderMutation.isPending;
 
   // Auto-sync incomplete orders when valid phone is entered and on changes
-  const { draftOrderId, triggerSyncNow, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
+  const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoSyncIncompleteOrder({
     customerPhone,
     customerName,
     addressLine,
@@ -180,17 +180,17 @@ export function QuickOrderSheet({
       return;
     }
 
-    // Wait for any in-flight auto-sync before submitting final order
-    await awaitInFlightSync();
+    // Cancel any pending debounced sync before submitting final order
+    cancelPendingSync();
 
     try {
       await createOrderMutation.mutateAsync({
         orderId: draftOrderId || undefined,
         status: "pending",
-        customerName,
+        customerName: customerName.trim() || undefined,
         customerPhone: parseBdPhone(customerPhone).local || customerPhone.trim(),
         deliveryZone,
-        addressLine,
+        addressLine: addressLine.trim() || undefined,
         items: formattedItems,
       });
     } catch {

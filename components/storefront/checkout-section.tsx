@@ -95,6 +95,7 @@ export function CheckoutSection({
 
   const clearDraftRef = React.useRef<() => void>(() => { });
   const draftOrderIdRef = React.useRef<string | null>(null);
+  const cancelPendingSyncRef = React.useRef<() => void>(() => { });
 
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
   const createOrderMutation = useCreateOrderMutation({
@@ -376,8 +377,8 @@ const form = useForm({
     }
     setSubmissionError(null);
 
-    // Ensure any pending or in-flight auto-sync settles before finalizing
-    await awaitInFlightSync();
+    // Cancel any pending debounced sync so no redundant background draft requests occur
+    cancelPendingSyncRef.current?.();
 
     try {
       await createOrderMutation.mutateAsync({
@@ -404,9 +405,11 @@ const form = useForm({
 });
 
 const formValues = useStore(form.store, (state) => state.values);
+const isFormSubmitting = useStore(form.store, (state) => state.isSubmitting);
+const isOrderProcessing = createOrderMutation.isPending || isFormSubmitting;
 
 // Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
-const { draftOrderId, triggerSyncNow, cancelPendingSync, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
+const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoSyncIncompleteOrder({
   customerPhone: formValues.customerPhone,
   customerName: formValues.customerName,
   addressLine: formValues.addressLine,
@@ -420,12 +423,13 @@ const { draftOrderId, triggerSyncNow, cancelPendingSync, awaitInFlightSync, clea
     quantity: item.quantity,
     unitPrice: item.unitPrice,
   })),
-  enabled: mounted && !isSubmitting,
-  isSubmitting,
+  enabled: mounted && !isOrderProcessing,
+  isSubmitting: isOrderProcessing,
 });
 
 draftOrderIdRef.current = draftOrderId;
 clearDraftRef.current = clearDraft;
+cancelPendingSyncRef.current = cancelPendingSync;
 
 return (
   <section
@@ -645,7 +649,7 @@ return (
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={() => {
                         field.handleBlur();
-                        triggerSyncNow();
+                        if (!isOrderProcessing) triggerSyncNow();
                       }}
                       placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
                       className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
@@ -683,7 +687,7 @@ return (
                         onChange={(e) => field.handleChange(e.target.value)}
                         onBlur={() => {
                           field.handleBlur();
-                          triggerSyncNow();
+                          if (!isOrderProcessing) triggerSyncNow();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"
                         className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${hasError
@@ -757,7 +761,7 @@ return (
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={() => {
                       field.handleBlur();
-                      triggerSyncNow();
+                      if (!isOrderProcessing) triggerSyncNow();
                     }}
                     placeholder={
                       lang === "bn"
@@ -789,7 +793,7 @@ return (
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={() => {
                       field.handleBlur();
-                      triggerSyncNow();
+                      if (!isOrderProcessing) triggerSyncNow();
                     }}
                     placeholder={
                       lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
@@ -814,43 +818,46 @@ return (
             <form.Subscribe
               selector={(state) => [state.isSubmitting]}
             >
-              {([isSubmittingState]) => (
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  type="submit"
-                  disabled={isSubmitting || isSubmittingState}
-                  className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-50 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
-                    </>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      {displayCartItems.length > 0 ? (
-                        <>
-                          <span>
-                            {lang === "bn"
-                              ? `অর্ডার নিশ্চিত করুন (${formatStorePrice(grandTotal, lang)})`
-                              : `Confirm Order (${formatStorePrice(grandTotal, lang)})`}
-                          </span>
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      ) : (
-                        <>
-                          <span>
-                            {lang === "bn"
-                              ? "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি)"
-                              : "Confirm Order (Cash on Delivery)"}
-                          </span>
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      )}
-                    </span>
-                  )}
-                </motion.button>
-              )}
+              {([isSubmittingState]) => {
+                const isProcessing = isSubmitting || isSubmittingState;
+                return (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
+                    disabled={isProcessing}
+                    className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-85 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
+                      </>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        {displayCartItems.length > 0 ? (
+                          <>
+                            <span>
+                              {lang === "bn"
+                                ? `অর্ডার নিশ্চিত করুন (${formatStorePrice(grandTotal, lang)})`
+                                : `Confirm Order (${formatStorePrice(grandTotal, lang)})`}
+                            </span>
+                            <ArrowRight className="w-5 h-5" />
+                          </>
+                        ) : (
+                          <>
+                            <span>
+                              {lang === "bn"
+                                ? "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি)"
+                                : "Confirm Order (Cash on Delivery)"}
+                            </span>
+                            <ArrowRight className="w-5 h-5" />
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </motion.button>
+                );
+              }}
             </form.Subscribe>
           </form>
         </div>
