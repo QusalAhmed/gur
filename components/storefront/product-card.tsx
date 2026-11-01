@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { motion } from "motion/react";
-import { Plus, Minus, ShoppingBag, Sparkles, Check, ChevronDown, Award, Leaf } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Plus, Minus, Sparkles, Check, ChevronDown, Award, Leaf } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { SelectedProductData } from "./quick-order-sheet";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -154,6 +154,47 @@ export function ProductCard({
     }
   };
 
+  // Fly-to-bag animation states and refs
+  const [flyingItems, setFlyingItems] = useState<{ id: number; dx: number }[]>([]);
+  const [isBagAnimating, setIsBagAnimating] = useState(false);
+  const bagRef = useRef<HTMLDivElement>(null);
+  const plusRef = useRef<HTMLButtonElement>(null);
+
+  const triggerFlyAnimation = () => {
+    let dx = -150;
+    if (bagRef.current && plusRef.current) {
+      const bagRect = bagRef.current.getBoundingClientRect();
+      const plusRect = plusRef.current.getBoundingClientRect();
+      dx = (bagRect.left + bagRect.width / 2) - (plusRect.left + plusRect.width / 2);
+    }
+    const newId = Date.now() + Math.random();
+    setFlyingItems((prev) => [...prev, { id: newId, dx }]);
+
+    setTimeout(() => {
+      setIsBagAnimating(true);
+    }, 320);
+
+    setTimeout(() => {
+      setIsBagAnimating(false);
+    }, 850);
+
+    setTimeout(() => {
+      setFlyingItems((prev) => prev.filter((item) => item.id !== newId));
+    }, 650);
+  };
+
+  const handleAddQuantityWithAnimation = () => {
+    triggerFlyAnimation();
+    handleSetUnit(currentUnit + 1);
+  };
+
+  const handlePresetClick = (preset: number) => {
+    if (preset > currentUnit) {
+      triggerFlyAnimation();
+    }
+    handleSetUnit(preset);
+  };
+
   const displayName = lang === "bn" ? product.nameBn || product.name : product.name;
   const displaySummary =
     lang === "bn"
@@ -273,7 +314,7 @@ export function ProductCard({
               <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-200" />
               <div className="flex items-center gap-1 font-black text-xs sm:text-sm">
                 <SlidingNumber
-                  value={currentUnit}
+                  value={displayUnit}
                   isBengali={lang === "bn"}
                   className="font-mono font-black"
                 />
@@ -305,15 +346,32 @@ export function ProductCard({
 
       {/* Bottom Control Deck: Clean Quantity Selector (Default 0, auto-sync to cart) */}
       <div className="relative z-10 w-full max-w-lg mx-auto bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5">
-        {/* Price & Pack Size Selector */}
+        {/* Price & Pack Size Selector: Shows Unit Price on Top & Total Price Below */}
         <div className="flex items-center justify-between gap-2 px-1">
           <div>
-            <span className="text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold block">
-              {lang === "bn" ? "মূল্য:" : "Price:"}
-            </span>
-            <span className="font-mono text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100">
-              {formatStorePrice(unitPrice, lang)}
-            </span>
+            {/* Unit Price */}
+            <div className="flex items-center gap-1 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
+              <span>{lang === "bn" ? "একক দর:" : "Unit Price:"}</span>
+              <span className="font-mono">{formatStorePrice(unitPrice, lang)}</span>
+              {selectedVariant.name && (
+                <span className="text-[10px] sm:text-[11px] text-amber-700/70 dark:text-amber-400/70 font-normal">
+                  / {lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}
+                </span>
+              )}
+            </div>
+
+            {/* Total Price (Displayed directly below Unit Price) */}
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
+                {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
+              </span>
+              <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
+                {formatStorePrice(unitPrice * (displayUnit > 0 ? displayUnit : 1), lang)}
+              </span>
+              <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                ({lang === "bn" ? `${toBnNumber(displayUnit > 0 ? displayUnit : 1)}টি` : `${displayUnit > 0 ? displayUnit : 1} ${displayUnit > 1 ? "packs" : "pack"}`})
+              </span>
+            </div>
           </div>
 
           {sortedVariants.length > 1 && (
@@ -337,53 +395,56 @@ export function ProductCard({
           )}
         </div>
 
-        {/* Eye-Catching Button to Select Quantity (Default 0, adds to cart when selected) */}
-        {displayUnit === 0 ? (
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            whileHover={{ scale: 1.01 }}
-            type="button"
-            onClick={() => handleSetUnit(1)}
-            className="w-full relative group overflow-hidden bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:via-amber-600 hover:to-amber-700 text-white font-black py-3 sm:py-3.5 px-4 sm:px-6 rounded-2xl shadow-[0_10px_24px_rgba(217,119,6,0.32)] border-2 border-amber-300/80 transition-all flex items-center justify-between gap-3 touch-manipulation cursor-pointer"
+        {/* Redesigned Cart Button: Minus on Left, Quantity & Animated Bag in Middle, Plus on Right */}
+        <div className="relative">
+          {/* Flying Miniature Product Animation into Bag */}
+          <AnimatePresence>
+            {flyingItems.map((item) => (
+              <motion.div
+                key={item.id}
+                initial={{ x: 0, y: 0, scale: 0.7, opacity: 1, rotate: 0 }}
+                animate={{
+                  x: [0, item.dx * 0.45, item.dx],
+                  y: [0, -42, 2],
+                  scale: [0.7, 1.2, 0.2],
+                  rotate: [0, -18, 22],
+                  opacity: [1, 1, 0.15],
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-50 pointer-events-none"
+              >
+                <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-amber-300 dark:border-amber-400 shadow-[0_4px_14px_rgba(217,119,6,0.6)] bg-white relative flex items-center justify-center">
+                  <Image
+                    src={imagesList[currentSlide] || product.image}
+                    alt="flying product"
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          <div
+            className={`w-full rounded-2xl p-2 sm:p-2.5 border-2 transition-all flex items-center justify-between gap-2 shadow-lg ${
+              displayUnit > 0
+                ? "bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 text-white border-emerald-400 shadow-emerald-950/20"
+                : "bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white border-amber-300/80 shadow-amber-950/20"
+            }`}
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full duration-1000 transition-transform pointer-events-none" />
-
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
-                <ShoppingBag className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left min-w-0">
-                <span className="block text-xs sm:text-base font-black tracking-tight leading-tight truncate">
-                  {lang === "bn" ? "পরিমাণ নির্বাচন করুন" : "Select Quantity"}
-                </span>
-                <span className="block text-[11px] sm:text-xs text-amber-100 font-medium opacity-90 truncate">
-                  {lang === "bn" ? "ট্যাপ করে কার্টে যোগ করুন" : "Tap to add to cart"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="bg-amber-900/40 backdrop-blur-sm px-2.5 sm:px-3 py-1 rounded-xl text-center border border-amber-300/40">
-                <span className="text-[10px] sm:text-[11px] block text-amber-200 font-semibold leading-tight">
-                  {lang === "bn" ? "পরিমাণ" : "Qty"}
-                </span>
-                <span className="font-mono text-sm sm:text-base font-black text-white leading-tight flex items-center justify-center min-w-[16px]">
-                  <SlidingNumber value={0} isBengali={lang === "bn"} />
-                </span>
-              </div>
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-amber-900 flex items-center justify-center font-black shadow-md text-base sm:text-lg group-hover:scale-110 transition-transform">
-                +
-              </div>
-            </div>
-          </motion.button>
-        ) : (
-          <div className="space-y-2">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 text-white rounded-2xl p-2 sm:p-2.5 shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 flex items-center justify-between gap-2"
-            >
-              {/* Decrease Quantity / Remove from Cart */}
+            {/* Left: Minus Button */}
+            {displayUnit === 0 ? (
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-black/15 text-white/40 flex items-center justify-center font-black text-xl shrink-0 cursor-not-allowed select-none"
+                aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
+              >
+                <Minus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+              </button>
+            ) : (
               <motion.button
                 whileTap={{ scale: 0.85 }}
                 type="button"
@@ -393,68 +454,106 @@ export function ProductCard({
               >
                 <Minus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               </motion.button>
+            )}
 
-              {/* Center Display: Highly Visible Sliding Quantity & Live Subtotal */}
-              <div className="flex-1 flex items-center justify-center gap-2 sm:gap-3 px-1 min-w-0">
-                {/* Prominent High-Contrast Quantity Box with SlidingNumber */}
-                <div className="flex items-center gap-1.5 bg-black/35 dark:bg-black/55 px-3 sm:px-4 py-1.5 rounded-xl border border-white/25 shadow-inner shrink-0">
-                  <span className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white flex items-center justify-center min-w-[24px]">
-                    <SlidingNumber
-                      value={currentUnit}
-                      isBengali={lang === "bn"}
-                      className="font-mono font-black"
-                    />
-                  </span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-200">
-                    {lang === "bn" ? "টি" : currentUnit > 1 ? "items" : "item"}
-                  </span>
-                </div>
+            {/* Middle: Large Quantity Display & Instruction Text */}
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-1 min-w-0">
+              {/* Prominent Large Quantity Box with Fly-in Impact Feedback */}
+              <div ref={bagRef} className="relative flex items-center justify-center">
+                {/* Impact Ripple Shockwave */}
+                {isBagAnimating && (
+                  <motion.div
+                    initial={{ scale: 0.7, opacity: 0.95 }}
+                    animate={{ scale: 2.2, opacity: 0 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="absolute inset-0 rounded-2xl border-2 border-amber-300 bg-amber-300/30 pointer-events-none"
+                  />
+                )}
 
-                {/* Status & Live Subtotal */}
-                <div className="flex flex-col text-left min-w-0">
-                  <div className="flex items-center gap-1 text-[11px] sm:text-xs text-emerald-200 font-semibold leading-tight">
-                    <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-300 shrink-0" />
-                    <span className="truncate">{lang === "bn" ? "কার্টে যুক্ত" : "In Cart"}</span>
-                  </div>
-                  <span className="text-sm sm:text-base font-black font-mono text-white leading-tight mt-0.5 truncate">
-                    {formatStorePrice(unitPrice * currentUnit, lang)}
-                  </span>
-                </div>
+                {/* Floating +1 / +১ indicator */}
+                {isBagAnimating && (
+                  <motion.span
+                    initial={{ y: 0, opacity: 1, scale: 0.7 }}
+                    animate={{ y: -24, opacity: 0, scale: 1.25 }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    className="absolute -top-3 font-mono font-black text-xs sm:text-sm text-amber-200 pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                  >
+                    +{lang === "bn" ? "১" : "1"}
+                  </motion.span>
+                )}
+
+                {/* Large Quantity Box with SlidingNumber */}
+                <motion.div
+                  animate={
+                    isBagAnimating
+                      ? {
+                          scale: [1, 1.22, 0.92, 1.06, 1],
+                        }
+                      : { scale: 1 }
+                  }
+                  transition={{ duration: 0.45 }}
+                  className={`px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl border transition-all flex items-center justify-center min-w-[56px] sm:min-w-[68px] ${
+                    displayUnit > 0
+                      ? "bg-black/35 border-white/25 text-white shadow-inner"
+                      : "bg-amber-900/40 border-amber-300/40 text-white"
+                  }`}
+                >
+                  <SlidingNumber
+                    value={displayUnit}
+                    isBengali={lang === "bn"}
+                    className="text-2xl sm:text-3xl font-black font-mono tracking-tight flex items-center justify-center"
+                  />
+                </motion.div>
               </div>
 
-              {/* Increase Quantity / Add to Cart */}
-              <motion.button
-                whileTap={{ scale: 0.85 }}
-                type="button"
-                onClick={() => handleSetUnit(currentUnit + 1)}
-                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white hover:bg-emerald-50 active:bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xl shadow-md transition-all touch-manipulation cursor-pointer shrink-0"
-                aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
-              >
-                <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-              </motion.button>
-            </motion.div>
-
-            {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
-            <div className="flex items-center justify-center gap-1.5 pt-0.5">
-              <span className="text-[10px] sm:text-[11px] font-semibold text-amber-900/70 dark:text-amber-400/70 mr-1">
-                {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
+              {/* Button Text Requested by User: "tab on plus button to add quantity" */}
+              <span className="text-[11px] sm:text-xs font-semibold text-amber-100 dark:text-amber-200 tracking-tight leading-tight mt-1 truncate max-w-full">
+                {lang === "bn"
+                  ? "পরিমাণ যোগ করতে + বাটনে চাপুন"
+                  : "Tab on plus button to add quantity"}
               </span>
-              {[1, 2, 3, 5, 10].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => handleSetUnit(preset)}
-                  className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${currentUnit === preset
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                      : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
-                    }`}
-                >
-                  {lang === "bn" ? `${toBnNumber(preset)}টি` : preset}
-                </button>
-              ))}
             </div>
+
+            {/* Right: Plus Button */}
+            <motion.button
+              ref={plusRef}
+              whileTap={{ scale: 0.85 }}
+              whileHover={{ scale: 1.05 }}
+              type="button"
+              onClick={handleAddQuantityWithAnimation}
+              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white flex items-center justify-center font-black text-xl shadow-md transition-all touch-manipulation cursor-pointer shrink-0 ${
+                displayUnit > 0
+                  ? "text-emerald-800 hover:bg-emerald-50 active:bg-emerald-100"
+                  : "text-amber-900 hover:bg-amber-50 active:bg-amber-100"
+              }`}
+              aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
+            >
+              <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+            </motion.button>
           </div>
-        )}
+        </div>
+
+        {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
+        <div className="flex items-center justify-center gap-1.5 pt-0.5">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-amber-900/70 dark:text-amber-400/70 mr-1">
+            {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
+          </span>
+          {[1, 2, 3, 5, 10].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              suppressHydrationWarning
+              onClick={() => handlePresetClick(preset)}
+              className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${
+                displayUnit === preset
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                  : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
+              }`}
+            >
+              {lang === "bn" ? `${toBnNumber(preset)}টি` : preset}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bottom Scroll Hint: If not last product */}
