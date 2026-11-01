@@ -51,7 +51,8 @@ import {
   clearCart,
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
-import { useCreateOrderMutation } from "@/hooks/use-order";
+import { useCreateOrderMutation, ORDER_QUERY_KEY } from "@/hooks/use-order";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-order";
 import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
@@ -84,9 +85,11 @@ export function CheckoutSection({
   const displayTotalQuantity = mounted ? cartTotalQuantity : 0;
 
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [deliveryZone, setDeliveryZone] = useState<"inside_dhaka" | "outside_dhaka">("inside_dhaka");
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const t = STOREFRONT_TEXT[lang];
   const deliveryCharge = deliveryZone === "inside_dhaka" ? 70 : 130;
@@ -97,9 +100,15 @@ export function CheckoutSection({
   const draftOrderIdRef = React.useRef<string | null>(null);
   const cancelPendingSyncRef = React.useRef<() => void>(() => { });
 
+  // Prefetch order-confirmed dynamic route structure ahead of time for 0ms transition
+  useEffect(() => {
+    router.prefetch("/order-confirmed/preview");
+  }, [router]);
+
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (result, variables) => {
+      setIsRedirecting(true);
       // Clear draft tracking & Redux cart upon confirmed placement
       clearDraftRef.current?.();
       dispatch(clearCart());
@@ -119,28 +128,63 @@ export function CheckoutSection({
         });
       }
 
-      // Redirect to dedicated order confirmation page using order UUID
+      // Pre-seed TanStack Query cache so /order-confirmed/[id] renders immediately with zero network delay
       if (result.orderId) {
-        router.push(`/order-confirmed/${result.orderId}`);
+        queryClient.setQueryData(ORDER_QUERY_KEY(result.orderId), {
+          id: result.orderId,
+          order_number: result.orderNumber,
+          status: result.status || "pending",
+          customer: result.customerName || variables.customerName || null,
+          phone: result.phone || variables.customerPhone,
+          grand_total: result.grandTotal,
+          total_price: result.grandTotal,
+          subtotal: result.subtotal,
+          shipping_fee: result.shippingTotal,
+          address: {
+            address_line1: variables.addressLine || null,
+            district: variables.deliveryZone === "inside_dhaka" ? "Dhaka" : null,
+            division: variables.deliveryZone === "inside_dhaka" ? "Dhaka" : null,
+          },
+          items: variables.items?.map((item, idx) => ({
+            id: `item-${idx}`,
+            product_name: item.productName,
+            variant_name: item.variantName,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            line_total: item.quantity * item.unitPrice,
+          })) || [],
+          created_at: new Date().toISOString(),
+        });
+
+        const targetUrl = `/order-confirmed/${result.orderId}`;
+        router.replace(targetUrl);
+
+        // Immediate safety fallback: if router.replace hasn't committed within 250ms, navigate via location
+        setTimeout(() => {
+          if (typeof window !== "undefined" && !window.location.pathname.includes(result.orderId!)) {
+            window.location.replace(targetUrl);
+          }
+        }, 250);
       } else {
-        router.push("/");
+        router.replace("/");
       }
     },
     onError: (err) => {
+      setIsRedirecting(false);
       const errMsg =
         err.message ||
         (lang === "bn"
           ? "অর্ডার প্রসেসিংয়ে সমস্যা হয়েছে। সরাসরি ফোনে যোগাযোগ করুন।"
           : "An unexpected error occurred. Please contact us via phone.");
-  setSubmissionError(errMsg);
-  setSubmissionSuccess(null);
+      setSubmissionError(errMsg);
+      setSubmissionSuccess(null);
 
-  if (toast.isAvailable) {
-    toast.showToast(errMsg, "destructive", {
-      title: lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
-    });
-  }
-},
+      if (toast.isAvailable) {
+        toast.showToast(errMsg, "destructive", {
+          title: lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
+        });
+      }
+    },
   });
 
 const isSubmitting = createOrderMutation.isPending;
@@ -402,7 +446,7 @@ const form = useForm({
 
 const formValues = useStore(form.store, (state) => state.values);
 const isFormSubmitting = useStore(form.store, (state) => state.isSubmitting);
-const isOrderProcessing = createOrderMutation.isPending || isFormSubmitting;
+const isOrderProcessing = createOrderMutation.isPending || isFormSubmitting || isRedirecting;
 
 // Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
 const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoSyncIncompleteOrder({
@@ -422,6 +466,13 @@ const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoS
   enabled: mounted && !isOrderProcessing,
   isSubmitting: isOrderProcessing,
 });
+
+// Prefetch specific order route as soon as a draft order ID is created
+useEffect(() => {
+  if (draftOrderId) {
+    router.prefetch(`/order-confirmed/${draftOrderId}`);
+  }
+}, [draftOrderId, router]);
 
 draftOrderIdRef.current = draftOrderId;
 clearDraftRef.current = clearDraft;
@@ -815,7 +866,7 @@ return (
               selector={(state) => [state.isSubmitting]}
             >
               {([isSubmittingState]) => {
-                const isProcessing = isSubmitting || isSubmittingState;
+                const isProcessing = isSubmitting || isSubmittingState || isRedirecting;
                 return (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
@@ -823,7 +874,16 @@ return (
                     disabled={isProcessing}
                     className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-85 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
                   >
-                    {isProcessing ? (
+                    {isRedirecting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>
+                          {lang === "bn"
+                            ? "অর্ডার নিশ্চিত হয়েছে! পেজে নিয়ে যাওয়া হচ্ছে..."
+                            : "Order Confirmed! Redirecting..."}
+                        </span>
+                      </>
+                    ) : isProcessing ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
                         <span>{lang === "bn" ? "অর্ডার প্রসেস হচ্ছে..." : "Processing Order..."}</span>
