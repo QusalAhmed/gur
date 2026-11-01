@@ -36,6 +36,7 @@ export interface StorefrontVariant {
 
 export interface StorefrontProduct {
   id: string;
+  slug?: string;
   name: string;
   nameBn?: string;
   summary?: string;

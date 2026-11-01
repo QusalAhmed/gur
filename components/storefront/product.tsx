@@ -27,7 +27,15 @@ export function ProductLoading() {
   );
 }
 
-export async function Product() {
+interface ProductProps {
+  featuredIdentifier?: string;
+  autoScrollToProduct?: boolean;
+}
+
+export async function Product({
+  featuredIdentifier,
+  autoScrollToProduct,
+}: ProductProps = {}) {
   const queryClient = getQueryClient();
 
   // Prefetch storefront products into TanStack Query cache on SSR
@@ -42,7 +50,10 @@ export async function Product() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <StorefrontProductsClient />
+      <StorefrontProductsClient
+        featuredIdentifier={featuredIdentifier}
+        autoScrollToProduct={autoScrollToProduct}
+      />
     </HydrationBoundary>
   );
 }

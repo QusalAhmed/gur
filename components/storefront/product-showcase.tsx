@@ -25,6 +25,8 @@ interface ProductShowcaseProps {
   storeName?: string;
   storeSubtitle?: string;
   isLoading?: boolean;
+  featuredIdentifier?: string;
+  autoScrollToProduct?: boolean;
 }
 
 export function ProductShowcase({
@@ -33,6 +35,8 @@ export function ProductShowcase({
   storeName,
   storeSubtitle,
   isLoading = false,
+  featuredIdentifier,
+  autoScrollToProduct = false,
 }: ProductShowcaseProps) {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
@@ -98,6 +102,49 @@ export function ProductShowcase({
     const height = container.clientHeight || window.innerHeight;
     container.scrollTo({ top: sectionIndex * height, behavior: "smooth" });
   };
+
+  const hasAutoScrolledRef = useRef(false);
+
+  // Automatically scroll down to the product section on load
+  useEffect(() => {
+    if (hasAutoScrolledRef.current) return;
+    if (isLoading || products.length === 0) return;
+
+    const shouldScroll =
+      autoScrollToProduct ||
+      Boolean(featuredIdentifier) ||
+      (typeof window !== "undefined" &&
+        (window.location.pathname.startsWith("/products") ||
+          window.location.search.includes("product=") ||
+          window.location.search.includes("p=") ||
+          window.location.hash === "#products"));
+
+    if (!shouldScroll) return;
+
+    const performScroll = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const productEl = (container.querySelector("#products") ||
+        container.querySelector("[data-product-card]")) as HTMLElement | null;
+
+      if (productEl) {
+        productEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        const height = container.clientHeight || window.innerHeight;
+        container.scrollTo({ top: productsStartIndex * height, behavior: "smooth" });
+      }
+      hasAutoScrolledRef.current = true;
+    };
+
+    const t1 = setTimeout(performScroll, 80);
+    const t2 = setTimeout(performScroll, 350);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [autoScrollToProduct, featuredIdentifier, isLoading, products.length, productsStartIndex]);
 
   // Discrete 1-step scroll for desktop mouse wheels so 1 tick smoothly changes product
   useEffect(() => {
