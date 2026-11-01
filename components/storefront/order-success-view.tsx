@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { motion } from "motion/react";
-import { CheckCircle2, Phone, MessageSquare, ArrowRight, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Phone, MessageSquare, ArrowRight, ShieldCheck, FileText } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 
 interface OrderSuccessViewProps {
+  orderId?: string;
   orderNumber: string;
   customerName: string;
   phone: string;
@@ -17,6 +19,7 @@ interface OrderSuccessViewProps {
 }
 
 export function OrderSuccessView({
+  orderId,
   orderNumber,
   customerName,
   phone,
@@ -120,6 +123,19 @@ export function OrderSuccessView({
           <span>{t.whatsappBtn}</span>
         </a>
       </div>
+
+      {/* View Full Online Receipt Link */}
+      {orderId && (
+        <Link
+          href={`/order-confirmed/${orderId}`}
+          onClick={onReset}
+          className="w-full inline-flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-amber-950 dark:text-amber-100 font-bold py-2.5 px-4 rounded-xl border border-amber-300/80 dark:border-stone-700 transition-all text-xs sm:text-sm mb-3.5"
+        >
+          <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+          <span>অনলাইন রিসিট ও ট্র্যাকিং দেখুন</span>
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      )}
 
       {/* Return to Shop Button */}
       <button

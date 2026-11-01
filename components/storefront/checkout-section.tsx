@@ -119,16 +119,12 @@ export function CheckoutSection({
         });
       }
 
-      // Redirect to dedicated order confirmation page
-      const queryParams = new URLSearchParams({
-        orderNumber: result.orderNumber || "",
-        total: String(result.grandTotal || grandTotal),
-        name: result.customerName || variables.customerName || "",
-        phone: result.phone || variables.customerPhone,
-        zone: deliveryZone,
-      });
-
-      router.push(`/order-confirmed?${queryParams.toString()}`);
+      // Redirect to dedicated order confirmation page using order UUID
+      if (result.orderId) {
+        router.push(`/order-confirmed/${result.orderId}`);
+      } else {
+        router.push("/");
+      }
     },
     onError: (err) => {
       const errMsg =

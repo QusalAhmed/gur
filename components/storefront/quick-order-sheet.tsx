@@ -252,6 +252,7 @@ export function QuickOrderSheet({
               /* Success View */
               <div className="overflow-y-auto px-4 py-4 sm:px-7 sm:py-6 flex-1">
                 <OrderSuccessView
+                  orderId={orderResult.orderId}
                   orderNumber={orderResult.orderNumber || "MOL-1001"}
                   customerName={orderResult.customerName || customerName}
                   phone={orderResult.phone || customerPhone}
