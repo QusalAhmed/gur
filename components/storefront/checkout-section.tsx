@@ -73,9 +73,14 @@ export function CheckoutSection({
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
 
   const [mounted, setMounted] = useState(false);
+  const isSubmittingRef = React.useRef(false);
+  const hasNavigatedRef = React.useRef(false);
+
   useEffect(() => {
     setMounted(true);
-  }, []);
+    // Prefetch order confirmed route so navigation is instantaneous
+    router.prefetch("/order-confirmed");
+  }, [router]);
 
   const displayCartItems = mounted ? cartItems : [];
   const displaySubtotal = mounted ? cartSubtotal : 0;
@@ -95,6 +100,10 @@ export function CheckoutSection({
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (result, variables) => {
+      // Prevent duplicate navigations if multiple events fire
+      if (hasNavigatedRef.current) return;
+      hasNavigatedRef.current = true;
+
       // Clear draft tracking & Redux cart upon confirmed placement
       clearDraftRef.current?.();
       dispatch(clearCart());
@@ -111,6 +120,8 @@ export function CheckoutSection({
       router.push(`/order-confirmed?${queryParams.toString()}`);
     },
     onError: (err) => {
+      isSubmittingRef.current = false;
+      hasNavigatedRef.current = false;
       setSubmissionError(
         err.message ||
         (lang === "bn"
@@ -343,8 +354,12 @@ export function CheckoutSection({
       focusFirstInvalidField(formApi);
     },
     onSubmit: async ({ value }) => {
+      if (isSubmittingRef.current) return;
+      isSubmittingRef.current = true;
+
       const phoneErr = validatePhone(value.customerPhone);
       if (phoneErr) {
+        isSubmittingRef.current = false;
         focusFirstInvalidField(form);
         return;
       }
@@ -372,6 +387,7 @@ export function CheckoutSection({
           })),
         });
       } catch {
+        isSubmittingRef.current = false;
         // Error handling is handled in createOrderMutation.onError
       }
     },

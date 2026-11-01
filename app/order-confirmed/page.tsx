@@ -39,7 +39,7 @@ function OrderConfirmedContent() {
 
   const orderNumber = order?.order_number || queryOrderNumber || "GUR-ORDER";
   const grandTotal = order ? Number(order.grand_total) : paramTotal;
-  const customerName = order?.customer || paramName || "সম্মানিত গ্রাহক";
+  const customerName = (order?.customer || paramName || "").trim();
   const customerPhone = order?.phone || paramPhone || "";
   const deliveryZone = (order?.address?.division?.toLowerCase().includes("dhaka")
     ? "inside_dhaka"
@@ -99,7 +99,14 @@ function OrderConfirmedContent() {
               <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600 dark:text-amber-400 shrink-0" />
             </h1>
             <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1.5 max-w-md mx-auto leading-relaxed">
-              প্রিয় <span className="font-bold text-stone-900 dark:text-stone-100">{customerName}</span>, আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে (<span className="font-mono font-bold">{customerPhone}</span>) কল করে ডেলিভারি ও ঠিকানা নিশ্চিত করবেন।
+              {customerName ? (
+                <>
+                  প্রিয় <span className="font-bold text-stone-900 dark:text-stone-100">{customerName}</span>, আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে (
+                </>
+              ) : (
+                <>আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে (</>
+              )}
+              <span className="font-mono font-bold text-stone-900 dark:text-stone-100">{customerPhone}</span>) কল করে ডেলিভারি ও ঠিকানা নিশ্চিত করবেন।
             </p>
           </div>
 
