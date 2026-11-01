@@ -1886,6 +1886,8 @@ export function formatDbOrderRecord(data: any): Order {
     unit_price: Number(it.unit_price) || 0,
     line_total: Number(it.line_total) || (Number(it.quantity) * Number(it.unit_price)),
     variant_id: it.variant_id,
+    product_id: it.product_id || null,
+    image: it.image || null,
   }));
 
   const rawEvents = data.order_events || data.timeline || [];
@@ -1995,6 +1997,7 @@ export function formatDbOrderRecord(data: any): Order {
     ],
     isFromDb: true,
     public_token: data.public_token,
+    attribution: data.attribution || null,
   };
 }
 

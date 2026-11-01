@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { normalizeBdPhone } from "@/lib/supabase/api";
+import { getOtherOrderInsight } from "@/types/order";
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -266,7 +267,70 @@ export async function placeStorefrontOrderAction(
         grand_total?: number | null;
       } | null = null;
 
-      if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
+      let wasPending = false;
+      let wasIncomplete = false;
+
+      if (targetStatus === "pending") {
+        // Rule 1: Check for existing pending order with the same phone number to update
+        const { data: foundPending } = await client
+          .from("orders")
+          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+          .eq("customer_phone", normalizedPhone)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (foundPending) {
+          existingOrder = foundPending;
+          wasPending = true;
+        } else {
+          // Rule 2: Check for existing incomplete order with the same phone number to update and upgrade
+          const { data: foundIncomplete } = await client
+            .from("orders")
+            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .eq("customer_phone", normalizedPhone)
+            .eq("status", "incomplete_order")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (foundIncomplete) {
+            existingOrder = foundIncomplete;
+            wasIncomplete = true;
+          }
+        }
+      } else {
+        if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
+          const { data: foundById } = await client
+            .from("orders")
+            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .eq("id", payload.orderId)
+            .maybeSingle();
+
+          if (foundById) {
+            existingOrder = foundById;
+          }
+        }
+
+        if (!existingOrder) {
+          const { data: foundByPhone } = await client
+            .from("orders")
+            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .eq("customer_phone", normalizedPhone)
+            .eq("status", "incomplete_order")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (foundByPhone) {
+            existingOrder = foundByPhone;
+          }
+        }
+      }
+
+      // Explicit orderId check if not yet matched
+      if (!existingOrder && payload.orderId && UUID_REGEX.test(payload.orderId)) {
         const { data: foundById } = await client
           .from("orders")
           .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
@@ -275,30 +339,36 @@ export async function placeStorefrontOrderAction(
 
         if (foundById) {
           existingOrder = foundById;
+          if (existingOrder.status === "pending") wasPending = true;
+          if (existingOrder.status === "incomplete_order") wasIncomplete = true;
         }
       }
 
-      if (!existingOrder) {
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: foundByPhone } = await client
-          .from("orders")
-          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-          .eq("customer_phone", normalizedPhone)
-          .eq("status", "incomplete_order")
-          .gte("created_at", oneDayAgo)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (foundByPhone) {
-          existingOrder = foundByPhone;
-        }
-      }
-
-      // If existing order is already confirmed/shipped/delivered/etc., do not overwrite it. Treat as fresh order.
+      // Rule 3: If found order is already confirmed/shipped/delivered/etc., do not overwrite it. Treat as fresh order.
       if (existingOrder && !["incomplete_order", "pending"].includes(existingOrder.status)) {
         existingOrder = null;
+        wasPending = false;
+        wasIncomplete = false;
       }
+
+      // Rule 3 check: Check for any other orders with the same phone number in DB
+      const { data: allPhoneOrders } = await client
+        .from("orders")
+        .select("id, order_number, status, created_at, grand_total")
+        .eq("customer_phone", normalizedPhone);
+
+      const otherOrdersList = (allPhoneOrders || [])
+        .filter((o: any) => !existingOrder || o.id !== existingOrder.id)
+        .map((o: any) => {
+          const insight = getOtherOrderInsight(o.status);
+          return {
+            ...o,
+            note: insight.note,
+            detail_summary: `other order: ${insight.statusText}, note: ${insight.note}`,
+          };
+        });
+      const hasOtherOrders = otherOrdersList.length > 0;
+      const otherOrderNumbers = otherOrdersList.map((o: any) => o.order_number);
 
       // Snapshot existing line items for rollback if an existing order is being updated
       let previousItemsSnapshot: any[] = [];
@@ -395,6 +465,11 @@ export async function placeStorefrontOrderAction(
             client_timestamp: new Date().toISOString(),
             zero_items_phone_order: !hasItems,
             last_sync_status: finalStatus,
+            was_pending_updated: wasPending,
+            was_incomplete_upgraded: wasIncomplete,
+            has_other_orders: hasOtherOrders,
+            other_order_numbers: otherOrderNumbers,
+            other_orders: otherOrdersList,
           },
           updated_at: new Date().toISOString(),
         };
@@ -438,6 +513,9 @@ export async function placeStorefrontOrderAction(
             client_timestamp: new Date().toISOString(),
             zero_items_phone_order: !hasItems,
             initial_status: finalStatus,
+            has_other_orders: hasOtherOrders,
+            other_order_numbers: otherOrderNumbers,
+            other_orders: otherOrdersList,
           },
         };
 
@@ -540,18 +618,57 @@ export async function placeStorefrontOrderAction(
         }
       }
 
-      // Fire-and-forget transition event ONLY after items and order were successfully written
-      if (existingOrder && existingOrder.status === "incomplete_order" && finalStatus === "pending") {
-        Promise.resolve(
-          client.from("order_events").insert([
-            {
-              order_id: orderDbId,
-              event_type: "placed",
-              to_value: "pending",
-              message: `গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
-            },
-          ])
-        ).catch(() => {});
+      // Notes & Events logging for Rules 1, 2, and 3
+      if (wasIncomplete && finalStatus === "pending") {
+        // Rule 2: Incomplete upgraded to pending -> write note about this upgradation
+        Promise.all([
+          client.from("order_notes").insert({
+            order_id: orderDbId,
+            order_number: orderNumber,
+            type: "internal",
+            author: "System",
+            note: `Incomplete order upgraded to pending upon customer order submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
+          }),
+          client.from("order_events").insert({
+            order_id: orderDbId,
+            event_type: "status_change",
+            from_value: "incomplete_order",
+            to_value: "pending",
+            message: `গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
+          }),
+        ]).catch(() => {});
+      } else if (wasPending && finalStatus === "pending") {
+        // Rule 1: Existing pending order updated
+        Promise.all([
+          client.from("order_notes").insert({
+            order_id: orderDbId,
+            order_number: orderNumber,
+            type: "internal",
+            author: "System",
+            note: `Pending order updated with new items and details from customer submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
+          }),
+          client.from("order_events").insert({
+            order_id: orderDbId,
+            event_type: "updated",
+            to_value: "pending",
+            message: `গ্রাহক পেন্ডিং অর্ডার আপডেট করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
+          }),
+        ]).catch(() => {});
+      }
+
+      // Rule 3: Note if customer phone has other orders with specific details (e.g. other order: delivered, note: old customer)
+      if (hasOtherOrders && (!existingOrder || wasIncomplete)) {
+        const noteInserts = otherOrdersList.slice(0, 5).map((o: any) => {
+          const insight = getOtherOrderInsight(o.status);
+          return {
+            order_id: orderDbId,
+            order_number: orderNumber,
+            type: "internal",
+            author: "System",
+            note: `Other order ${o.order_number || o.id}: ${insight.statusText}, note: ${insight.note}`,
+          };
+        });
+        Promise.resolve(client.from("order_notes").insert(noteInserts)).catch(() => {});
       }
 
       return {

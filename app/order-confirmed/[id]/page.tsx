@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "motion/react";
@@ -16,12 +17,83 @@ import {
   ShieldCheck,
   Sparkles,
   HelpCircle,
+  CalendarCheck,
+  Clock,
+  PhoneCall,
+  PackageCheck,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { useOrder } from "@/hooks/use-order";
+import { useStorefrontProducts } from "@/hooks/use-storefront-products";
+import type { OrderItem } from "@/types/order";
 
 const HOTLINE_NUMBER = "01843557389";
 const RAW_HOTLINE = HOTLINE_NUMBER.replace(/[^0-9]/g, "");
+
+/**
+ * Calculates probable delivery date range (2 to 3 days after order placed).
+ */
+function getProbableDeliveryDetails(dateStr?: string) {
+  const baseDate = dateStr ? new Date(dateStr) : new Date();
+  const valid = !isNaN(baseDate.getTime()) ? baseDate : new Date();
+
+  const minDate = new Date(valid);
+  minDate.setDate(minDate.getDate() + 2);
+
+  const maxDate = new Date(valid);
+  maxDate.setDate(maxDate.getDate() + 3);
+
+  const bnMonths = [
+    "জানুয়ারি",
+    "ফেব্রুয়ারি",
+    "মার্চ",
+    "এপ্রিল",
+    "মে",
+    "জুন",
+    "জুলাই",
+    "আগস্ট",
+    "সেপ্টেম্বর",
+    "অক্টোবর",
+    "নভেম্বর",
+    "ডিসেম্বর",
+  ];
+
+  const minDay = toBnNumber(minDate.getDate());
+  const maxDay = toBnNumber(maxDate.getDate());
+  const minMonth = bnMonths[minDate.getMonth()];
+  const maxMonth = bnMonths[maxDate.getMonth()];
+  const year = toBnNumber(maxDate.getFullYear());
+
+  const rangeText =
+    minDate.getMonth() === maxDate.getMonth()
+      ? `${minDay} - ${maxDay} ${maxMonth}, ${year}`
+      : `${minDay} ${minMonth} - ${maxDay} ${maxMonth}, ${year}`;
+
+  return {
+    rangeText,
+    relativeDaysText: "২ থেকে ৩ দিনের মধ্যে",
+  };
+}
+
+/**
+ * Matches item name to local product photography
+ */
+function getItemImage(productName?: string, variantName?: string): string {
+  const text = `${productName || ""} ${variantName || ""}`.toLowerCase();
+  if (text.includes("ঝোল") || text.includes("liquid") || text.includes("নলেন")) {
+    return "/images/products/date-palm-liquid.jpg";
+  }
+  if (text.includes("পাটালী") || text.includes("patali") || text.includes("দানাদার")) {
+    return "/images/products/date-palm-patali.jpg";
+  }
+  if (text.includes("জার") || text.includes("jar")) {
+    return "/images/products/nolen-gur-jar.jpg";
+  }
+  if (text.includes("আখের") || text.includes("sugarcane")) {
+    return "/images/products/organic-sugarcane.jpg";
+  }
+  return "/images/products/date-palm-patali.jpg";
+}
 
 function OrderConfirmedSkeleton() {
   return (
@@ -30,7 +102,7 @@ function OrderConfirmedSkeleton() {
       <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />
 
       {/* Header Bar */}
-      <header className="relative z-10 max-w-xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
+      <header className="relative z-10 max-w-2xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
@@ -46,7 +118,7 @@ function OrderConfirmedSkeleton() {
       </header>
 
       {/* Main Skeleton Card */}
-      <div className="relative z-10 max-w-xl mx-auto w-full my-auto py-6">
+      <div className="relative z-10 max-w-2xl mx-auto w-full my-auto py-6">
         <div className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-xl rounded-3xl border border-amber-200/90 dark:border-stone-800 shadow-2xl shadow-amber-950/10 p-5 sm:p-8 text-center space-y-5">
           <div className="relative inline-flex items-center justify-center">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-lg ring-8 ring-emerald-50 dark:ring-emerald-900/30">
@@ -65,7 +137,7 @@ function OrderConfirmedSkeleton() {
             </div>
           </div>
 
-          <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl border border-amber-200/80 dark:border-stone-700/80 p-4 text-left space-y-2.5">
+          <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl border border-amber-200/80 dark:border-stone-700/80 p-4 text-left space-y-3">
             <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-amber-200/60 dark:border-stone-700/60">
               <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
                 অর্ডার নম্বর:
@@ -73,17 +145,29 @@ function OrderConfirmedSkeleton() {
               <div className="h-5 w-28 bg-amber-200/60 dark:bg-stone-700/60 rounded-md animate-pulse" />
             </div>
 
-            <div className="flex items-center justify-between text-xs text-stone-600 dark:text-stone-400">
-              <span className="flex items-center gap-1">
-                <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>ডেলিভারি এলাকা:</span>
+            {/* Probable delivery skeleton */}
+            <div className="flex items-center justify-between text-xs sm:text-sm bg-amber-100/70 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 px-3 py-2 rounded-xl">
+              <span className="flex items-center gap-1.5 font-bold text-amber-950 dark:text-amber-200">
+                <CalendarCheck className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                <span>সম্ভাব্য ডেলিভারি তারিখ:</span>
               </span>
-              <div className="h-4 w-32 bg-amber-200/50 dark:bg-stone-700/50 rounded-md animate-pulse" />
+              <div className="h-4 w-32 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
             </div>
 
-            <div className="pt-2 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-2">
-              <div className="h-3 w-36 bg-amber-200/50 dark:bg-stone-700/50 rounded-md animate-pulse" />
-              <div className="h-4 w-full bg-amber-200/40 dark:bg-stone-700/40 rounded-md animate-pulse" />
+            {/* Invoice Table Skeleton */}
+            <div className="pt-3 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-36 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+                <div className="h-4 w-16 bg-amber-200/40 dark:bg-stone-700/40 rounded animate-pulse" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-200/50 dark:bg-stone-700/50 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-3/4 bg-amber-200/50 dark:bg-stone-700/50 rounded animate-pulse" />
+                  <div className="h-3 w-1/2 bg-amber-200/40 dark:bg-stone-700/40 rounded animate-pulse" />
+                </div>
+                <div className="h-4 w-16 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-dashed border-amber-300/80 dark:border-stone-700">
@@ -131,7 +215,7 @@ function OrderConfirmedSkeleton() {
         </div>
       </div>
 
-      <footer className="relative z-10 max-w-xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
+      <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
         © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
       </footer>
     </main>
@@ -143,7 +227,7 @@ function OrderConfirmedContent() {
   const orderId = (params?.id || "").trim();
   const [copied, setCopied] = useState(false);
 
-  // TanStack Query to fetch the single order in background using the UUID
+  // TanStack Query to fetch the single order in background using the UUID or order_number
   const { data: order, isLoading } = useOrder(orderId, {
     enabled: Boolean(orderId),
   });
@@ -156,9 +240,51 @@ function OrderConfirmedContent() {
     }
   };
 
-  const isDhaka =
-    order?.address?.division?.toLowerCase().includes("dhaka") ||
-    order?.address?.district?.toLowerCase().includes("dhaka");
+  // Fetch real products from server for authentic real product pictures
+  const { data: storefrontData } = useStorefrontProducts();
+  const catalogProducts = storefrontData?.products ?? [];
+
+  const resolveRealProductImage = (item: OrderItem): string => {
+    // 1. Direct image returned from order item on server
+    if (item.image && typeof item.image === "string" && item.image.trim()) {
+      return item.image;
+    }
+
+    // 2. Look up product in server catalog by product_id
+    if (item.product_id && catalogProducts.length > 0) {
+      const match = catalogProducts.find((p) => p.id === item.product_id);
+      if (match?.image) return match.image;
+    }
+
+    // 3. Look up product in server catalog by product_name / product_name_bn
+    if (item.product_name && catalogProducts.length > 0) {
+      const cleanItemName = item.product_name.trim().toLowerCase();
+      const match = catalogProducts.find((p) => {
+        const pName = p.name.toLowerCase();
+        const pNameBn = p.nameBn?.toLowerCase() || "";
+        return (
+          pName === cleanItemName ||
+          pNameBn === cleanItemName ||
+          cleanItemName.includes(pName) ||
+          (pNameBn && cleanItemName.includes(pNameBn))
+        );
+      });
+      if (match?.image) return match.image;
+    }
+
+    // 4. Default fallback image
+    return getItemImage(item.product_name, item.variant_name);
+  };
+  
+  // Requirement 2: Calculate probable delivery date (2-3 days later) on client to avoid unstable Date() in prerendering
+  const [deliveryDetails, setDeliveryDetails] = useState<{
+    rangeText: string;
+    relativeDaysText: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setDeliveryDetails(getProbableDeliveryDetails(order?.date));
+  }, [order?.date]);
 
   const whatsappMessage = encodeURIComponent(
     order?.order_number
@@ -171,8 +297,8 @@ function OrderConfirmedContent() {
       {/* Background Texture */}
       <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />
 
-      {/* Header Bar (Loads 0ms instantly) */}
-      <header className="relative z-10 max-w-xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
+      {/* Header Bar */}
+      <header className="relative z-10 max-w-2xl mx-auto w-full flex items-center justify-between pb-4 border-b border-amber-200/80 dark:border-stone-800">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold hover:text-amber-700 transition-colors text-xs sm:text-sm"
@@ -188,7 +314,7 @@ function OrderConfirmedContent() {
       </header>
 
       {/* Main Content Card */}
-      <div className="relative z-10 max-w-xl mx-auto w-full my-auto py-6">
+      <div className="relative z-10 max-w-2xl mx-auto w-full my-auto py-6">
         {/* If order not found and not loading: Friendly Not Found view */}
         {!isLoading && !order ? (
           <motion.div
@@ -274,11 +400,11 @@ function OrderConfirmedContent() {
               )}
             </div>
 
-            {/* Order Details Receipt Box */}
-            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl border border-amber-200/80 dark:border-stone-700/80 p-4 text-left space-y-2.5">
+            {/* Order Details & Summary Card */}
+            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
               {/* Order Number Row */}
               <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-amber-200/60 dark:border-stone-700/60">
-                <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
+                <span className="text-xs sm:text-sm font-semibold text-stone-600 dark:text-stone-400">
                   অর্ডার নম্বর:
                 </span>
                 {isLoading ? (
@@ -300,70 +426,178 @@ function OrderConfirmedContent() {
                 )}
               </div>
 
-              {/* Delivery Area */}
-              <div className="flex items-center justify-between text-xs text-stone-600 dark:text-stone-400">
-                <span className="flex items-center gap-1">
-                  <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>ডেলিভারি এলাকা:</span>
-                </span>
-                {isLoading ? (
-                  <div className="h-4 w-32 bg-amber-200/50 dark:bg-stone-700/50 rounded-md animate-pulse" />
-                ) : (
-                  <span className="font-semibold text-stone-900 dark:text-stone-100">
-                    {order?.address?.district || order?.address?.division
-                      ? `${isDhaka ? "ঢাকার ভিতরে" : "ঢাকার বাইরে"} (${order.address.district || order.address.division})`
-                      : isDhaka
-                      ? "ঢাকার ভিতরে (হোম ডেলিভারি)"
-                      : "ঢাকার বাইরে (কুরিয়ার হোম ডেলিভারি)"}
-                  </span>
-                )}
-              </div>
-
-              {/* Ordered Items List */}
-              {isLoading ? (
-                <div className="pt-2 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-2">
-                  <div className="h-3 w-36 bg-amber-200/50 dark:bg-stone-700/50 rounded-md animate-pulse" />
-                  <div className="h-4 w-full bg-amber-200/40 dark:bg-stone-700/40 rounded-md animate-pulse" />
-                  <div className="h-4 w-4/5 bg-amber-200/40 dark:bg-stone-700/40 rounded-md animate-pulse" />
-                </div>
-              ) : order?.items && order.items.length > 0 ? (
-                <div className="pt-2 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-1.5">
-                  <span className="text-[11px] font-bold text-stone-600 dark:text-stone-400 block">
-                    অর্ডারের পণ্যসমূহ ({toBnNumber(order.items.length)}টি):
-                  </span>
-                  <div className="space-y-1">
-                    {order.items.map((item, idx) => (
-                      <div key={item.id || idx} className="flex justify-between items-center text-xs">
-                        <span className="text-stone-800 dark:text-stone-200 font-medium">
-                          {item.product_name} {item.variant_name ? `(${item.variant_name})` : ""} × {toBnNumber(item.quantity)}
-                        </span>
-                        <span className="font-mono font-bold text-amber-950 dark:text-amber-100">
-                          {formatStorePrice(item.line_total || item.unit_price * item.quantity, "bn")}
-                        </span>
-                      </div>
-                    ))}
+              {/* Requirement 2: Show Probable Delivery Date (2-3 days later) */}
+              <div className="flex items-center justify-between text-xs sm:text-sm bg-gradient-to-r from-amber-100/90 via-amber-50/90 to-amber-100/80 dark:from-amber-950/60 dark:via-stone-900/60 dark:to-amber-950/40 border border-amber-300/90 dark:border-amber-700/60 px-3 py-2.5 rounded-xl shadow-xs">
+                <div className="flex items-center gap-2 font-bold text-amber-950 dark:text-amber-200">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <CalendarCheck className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold leading-tight">সম্ভাব্য ডেলিভারি তারিখ</span>
+                    <span className="block text-[10px] text-amber-800/80 dark:text-amber-400/80 font-medium">
+                      ({deliveryDetails?.relativeDaysText || "২ থেকে ৩ দিনের মধ্যে"})
+                    </span>
                   </div>
                 </div>
-              ) : null}
-
-              {/* Total Payable COD */}
-              <div className="flex items-center justify-between pt-2 border-t border-dashed border-amber-300/80 dark:border-stone-700">
-                <div>
-                  <span className="block text-xs font-bold text-stone-700 dark:text-stone-300 leading-tight">
-                    ক্যাশ অন ডেলিভারি মোট প্রদেয়:
-                  </span>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
-                    পণ্য হাতে পেয়ে দেখে টাকা দিন
+                <div className="text-right">
+                  {deliveryDetails ? (
+                    <span className="font-mono font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-100 block">
+                      {deliveryDetails.rangeText}
+                    </span>
+                  ) : (
+                    <div className="h-4 w-32 bg-amber-200/50 dark:bg-stone-700/50 rounded animate-pulse" />
+                  )}
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                    হোম ডেলিভারি
                   </span>
                 </div>
-                {isLoading ? (
-                  <div className="h-6 w-24 bg-amber-200/60 dark:bg-stone-700/60 rounded-md animate-pulse" />
-                ) : (
-                  <span className="font-mono font-black text-lg sm:text-xl text-emerald-700 dark:text-emerald-400">
-                    {formatStorePrice(Number(order?.grand_total) || 0, "bn")}
-                  </span>
-                )}
               </div>
+
+              {/* Requirement 1: Order Item Section styled identically to main page invoice */}
+              {isLoading ? (
+                <div className="pt-3 pb-1 border-t border-amber-200/60 dark:border-stone-700/60 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-36 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+                    <div className="h-4 w-16 bg-amber-200/40 dark:bg-stone-700/40 rounded animate-pulse" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-amber-200/50 dark:bg-stone-700/50 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3.5 w-3/4 bg-amber-200/50 dark:bg-stone-700/50 rounded animate-pulse" />
+                      <div className="h-3 w-1/2 bg-amber-200/40 dark:bg-stone-700/40 rounded animate-pulse" />
+                    </div>
+                    <div className="h-4 w-16 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+                  </div>
+                </div>
+              ) : order?.items && order.items.length > 0 ? (
+                <div className="pt-2 border-t border-stone-200 dark:border-stone-800 space-y-2.5">
+                  {/* Invoice Header */}
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-200/80 dark:border-stone-800">
+                    <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                      <ShoppingBag className="w-4 h-4 text-amber-600" />
+                      <span>অর্ডারের সারসংক্ষেপ</span>
+                    </div>
+                    <span className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-bold">
+                      {toBnNumber(order.items.length)} পদের গুড়
+                    </span>
+                  </div>
+
+                  {/* TanStack-like Invoice Table (Reused from Main Page Checkout) */}
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-200 dark:border-stone-800 text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                          <th className="pb-1.5 pr-2 font-bold">পণ্যের বিবরণ ও পরিমাণ</th>
+                          <th className="pb-1.5 pr-1 text-right font-bold">মোট মূল্য</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
+                        {order.items.map((item, idx) => {
+                          const itemImg = resolveRealProductImage(item);
+                          const total = item.line_total || item.unit_price * item.quantity;
+                          return (
+                            <tr key={item.id || idx} className="hover:bg-amber-50/50 dark:hover:bg-stone-800/40 transition-colors">
+                              <td className="py-2.5 pr-2">
+                                <div className="flex items-start gap-2.5 sm:gap-3">
+                                  {/* Product Thumbnail Image */}
+                                  <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
+                                    <Image
+                                      src={itemImg}
+                                      alt={item.product_name || "খেজুরের গুড়"}
+                                      fill
+                                      className="object-cover"
+                                      sizes="56px"
+                                    />
+                                  </div>
+
+                                  {/* Product Title, Variant & Unit Price */}
+                                  <div className="space-y-0.5 min-w-0">
+                                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                                      <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-tight">
+                                        {item.product_name}
+                                      </span>
+                                      {item.variant_name && (
+                                        <span className="inline-block bg-amber-100/90 dark:bg-stone-800 text-amber-900 dark:text-amber-300 font-bold text-[10px] sm:text-[11px] px-1.5 py-0.2 rounded border border-amber-200/80 dark:border-stone-700">
+                                          {item.variant_name}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 text-[11px] text-amber-800/90 dark:text-amber-400 font-medium">
+                                      <span>দর: {formatStorePrice(item.unit_price, "bn")}</span>
+                                      <span>•</span>
+                                      <span className="inline-flex items-center bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100 px-1.5 py-0.2 rounded border border-stone-200 dark:border-stone-700 font-bold text-[10.5px]">
+                                        পরিমাণ: {toBnNumber(item.quantity)} প্যাক
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Total price column */}
+                              <td className="py-2.5 pl-2 text-right align-top whitespace-nowrap">
+                                <span className="block font-mono text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 leading-tight">
+                                  {formatStorePrice(total, "bn")}
+                                </span>
+                                <span className="block font-mono text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
+                                  ({formatStorePrice(item.unit_price, "bn")} × {toBnNumber(item.quantity)})
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Price Breakdown & Grand Total Card (reused from main page) */}
+                  <div className="mt-2 pt-2.5 border-t border-stone-200 dark:border-stone-800 space-y-1.5 text-xs sm:text-sm">
+                    <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
+                      <span className="font-semibold">পণ্যের মোট মূল্য:</span>
+                      <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                        {formatStorePrice(Number(order.subtotal) || 0, "bn")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
+                      <div className="flex items-center gap-1.5 font-semibold">
+                        <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>
+                          ডেলিভারি চার্জ:
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-xs sm:text-sm">
+                        {formatStorePrice(Number(order.shipping_total) || 0, "bn")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-dashed border-stone-300 dark:border-stone-700 text-sm sm:text-base font-black text-amber-950 dark:text-amber-100">
+                      <div>
+                        <span className="block leading-tight">ক্যাশ অন ডেলিভারি মোট প্রদেয়:</span>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                          পণ্য হাতে পেয়ে দেখে টাকা দিন
+                        </span>
+                      </div>
+                      <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
+                        {formatStorePrice(Number(order.grand_total) || 0, "bn")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* When 0 products selected (direct phone order) */
+                <div className="pt-2 border-t border-stone-200 dark:border-stone-800">
+                  <div className="bg-amber-100/50 dark:bg-stone-800/80 rounded-xl p-3 text-center space-y-1">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-200">
+                      <PhoneCall className="w-4 h-4 text-amber-600" />
+                      <span>সরাসরি ফোন অর্ডার</span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                      আমাদের প্রতিনিধি সরাসরি ফোন করে আপনার পছন্দের গুড় ও পরিমাণ নিশ্চিত করে ডেলিভারির ব্যবস্থা করবেন।
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Cash on Delivery Reassurance Notice */}
@@ -408,7 +642,7 @@ function OrderConfirmedContent() {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 max-w-xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
+      <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
         © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
       </footer>
     </main>

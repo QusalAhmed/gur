@@ -228,6 +228,48 @@ export async function getOrdersAction(params: GetOrdersParams = {}): Promise<Get
  * Server Action: Fetches a single order by either its UUID or order_number,
  * including related order_items, order_events, and order_notes.
  */
+async function enrichOrderItemsWithImages(client: any, orderData: any) {
+  if (!orderData || !Array.isArray(orderData.order_items) || orderData.order_items.length === 0) {
+    return;
+  }
+  const prodIds = orderData.order_items
+    .map((it: any) => it.product_id)
+    .filter((id: any) => Boolean(id));
+
+  if (prodIds.length === 0) return;
+
+  try {
+    const { data: imgRows } = await client
+      .from("product_images")
+      .select("product_id, storage_path, is_primary")
+      .in("product_id", prodIds)
+      .order("is_primary", { ascending: false });
+
+    if (imgRows && imgRows.length > 0) {
+      const imgMap = new Map<string, string>();
+      for (const row of imgRows) {
+        if (!imgMap.has(row.product_id)) {
+          let pubUrl = row.storage_path;
+          if (pubUrl && !pubUrl.startsWith("http")) {
+            const { data: pubData } = client.storage.from("catalog-images").getPublicUrl(row.storage_path);
+            pubUrl = pubData?.publicUrl || "";
+          }
+          if (pubUrl) {
+            imgMap.set(row.product_id, pubUrl);
+          }
+        }
+      }
+      for (const it of orderData.order_items) {
+        if (it.product_id && imgMap.has(it.product_id)) {
+          it.image = imgMap.get(it.product_id);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not enrich order items with product images from server:", err);
+  }
+}
+
 export async function getOrderAction(idOrNumber: string): Promise<Order | null> {
   if (!idOrNumber || !idOrNumber.trim()) return null;
 
@@ -267,9 +309,11 @@ export async function getOrderAction(idOrNumber: string): Promise<Order | null> 
     if (fallbackRes.error || !fallbackRes.data) {
       return null;
     }
+    await enrichOrderItemsWithImages(client, fallbackRes.data);
     return formatDbOrderRecord(fallbackRes.data);
   }
 
   if (!data) return null;
+  await enrichOrderItemsWithImages(client, data);
   return formatDbOrderRecord(data);
 }

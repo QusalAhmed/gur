@@ -1,9 +1,16 @@
 -- =============================================================================
 -- Migration: Atomic Storefront Order Transaction (public.process_storefront_order)
 -- Description: Executes order creation/updating and item synchronization inside
---              a single atomic PostgreSQL transaction. If any step fails,
---              PostgreSQL rolls back all changes so the database is never left
---              in a partial or corrupted state.
+--              a single atomic PostgreSQL transaction.
+--              Rules:
+--              1. If there is another pending order with the same phone number,
+--                 updates that order based on new order data.
+--              2. If there is another incomplete order with the same phone number,
+--                 updates that order, upgrades status to pending, and writes a note
+--                 about this upgradation.
+--              3. If there are other orders with the same phone number (e.g. confirmed/shipped),
+--                 stores a new order in DB and links historical order references.
+--              4. Does not inject default division/district/courier if left empty.
 -- =============================================================================
 
 DROP FUNCTION IF EXISTS public.process_storefront_order(uuid, text, text, text, text, text, text, jsonb);
@@ -55,6 +62,13 @@ DECLARE
   v_sku                 text;
   v_prod_name           text;
   v_var_name            text;
+  v_was_incomplete      boolean := false;
+  v_was_pending         boolean := false;
+  v_has_other_orders    boolean := false;
+  v_other_order_numbers text[] := '{}';
+  v_other_orders_json   jsonb := '[]'::jsonb;
+  v_other_rec           record;
+  v_derived_note        text;
 BEGIN
   -- 1. Validate & normalize phone number (Supports: +8801XXXXXXXXX, 8801XXXXXXXXX, 01XXXXXXXXX, 1XXXXXXXXX)
   v_raw_digits := regexp_replace(coalesce(p_customer_phone, ''), '\D', '', 'g');
@@ -74,25 +88,70 @@ BEGIN
     v_final_status := 'pending';
   END IF;
 
-  -- 3. Lookup existing draft order with row-level lock
-  IF p_order_id IS NOT NULL THEN
-    SELECT * INTO v_existing FROM public.orders WHERE id = p_order_id FOR UPDATE;
-  END IF;
-
-  IF v_existing.id IS NULL THEN
+  -- 3. Lookup existing order with row-level lock based on phone number and status:
+  IF v_final_status = 'pending' THEN
+    -- Rule 1: If there is another pending order with the same phone number, select it to update
     SELECT * INTO v_existing
       FROM public.orders
      WHERE customer_phone = v_phone
-       AND status = 'incomplete_order'
-       AND created_at >= (now() - interval '24 hours')
+       AND status = 'pending'
      ORDER BY created_at DESC
      LIMIT 1
      FOR UPDATE;
+
+    IF v_existing.id IS NOT NULL THEN
+      v_was_pending := true;
+    END IF;
+
+    -- Rule 2: If no pending order, but there is an incomplete order with the same phone number, select it to update and upgrade
+    IF v_existing.id IS NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE customer_phone = v_phone
+         AND status = 'incomplete_order'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE;
+
+      IF v_existing.id IS NOT NULL THEN
+        v_was_incomplete := true;
+      END IF;
+    END IF;
+  ELSE
+    -- If status = incomplete_order (auto-save), check by explicit p_order_id or latest incomplete_order
+    IF p_order_id IS NOT NULL THEN
+      SELECT * INTO v_existing FROM public.orders WHERE id = p_order_id FOR UPDATE;
+    END IF;
+
+    IF v_existing.id IS NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE customer_phone = v_phone
+         AND status = 'incomplete_order'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE;
+    END IF;
   END IF;
 
-  -- If found order is already confirmed/shipped/cancelled etc., do not mutate it - start fresh order
+  -- Fallback check by p_order_id if not yet matched
+  IF v_existing.id IS NULL AND p_order_id IS NOT NULL THEN
+    SELECT * INTO v_existing FROM public.orders WHERE id = p_order_id FOR UPDATE;
+    IF v_existing.id IS NOT NULL THEN
+      IF v_existing.status::text = 'pending' THEN
+        v_was_pending := true;
+      ELSIF v_existing.status::text = 'incomplete_order' THEN
+        v_was_incomplete := true;
+      END IF;
+    END IF;
+  END IF;
+
+  -- Rule 3: If found order is already confirmed/processing/shipped/delivered/cancelled etc.,
+  -- do NOT overwrite it! Treat as fresh order to store in DB.
   IF v_existing.id IS NOT NULL AND v_existing.status::text NOT IN ('incomplete_order', 'pending') THEN
     v_existing := NULL;
+    v_was_incomplete := false;
+    v_was_pending := false;
   END IF;
 
   -- Status transition guard: never step backwards from pending to incomplete_order
@@ -100,7 +159,37 @@ BEGIN
     v_final_status := 'pending';
   END IF;
 
-  -- 4. Customer Data SSOT: strictly preserve customer inputs; never inject synthetic names/notes
+  -- Rule 3 check: Check for any other existing orders with this phone number
+  SELECT coalesce(array_agg(o.order_number ORDER BY o.created_at DESC), '{}'),
+         coalesce(jsonb_agg(jsonb_build_object(
+           'id', o.id,
+           'order_number', o.order_number,
+           'status', o.status,
+           'note', CASE
+             WHEN o.status::text = 'delivered' THEN 'old customer'
+             WHEN o.status::text = 'returned' THEN 'returned order'
+             WHEN o.status::text = 'cancelled' THEN 'cancelled order'
+             WHEN o.status::text = 'shipped' THEN 'order in transit'
+             WHEN o.status::text = 'processing' THEN 'processing order'
+             WHEN o.status::text = 'confirmed' THEN 'confirmed order'
+             WHEN o.status::text = 'pending' THEN 'pending order'
+             WHEN o.status::text = 'incomplete_order' THEN 'incomplete order'
+             ELSE 'previous order'
+           END,
+           'placed_at', o.placed_at,
+           'created_at', o.created_at,
+           'grand_total', o.grand_total
+         ) ORDER BY o.created_at DESC), '[]'::jsonb)
+    INTO v_other_order_numbers, v_other_orders_json
+    FROM public.orders o
+   WHERE o.customer_phone = v_phone
+     AND (v_existing.id IS NULL OR o.id <> v_existing.id);
+
+  IF array_length(v_other_order_numbers, 1) > 0 THEN
+    v_has_other_orders := true;
+  END IF;
+
+  -- 4. Customer Data SSOT: strictly preserve customer inputs; never inject synthetic defaults
   v_resolved_customer_name := coalesce(nullif(trim(p_customer_name), ''), v_existing.customer_name);
   v_resolved_customer_note := coalesce(nullif(trim(p_customer_note), ''), v_existing.customer_note);
   v_resolved_address_line  := coalesce(nullif(trim(p_address_line), ''), (v_existing.shipping_address ->> 'address_line'));
@@ -174,11 +263,17 @@ BEGIN
         'source', 'direct_storefront_web',
         'client_timestamp', now()::text,
         'zero_items_phone_order', (v_item_count = 0),
-        'last_sync_status', v_final_status
+        'last_sync_status', v_final_status,
+        'was_pending_updated', v_was_pending,
+        'was_incomplete_upgraded', v_was_incomplete,
+        'has_other_orders', v_has_other_orders,
+        'other_order_numbers', to_jsonb(v_other_order_numbers),
+        'other_orders', v_other_orders_json
       ),
       updated_at = now()
     WHERE id = v_order_id;
   ELSE
+    -- Rule 3: Insert brand new order row if no active pending/incomplete order
     INSERT INTO public.orders (
       status,
       channel,
@@ -222,7 +317,10 @@ BEGIN
         'source', 'direct_storefront_web',
         'client_timestamp', now()::text,
         'zero_items_phone_order', (v_item_count = 0),
-        'initial_status', v_final_status
+        'initial_status', v_final_status,
+        'has_other_orders', v_has_other_orders,
+        'other_order_numbers', to_jsonb(v_other_order_numbers),
+        'other_orders', v_other_orders_json
       )
     )
     RETURNING id, order_number INTO v_order_id, v_order_number;
@@ -285,15 +383,106 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- 8. Log transition event when promoting from incomplete_order to pending
-  IF v_existing.id IS NOT NULL AND v_existing.status::text = 'incomplete_order' AND v_final_status = 'pending' THEN
+  -- 8. Requirement 1 & 2: Log Notes & Events
+  IF v_was_incomplete AND v_final_status = 'pending' THEN
+    -- Rule 2: Incomplete order updated and upgraded to pending -> write note about this upgradation
+    INSERT INTO public.order_notes (
+      order_id,
+      order_number,
+      type,
+      author,
+      note,
+      created_at
+    ) VALUES (
+      v_order_id,
+      v_order_number,
+      'internal',
+      'System',
+      'Incomplete order upgraded to pending upon customer order submission (' || v_item_count::text || ' items, total ৳' || v_grand_total::text || ')',
+      now()
+    );
+
+    INSERT INTO public.order_events (order_id, event_type, from_value, to_value, message)
+    VALUES (
+      v_order_id,
+      'status_change',
+      'incomplete_order',
+      'pending',
+      'Incomplete order upgraded to pending upon customer order submission'
+    );
+  ELSIF v_was_pending AND v_final_status = 'pending' THEN
+    -- Rule 1: Pending order updated based on new order data
     INSERT INTO public.order_events (order_id, event_type, to_value, message)
     VALUES (
       v_order_id,
-      'placed',
+      'updated',
       'pending',
-      'গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (' || v_item_count::text || 'টি আইটেম, মোট ৳' || v_grand_total::text || ')'
+      'পেন্ডিং অর্ডারের তথ্য ও আইটেম নতুন সাবমিশন অনুযায়ী আপডেট করা হয়েছে (' || v_item_count::text || 'টি আইটেম, মোট ৳' || v_grand_total::text || ')'
     );
+
+    INSERT INTO public.order_notes (
+      order_id,
+      order_number,
+      type,
+      author,
+      note,
+      created_at
+    ) VALUES (
+      v_order_id,
+      v_order_number,
+      'internal',
+      'System',
+      'Pending order updated with new items and delivery details from customer submission.',
+      now()
+    );
+  END IF;
+
+  -- Rule 3: Note if customer phone has other existing orders with specific details (e.g. other order: delivered, note: old customer)
+  IF (v_existing.id IS NULL OR v_was_incomplete) AND v_has_other_orders THEN
+    FOR v_other_rec IN
+      SELECT o.order_number, o.status::text AS status
+        FROM public.orders o
+       WHERE o.customer_phone = v_phone
+         AND o.id <> v_order_id
+       ORDER BY o.created_at DESC
+       LIMIT 5
+    LOOP
+      IF v_other_rec.status = 'delivered' THEN
+        v_derived_note := 'old customer';
+      ELSIF v_other_rec.status = 'returned' THEN
+        v_derived_note := 'returned order';
+      ELSIF v_other_rec.status = 'cancelled' THEN
+        v_derived_note := 'cancelled order';
+      ELSIF v_other_rec.status = 'shipped' THEN
+        v_derived_note := 'order in transit';
+      ELSIF v_other_rec.status = 'processing' THEN
+        v_derived_note := 'processing order';
+      ELSIF v_other_rec.status = 'confirmed' THEN
+        v_derived_note := 'confirmed order';
+      ELSIF v_other_rec.status = 'pending' THEN
+        v_derived_note := 'pending order';
+      ELSIF v_other_rec.status = 'incomplete_order' THEN
+        v_derived_note := 'incomplete order';
+      ELSE
+        v_derived_note := 'previous order';
+      END IF;
+
+      INSERT INTO public.order_notes (
+        order_id,
+        order_number,
+        type,
+        author,
+        note,
+        created_at
+      ) VALUES (
+        v_order_id,
+        v_order_number,
+        'internal',
+        'System',
+        'Other order ' || coalesce(v_other_rec.order_number, '') || ': ' || v_other_rec.status || ', note: ' || v_derived_note,
+        now()
+      );
+    END LOOP;
   END IF;
 
   -- 9. Return structured order result
@@ -307,10 +496,13 @@ BEGIN
     'shipping_total', v_shipping_total,
     'customer_name', v_resolved_customer_name,
     'phone', v_phone,
-    'delivery_zone', p_delivery_zone
+    'delivery_zone', p_delivery_zone,
+    'was_pending_updated', v_was_pending,
+    'was_incomplete_upgraded', v_was_incomplete,
+    'has_other_orders', v_has_other_orders,
+    'other_order_numbers', to_jsonb(v_other_order_numbers)
   );
 END $$;
 
 -- Allow anon and authenticated roles to execute the procedure
 GRANT EXECUTE ON FUNCTION public.process_storefront_order(uuid, text, text, text, text, text, text, jsonb, text, text, text) TO anon, authenticated, service_role;
-

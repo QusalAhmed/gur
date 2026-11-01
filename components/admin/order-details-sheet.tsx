@@ -86,13 +86,14 @@ import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-d
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { updateOrderInDb } from "@/lib/supabase/api";
 import { useOrder } from "@/hooks/use-order";
-import type {
-  Order,
-  OrderItem,
-  OrderNote,
-  OrderEvent,
-  OrderNoteType,
-  CatalogProduct,
+import {
+  getOtherOrderInsight,
+  type Order,
+  type OrderItem,
+  type OrderNote,
+  type OrderEvent,
+  type OrderNoteType,
+  type CatalogProduct,
 } from "@/types/order";
 
 export interface OrderDetailsSheetProps {
@@ -198,6 +199,46 @@ export function OrderDetailsSheet({
   const [isRecreatingSteadfast, setIsRecreatingSteadfast] = React.useState(false);
   const [isRecreateModalOpen, setIsRecreateModalOpen] = React.useState(false);
   const [steadfastError, setSteadfastError] = React.useState<string | null>(null);
+
+  // Check for other orders with the same customer phone
+  const otherOrdersForSheet = React.useMemo(() => {
+    if (!order) return [];
+    const digits = (order.phone || order.shipping_phone || "").replace(/\D/g, "");
+    const phoneKey = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (!phoneKey) return [];
+
+    const found: Order[] = [];
+    if (ordersList) {
+      for (const o of ordersList) {
+        if (o.id === order.id || o.order_number === order.id) continue;
+        const oDigits = (o.phone || o.shipping_phone || "").replace(/\D/g, "");
+        const oKey = oDigits.length >= 10 ? oDigits.slice(-10) : oDigits;
+        if (oKey === phoneKey) {
+          found.push(o);
+        }
+      }
+    }
+    // Also include any historical references from attribution.other_orders
+    const attrOrders: any[] = Array.isArray(order.attribution?.other_orders)
+      ? (order.attribution.other_orders as any[]).filter(
+          (ao: any) => ao.id !== order.id && ao.order_number !== order.id
+        )
+      : [];
+    for (const ao of attrOrders) {
+      const num = ao.order_number || ao.id;
+      if (num && !found.some((o) => o.id === num || o.order_number === num || o.id === ao.id)) {
+        found.push({
+          id: num,
+          order_number: num,
+          status: ao.status || "pending",
+          date: ao.placed_at || ao.created_at || "",
+          customer: order.customer,
+          phone: order.phone,
+        } as Order);
+      }
+    }
+    return found;
+  }, [order, ordersList]);
 
   const payloadSnapshot = React.useMemo(() => {
     if (!order) return null;
@@ -812,6 +853,48 @@ export function OrderDetailsSheet({
                       <a href={`mailto:${order.email}`} className="hover:underline truncate">
                         {order.email}
                       </a>
+                    </div>
+                  )}
+
+                  {/* Other orders for this customer phone */}
+                  {otherOrdersForSheet.length > 0 && (
+                    <div className="pt-2.5 border-t border-dashed mt-2.5 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                        <PackageCheck className="h-3.5 w-3.5 text-amber-600" />
+                        <span>Other Orders ({otherOrdersForSheet.length})</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {otherOrdersForSheet.map((other) => {
+                          const insight = getOtherOrderInsight(other.status);
+                          return (
+                            <button
+                              key={other.id}
+                              type="button"
+                              onClick={() => onSelectOrder?.(other)}
+                              className={cn(
+                                "w-full text-left p-2 rounded-lg border text-xs flex flex-col gap-0.5 hover:shadow-xs transition-all cursor-pointer",
+                                insight.badgeStyle
+                              )}
+                            >
+                              <div className="flex items-center justify-between font-mono font-bold">
+                                <span className="flex items-center gap-1.5">
+                                  <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", insight.dotColor)} />
+                                  <span>{other.id}</span>
+                                </span>
+                                {other.date && (
+                                  <span className="font-sans text-[11px] font-normal opacity-75">{formatDate(other.date)}</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-sans">
+                                <span className="opacity-75">other order: </span>
+                                <span className="font-semibold">{insight.statusText}</span>
+                                <span className="opacity-75">, note: </span>
+                                <span className="font-bold underline decoration-dotted">{insight.note}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

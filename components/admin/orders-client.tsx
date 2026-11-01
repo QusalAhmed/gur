@@ -163,7 +163,7 @@ import {
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
-import type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
+import { getOtherOrderInsight, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
 export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
 
 const availableCatalogProducts: CatalogProduct[] = [
@@ -2102,6 +2102,21 @@ export function OrdersClient() {
     walk_in: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800",
   };
 
+  // Fast lookup map for orders sharing the same customer phone number
+  const phoneToOrdersMap = React.useMemo(() => {
+    const map = new Map<string, Order[]>();
+    for (const o of orders) {
+      const raw = o.phone || o.shipping_phone || "";
+      const digits = raw.replace(/\D/g, "");
+      const key = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (!key) continue;
+      const list = map.get(key) || [];
+      list.push(o);
+      map.set(key, list);
+    }
+    return map;
+  }, [orders]);
+
   const orderColumns: ColumnDef<Order>[] = React.useMemo(
     () => [
       {
@@ -2154,8 +2169,54 @@ export function OrdersClient() {
         cell: ({ row }) => {
           const order = row.original;
           const itemCount = (order.items || []).length;
+
+          // Find other orders with the same phone number
+          const digits = (order.phone || order.shipping_phone || "").replace(/\D/g, "");
+          const phoneKey = digits.length >= 10 ? digits.slice(-10) : digits;
+          const matchedByPhone = phoneKey ? phoneToOrdersMap.get(phoneKey) || [] : [];
+          const otherOrders = matchedByPhone.filter((o) => o.id !== order.id && o.order_number !== order.id);
+
+          // Check attribution.other_orders or attribution.other_order_numbers for any historical references
+          const attrOrders: any[] = Array.isArray(order.attribution?.other_orders)
+            ? (order.attribution.other_orders as any[]).filter(
+                (o: any) => o.id !== order.id && o.order_number !== order.id
+              )
+            : [];
+          const attrNumbers: string[] = Array.isArray(order.attribution?.other_order_numbers)
+            ? (order.attribution.other_order_numbers as string[]).filter(
+                (num: string) => num !== order.id && num !== order.order_number
+              )
+            : [];
+
+          const displayOtherOrders = [...otherOrders];
+          for (const ao of attrOrders) {
+            const num = ao.order_number || ao.id;
+            if (num && !displayOtherOrders.some((o) => o.id === num || o.order_number === num || o.id === ao.id)) {
+              displayOtherOrders.push({
+                id: num,
+                order_number: num,
+                status: ao.status || "pending",
+                date: ao.placed_at || ao.created_at || "",
+                customer: order.customer,
+                phone: order.phone,
+              } as Order);
+            }
+          }
+          for (const num of attrNumbers) {
+            if (!displayOtherOrders.some((o) => o.id === num || o.order_number === num)) {
+              displayOtherOrders.push({
+                id: num,
+                order_number: num,
+                status: "pending",
+                date: "",
+                customer: order.customer,
+                phone: order.phone,
+              } as Order);
+            }
+          }
+
           return (
-            <div className="space-y-1 min-w-[120px]" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1.5 min-w-[130px] max-w-[260px]" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => handleOpenView(order)}
@@ -2181,6 +2242,63 @@ export function OrdersClient() {
                   {formatDateTime(order.date)}
                 </span>
               </div>
+
+              {/* Requirement: if other order is found shows specific details like:
+                  1. other order: delivered, note: old customer
+                  2. other order: returned, note: returned order and so on */}
+              {displayOtherOrders.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                      Other Orders ({displayOtherOrders.length})
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {displayOtherOrders.slice(0, 3).map((other) => {
+                      const fullOrder = orders.find((o) => o.id === other.id || o.order_number === other.id) || other;
+                      const insight = getOtherOrderInsight(fullOrder.status);
+
+                      return (
+                        <div key={other.id} className="leading-tight">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenView(fullOrder);
+                            }}
+                            title={`Click to view other order ${fullOrder.id} (${insight.statusText}, note: ${insight.note})`}
+                            className={cn(
+                              "w-full text-left inline-flex flex-col gap-0.5 px-2 py-1 rounded border transition-all hover:scale-[1.01] hover:shadow-xs cursor-pointer",
+                              insight.badgeStyle
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
+                              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", insight.dotColor)} />
+                              <span className="hover:underline">{fullOrder.id}</span>
+                              {(fullOrder.date || other.date) && (
+                                <span className="font-sans font-normal text-[9px] opacity-75">
+                                  • {formatDateTime(fullOrder.date || other.date)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[9.5px] font-sans leading-tight">
+                              <span className="opacity-75">other order: </span>
+                              <span className="font-semibold">{insight.statusText}</span>
+                              <span className="opacity-75">, note: </span>
+                              <span className="font-bold underline decoration-dotted">{insight.note}</span>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {displayOtherOrders.length > 3 && (
+                      <span className="text-[9px] font-mono text-muted-foreground font-semibold pl-1">
+                        +{displayOtherOrders.length - 3} more other order(s)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         },
@@ -2611,7 +2729,7 @@ export function OrdersClient() {
         enableHiding: false,
       },
     ],
-    [expandedRows, toggleRowExpanded, copyToClipboard]
+    [expandedRows, toggleRowExpanded, copyToClipboard, phoneToOrdersMap, orders, handleOpenView]
   );
 
   const renderOrderDetailsSubRow = (order: Order) => {
