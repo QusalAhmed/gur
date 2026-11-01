@@ -15,6 +15,7 @@ export interface UseAutoSyncIncompleteOrderProps {
   deliveryZone: "inside_dhaka" | "outside_dhaka";
   items: StorefrontOrderItem[];
   enabled?: boolean;
+  isSubmitting?: boolean;
 }
 
 export function useAutoSyncIncompleteOrder({
@@ -25,9 +26,11 @@ export function useAutoSyncIncompleteOrder({
   deliveryZone,
   items,
   enabled = true,
+  isSubmitting = false,
 }: UseAutoSyncIncompleteOrderProps) {
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const draftOrderIdRef = useRef<string | null>(null);
+  const inFlightPromiseRef = useRef<Promise<any> | null>(null);
 
   // Read initial draft order ID from sessionStorage on client mount
   useEffect(() => {
@@ -46,12 +49,33 @@ export function useAutoSyncIncompleteOrder({
   const lastSyncedHashRef = useRef<string>("");
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Cancel any scheduled debounced sync
+  const cancelPendingSync = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }, []);
+
+  // Wait for any in-flight sync mutation to settle before completing order
+  const awaitInFlightSync = useCallback(async () => {
+    cancelPendingSync();
+    if (inFlightPromiseRef.current) {
+      try {
+        await inFlightPromiseRef.current;
+      } catch {
+        // Safe ignore
+      }
+    }
+  }, [cancelPendingSync]);
+
   // Parse & validate Bangladeshi phone in all 4 supported formats (+8801..., 8801..., 01..., 1...)
   const parsedPhone = parseBdPhone(customerPhone);
   const isPhoneValid = parsedPhone.isValid;
 
   // Clear draft from memory and sessionStorage upon completed order placement
   const clearDraft = useCallback(() => {
+    cancelPendingSync();
     draftOrderIdRef.current = null;
     setDraftOrderId(null);
     lastSyncedHashRef.current = "";
@@ -60,11 +84,11 @@ export function useAutoSyncIncompleteOrder({
     } catch {
       // Safe ignore
     }
-  }, []);
+  }, [cancelPendingSync]);
 
   // Primary synchronization function
   const performSync = useCallback(async () => {
-    if (!enabled || !parsedPhone.isValid) return;
+    if (!enabled || isSubmitting || !parsedPhone.isValid) return;
 
     // Generate hash of current state to prevent duplicate calls
     const currentHash = JSON.stringify({
@@ -85,17 +109,20 @@ export function useAutoSyncIncompleteOrder({
       return;
     }
 
-    try {
-      const res = await syncMutation.mutateAsync({
-        orderId: draftOrderIdRef.current || undefined,
-        customerPhone: parsedPhone.normalized,
-        customerName: customerName.trim() || undefined,
-        addressLine: addressLine.trim() || undefined,
-        customerNote: customerNote.trim() || undefined,
-        deliveryZone,
-        items,
-      });
+    const currentPromise = syncMutation.mutateAsync({
+      orderId: draftOrderIdRef.current || undefined,
+      customerPhone: parsedPhone.normalized,
+      customerName: customerName.trim() || undefined,
+      addressLine: addressLine.trim() || undefined,
+      customerNote: customerNote.trim() || undefined,
+      deliveryZone,
+      items,
+    });
 
+    inFlightPromiseRef.current = currentPromise;
+
+    try {
+      const res = await currentPromise;
       if (res.success && res.orderId) {
         draftOrderIdRef.current = res.orderId;
         setDraftOrderId(res.orderId);
@@ -109,9 +136,14 @@ export function useAutoSyncIncompleteOrder({
     } catch (err) {
       // Silent error: do not block or interrupt the customer's checkout flow
       console.warn("Background incomplete order sync failed silently:", err);
+    } finally {
+      if (inFlightPromiseRef.current === currentPromise) {
+        inFlightPromiseRef.current = null;
+      }
     }
   }, [
     enabled,
+    isSubmitting,
     parsedPhone.isValid,
     parsedPhone.normalized,
     customerName,
@@ -124,31 +156,29 @@ export function useAutoSyncIncompleteOrder({
 
   // Immediate sync trigger (for blur events, cart modifications, or delivery zone toggles)
   const triggerSyncNow = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
+    cancelPendingSync();
+    if (!isSubmitting) {
+      performSync();
     }
-    performSync();
-  }, [performSync]);
+  }, [cancelPendingSync, isSubmitting, performSync]);
 
   // Trigger sync on text typing with 600ms debounce
   useEffect(() => {
-    if (!enabled || !isPhoneValid) return;
-
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+    if (!enabled || isSubmitting || !isPhoneValid) {
+      cancelPendingSync();
+      return;
     }
+
+    cancelPendingSync();
 
     debounceTimerRef.current = setTimeout(() => {
       performSync();
     }, 600);
 
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
+      cancelPendingSync();
     };
-  }, [enabled, isPhoneValid, performSync]);
+  }, [enabled, isSubmitting, isPhoneValid, performSync, cancelPendingSync]);
 
   // Track discrete cart changes and delivery zone toggles immediately
   const itemsSerialized = JSON.stringify(
@@ -163,7 +193,7 @@ export function useAutoSyncIncompleteOrder({
   const prevZoneRef = useRef(deliveryZone);
 
   useEffect(() => {
-    if (!enabled || !isPhoneValid) return;
+    if (!enabled || isSubmitting || !isPhoneValid) return;
 
     const hasZoneChanged = prevZoneRef.current !== deliveryZone;
     const hasItemsChanged = prevItemsSerializedRef.current !== itemsSerialized;
@@ -173,12 +203,14 @@ export function useAutoSyncIncompleteOrder({
       prevItemsSerializedRef.current = itemsSerialized;
       triggerSyncNow();
     }
-  }, [enabled, isPhoneValid, deliveryZone, itemsSerialized, triggerSyncNow]);
+  }, [enabled, isSubmitting, isPhoneValid, deliveryZone, itemsSerialized, triggerSyncNow]);
 
   return {
     draftOrderId,
     isSyncing: syncMutation.isPending,
     triggerSyncNow,
+    cancelPendingSync,
+    awaitInFlightSync,
     clearDraft,
   };
 }

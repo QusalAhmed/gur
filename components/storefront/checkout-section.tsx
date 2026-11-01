@@ -349,6 +349,10 @@ export function CheckoutSection({
         return;
       }
       setSubmissionError(null);
+
+      // Ensure any pending or in-flight auto-sync settles before finalizing
+      await awaitInFlightSync();
+
       try {
         await createOrderMutation.mutateAsync({
           orderId: draftOrderIdRef.current || undefined,
@@ -376,7 +380,7 @@ export function CheckoutSection({
   const formValues = useStore(form.store, (state) => state.values);
 
   // Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
-  const { draftOrderId, triggerSyncNow, clearDraft } = useAutoSyncIncompleteOrder({
+  const { draftOrderId, triggerSyncNow, cancelPendingSync, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
     customerPhone: formValues.customerPhone,
     customerName: formValues.customerName,
     addressLine: formValues.addressLine,
@@ -390,7 +394,8 @@ export function CheckoutSection({
       quantity: item.quantity,
       unitPrice: item.unitPrice,
     })),
-    enabled: mounted,
+    enabled: mounted && !isSubmitting,
+    isSubmitting,
   });
 
   draftOrderIdRef.current = draftOrderId;

@@ -97,16 +97,6 @@ export function QuickOrderSheet({
     [resolvedItems, lang]
   );
 
-  // Auto-sync incomplete orders when valid phone is entered and on changes
-  const { draftOrderId, triggerSyncNow, clearDraft } = useAutoSyncIncompleteOrder({
-    customerPhone,
-    customerName,
-    addressLine,
-    deliveryZone,
-    items: formattedItems,
-    enabled: isOpen,
-  });
-
   // TanStack Query Mutation for Order Creation
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (res) => {
@@ -123,6 +113,17 @@ export function QuickOrderSheet({
   });
 
   const isSubmitting = createOrderMutation.isPending;
+
+  // Auto-sync incomplete orders when valid phone is entered and on changes
+  const { draftOrderId, triggerSyncNow, awaitInFlightSync, clearDraft } = useAutoSyncIncompleteOrder({
+    customerPhone,
+    customerName,
+    addressLine,
+    deliveryZone,
+    items: formattedItems,
+    enabled: isOpen && !isSubmitting,
+    isSubmitting,
+  });
 
   const subtotal = resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const shippingFee = resolvedItems.length === 0 ? 0 : (deliveryZone === "inside_dhaka" ? 70 : 130);
@@ -159,6 +160,9 @@ export function QuickOrderSheet({
       });
       return;
     }
+
+    // Wait for any in-flight auto-sync before submitting final order
+    await awaitInFlightSync();
 
     try {
       await createOrderMutation.mutateAsync({
