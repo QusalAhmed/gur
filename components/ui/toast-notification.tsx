@@ -92,7 +92,7 @@ export function ToastNotificationPortal({
   return createPortal(
     <div
       ref={containerRef}
-      className="fixed top-4 right-4 sm:top-5 sm:right-5 z-[99999] pointer-events-none flex flex-col items-end gap-2.5 max-w-sm sm:max-w-md w-full px-2 sm:px-0"
+      className="fixed top-[max(1rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 sm:left-auto sm:right-5 sm:translate-x-0 sm:top-5 z-[99999] pointer-events-none flex flex-col items-center sm:items-end gap-2.5 w-[calc(100%-2rem)] max-w-sm sm:max-w-md px-0"
       aria-live={toast?.type === "destructive" ? "assertive" : "polite"}
       role="region"
       aria-label="Notifications"
