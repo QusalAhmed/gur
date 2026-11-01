@@ -21,6 +21,10 @@ import {
   Clock,
   PhoneCall,
   PackageCheck,
+  MapPin,
+  User,
+  RotateCcw,
+  FileText,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { useOrder } from "@/hooks/use-order";
@@ -183,6 +187,25 @@ function OrderConfirmedSkeleton() {
             </div>
           </div>
 
+          {/* Skeleton Section 1: Delivery Address Placeholder */}
+          <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl border border-amber-200/80 dark:border-stone-700/80 p-4 text-left space-y-2.5">
+            <div className="h-4 w-44 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="h-10 bg-amber-200/40 dark:bg-stone-700/40 rounded-xl animate-pulse" />
+              <div className="h-10 bg-amber-200/40 dark:bg-stone-700/40 rounded-xl animate-pulse" />
+            </div>
+            <div className="h-12 bg-amber-200/40 dark:bg-stone-700/40 rounded-xl animate-pulse" />
+          </div>
+
+          {/* Skeleton Section 2: Timeline Placeholder */}
+          <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl border border-amber-200/80 dark:border-stone-700/80 p-4 text-left space-y-2.5">
+            <div className="h-4 w-48 bg-amber-200/60 dark:bg-stone-700/60 rounded animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-9 bg-amber-200/40 dark:bg-stone-700/40 rounded-xl animate-pulse" />
+              <div className="h-9 bg-amber-200/40 dark:bg-stone-700/40 rounded-xl animate-pulse" />
+            </div>
+          </div>
+
           <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 rounded-xl p-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300 text-left">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>কোন অগ্রিম টাকা দেওয়া লাগবে না। পার্সেল খুলে পরীক্ষা করার পর ডেলিভারিম্যানকে টাকা দিন।</span>
@@ -291,6 +314,18 @@ function OrderConfirmedContent() {
       ? `আসসালামু আলাইকুম, আমি খাঁটি গুড় অর্ডার করেছি। আমার অর্ডার নম্বর: ${order.order_number}`
       : `আসসালামু আলাইকুম, আমি খাঁটি গুড় অর্ডার করেছি।`
   );
+
+  const recipientName =
+    order?.recipient_name || order?.customer || order?.address?.recipient_name;
+  const primaryPhone =
+    order?.phone || order?.shipping_phone || order?.address?.phone;
+  const altPhone = order?.alternative_phone;
+  const addressParts = [
+    order?.address?.address_line?.trim(),
+    order?.address?.district?.trim(),
+    order?.address?.division?.trim(),
+  ].filter(Boolean);
+  const formattedAddress = addressParts.join(", ");
 
   return (
     <main className="min-h-screen w-full bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 flex flex-col justify-between p-4 sm:p-8 select-none">
@@ -511,7 +546,7 @@ function OrderConfirmedContent() {
                                   </div>
 
                                   {/* Product Title, Variant & Unit Price */}
-                                  <div className="space-y-0.5 min-w-0">
+                                  <div className="space-y-1 min-w-0">
                                     <div className="flex items-baseline gap-1.5 flex-wrap">
                                       <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 leading-tight">
                                         {item.product_name}
@@ -523,11 +558,23 @@ function OrderConfirmedContent() {
                                       )}
                                     </div>
 
-                                    <div className="flex items-center gap-1.5 text-[11px] text-amber-800/90 dark:text-amber-400 font-medium">
-                                      <span>দর: {formatStorePrice(item.unit_price, "bn")}</span>
-                                      <span>•</span>
-                                      <span className="inline-flex items-center bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100 px-1.5 py-0.2 rounded border border-stone-200 dark:border-stone-700 font-bold text-[10.5px]">
-                                        পরিমাণ: {toBnNumber(item.quantity)} প্যাক
+                                    {/* Unit Price */}
+                                    <div className="text-[11px] sm:text-xs text-amber-800/90 dark:text-amber-400 font-semibold">
+                                      <span>দর: </span>
+                                      <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
+                                        {formatStorePrice(item.unit_price, "bn")}
+                                      </span>
+                                      <span className="text-[10px] text-stone-500"> / প্যাক</span>
+                                    </div>
+
+                                    {/* Quantity displayed below the price */}
+                                    <div className="pt-0.5">
+                                      <span className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700 font-bold text-[11px]">
+                                        <span>পরিমাণ:</span>
+                                        <span className="font-mono font-black text-amber-950 dark:text-amber-200">
+                                          {toBnNumber(item.quantity)}
+                                        </span>
+                                        <span className="text-[10px] text-stone-500 font-normal">প্যাক</span>
                                       </span>
                                     </div>
                                   </div>
@@ -538,6 +585,9 @@ function OrderConfirmedContent() {
                               <td className="py-2.5 pl-2 text-right align-top whitespace-nowrap">
                                 <span className="block font-mono text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 leading-tight">
                                   {formatStorePrice(total, "bn")}
+                                </span>
+                                <span className="block font-mono text-[10.5px] font-bold text-stone-600 dark:text-stone-300 mt-0.5">
+                                  {toBnNumber(item.quantity)} প্যাক
                                 </span>
                                 <span className="block font-mono text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
                                   ({formatStorePrice(item.unit_price, "bn")} × {toBnNumber(item.quantity)})
@@ -598,6 +648,314 @@ function OrderConfirmedContent() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Section 1: ডেলিভারি ঠিকানা ও প্রাপকের তথ্য (Delivery Address & Recipient Card) */}
+            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                  <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>ডেলিভারি ঠিকানা ও প্রাপকের তথ্য</span>
+                </div>
+                <span className="text-[10px] sm:text-[11px] text-amber-900 dark:text-amber-200 font-semibold bg-amber-100/90 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-300/80 dark:border-amber-700/60">
+                  হোম ডেলিভারি
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs sm:text-sm">
+                {/* Recipient Name */}
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60">
+                  <User className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                      প্রাপকের নাম
+                    </span>
+                    <span className="font-bold text-stone-900 dark:text-stone-100 truncate block">
+                      {recipientName || "সম্মানিত গ্রাহক"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Primary Phone */}
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60">
+                  <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                      যোগাযোগের নম্বর
+                    </span>
+                    <span className="font-mono font-bold text-stone-900 dark:text-stone-100 block">
+                      {primaryPhone || "নম্বর প্রদান করা হয়নি"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alternative Phone if provided */}
+              {altPhone && (
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 text-xs sm:text-sm">
+                  <Phone className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                      বিকল্প মোবাইল নম্বর
+                    </span>
+                    <span className="font-mono font-bold text-stone-900 dark:text-stone-100 block">
+                      {altPhone}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Complete Delivery Address */}
+              <div className="bg-white/80 dark:bg-stone-900/60 p-2.5 sm:p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 text-xs sm:text-sm">
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                      সম্পূর্ণ ডেলিভারি ঠিকানা
+                    </span>
+                    <p className="font-bold text-stone-900 dark:text-stone-100 leading-snug">
+                      {formattedAddress || "ঠিকানা ফোনে নিশ্চিত করা হবে"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Note if provided */}
+              {order?.customer_note && order.customer_note.trim() && (
+                <div className="bg-amber-100/70 dark:bg-stone-900/80 border border-amber-300/80 dark:border-amber-700/60 rounded-xl p-2.5 sm:p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-4 h-4 text-amber-800 dark:text-amber-300 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <span className="block text-[11px] font-bold text-amber-950 dark:text-amber-200">
+                        আপনার বিশেষ নির্দেশনা (নোট):
+                      </span>
+                      <p className="text-stone-800 dark:text-stone-200 leading-relaxed italic">
+                        &ldquo;{order.customer_note.trim()}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Address modification helper hint */}
+              <div className="text-[11px] text-stone-500 dark:text-stone-400 flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-amber-200/40 dark:border-stone-700/40">
+                <span>ঠিকানা বা তথ্যে কোনো পরিবর্তন করতে চাইলে:</span>
+                <a
+                  href={`https://wa.me/88${RAW_HOTLINE}?text=${encodeURIComponent(
+                    `আসসালামু আলাইকুম, আমার অর্ডার ${order?.order_number || ""} এর ডেলিভারি ঠিকানায় কিছু পরিবর্তন করতে চাই।`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-700 dark:text-emerald-400 font-bold hover:underline inline-flex items-center gap-1"
+                >
+                  <MessageSquare className="w-3 h-3 text-[#25D366]" />
+                  <span>WhatsApp-এ মেসেজ পাঠান</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Section 2: অর্ডার পরবর্তী ধাপসমূহ (Next Steps / Delivery Progress Timeline) */}
+            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3.5">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>অর্ডার পরবর্তী ধাপসমূহ (ডেলিভারি প্রসেস)</span>
+                </div>
+                <span className="text-[10px] sm:text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  ৪টি সহজ ধাপ
+                </span>
+              </div>
+
+              <div className="space-y-3 relative before:absolute before:left-3.5 sm:before:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-amber-200 dark:before:bg-stone-700">
+                {/* Step 1: অর্ডার গ্রহণ সম্পন্ন */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 z-10 shadow-sm ring-4 ring-white dark:ring-stone-800">
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
+                  </div>
+                  <div className="flex-1 bg-white/80 dark:bg-stone-900/60 p-2.5 sm:p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/60 shadow-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                        ১. অর্ডার গ্রহণ সম্পন্ন
+                      </span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                        সম্পন্ন
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      আপনার অর্ডারটি আমাদের ডাটাবেজে সফলভাবে নিবন্ধিত হয়েছে।
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2: কনফার্মেশন কল */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 z-10 shadow-sm ring-4 ring-white dark:ring-stone-800 animate-pulse">
+                    <PhoneCall className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  </div>
+                  <div className="flex-1 bg-white/90 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-amber-300 dark:border-amber-700/60 shadow-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-200">
+                        ২. কনফার্মেশন কল
+                      </span>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-900 dark:bg-amber-950 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full">
+                        চলমান / পরবর্তী ধাপ
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-300 mt-0.5 leading-relaxed">
+                      কিছুক্ষণের মধ্যেই আমাদের কাস্টমার সার্ভিস প্রতিনিধি কল করে আপনার ঠিকানা ও অর্ডার কনফার্ম করবেন।
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3: নিরাপদ প্যাকেজিং ও প্রেরণ */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 flex items-center justify-center shrink-0 z-10 shadow-xs ring-4 ring-white dark:ring-stone-800 font-bold text-xs">
+                    ৩
+                  </div>
+                  <div className="flex-1 bg-white/60 dark:bg-stone-900/40 p-2.5 sm:p-3 rounded-xl border border-stone-200 dark:border-stone-700/50">
+                    <span className="font-bold text-xs sm:text-sm text-stone-800 dark:text-stone-200 block">
+                      ৩. নিরাপদ প্যাকেজিং ও কুরিয়ারে প্রেরণ
+                    </span>
+                    <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      বিশেষ বাবল র‍্যাপ ও মজবুত কার্টনে যত্নসহকারে প্যাক করে দ্রুততম সময়ে কুরিয়ারে হস্তান্তর করা হবে।
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 4: পার্সেল খুলে দেখে ক্যাশ অন ডেলিভারি */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 flex items-center justify-center shrink-0 z-10 shadow-xs ring-4 ring-white dark:ring-stone-800 font-bold text-xs">
+                    ৪
+                  </div>
+                  <div className="flex-1 bg-white/60 dark:bg-stone-900/40 p-2.5 sm:p-3 rounded-xl border border-stone-200 dark:border-stone-700/50">
+                    <span className="font-bold text-xs sm:text-sm text-stone-800 dark:text-stone-200 block">
+                      ৪. পার্সেল খুলে দেখে ক্যাশ অন ডেলিভারি
+                    </span>
+                    <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      ডেলিভারিম্যানের সামনে প্যাকেট খুলে খাঁটি গুড়ের ঘ্রাণ ও মান পরীক্ষা করে নিশ্চিত হয়ে মূল্য পরিশোধ করুন।
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: ১০০% নিরাপদ ডেলিভারি ও রিপ্লেসমেন্ট গ্যারান্টি (Replacement & Quality Guarantee) */}
+            <div className="bg-gradient-to-br from-emerald-50/80 via-white/80 to-emerald-50/60 dark:from-emerald-950/40 dark:via-stone-900/60 dark:to-emerald-950/30 rounded-2xl sm:rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-emerald-200/80 dark:border-emerald-800/60">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-emerald-950 dark:text-emerald-200">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>১০০% নিরাপদ ডেলিভারি ও রিপ্লেসমেন্ট গ্যারান্টি</span>
+                </div>
+                <span className="text-[10px] sm:text-[11px] text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-100 dark:bg-emerald-900/70 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                  কোন ঝুঁকি নেই
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2.5 text-xs sm:text-sm">
+                {/* Guarantee item 1: 100% Pure */}
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                      ১০০% খাঁটি ও নির্ভেজাল খেজুরের গুড়
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      কোনো চিনি, কৃত্রিম রং, হাইড্রোজ বা রাসায়নিক প্রিজারভেটিভ নেই। ভেজাল প্রমাণে ১০০% মূল্য ফেরত।
+                    </p>
+                  </div>
+                </div>
+
+                {/* Guarantee item 2: Instant Replacement */}
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <RotateCcw className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                      ভাঙা বা নষ্ট হলে তাৎক্ষণিক ফ্রি রিপ্লেসমেন্ট
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      কুরিয়ারে পরিবহনের সময় পাত্র ভেঙে গেলে বা কোনো ক্ষতি হলে কোনো প্রশ্ন ছাড়াই নতুন গুড় পাঠানো হবে।
+                    </p>
+                  </div>
+                </div>
+
+                {/* Guarantee item 3: Open box check */}
+                <div className="flex items-start gap-2.5 bg-white/80 dark:bg-stone-900/70 p-2.5 sm:p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-900/50">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <PackageCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                      খুলে দেখে নেওয়ার সুবিধা (Open-Box Delivery)
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
+                      ডেলিভারিম্যানের সামনে প্যাকেট খুলে ঘ্রাণ ও গুণমান পরীক্ষা করে সন্তুষ্ট হলে তবেই মূল্য পরিশোধ করুন।
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: প্রাকৃতিক গুড় ভালো ও ফ্রেশ রাখার নিয়ম (Storage & Care Tips) */}
+            <div className="bg-amber-50/70 dark:bg-stone-800/60 rounded-2xl sm:rounded-3xl border border-amber-200/80 dark:border-stone-700/80 p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-stone-700/60">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                  <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>প্রাকৃতিক গুড় ভালো ও ফ্রেশ রাখার নিয়ম</span>
+                </div>
+                <span className="text-[10px] sm:text-[11px] text-amber-900 dark:text-amber-200 font-semibold bg-amber-100/90 dark:bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                  সংরক্ষণ টিপস
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs sm:text-sm">
+                {/* Tip 1 */}
+                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                    <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">১</span>
+                    <span>বায়ুরোধী পাত্রে রাখুন</span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
+                    গুড় খোলার পর সবসময় শুকনো এয়ারটাইট কাঁচের পাত্র বা ফুড-গ্রেড বক্সে মুখ বন্ধ করে রাখুন।
+                  </p>
+                </div>
+
+                {/* Tip 2 */}
+                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                    <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">২</span>
+                    <span>শুকনো চামচ ব্যবহার করুন</span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
+                    গুড় নেওয়ার সময় কখনো ভেজা হাত বা ভেজা চামচ ব্যবহার করবেন না, এতে গুড় দ্রুত নষ্ট হতে পারে।
+                  </p>
+                </div>
+
+                {/* Tip 3 */}
+                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                    <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">৩</span>
+                    <span>শীতল ও শুষ্ক স্থান</span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
+                    সরাসরি রোদ ও স্যাঁতসেঁতে পরিবেশ এড়িয়ে ঠান্ডা ও শুষ্ক জায়গায় গুড়ের পাত্র রাখুন।
+                  </p>
+                </div>
+
+                {/* Tip 4 */}
+                <div className="bg-white/70 dark:bg-stone-900/60 p-3 rounded-xl border border-amber-200/60 dark:border-stone-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-stone-900 dark:text-stone-100 text-xs sm:text-sm">
+                    <span className="w-5 h-5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center text-xs">৪</span>
+                    <span>নরমাল ফ্রিজে সংরক্ষণ</span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed pl-6.5">
+                    ঝোলা গুড় বা নলেন গুড়ের প্রাকৃতিক সুবাস ও স্বাদ দীর্ঘদিন অটুট রাখতে সাধারণ ফ্রিজে রাখা ভালো।
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Cash on Delivery Reassurance Notice */}
