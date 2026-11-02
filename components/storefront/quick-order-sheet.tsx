@@ -13,6 +13,11 @@ import { OrderSuccessView } from "./order-success-view";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearCart, CartItem } from "@/lib/redux/slices/cart-slice";
 import { useToast } from "@/components/ui/toast-notification";
+import {
+  trackInitiateCheckout,
+  resetInitiateCheckoutTracking,
+  setPixelUserPhone,
+} from "@/lib/facebook-pixel";
 
 export interface SelectedProductData {
   productId: string;
@@ -102,9 +107,10 @@ export function QuickOrderSheet({
   // TanStack Query Mutation for Order Creation
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (res) => {
-      // Clear draft tracking & Redux cart on successful order
+      // Clear draft tracking, Redux cart, and pixel checkout tracking on successful order
       clearDraft();
       dispatch(clearCart());
+      resetInitiateCheckoutTracking();
       setOrderResult(res);
 
       if (toast.isAvailable) {
@@ -147,6 +153,26 @@ export function QuickOrderSheet({
   const subtotal = resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const shippingFee = resolvedItems.length === 0 ? 0 : (deliveryZone === "inside_dhaka" ? 70 : 130);
   const grandTotal = subtotal + shippingFee;
+
+  // InitiateCheckout is triggered ONLY when user types text in order form inputs
+  const triggerQuickOrderInitiateCheckout = React.useCallback(
+    (phoneInput?: string) => {
+      if (resolvedItems.length === 0) return;
+      trackInitiateCheckout({
+        items: resolvedItems.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productName,
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice) || 0,
+        })),
+        value: subtotal,
+        phone: phoneInput?.trim() || customerPhone?.trim() || undefined,
+        currency: "BDT",
+      });
+    },
+    [resolvedItems, subtotal, customerPhone]
+  );
 
   const handleResetForm = () => {
     clearDraft();
@@ -372,7 +398,13 @@ export function QuickOrderSheet({
                       <input
                         type="text"
                         value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomerName(val);
+                          if (val.trim().length > 0) {
+                            triggerQuickOrderInitiateCheckout();
+                          }
+                        }}
                         onBlur={triggerSyncNow}
                         placeholder={t.fullNamePlaceholder}
                         className="w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-medium transition-colors shadow-sm touch-manipulation"
@@ -395,8 +427,17 @@ export function QuickOrderSheet({
                         required
                         aria-invalid={!!errorMessage}
                         value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        onBlur={triggerSyncNow}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomerPhone(val);
+                          if (val.trim().length > 0) {
+                            triggerQuickOrderInitiateCheckout(val);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (customerPhone) setPixelUserPhone(customerPhone);
+                          triggerSyncNow();
+                        }}
                         placeholder={t.phonePlaceholder}
                         className={`w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 text-base rounded-xl border-2 bg-white dark:bg-stone-800 focus:outline-none font-mono font-medium transition-colors shadow-sm touch-manipulation ${errorMessage
                             ? "border-rose-500 focus:border-rose-600 ring-1 ring-rose-400/40"
@@ -494,7 +535,13 @@ export function QuickOrderSheet({
                       <textarea
                         rows={2}
                         value={addressLine}
-                        onChange={(e) => setAddressLine(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAddressLine(val);
+                          if (val.trim().length > 0) {
+                            triggerQuickOrderInitiateCheckout();
+                          }
+                        }}
                         onBlur={triggerSyncNow}
                         placeholder={t.addressPlaceholder}
                         className="w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-base rounded-xl border-2 border-amber-300 dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-none focus:border-amber-600 dark:focus:border-amber-400 font-medium transition-colors shadow-sm resize-none touch-manipulation"

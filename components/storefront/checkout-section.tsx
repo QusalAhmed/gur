@@ -40,7 +40,7 @@ import {
   formatStorePrice,
   toBnNumber,
 } from "@/lib/storefront-i18n";
-import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
+import { useAppDispatch, useAppSelector, useAppStore } from "@/lib/redux/hooks";
 import {
   selectCartItems,
   selectCartSubtotal,
@@ -57,6 +57,12 @@ import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-ord
 import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
+import {
+  trackInitiateCheckout,
+  trackAddToCart,
+  resetInitiateCheckoutTracking,
+  setPixelUserPhone,
+} from "@/lib/facebook-pixel";
 
 interface CheckoutSectionProps {
   lang: StorefrontLang;
@@ -96,9 +102,37 @@ export function CheckoutSection({
   const grandTotal = displaySubtotal + (displayCartItems.length > 0 ? deliveryCharge : 0);
   const rawHotline = hotline.replace(/[^0-9]/g, "");
 
+  const store = useAppStore();
   const clearDraftRef = React.useRef<() => void>(() => { });
   const draftOrderIdRef = React.useRef<string | null>(null);
   const cancelPendingSyncRef = React.useRef<() => void>(() => { });
+
+  const triggerInitiateCheckout = React.useCallback(
+    (phoneInput?: string) => {
+      const cartState = store.getState().cart;
+      const currentItems = cartState.items || [];
+      if (currentItems.length === 0) return;
+
+      const totalVal = currentItems.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+        0
+      );
+
+      trackInitiateCheckout({
+        items: currentItems.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+          quantity: Number(item.quantity) || 1,
+          unitPrice: Number(item.unitPrice) || 0,
+        })),
+        value: totalVal,
+        phone: phoneInput?.trim() || undefined,
+        currency: "BDT",
+      });
+    },
+    [store]
+  );
 
   // Prefetch order-confirmed dynamic route structure ahead of time for 0ms transition
   useEffect(() => {
@@ -109,9 +143,10 @@ export function CheckoutSection({
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (result, variables) => {
       setIsRedirecting(true);
-      // Clear draft tracking & Redux cart upon confirmed placement
+      // Clear draft tracking, Redux cart, and pixel checkout tracking upon confirmed placement
       clearDraftRef.current?.();
       dispatch(clearCart());
+      resetInitiateCheckoutTracking();
 
       const successMsg = lang === "bn"
         ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${result.orderNumber})`
@@ -275,14 +310,24 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
 
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const newQty = item.quantity + 1;
                       dispatch(
                         incrementQuantity({
                           productId: item.productId,
                           variantId: item.variantId,
                         })
-                      )
-                    }
+                      );
+                      trackAddToCart({
+                        productId: item.productId,
+                        productName: item.productName,
+                        variantId: item.variantId,
+                        variantName: item.variantName,
+                        price: item.unitPrice,
+                        quantity: newQty,
+                        currency: "BDT",
+                      });
+                    }}
                     className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
                     aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
                   >
@@ -693,7 +738,13 @@ return (
                       name="customerName"
                       type="text"
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.handleChange(val);
+                        if (val.trim().length > 0) {
+                          triggerInitiateCheckout();
+                        }
+                      }}
                       onBlur={() => {
                         field.handleBlur();
                         if (!isOrderProcessing) triggerSyncNow();
@@ -731,9 +782,16 @@ return (
                         type="tel"
                         aria-invalid={hasError ? "true" : undefined}
                         value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          field.handleChange(val);
+                          if (val.trim().length > 0) {
+                            triggerInitiateCheckout(val);
+                          }
+                        }}
                         onBlur={() => {
                           field.handleBlur();
+                          if (field.state.value) setPixelUserPhone(field.state.value);
                           if (!isOrderProcessing) triggerSyncNow();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"
@@ -805,7 +863,13 @@ return (
                     id="addressLine"
                     rows={2}
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      field.handleChange(val);
+                      if (val.trim().length > 0) {
+                        triggerInitiateCheckout();
+                      }
+                    }}
                     onBlur={() => {
                       field.handleBlur();
                       if (!isOrderProcessing) triggerSyncNow();
@@ -837,7 +901,13 @@ return (
                     id="customerNote"
                     type="text"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      field.handleChange(val);
+                      if (val.trim().length > 0) {
+                        triggerInitiateCheckout();
+                      }
+                    }}
                     onBlur={() => {
                       field.handleBlur();
                       if (!isOrderProcessing) triggerSyncNow();

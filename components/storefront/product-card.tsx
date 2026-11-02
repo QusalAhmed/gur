@@ -14,6 +14,11 @@ import {
   selectCartItems,
 } from "@/lib/redux/slices/cart-slice";
 import {
+  recordProductView,
+  selectHasViewedProduct,
+} from "@/lib/redux/slices/pixel-slice";
+import { trackViewContent, trackAddToCart } from "@/lib/facebook-pixel";
+import {
   Carousel,
   CarouselContent,
   CarouselItem,
@@ -55,6 +60,7 @@ interface ProductCardProps {
   index: number;
   totalProducts: number;
   lang: StorefrontLang;
+  isActive?: boolean;
   onOrderClick: (selectedData: SelectedProductData, quantity: number) => void;
 }
 
@@ -63,6 +69,7 @@ export function ProductCard({
   index,
   totalProducts,
   lang,
+  isActive,
   onOrderClick,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
@@ -78,6 +85,8 @@ export function ProductCard({
 
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
+  const hasFiredViewContent = useAppSelector(selectHasViewedProduct(product.id));
+  const cardRef = useRef<HTMLElement>(null);
   const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant>(initialVariant);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -87,6 +96,73 @@ export function ProductCard({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Facebook Pixel ViewContent: fire when user dwells on a product card for > 5 seconds
+  // Deduplicated per product in Redux so it does not fire repeatedly in the same session,
+  // but re-triggers on page refresh/revisit when Redux store resets.
+  useEffect(() => {
+    if (hasFiredViewContent) return;
+
+    let timer: NodeJS.Timeout | null = null;
+
+    // Fast path: if active state is explicitly supplied by ProductShowcase scroll tracker
+    if (typeof isActive === "boolean") {
+      if (isActive) {
+        timer = setTimeout(() => {
+          dispatch(recordProductView(product.id));
+          trackViewContent({
+            productId: product.id,
+            productName: product.name,
+            price: Number(selectedVariant.price) || 0,
+            currency: "BDT",
+          });
+        }, 5000);
+      }
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }
+
+    // Fallback path: IntersectionObserver with broad threshold
+    const el = cardRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
+          if (!timer) {
+            timer = setTimeout(() => {
+              dispatch(recordProductView(product.id));
+              trackViewContent({
+                productId: product.id,
+                productName: product.name,
+                price: Number(selectedVariant.price) || 0,
+                currency: "BDT",
+              });
+              timer = null;
+            }, 5000);
+          }
+        } else {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        }
+      },
+      { threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+  }, [isActive, hasFiredViewContent, product.id, product.name, selectedVariant.price, dispatch]);
 
   // Check how many units of this variant are in the Redux cart (defaults to 0)
   const matchedCartItem = cartItems.find(
@@ -124,34 +200,49 @@ export function ProductCard({
     const currentActiveImage = imagesList[currentSlide] || product.image;
     if (newUnit <= 0) {
       dispatch(removeFromCart({ productId: product.id, variantId: selectedVariant.id }));
-    } else if (currentUnit === 0) {
-      dispatch(
-        addToCart({
+    } else {
+      // Whenever quantity increases (adding to cart or increasing pack count), fire AddToCart
+      if (newUnit > currentUnit) {
+        trackAddToCart({
           productId: product.id,
           productName: product.name,
-          productNameBn: product.nameBn || product.name,
           variantId: selectedVariant.id,
           variantName: selectedVariant.name,
-          variantNameBn: selectedVariant.nameBn || selectedVariant.name,
-          unitPrice,
+          price: unitPrice,
           quantity: newUnit,
-          image: currentActiveImage,
-          description: product.summary,
-          descriptionBn: product.summaryBn,
-        })
-      );
-      setJustAdded(true);
-      setTimeout(() => setJustAdded(false), 2000);
-    } else {
-      dispatch(
-        updateQuantity({
-          productId: product.id,
-          variantId: selectedVariant.id,
-          quantity: newUnit,
-        })
-      );
-      setJustAdded(true);
-      setTimeout(() => setJustAdded(false), 1500);
+          currency: "BDT",
+        });
+      }
+
+      if (currentUnit === 0) {
+        dispatch(
+          addToCart({
+            productId: product.id,
+            productName: product.name,
+            productNameBn: product.nameBn || product.name,
+            variantId: selectedVariant.id,
+            variantName: selectedVariant.name,
+            variantNameBn: selectedVariant.nameBn || selectedVariant.name,
+            unitPrice,
+            quantity: newUnit,
+            image: currentActiveImage,
+            description: product.summary,
+            descriptionBn: product.summaryBn,
+          })
+        );
+        setJustAdded(true);
+        setTimeout(() => setJustAdded(false), 2000);
+      } else {
+        dispatch(
+          updateQuantity({
+            productId: product.id,
+            variantId: selectedVariant.id,
+            quantity: newUnit,
+          })
+        );
+        setJustAdded(true);
+        setTimeout(() => setJustAdded(false), 1500);
+      }
     }
   };
 
@@ -204,6 +295,7 @@ export function ProductCard({
 
   return (
     <section
+      ref={cardRef}
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
@@ -446,6 +538,7 @@ export function ProductCard({
                     src={imagesList[currentSlide] || product.image}
                     alt="flying product"
                     fill
+                    sizes="32px"
                     className="object-cover"
                   />
                 </div>

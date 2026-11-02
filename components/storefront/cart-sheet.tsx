@@ -17,6 +17,7 @@ import {
   removeFromCart,
   clearCart,
 } from "@/lib/redux/slices/cart-slice";
+import { trackAddToCart } from "@/lib/facebook-pixel";
 
 interface CartSheetProps {
   lang: StorefrontLang;
@@ -201,7 +202,19 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => dispatch(incrementQuantity({ productId: item.productId, variantId: item.variantId }))}
+                                onClick={() => {
+                                  const newQuantity = item.quantity + 1;
+                                  dispatch(incrementQuantity({ productId: item.productId, variantId: item.variantId }));
+                                  trackAddToCart({
+                                    productId: item.productId,
+                                    productName: item.productName,
+                                    variantId: item.variantId,
+                                    variantName: item.variantName,
+                                    price: item.unitPrice,
+                                    quantity: newQuantity,
+                                    currency: "BDT",
+                                  });
+                                }}
                                 disabled={item.quantity >= 50}
                                 className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-950 dark:text-amber-100 flex items-center justify-center font-bold active:scale-95 disabled:opacity-40 transition-all touch-manipulation"
                                 aria-label="Increase quantity"

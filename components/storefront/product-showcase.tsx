@@ -504,6 +504,7 @@ export function ProductShowcase({
               index={idx}
               totalProducts={products.length}
               lang={lang}
+              isActive={activeSectionIndex === productsStartIndex + idx}
               onOrderClick={handleOpenOrder}
             />
           ))

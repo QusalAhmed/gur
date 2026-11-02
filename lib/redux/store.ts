@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 import cartReducer from "./slices/cart-slice";
+import pixelReducer from "./slices/pixel-slice";
 
 export const makeStore = () => {
   // During Next.js 16 prerendering, Redux internal ActionTypes.INIT invokes Math.random().
@@ -14,6 +15,7 @@ export const makeStore = () => {
     return configureStore({
       reducer: {
         cart: cartReducer,
+        pixel: pixelReducer,
       },
       devTools: process.env.NODE_ENV !== "production",
     });
