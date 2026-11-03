@@ -134,6 +134,33 @@ export const STOREFRONT_TEXT = {
     phoneHelpModalCloseBtn: "ঠিক আছে",
     phoneHelpModalBrowseBtn: "পণ্যগুলো ঘুরে দেখুন",
     phoneHelpModalCallHotline: "হটলাইনে কল করুন",
+    // Why Buy From Us Section
+    whyBuyBadge: "কেন আমাদের গুড় সেরা?",
+    whyBuyTitle: "আমাদের থেকেই কেন খাঁটি গুড় কিনবেন?",
+    whyBuySubtitle:
+      "বাজারের চিনি ও কেমিক্যাল মেশানো ভেজাল গুড়ের ভিড়ে আমরা দিচ্ছি ঐতিহ্যবাহী বাঘার গাছিদের নিজস্ব তদারকিতে প্রস্তুত শতভাগ খাঁটি ও নিরাপদ গুড়।",
+    whyBuyReason1Title: "১০০% নির্ভেজাল ও কেমিক্যালমুক্ত",
+    whyBuyReason1Desc:
+      "কোনো প্রকার চিনি, কৃত্রিম রঙ, ফ্লেভার বা ক্ষতিকারক হাইড্রোজ নেই। শুধুমাত্র গাছের খাঁটি তাজা রস জ্বাল দিয়ে তৈরি আদি গুড়।",
+    whyBuyReason2Title: "আগে গুড় দেখুন, পরে টাকা দিন",
+    whyBuyReason2Desc:
+      "কোনো প্রকার অগ্রিম পেমেন্টের ঝুঁকি নেই। ডেলিভারির সময় প্যাকেট খুলে রঙ, ঘ্রাণ ও গুণমান পরীক্ষা করে সম্পূর্ণ ক্যাশ অন ডেলিভারিতে মূল্য দিন।",
+    whyBuyReason3Title: "ঐতিহ্যবাহী গাছিদের হাতে তৈরি",
+    whyBuyReason3Desc:
+      "রাজশাহীর বাঘার বংশপরম্পরায় দক্ষ গাছিদের দিয়ে মাটির চুলায় কাঠের মৃদু আঁচে সময় নিয়ে ফোটানো আসল দানাদার পাটালি ও ঝোলা গুড়।",
+    whyBuyReason4Title: "শীতের ভোরের তাজা রসের আসল ঘ্রাণ",
+    whyBuyReason4Desc:
+      "ভোরবেলার নামানো হিমশীতল তাজা রসের সেই চিরচেনা অমৃত সুবাস ও অতুলনীয় স্বাদ, যা মুখে দিলেই খাঁটি গুড়ের প্রমাণ পাওয়া যায়।",
+    whyBuyReason5Title: "নিরাপদ ফুড-গ্রেড প্যাকেজিং",
+    whyBuyReason5Desc:
+      "স্বাস্থ্যসম্মত ফুড-গ্রেড এয়ার-টাইট বৈয়াম ও মজবুত প্যাকেজিং, যাতে দূরদূরান্তে ডেলিভারির সময়ও গুড়ের স্বাদ ও সতেজতা অক্ষুণ্ণ থাকে।",
+    whyBuyReason6Title: "সরাসরি উৎপাদনস্থল থেকে হোম ডেলিভারি",
+    whyBuyReason6Desc:
+      "কোনো মধ্যস্বত্বভোগী বা দালাল ছাড়া খামার থেকে সরাসরি দ্রুততম কুরিয়ারে দেশের যেকোনো প্রান্তে আপনার দরজায় পৌঁছে দেওয়া হয়।",
+    whyBuyGuaranteeTitle: "শতভাগ খাঁটিত্বের নিশ্চয়তা ও সহজ রিটার্ন",
+    whyBuyGuaranteeDesc:
+      "গুড়ের খাঁটিত্ব বা মান নিয়ে সামান্যতম অসন্তুষ্টি থাকলে ডেলিভারির সময় কোনো চার্জ ছাড়াই তাৎক্ষণিক ফেরত দেওয়ার পূর্ণ সুবিধা রয়েছে।",
+    whyBuyBrowseBtn: "পণ্যগুলো দেখুন ও এখনই অর্ডার করুন",
   },
   en: {
     storeName: "Pure Molasses Store",
@@ -254,6 +281,33 @@ export const STOREFRONT_TEXT = {
     phoneHelpModalCloseBtn: "Close",
     phoneHelpModalBrowseBtn: "Browse Products",
     phoneHelpModalCallHotline: "Call Hotline",
+    // Why Buy From Us Section
+    whyBuyBadge: "Why Choose Us",
+    whyBuyTitle: "Why Buy Pure Jaggery From Us?",
+    whyBuySubtitle:
+      "While the market is flooded with adulterated jaggery mixed with sugar and chemicals, we deliver 100% pure, unadulterated date palm jaggery straight from artisanal harvesters in Bagha, Rajshahi.",
+    whyBuyReason1Title: "100% Pure & Chemical Free",
+    whyBuyReason1Desc:
+      "Zero added sugar, artificial color, flavor, or harmful hydrose. Made exclusively from 100% pure date palm sap.",
+    whyBuyReason2Title: "Inspect First, Pay Later (COD)",
+    whyBuyReason2Desc:
+      "No advance payment risk. Open the parcel and check aroma, texture, and quality before paying cash on delivery.",
+    whyBuyReason3Title: "Crafted by Generational Artisans",
+    whyBuyReason3Desc:
+      "Patiently prepared over traditional wood-fired earthen stoves by generational village harvesters in Bagha, Rajshahi.",
+    whyBuyReason4Title: "Authentic Aroma & Unmatched Taste",
+    whyBuyReason4Desc:
+      "The genuine, irresistible fragrance and natural sweetness of fresh winter morning sap that instantly proves its authenticity.",
+    whyBuyReason5Title: "Airtight Food-Grade Packaging",
+    whyBuyReason5Desc:
+      "Sealed airtight in hygienic food-grade containers and robust packaging so freshness, aroma, and taste remain perfectly intact.",
+    whyBuyReason6Title: "Direct Source to Doorstep",
+    whyBuyReason6Desc:
+      "No middlemen or wholesale storage delays. Shipped directly from the harvest hub to your doorstep nationwide.",
+    whyBuyGuaranteeTitle: "100% Authenticity Guarantee & Easy Return",
+    whyBuyGuaranteeDesc:
+      "If you have any doubt about the purity, you have full freedom to return it instantly upon delivery with zero hassle.",
+    whyBuyBrowseBtn: "Browse Products & Order Now",
   },
 } as const;
 

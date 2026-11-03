@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
+import { WhyBuyFromUs } from "./why-buy-from-us";
 
 interface ContactSectionProps {
   lang?: StorefrontLang;
@@ -66,6 +67,13 @@ export function ContactSection({
     }
   };
 
+  const handleScrollToWhyBuy = () => {
+    const el = document.getElementById("why-buy-from-us");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   const handleScrollDown = () => {
     if (onScrollToProducts) {
       onScrollToProducts();
@@ -102,7 +110,7 @@ export function ContactSection({
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-gradient-to-b from-amber-200/40 via-amber-100/15 to-transparent dark:from-amber-950/25 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
 
       {/* Main Content Area: Contact & Incomplete Order Form under the Same Section */}
-      <div className="relative z-10 w-full max-w-2xl mx-auto my-auto py-2">
+      <div className="relative z-10 w-full max-w-2xl sm:max-w-3xl mx-auto my-auto py-2">
         {/* Top Heritage Pill & Title */}
         <div className="text-center mb-3 sm:mb-4 px-2 space-y-1 sm:space-y-1.5">
           <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
@@ -270,6 +278,18 @@ export function ContactSection({
             </div>
             <button
               type="button"
+              onClick={handleScrollToWhyBuy}
+              className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/80 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-emerald-950 dark:text-emerald-200 transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <span>
+                {lang === "bn"
+                  ? "কেন আমাদের গুড় সেরা? ❯"
+                  : "Why Buy From Us? ❯"}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={handleScrollToHelp}
               className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
             >
@@ -291,6 +311,15 @@ export function ContactSection({
           lang={lang}
           hotline={hotline}
           storeName={storeName}
+          onScrollToProducts={handleScrollDown}
+        />
+
+        {/* Soft Decorative Separator for Normal Scrolling */}
+        <div className="my-6 sm:my-8 border-t border-dashed border-amber-300/80 dark:border-stone-800" />
+
+        {/* Why Customer Will Buy From Us Section (Below the Easy One Tap Order Section) */}
+        <WhyBuyFromUs
+          lang={lang}
           onScrollToProducts={handleScrollDown}
         />
       </div>
