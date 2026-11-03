@@ -111,6 +111,7 @@ export function CheckoutSection({
   const clearDraftRef = React.useRef<() => void>(() => { });
   const draftOrderIdRef = React.useRef<string | null>(null);
   const cancelPendingSyncRef = React.useRef<() => void>(() => { });
+  const formResetRef = React.useRef<() => void>(() => { });
 
   const triggerInitiateCheckout = React.useCallback(
     (phoneInput?: string) => {
@@ -213,6 +214,10 @@ export function CheckoutSection({
           created_at: new Date().toISOString(),
         });
 
+        // Reset order form before redirecting to order completion page
+        formResetRef.current?.();
+        setDeliveryZone("inside_dhaka");
+
         const targetUrl = `/order-confirmed/${result.orderId}`;
         router.replace(targetUrl);
 
@@ -223,6 +228,9 @@ export function CheckoutSection({
           }
         }, 250);
       } else {
+        // Reset order form before redirecting
+        formResetRef.current?.();
+        setDeliveryZone("inside_dhaka");
         router.replace("/");
       }
     },
@@ -512,11 +520,19 @@ const form = useForm({
           unitPrice: item.unitPrice,
         })),
       });
+
+      // Reset order form on successful submission
+      form.reset();
+      setDeliveryZone("inside_dhaka");
     } catch {
       // Error handling is handled in createOrderMutation.onError
     }
   },
 });
+
+formResetRef.current = () => {
+  form.reset();
+};
 
 const formValues = useStore(form.store, (state) => state.values);
 const isFormSubmitting = useStore(form.store, (state) => state.isSubmitting);

@@ -116,6 +116,12 @@ export function QuickOrderSheet({
       dispatch(clearCart());
       resetInitiateCheckoutTracking();
       resetUserPropertiesTracking();
+      // Reset order form fields
+      setCustomerName("");
+      setCustomerPhone("");
+      setAddressLine("");
+      setDeliveryZone("inside_dhaka");
+      setErrorMessage(null);
       setOrderResult(res);
 
       if (toast.isAvailable) {

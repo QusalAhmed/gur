@@ -10,8 +10,6 @@ import {
   Box,
   Truck,
   CheckCircle2,
-  ChevronDown,
-  RotateCcw,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 
@@ -22,7 +20,6 @@ interface WhyBuyFromUsProps {
 
 export function WhyBuyFromUs({
   lang = "bn",
-  onScrollToProducts,
 }: WhyBuyFromUsProps) {
   const t = STOREFRONT_TEXT[lang];
 
@@ -134,19 +131,6 @@ export function WhyBuyFromUs({
         <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-300 max-w-md mx-auto leading-relaxed">
           {t.whyBuyGuaranteeDesc}
         </p>
-
-        {onScrollToProducts && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={onScrollToProducts}
-              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm py-2 px-4 sm:px-5 rounded-full shadow-md transition-all cursor-pointer touch-manipulation"
-            >
-              <span>{t.whyBuyBrowseBtn}</span>
-              <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );
