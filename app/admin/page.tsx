@@ -221,15 +221,15 @@ const recentOrderColumns: ColumnDef<RecentOrderItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Order" />,
     cell: ({ row }) => (
       <div>
-        <p className="font-mono text-xs font-semibold text-foreground">{row.original.id}</p>
-        <p className="text-[11px] text-muted-foreground">{formatDate(row.original.time)}</p>
+        <p className="font-mono text-sm font-semibold text-foreground">{row.original.id}</p>
+        <p className="text-xs text-muted-foreground">{formatDate(row.original.time)}</p>
       </div>
     ),
   },
   {
     accessorKey: "customer",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
-    cell: ({ row }) => <span className="text-xs font-medium text-foreground">{row.original.customer}</span>,
+    cell: ({ row }) => <span className="text-sm font-medium text-foreground">{row.original.customer}</span>,
   },
   {
     accessorKey: "status",
@@ -244,7 +244,7 @@ const recentOrderColumns: ColumnDef<RecentOrderItem>[] = [
     accessorKey: "payment",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
     cell: ({ row }) => (
-      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${paymentColors[row.original.payment]}`}>
+      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ${paymentColors[row.original.payment]}`}>
         {row.original.payment}
       </span>
     ),
@@ -252,7 +252,7 @@ const recentOrderColumns: ColumnDef<RecentOrderItem>[] = [
   {
     accessorKey: "amount",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
-    cell: ({ row }) => <span className="font-semibold text-xs text-foreground">{row.original.amount}</span>,
+    cell: ({ row }) => <span className="font-semibold text-sm font-mono text-foreground">{row.original.amount}</span>,
   },
 ];
 
@@ -473,6 +473,7 @@ export default function AdminDashboard() {
               <DataTable
                 columns={recentOrderColumns}
                 data={recentOrders}
+                cellClassName="text-sm py-3"
                 searchPlaceholder="Search recent orders..."
                 enableRowSelection={true}
                 enableSorting={true}

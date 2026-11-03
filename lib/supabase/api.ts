@@ -1508,7 +1508,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
       grand_total: grandTotal,
       amount_paid: Number(savedOrder.amount_paid) || 0,
       currency: "BDT",
-      date: formatDate(savedOrder.date) || formatDate(nowStr),
+      date: savedOrder.date || nowStr,
       customer_note: savedOrder.customer_note || "",
       courier_name: savedOrder.courier_name || "",
       cancel_reason: savedOrder.cancel_reason || "",
@@ -1819,7 +1819,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     grand_total: Number(orderDetails?.grand_total) || Number(placeData?.grand_total) || savedOrder.grand_total,
     amount_paid: Number(orderDetails?.amount_paid) || 0,
     currency: orderDetails?.currency || "BDT",
-    date: formatDate(orderDetails?.placed_at) || formatDate(nowStr),
+    date: orderDetails?.placed_at || orderDetails?.created_at || nowStr,
     customer_note: savedOrder.customer_note,
     items: orderDetails?.items && orderDetails.items.length > 0
       ? orderDetails.items.map((it: any, idx: number) => ({
@@ -1950,7 +1950,7 @@ export function formatDbOrderRecord(data: any): Order {
     grand_total: Number(data.grand_total) || 0,
     amount_paid: Number(data.amount_paid) || 0,
     currency: data.currency || "BDT",
-    date: formatDate(data.placed_at) || formatDate(nowStr),
+    date: data.placed_at || data.created_at || nowStr,
     customer_note: data.customer_note || (() => {
       if (Array.isArray(data.order_notes)) {
         const custNote = data.order_notes.find((n: any) => n && n.type === "customer");
@@ -2376,7 +2376,9 @@ export async function updateOrderStatusInDb(
       currentOrder.address?.address_line,
       currentOrder.items?.length,
       courierName || currentOrder.courier_name,
-      cancelReason
+      cancelReason,
+      currentOrder.address?.division,
+      currentOrder.address?.district
     );
     if (!val.valid) {
       // If currentOrder fails validation, it might be stale in client memory.
@@ -2396,7 +2398,9 @@ export async function updateOrderStatusInDb(
           dbOrder.shipping_address?.address_line,
           Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
           courierName || dbOrder.shipping_method_name,
-          cancelReason
+          cancelReason,
+          dbOrder.shipping_address?.division,
+          dbOrder.shipping_address?.district
         );
         if (liveVal.valid) {
           val = liveVal;
@@ -2429,7 +2433,9 @@ export async function updateOrderStatusInDb(
         dbOrder.shipping_address?.address_line,
         Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
         courierName || dbOrder.shipping_method_name,
-        cancelReason
+        cancelReason,
+        dbOrder.shipping_address?.division,
+        dbOrder.shipping_address?.district
       );
       if (!val.valid) {
         throw new DatabaseOperationError(
@@ -2631,7 +2637,7 @@ export async function addOrderNoteInDb(
       grand_total: 0,
       amount_paid: 0,
       currency: "BDT",
-      date: formatDate(new Date()),
+      date: new Date().toISOString(),
       items: [],
       notes: [],
       events: [],
@@ -3183,7 +3189,9 @@ export async function bulkUpdateOrderStatusInDb(
       addressLine,
       itemCount,
       effectiveCourier,
-      batchNote
+      batchNote,
+      o.shipping_address?.division,
+      o.shipping_address?.district
     );
 
     if (val.valid) {
@@ -3200,7 +3208,9 @@ export async function bulkUpdateOrderStatusInDb(
   if (eligibleOrders.length === 0) {
     const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
     const primaryReason = skippedOrders[0]?.reason || "Cannot advance orders";
-    const primaryCode = skippedOrders[0]?.reason?.includes("product item")
+    const primaryCode = skippedOrders[0]?.reason?.includes("division") || skippedOrders[0]?.reason?.includes("district")
+      ? "GEO_LOCATION_REQUIRED"
+      : skippedOrders[0]?.reason?.includes("product item")
       ? "ORDER_ITEMS_REQUIRED"
       : skippedOrders[0]?.reason?.includes("Courier")
       ? "COURIER_REQUIRED"

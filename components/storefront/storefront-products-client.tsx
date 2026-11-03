@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
 import { ProductShowcase } from "./product-showcase";
+import { ProductPixelTracker } from "./product-pixel-tracker";
 
 interface StorefrontProductsClientProps {
   featuredIdentifier?: string;
@@ -15,6 +16,17 @@ export function StorefrontProductsClient({
 }: StorefrontProductsClientProps) {
   // TanStack Query to get storefront products, variants, and store settings
   const { data, isLoading } = useStorefrontProducts();
+
+  const featuredProduct = useMemo(() => {
+    if (!featuredIdentifier || !data?.products || data.products.length === 0) {
+      return null;
+    }
+    return (
+      data.products.find(
+        (p) => p.slug === featuredIdentifier || p.id === featuredIdentifier
+      ) || null
+    );
+  }, [data?.products, featuredIdentifier]);
 
   const orderedProducts = useMemo(() => {
     const rawProducts = data?.products ?? [];
@@ -36,14 +48,17 @@ export function StorefrontProductsClient({
   }, [data?.products, featuredIdentifier]);
 
   return (
-    <ProductShowcase
-      products={orderedProducts}
-      defaultHotline={data?.hotline ?? "01843557389"}
-      storeName={data?.storeName ?? "খেজুরের খাঁটি গুড়"}
-      storeSubtitle={data?.storeSubtitle}
-      isLoading={isLoading}
-      featuredIdentifier={featuredIdentifier}
-      autoScrollToProduct={autoScrollToProduct || Boolean(featuredIdentifier)}
-    />
+    <>
+      <ProductPixelTracker product={featuredProduct} />
+      <ProductShowcase
+        products={orderedProducts}
+        defaultHotline={data?.hotline ?? "01843557389"}
+        storeName={data?.storeName ?? "খেজুরের খাঁটি গুড়"}
+        storeSubtitle={data?.storeSubtitle}
+        isLoading={isLoading}
+        featuredIdentifier={featuredIdentifier}
+        autoScrollToProduct={autoScrollToProduct || Boolean(featuredIdentifier)}
+      />
+    </>
   );
 }

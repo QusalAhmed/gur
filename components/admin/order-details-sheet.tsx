@@ -631,7 +631,10 @@ export function OrderDetailsSheet({
         {/* Sub-header meta bar */}
         <div className="px-4 sm:px-5 py-2 bg-muted/20 border-b flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span>Placed: {formatDate(order.date)}</span>
+            <span className="flex items-center gap-1 font-medium text-foreground/90">
+              <Clock className="h-3 w-3 text-amber-600 shrink-0" />
+              Placed: {formatDateTime(order.date)}
+            </span>
             <span>•</span>
             <span>Currency: {order.currency}</span>
             {order.isFromDb && (
@@ -882,7 +885,7 @@ export function OrderDetailsSheet({
                                   <span>{other.id}</span>
                                 </span>
                                 {other.date && (
-                                  <span className="font-sans text-[11px] font-normal opacity-75">{formatDate(other.date)}</span>
+                                  <span className="font-sans text-[11px] font-normal opacity-75">{formatDateTime(other.date)}</span>
                                 )}
                               </div>
                               <div className="text-[11px] font-sans">
@@ -1201,18 +1204,18 @@ export function OrderDetailsSheet({
                   <div className="rounded-xl border overflow-x-auto bg-card">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-muted/40 text-[11px]">
-                          <TableHead className="py-2">Item</TableHead>
-                          <TableHead className="text-right py-2">Price</TableHead>
-                          <TableHead className="text-center py-2">Qty</TableHead>
-                          <TableHead className="text-right py-2">Total</TableHead>
+                        <TableRow className="bg-muted/40 text-xs font-semibold">
+                          <TableHead className="py-2.5">Item</TableHead>
+                          <TableHead className="text-right py-2.5">Price</TableHead>
+                          <TableHead className="text-center py-2.5">Qty</TableHead>
+                          <TableHead className="text-right py-2.5">Total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {order.items.map((item) => {
                           const thumbnail = getProductThumbnail(item);
                           return (
-                            <TableRow key={item.id} className="text-xs hover:bg-muted/30">
+                            <TableRow key={item.id} className="text-xs sm:text-sm hover:bg-muted/30">
                               <TableCell className="py-2.5">
                                 <div className="flex items-center gap-2.5">
                                   <div className="h-9 w-9 rounded-lg border bg-muted/30 shrink-0 overflow-hidden relative flex items-center justify-center">
@@ -1229,10 +1232,10 @@ export function OrderDetailsSheet({
                                     )}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="font-medium text-foreground leading-tight truncate">
+                                    <p className="font-medium text-foreground text-sm leading-snug truncate">
                                       {item.product_name}
                                     </p>
-                                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
+                                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
                                       {item.variant_name && (
                                         <span>{item.variant_name}</span>
                                       )}
@@ -1241,7 +1244,7 @@ export function OrderDetailsSheet({
                                         <button
                                           type="button"
                                           onClick={() => handleCopy(item.sku, `sku-${item.id}`)}
-                                          className="font-mono text-[10px] hover:text-foreground flex items-center gap-1"
+                                          className="font-mono text-xs hover:text-foreground flex items-center gap-1"
                                           title="Click to copy SKU"
                                         >
                                           {item.sku}
@@ -1254,15 +1257,15 @@ export function OrderDetailsSheet({
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right font-mono py-2.5 text-muted-foreground">
+                              <TableCell className="text-right font-mono py-2.5 text-xs sm:text-sm text-muted-foreground">
                                 ৳ {item.unit_price.toLocaleString()}
                               </TableCell>
                               <TableCell className="text-center font-mono font-semibold py-2.5">
-                                <Badge variant="secondary" className="px-1.5 py-0 text-xs font-mono">
+                                <Badge variant="secondary" className="px-2 py-0.5 text-xs sm:text-sm font-mono">
                                   {item.quantity}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right font-mono font-semibold py-2.5 text-foreground">
+                              <TableCell className="text-right font-mono font-semibold py-2.5 text-xs sm:text-sm text-foreground">
                                 ৳ {item.line_total.toLocaleString()}
                               </TableCell>
                             </TableRow>

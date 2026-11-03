@@ -292,6 +292,8 @@ export function isFieldRequiredForStatus(
     fieldName === "items" ||
     fieldName === "channel" ||
     fieldName === "method" ||
+    fieldName === "division" ||
+    fieldName === "district" ||
     fieldName === "address_line" ||
     fieldName === "shipping_total"
   ) {
@@ -428,6 +430,22 @@ export const orderFormSchema = z
           code: z.ZodIssueCode.custom,
           message: "Please select at least one product item for confirmed orders",
           path: ["items"],
+        });
+      }
+
+      if (!data.division || data.division.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Delivery division is required before confirming order",
+          path: ["division"],
+        });
+      }
+
+      if (!data.district || data.district.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Delivery district is required before confirming order",
+          path: ["district"],
         });
       }
 

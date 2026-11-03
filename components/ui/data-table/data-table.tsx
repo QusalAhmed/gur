@@ -55,6 +55,7 @@ export interface DataTableProps<TData, TValue> {
   isRowExpanded?: (row: TData) => boolean;
   getRowId?: (row: TData, index: number) => string;
   className?: string;
+  cellClassName?: string;
 
   // Server-side / controlled pagination & sorting:
   manualPagination?: boolean;
@@ -98,6 +99,7 @@ export function DataTable<TData, TValue>({
       ? String(row.id)
       : String(index),
   className,
+  cellClassName,
 
   // Server-side props
   manualPagination = false,
@@ -412,7 +414,7 @@ export function DataTable<TData, TValue>({
                       )}
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="py-2.5 px-2 sm:px-2.5 text-xs align-top whitespace-normal">
+                        <TableCell key={cell.id} className={cn("py-2.5 px-2 sm:px-2.5 text-xs align-top whitespace-normal", cellClassName)}>
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()

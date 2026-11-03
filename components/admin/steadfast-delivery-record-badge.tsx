@@ -137,9 +137,9 @@ export function SteadfastDeliveryRecordBadge({
   if (isLoading && !record) {
     return (
       <div
-        className={`mt-0.5 inline-flex items-center gap-1.5 text-[10px] text-amber-700/80 dark:text-amber-400/80 animate-pulse px-1.5 py-0.5 rounded bg-amber-500/5 border border-amber-500/15 ${className}`}
+        className={`mt-0.5 inline-flex items-center gap-1.5 text-xs text-amber-700/80 dark:text-amber-400/80 animate-pulse px-2 py-0.5 rounded bg-amber-500/5 border border-amber-500/15 ${className}`}
       >
-        <RefreshCw className="h-2.5 w-2.5 animate-spin text-amber-600 shrink-0" />
+        <RefreshCw className="h-3 w-3 animate-spin text-amber-600 shrink-0" />
         <span>Searching DB & courier...</span>
       </div>
     );
@@ -150,14 +150,14 @@ export function SteadfastDeliveryRecordBadge({
     const isRateLimited =
       error?.message?.toLowerCase().includes("rate limit") || error?.message?.includes("429");
     return (
-      <div className={`mt-0.5 inline-flex items-center gap-1 text-[10px] ${className}`}>
+      <div className={`mt-0.5 inline-flex items-center gap-1 text-xs ${className}`}>
         <button
           type="button"
           onClick={handleRefresh}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-rose-200 dark:border-rose-900/40 bg-rose-50/70 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 hover:bg-rose-100 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border border-rose-200 dark:border-rose-900/40 bg-rose-50/70 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 hover:bg-rose-100 transition-colors cursor-pointer"
           title={error?.message || "Failed to load delivery record. Click to retry."}
         >
-          <AlertTriangle className="h-2.5 w-2.5 text-rose-500 shrink-0" />
+          <AlertTriangle className="h-3 w-3 text-rose-500 shrink-0" />
           <span>{isRateLimited ? "Rate limit (10/window)" : "Check failed"} • Retry</span>
         </button>
       </div>
@@ -199,19 +199,19 @@ export function SteadfastDeliveryRecordBadge({
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              className={`group inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border transition-all cursor-pointer select-none max-w-full truncate shadow-xs ${risk.badgeClass}`}
+              className={`group inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border transition-all cursor-pointer select-none max-w-full truncate shadow-xs ${risk.badgeClass}`}
               title={`Delivery record: ${risk.badgeLabel} • Click for details (${
                 recordSource === "db" ? `DB: ${timeInfo.relative}` : "Live API"
               })`}
             >
               {risk.level === "safe" ? (
-                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               ) : risk.level === "moderate" ? (
-                <AlertTriangle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
               ) : risk.level === "risk" ? (
-                <ShieldAlert className="h-2.5 w-2.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <ShieldAlert className="h-3 w-3 text-rose-600 dark:text-rose-400 shrink-0" />
               ) : (
-                <HelpCircle className="h-2.5 w-2.5 text-slate-500 shrink-0" />
+                <HelpCircle className="h-3 w-3 text-slate-500 shrink-0" />
               )}
 
               <span className="truncate">
@@ -220,8 +220,8 @@ export function SteadfastDeliveryRecordBadge({
               </span>
 
               {reportsCount > 0 && (
-                <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[9px] px-1 py-0.2 rounded-full font-bold ml-0.5">
-                  <Flag className="h-2 w-2" />
+                <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+                  <Flag className="h-2.5 w-2.5" />
                   {reportsCount}
                 </span>
               )}
@@ -229,11 +229,11 @@ export function SteadfastDeliveryRecordBadge({
               {/* Source marker pill */}
               {recordSource === "db" ? (
                 <span title={`Stored in DB (${timeInfo.relative})`}>
-                  <Database className="h-2.5 w-2.5 text-muted-foreground/70 shrink-0 ml-0.5" />
+                  <Database className="h-3 w-3 text-muted-foreground/70 shrink-0 ml-0.5" />
                 </span>
               ) : (
                 <span title="Live Steadfast API">
-                  <Sparkles className="h-2.5 w-2.5 text-amber-500 shrink-0 ml-0.5" />
+                  <Sparkles className="h-3 w-3 text-amber-500 shrink-0 ml-0.5" />
                 </span>
               )}
             </button>

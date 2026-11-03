@@ -1291,6 +1291,12 @@ export function OrdersClient() {
   }, [orders, bulkSelectedOrders]);
 
   // Single Order Status Pre-validation Eligibility
+  const isMissingLocation = Boolean(
+    effectiveStatusOrder &&
+      (!effectiveStatusOrder.address?.division?.trim() ||
+        !effectiveStatusOrder.address?.district?.trim())
+  );
+
   const singleStatusEligibility = React.useMemo(() => {
     if (!isStatusOpen || !effectiveStatusOrder) {
       return { valid: true, reason: undefined, code: undefined };
@@ -1303,7 +1309,9 @@ export function OrdersClient() {
       effectiveStatusOrder.address?.address_line,
       effectiveStatusOrder.items?.length,
       selectedCourier || effectiveStatusOrder.courier_name,
-      cancelReason
+      cancelReason,
+      effectiveStatusOrder.address?.division,
+      effectiveStatusOrder.address?.district
     );
   }, [isStatusOpen, effectiveStatusOrder, newStatus, selectedCourier, cancelReason]);
 
@@ -1314,12 +1322,15 @@ export function OrdersClient() {
         statusError.code === "CUSTOMER_NAME_REQUIRED" ||
         statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
         statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+        statusError.code === "GEO_LOCATION_REQUIRED" ||
         statusError.code === "ORDER_ITEMS_REQUIRED" ||
         statusError.code === "COURIER_REQUIRED" ||
         statusError.code === "CANCEL_REASON_REQUIRED" ||
         statusError.message.includes("Customer name") ||
         statusError.message.includes("mobile number") ||
         statusError.message.includes("product item") ||
+        statusError.message.includes("division") ||
+        statusError.message.includes("district") ||
         statusError.message.includes("address") ||
         statusError.message.includes("Courier")
       ) {
@@ -1365,7 +1376,9 @@ export function OrdersClient() {
         o.address?.address_line,
         o.items?.length,
         effectiveCourier,
-        bulkTargetStatus === "cancelled" || bulkTargetStatus === "returned" ? bulkStatusNote : undefined
+        bulkTargetStatus === "cancelled" || bulkTargetStatus === "returned" ? bulkStatusNote : undefined,
+        o.address?.division,
+        o.address?.district
       );
       if (val.valid) {
         eligible.push(o);
@@ -1784,6 +1797,18 @@ export function OrdersClient() {
     const next = getNextStatus(freshOrder.status);
     if (!next) return;
 
+    // Ensure delivery division and district are set before changing order status
+    const division = (freshOrder.address?.division || "").trim();
+    const district = (freshOrder.address?.district || "").trim();
+    if (!division || !district) {
+      showToast(
+        "Delivery division and district are required before changing order status. Please edit the order.",
+        "destructive"
+      );
+      handleOpenEdit(freshOrder);
+      return;
+    }
+
     // Check if advancing to confirmed or higher requires missing details
     if (next !== "incomplete_order" && next !== "pending") {
       if (
@@ -1847,6 +1872,29 @@ export function OrdersClient() {
 
     const fromStatus = targetOrder.status;
     const updatedStatus = newStatus;
+
+    if (fromStatus === updatedStatus) {
+      setIsStatusOpen(false);
+      return;
+    }
+
+    // Require delivery division and district before changing status
+    const division = (targetOrder.address?.division || "").trim();
+    const district = (targetOrder.address?.district || "").trim();
+    if (!division || !district) {
+      showToast(
+        "Delivery division and district are required before changing order status. Please edit the order.",
+        "destructive"
+      );
+      setStatusError(
+        parseDatabaseError({
+          code: "GEO_LOCATION_REQUIRED",
+          message: "Delivery division and district are required before changing order status.",
+          details: "Delivery division and district are required before changing order status.",
+        })
+      );
+      return;
+    }
 
     // 1. Validation for confirmed and higher
     const isDraft = updatedStatus === "incomplete_order" || updatedStatus === "pending";
@@ -2216,15 +2264,15 @@ export function OrdersClient() {
           }
 
           return (
-            <div className="space-y-1.5 min-w-[130px] max-w-[260px]" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1.5 min-w-[145px] max-w-[270px]" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => handleOpenView(order)}
-                  className="text-left font-mono text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                  className="text-left font-mono text-sm font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
                 >
                   {order.id}
                 </button>
-                <span className="text-[10px] text-muted-foreground font-mono">
+                <span className="text-xs text-muted-foreground font-mono">
                   ({itemCount} {itemCount === 1 ? "item" : "items"})
                 </span>
               </div>
@@ -2232,13 +2280,14 @@ export function OrdersClient() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    "text-[10px] font-mono uppercase px-1.5 py-0 font-bold",
+                    "text-xs font-mono uppercase px-2 py-0.5 font-bold",
                     channelBadgeColors[order.channel] || "bg-muted text-muted-foreground"
                   )}
                 >
                   {order.channel}
                 </Badge>
-                <span className="text-[11px] font-medium text-foreground/80 whitespace-nowrap">
+                <span className="text-xs font-medium text-foreground/90 whitespace-nowrap inline-flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-amber-600/80 shrink-0" />
                   {formatDateTime(order.date)}
                 </span>
               </div>
@@ -2249,7 +2298,7 @@ export function OrdersClient() {
               {displayOtherOrders.length > 0 && (
                 <div className="pt-1 space-y-1">
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
                       Other Orders ({displayOtherOrders.length})
                     </span>
                   </div>
@@ -2272,16 +2321,16 @@ export function OrdersClient() {
                               insight.badgeStyle
                             )}
                           >
-                            <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
-                              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", insight.dotColor)} />
+                            <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
+                              <span className={cn("h-2 w-2 rounded-full shrink-0", insight.dotColor)} />
                               <span className="hover:underline">{fullOrder.id}</span>
                               {(fullOrder.date || other.date) && (
-                                <span className="font-sans font-normal text-[9px] opacity-75">
+                                <span className="font-sans font-normal text-[10px] opacity-75">
                                   • {formatDateTime(fullOrder.date || other.date)}
                                 </span>
                               )}
                             </div>
-                            <div className="text-[9.5px] font-sans leading-tight">
+                            <div className="text-[11px] font-sans leading-tight">
                               <span className="opacity-75">other order: </span>
                               <span className="font-semibold">{insight.statusText}</span>
                               <span className="opacity-75">, note: </span>
@@ -2292,7 +2341,7 @@ export function OrdersClient() {
                       );
                     })}
                     {displayOtherOrders.length > 3 && (
-                      <span className="text-[9px] font-mono text-muted-foreground font-semibold pl-1">
+                      <span className="text-[10px] font-mono text-muted-foreground font-semibold pl-1">
                         +{displayOtherOrders.length - 3} more other order(s)
                       </span>
                     )}
@@ -2312,21 +2361,21 @@ export function OrdersClient() {
           const addressLine = order.address?.address_line;
 
           return (
-            <div className="space-y-1 min-w-[140px] max-w-[220px]">
+            <div className="space-y-1.5 min-w-[155px] max-w-[240px]">
               {/* Customer Name */}
-              <p className="text-xs font-bold text-foreground leading-tight truncate">
+              <p className="text-sm font-bold text-foreground leading-snug truncate">
                 {order.customer || <span className="text-muted-foreground font-normal italic">Guest Customer</span>}
               </p>
 
               {/* Phone with click-to-call and 1-click copy */}
               {order.phone && (
-                <div className="flex items-center gap-1 text-xs">
+                <div className="flex items-center gap-1 text-sm">
                   <a
                     href={`tel:${order.phone}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="font-mono text-xs font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                    className="font-mono text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
                   >
-                    <Phone className="h-3 w-3 text-amber-600 shrink-0" />
+                    <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                     <span>{order.phone}</span>
                   </a>
                   <button
@@ -2338,7 +2387,7 @@ export function OrdersClient() {
                     className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
                     title="Copy phone"
                   >
-                    <Copy className="h-2.5 w-2.5" />
+                    <Copy className="h-3 w-3" />
                   </button>
                 </div>
               )}
@@ -2353,16 +2402,16 @@ export function OrdersClient() {
               {/* Alternative phone with click-to-call and 1-click copy (exact same font, size & styling as primary phone) */}
               {order.alternative_phone && (
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-1 text-xs">
+                  <div className="flex items-center gap-1 text-sm">
                     <a
                       href={`tel:${order.alternative_phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-mono text-xs font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                      className="font-mono text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
                     >
-                      <Phone className="h-3 w-3 text-amber-600 shrink-0" />
+                      <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                       <span>{order.alternative_phone}</span>
                     </a>
-                    <span className="text-[10px] text-muted-foreground font-normal">(Alt)</span>
+                    <span className="text-xs text-muted-foreground font-normal">(Alt)</span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -2372,7 +2421,7 @@ export function OrdersClient() {
                       className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
                       title="Copy alternative phone"
                     >
-                      <Copy className="h-2.5 w-2.5" />
+                      <Copy className="h-3 w-3" />
                     </button>
                   </div>
                   <div>
@@ -2384,13 +2433,13 @@ export function OrdersClient() {
               {/* Destination: District Badge + Address Line */}
               <div className="space-y-0.5">
                 {district && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-900/50">
-                    <MapPin className="h-2.5 w-2.5 text-sky-500 shrink-0" />
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-900/50">
+                    <MapPin className="h-3 w-3 text-sky-500 shrink-0" />
                     {district}
                   </span>
                 )}
                 {addressLine && (
-                  <p className="text-[11px] text-muted-foreground truncate leading-normal" title={addressLine}>
+                  <p className="text-xs text-muted-foreground truncate leading-normal" title={addressLine}>
                     {addressLine}
                   </p>
                 )}
@@ -2410,9 +2459,9 @@ export function OrdersClient() {
                 const shipPhone = order.address?.phone || order.shipping_phone;
 
                 return (
-                  <div className="p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1">
-                    <div className="flex items-center gap-1 font-semibold text-[10px] text-amber-800 dark:text-amber-300">
-                      <User className="h-3 w-3 shrink-0 text-amber-600" />
+                  <div className="p-2 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
+                    <div className="flex items-center gap-1 font-semibold text-xs text-amber-800 dark:text-amber-300">
+                      <User className="h-3.5 w-3.5 shrink-0 text-amber-600" />
                       <span className="truncate">Ship to: {recipientName}</span>
                     </div>
                     {shipPhone && (
@@ -2420,9 +2469,9 @@ export function OrdersClient() {
                         <a
                           href={`tel:${shipPhone}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-mono text-[11px] font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                          className="font-mono text-xs sm:text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
                         >
-                          <Phone className="h-2.5 w-2.5 text-amber-600 shrink-0" />
+                          <Phone className="h-3 w-3 text-amber-600 shrink-0" />
                           <span>{shipPhone}</span>
                         </a>
                         <button
@@ -2434,7 +2483,7 @@ export function OrdersClient() {
                           className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
                           title="Copy shipping phone"
                         >
-                          <Copy className="h-2.5 w-2.5" />
+                          <Copy className="h-3 w-3" />
                         </button>
                       </div>
                     )}
@@ -2450,10 +2499,10 @@ export function OrdersClient() {
               {/* Customer Checkout Delivery Instruction - Full Note Display */}
               {order.customer_note && (
                 <div
-                  className="p-2 rounded-lg bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px] text-blue-950 dark:text-blue-100 space-y-0.5 mt-1"
+                  className="p-2.5 rounded-lg bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-xs text-blue-950 dark:text-blue-100 space-y-1 mt-1"
                 >
-                  <div className="flex items-center gap-1 font-bold text-[10px] text-blue-800 dark:text-blue-300 uppercase tracking-wider">
-                    <MessageSquare className="h-3 w-3 text-blue-600 shrink-0" />
+                  <div className="flex items-center gap-1 font-bold text-xs text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                    <MessageSquare className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                     <span>Customer Note:</span>
                   </div>
                   <p className="whitespace-pre-wrap leading-relaxed italic break-words">
@@ -2471,7 +2520,7 @@ export function OrdersClient() {
         cell: ({ row }) => {
           const order = row.original;
           return (
-            <div className="space-y-1.5 min-w-[115px] max-w-[155px]">
+            <div className="space-y-1.5 min-w-[125px] max-w-[165px]">
               {/* Order Status Badge */}
               <div>
                 <button
@@ -2495,7 +2544,7 @@ export function OrdersClient() {
                 <Badge
                   variant="secondary"
                   className={cn(
-                    "text-[10px] font-medium capitalize px-1.5 py-0.5",
+                    "text-xs font-medium capitalize px-2 py-0.5",
                     order.fulfillment === "fulfilled"
                       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
                       : order.fulfillment === "partial"
@@ -2503,21 +2552,21 @@ export function OrdersClient() {
                       : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                   )}
                 >
-                  <Truck className="h-3 w-3 mr-1" />
+                  <Truck className="h-3.5 w-3.5 mr-1" />
                   {order.fulfillment}
                 </Badge>
               </div>
 
               {/* Courier Service & Tracking */}
               {order.courier_name ? (
-                <div className="flex items-center gap-1 text-[11px] text-foreground font-medium">
-                  <span className="inline-flex items-center gap-1 font-semibold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded text-[10px]">
-                    <Truck className="h-2.5 w-2.5 text-blue-600" />
+                <div className="flex items-center gap-1 text-xs text-foreground font-medium">
+                  <span className="inline-flex items-center gap-1 font-semibold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded text-xs">
+                    <Truck className="h-3 w-3 text-blue-600" />
                     {order.courier_name}
                   </span>
                 </div>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground italic">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground italic">
                   No courier
                 </span>
               )}
@@ -2541,9 +2590,9 @@ export function OrdersClient() {
               : 0;
 
           return (
-            <div className="text-right space-y-1 min-w-[105px] max-w-[135px]">
+            <div className="text-right space-y-1.5 min-w-[115px] max-w-[150px]">
               {/* Grand Total */}
-              <p className="font-bold text-sm font-mono text-foreground">
+              <p className="font-bold text-base font-mono text-foreground">
                 ৳ {order.grand_total.toLocaleString()}
               </p>
 
@@ -2556,32 +2605,32 @@ export function OrdersClient() {
                   }}
                   title="Click to record or update payment"
                   className={cn(
-                    "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize cursor-pointer hover:ring-1 hover:ring-current",
+                    "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold capitalize cursor-pointer hover:ring-1 hover:ring-current",
                     paymentStyles[order.payment]
                   )}
                 >
                   {order.payment.replace(/_/g, " ")}
                 </span>
-                <Badge variant="outline" className="text-[10px] font-mono uppercase px-1 py-0 font-normal">
+                <Badge variant="outline" className="text-xs font-mono uppercase px-1.5 py-0.5 font-normal">
                   {order.method.replace("_", " ")}
                 </Badge>
               </div>
 
               {/* Financial Balance Summary - Highly Visible Due Balance */}
               {order.payment === "unpaid" && (
-                <p className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                <p className="text-xs sm:text-sm font-mono font-bold text-rose-600 dark:text-rose-400">
                   Due ৳ {order.grand_total.toLocaleString()}
                 </p>
               )}
 
               {order.payment === "partially_paid" && (
                 <div className="space-y-0.5">
-                  <div className="flex items-center justify-end gap-1 text-[10px] font-mono">
+                  <div className="flex items-center justify-end gap-1 text-xs font-mono">
                     <span className="text-emerald-600 font-semibold">Paid ৳{order.amount_paid.toLocaleString()}</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-rose-600 font-bold">Due ৳{due.toLocaleString()}</span>
                   </div>
-                  <div className="w-20 ml-auto h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="w-24 ml-auto h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-amber-500 rounded-full"
                       style={{ width: `${percentPaid}%` }}
@@ -2591,8 +2640,8 @@ export function OrdersClient() {
               )}
 
               {order.payment === "paid" && (
-                <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
                   Paid in Full
                 </p>
               )}
@@ -2609,11 +2658,11 @@ export function OrdersClient() {
         ),
         cell: ({ row }) => {
           const order = row.original;
-          const internalNotes = (order.notes || []).filter((n) => n.type === "internal");
-          const hasInternalNotes = internalNotes.length > 0;
+          const displayNotes = (order.notes || []).filter((n) => n.type !== "customer");
+          const hasNotes = displayNotes.length > 0;
 
           return (
-            <div onClick={(e) => e.stopPropagation()} className="text-right space-y-2 min-w-[140px] max-w-[220px] ml-auto">
+            <div onClick={(e) => e.stopPropagation()} className="text-right space-y-2 min-w-[150px] max-w-[240px] ml-auto">
               {/* Action Buttons Row */}
               <div className="flex items-center justify-end gap-1">
                 <Button
@@ -2621,48 +2670,48 @@ export function OrdersClient() {
                   size="icon-sm"
                   title="View Order Details"
                   onClick={() => handleOpenView(order)}
-                  className="cursor-pointer h-7 w-7 text-muted-foreground hover:text-foreground"
+                  className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-foreground"
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" className="cursor-pointer h-7 w-7 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="icon-sm" className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-foreground">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>Order {order.id}</DropdownMenuLabel>
+                  <DropdownMenuContent align="end" className="w-48 text-xs">
+                    <DropdownMenuLabel className="text-xs font-bold">Order {order.id}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleOpenView(order)}>
+                    <DropdownMenuItem onClick={() => handleOpenView(order)} className="text-xs">
                       <Eye className="h-4 w-4 mr-2" />
                       View Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenEdit(order)}>
+                    <DropdownMenuItem onClick={() => handleOpenEdit(order)} className="text-xs">
                       <Edit className="h-4 w-4 mr-2 text-blue-600" />
                       Edit Order
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenStatus(order)}>
+                    <DropdownMenuItem onClick={() => handleOpenStatus(order)} className="text-xs">
                       <RefreshCw className="h-4 w-4 mr-2 text-amber-600" />
                       Update Status
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenPayment(order)}>
+                    <DropdownMenuItem onClick={() => handleOpenPayment(order)} className="text-xs">
                       <CreditCard className="h-4 w-4 mr-2 text-emerald-600" />
                       Record / Edit Payment
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenNote(order)}>
+                    <DropdownMenuItem onClick={() => handleOpenNote(order)} className="text-xs">
                       <ShieldCheck className="h-4 w-4 mr-2 text-amber-600" />
                       Add Staff Note
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])}>
+                    <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])} className="text-xs">
                       <Printer className="h-4 w-4 mr-2 text-amber-600" />
                       Print
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => handleOpenDelete(order)}
-                      className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                      className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Order
@@ -2673,37 +2722,78 @@ export function OrdersClient() {
 
               {/* Only show full staff notes below action button */}
               <div className="space-y-1.5 w-full text-left max-h-52 overflow-y-auto pr-0.5">
-                {hasInternalNotes ? (
+                {hasNotes ? (
                   <>
-                    {internalNotes.map((note) => (
-                      <div
-                        key={note.id}
-                        onClick={() => handleOpenNote(order)}
-                        className="p-2 rounded-lg bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-950 dark:text-amber-100 space-y-1 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                        title="Click to manage staff notes"
-                      >
-                        <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                          <span className="flex items-center gap-1">
-                            <ShieldCheck className="h-3 w-3 text-amber-600 shrink-0" />
-                            <span>Staff Note</span>
-                          </span>
-                          <span className="text-[9px] font-normal text-muted-foreground/80">
-                            {note.created_at}
-                          </span>
+                    {displayNotes.map((note) => {
+                      const isPackaging = note.type === "packaging" || note.type === "packaging_note";
+                      const isDelivery = note.type === "delivery" || note.type === "delivery_note";
+                      const noteTypeLabel = isPackaging
+                        ? "Packaging Note"
+                        : isDelivery
+                        ? "Delivery Note"
+                        : "Staff Note";
+
+                      return (
+                        <div
+                          key={note.id}
+                          onClick={() => handleOpenNote(order)}
+                          className={cn(
+                            "p-2.5 rounded-lg border text-xs space-y-1.5 transition-colors cursor-pointer",
+                            isPackaging
+                              ? "bg-purple-500/10 dark:bg-purple-500/15 border-purple-500/30 text-purple-950 dark:text-purple-100 hover:bg-purple-500/20"
+                              : isDelivery
+                              ? "bg-indigo-500/10 dark:bg-indigo-500/15 border-indigo-500/30 text-indigo-950 dark:text-indigo-100 hover:bg-indigo-500/20"
+                              : "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20"
+                          )}
+                          title="Click to manage staff notes"
+                        >
+                          {/* Note Type Header & Date Time Below Right */}
+                          <div className="space-y-0.5">
+                            <div
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-bold uppercase tracking-wider",
+                                isPackaging
+                                  ? "text-purple-800 dark:text-purple-300"
+                                  : isDelivery
+                                  ? "text-indigo-800 dark:text-indigo-300"
+                                  : "text-amber-800 dark:text-amber-300"
+                              )}
+                            >
+                              {isPackaging ? (
+                                <Package className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                              ) : isDelivery ? (
+                                <Truck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                              ) : (
+                                <ShieldCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                              )}
+                              <span>{noteTypeLabel}</span>
+                            </div>
+
+                            {/* Date time below right of the note type */}
+                            {note.created_at && (
+                              <div className="text-right">
+                                <span className="text-[10px] font-normal text-muted-foreground/80 inline-flex items-center gap-1 font-sans">
+                                  <Clock className="h-2.5 w-2.5 text-amber-600/70 shrink-0" />
+                                  {formatDateTime(note.created_at)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="whitespace-pre-wrap leading-relaxed break-words font-medium">
+                            {note.text}
+                          </p>
                         </div>
-                        <p className="whitespace-pre-wrap leading-relaxed break-words font-medium">
-                          {note.text}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div className="text-right">
                       <button
                         type="button"
                         onClick={() => handleOpenNote(order)}
-                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                        className="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
                         title="Add another staff note"
                       >
-                        <Plus className="h-2.5 w-2.5" />
+                        <Plus className="h-3 w-3" />
                         <span>Add Note</span>
                       </button>
                     </div>
@@ -2713,10 +2803,10 @@ export function OrdersClient() {
                     <button
                       type="button"
                       onClick={() => handleOpenNote(order)}
-                      className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/50 hover:text-amber-600 hover:underline cursor-pointer transition-colors"
+                      className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/60 hover:text-amber-600 hover:underline cursor-pointer transition-colors"
                       title="Add staff note"
                     >
-                      <Plus className="h-2.5 w-2.5" />
+                      <Plus className="h-3 w-3" />
                       <span>Staff Note</span>
                     </button>
                   </div>
@@ -2810,38 +2900,38 @@ export function OrdersClient() {
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-12 text-[11px] font-semibold">#</TableHead>
-                  <TableHead className="text-[11px] font-semibold">SKU</TableHead>
-                  <TableHead className="text-[11px] font-semibold">Product & Variant</TableHead>
-                  <TableHead className="text-right text-[11px] font-semibold">Unit Price</TableHead>
-                  <TableHead className="text-center text-[11px] font-semibold">Quantity</TableHead>
-                  <TableHead className="text-right text-[11px] font-semibold">Line Total</TableHead>
+                  <TableHead className="w-12 text-xs sm:text-sm font-semibold">#</TableHead>
+                  <TableHead className="text-xs sm:text-sm font-semibold">SKU</TableHead>
+                  <TableHead className="text-xs sm:text-sm font-semibold">Product & Variant</TableHead>
+                  <TableHead className="text-right text-xs sm:text-sm font-semibold">Unit Price</TableHead>
+                  <TableHead className="text-center text-xs sm:text-sm font-semibold">Quantity</TableHead>
+                  <TableHead className="text-right text-xs sm:text-sm font-semibold">Line Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {order.items.map((item, idx) => (
-                  <TableRow key={item.id} className="text-xs hover:bg-muted/30">
-                    <TableCell className="font-mono text-muted-foreground text-[11px] py-2">
+                  <TableRow key={item.id} className="text-xs sm:text-sm hover:bg-muted/30">
+                    <TableCell className="font-mono text-muted-foreground text-xs sm:text-sm py-2.5">
                       {idx + 1}
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-amber-700 dark:text-amber-400 font-medium py-2">
+                    <TableCell className="font-mono text-xs sm:text-sm text-amber-700 dark:text-amber-400 font-medium py-2.5">
                       {item.sku}
                     </TableCell>
-                    <TableCell className="py-2">
-                      <p className="font-medium text-foreground">{item.product_name}</p>
+                    <TableCell className="py-2.5">
+                      <p className="font-medium text-foreground text-sm">{item.product_name}</p>
                       {item.variant_name && (
-                        <p className="text-[11px] text-muted-foreground">{item.variant_name}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{item.variant_name}</p>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-[11px] py-2">
+                    <TableCell className="text-right font-mono text-xs sm:text-sm py-2.5">
                       ৳ {item.unit_price.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-center font-mono font-semibold py-2">
-                      <span className="inline-block px-2 py-0.5 rounded bg-muted/60 text-foreground text-xs">
+                    <TableCell className="text-center font-mono font-semibold py-2.5">
+                      <span className="inline-block px-2.5 py-0.5 rounded bg-muted/60 text-foreground text-xs sm:text-sm">
                         {item.quantity}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-foreground py-2">
+                    <TableCell className="text-right font-mono font-bold text-foreground text-xs sm:text-sm py-2.5">
                       ৳ {item.line_total.toLocaleString()}
                     </TableCell>
                   </TableRow>
@@ -2852,9 +2942,9 @@ export function OrdersClient() {
         )}
 
         {/* Summary Footer */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs sm:text-sm">
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Delivery Address</span>
+            <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Delivery Address</span>
             {(() => {
               const isDiff = Boolean(
                 (order.address?.phone && order.address.phone !== order.phone) ||
@@ -2866,36 +2956,36 @@ export function OrdersClient() {
               const rName = order.address?.recipient_name || order.recipient_name || "Recipient";
               const rPhone = order.address?.phone || order.shipping_phone;
               return (
-                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                <p className="text-xs sm:text-sm font-semibold text-amber-700 dark:text-amber-400">
                   Ship to: {rName} {rPhone ? `(${rPhone})` : ""}
                 </p>
               );
             })()}
-            <p className="font-medium text-foreground truncate">
+            <p className="font-medium text-foreground truncate text-xs sm:text-sm">
               {order.address?.district}, {order.address?.division}
             </p>
-            <p className="text-[11px] text-muted-foreground truncate">{order.address?.address_line}</p>
+            <p className="text-xs text-muted-foreground truncate">{order.address?.address_line}</p>
           </div>
 
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Order Breakdown</span>
-            <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Order Breakdown</span>
+            <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>Subtotal:</span>
               <span className="font-mono">৳ {order.subtotal.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-[11px] text-muted-foreground">
+            <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>Shipping Fee:</span>
               <span className="font-mono">৳ {order.shipping_total.toLocaleString()}</span>
             </div>
           </div>
 
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Discounts & Net</span>
-            <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Discounts & Net</span>
+            <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>Discount Total:</span>
               <span className="font-mono text-emerald-600">- ৳ {order.discount_total.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-[11px] font-bold text-foreground pt-0.5 border-t">
+            <div className="flex justify-between text-xs sm:text-sm font-bold text-foreground pt-0.5 border-t">
               <span>Grand Total:</span>
               <span className="font-mono text-amber-700 dark:text-amber-400">
                 ৳ {order.grand_total.toLocaleString()}
@@ -2904,12 +2994,12 @@ export function OrdersClient() {
           </div>
 
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Payment Settlement</span>
-            <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Payment Settlement</span>
+            <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>Amount Paid:</span>
               <span className="font-mono text-emerald-600 font-semibold">৳ {order.amount_paid.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-[11px] font-semibold text-foreground">
+            <div className="flex justify-between text-xs sm:text-sm font-semibold text-foreground">
               <span>Due Balance:</span>
               <span className={`font-mono ${dueAmount > 0 ? "text-rose-600 font-bold" : "text-muted-foreground"}`}>
                 ৳ {dueAmount.toLocaleString()}
@@ -3194,6 +3284,7 @@ export function OrdersClient() {
           <DataTable
             columns={orderColumns}
             data={orders}
+            cellClassName="text-sm py-3 px-2 sm:px-2.5"
             manualPagination={true}
             pageCount={pageCount}
             rowCount={totalCount}
@@ -3585,8 +3676,14 @@ export function OrdersClient() {
               <RefreshCw className="h-5 w-5 text-amber-600" />
               Update Order Status
             </DialogTitle>
-            <DialogDescription>
-              Change workflow progression for order <span className="font-mono font-bold text-foreground">{effectiveStatusOrder?.id}</span>.
+            <DialogDescription className="flex items-center gap-1.5 flex-wrap">
+              <span>Change workflow progression for order <span className="font-mono font-bold text-foreground">{effectiveStatusOrder?.id}</span></span>
+              {effectiveStatusOrder?.date && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border text-[11px] text-muted-foreground font-medium">
+                  <Clock className="h-3 w-3 text-amber-600" />
+                  Placed: <strong className="text-foreground">{formatDateTime(effectiveStatusOrder.date)}</strong>
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -3678,6 +3775,7 @@ export function OrdersClient() {
                 {(statusError.code === "CUSTOMER_NAME_REQUIRED" ||
                   statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
                   statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+                  statusError.code === "GEO_LOCATION_REQUIRED" ||
                   statusError.code === "ORDER_ITEMS_REQUIRED") && effectiveStatusOrder ? (
                   <Button
                     type="button"
@@ -3692,6 +3790,8 @@ export function OrdersClient() {
                     <Edit className="h-3 w-3 mr-1" />
                     {statusError.code === "ORDER_ITEMS_REQUIRED"
                       ? "Add Products / Edit Order"
+                      : statusError.code === "GEO_LOCATION_REQUIRED"
+                      ? "Edit Location (Division & District)"
                       : "Edit Order Details"}
                   </Button>
                 ) : null}
@@ -3704,6 +3804,37 @@ export function OrdersClient() {
                 </button>
               </div>
             </motion.div>
+          )}
+
+          {/* Missing Division / District Warning Banner */}
+          {isMissingLocation && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-100 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-amber-800 dark:text-amber-300">
+                    Missing Delivery Division & District
+                  </p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Order status cannot be changed because delivery division and/or district are empty or null. Please edit the order to select division and district first.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs bg-amber-600 text-white hover:bg-amber-700 shrink-0 border-0 cursor-pointer"
+                onClick={() => {
+                  setIsStatusOpen(false);
+                  if (effectiveStatusOrder) {
+                    handleOpenEdit(effectiveStatusOrder);
+                  }
+                }}
+              >
+                Edit Location
+              </Button>
+            </div>
           )}
 
           <div className="space-y-4 py-2">
@@ -3854,8 +3985,13 @@ export function OrdersClient() {
             </Button>
             <Button
               onClick={handleSaveStatus}
-              disabled={updateStatusMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+              disabled={updateStatusMutation.isPending || isMissingLocation}
+              title={
+                isMissingLocation
+                  ? "Cannot change status: Delivery division and district are required."
+                  : undefined
+              }
+              className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {updateStatusMutation.isPending ? "Saving..." : "Confirm Status"}
             </Button>
@@ -3873,9 +4009,17 @@ export function OrdersClient() {
               <CreditCard className="h-5 w-5 text-amber-600" />
               Record Order Payment
             </DialogTitle>
-            <DialogDescription>
-              Update payment settlement or log partial payments for order{" "}
-              <span className="font-mono font-bold text-foreground">{paymentOrder?.id}</span>.
+            <DialogDescription className="flex items-center gap-1.5 flex-wrap">
+              <span>
+                Update payment settlement or log partial payments for order{" "}
+                <span className="font-mono font-bold text-foreground">{paymentOrder?.id}</span>
+              </span>
+              {paymentOrder?.date && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border text-[11px] text-muted-foreground font-medium">
+                  <Clock className="h-3 w-3 text-amber-600" />
+                  Placed: <strong className="text-foreground">{formatDateTime(paymentOrder.date)}</strong>
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 

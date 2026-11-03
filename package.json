@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "meta:sync": "node scripts/meta-catalog-sync.mjs",
+    "meta:test": "node scripts/meta-catalog-sync.mjs --test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -23,6 +25,7 @@
     "cn": "^0.5.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
+    "facebook-nodejs-business-sdk": "^24.0.1",
     "lucide-react": "^1.61.0",
     "motion": "^14.6.0",
     "next": "16.4.2",
@@ -39,6 +42,7 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
+    "@types/facebook-nodejs-business-sdk": "^24.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

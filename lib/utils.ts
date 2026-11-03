@@ -37,8 +37,8 @@ export function formatDate(
     const s = value.trim();
     if (!s) return options?.fallback || "";
 
-    // If already in '24 Oct 2026' or '24 Oct 2026, 11:20' format
-    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}(?:,\s*\d{2}:\d{2}(?::\d{2})?)?$/.test(s)) {
+    // If already in '24 Oct 2026' or '24 Oct 2026, 11:20' or '24 Oct 2026, 02:25 PM' format
+    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}(?:,\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)?$/.test(s)) {
       if (options?.includeTime) return s;
       return s.split(",")[0].trim();
     }
@@ -47,6 +47,28 @@ export function formatDate(
     const prefixMatch = s.match(/^([A-Za-z\s/:]+?)\s+(\d{4}-\d{2}-\d{2}.*|\d{1,2}\s+[A-Za-z]{3}\s+\d{4}.*)/);
     if (prefixMatch) {
       return `${prefixMatch[1]} ${formatDate(prefixMatch[2], options)}`;
+    }
+
+    // Check if ISO with timezone ('Z' or '+00:00' or '-05:00') - parse with Date for local browser timezone
+    if (/[Zz]|[+-]\d{2}(?::?\d{2})?$/.test(s)) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        const dayNum = d.getDate();
+        const day = options?.padDay ? String(dayNum).padStart(2, "0") : String(dayNum);
+        const month = MONTH_NAMES[d.getMonth()];
+        const year = d.getFullYear();
+        const datePart = `${day} ${month} ${year}`;
+
+        if (options?.includeTime) {
+          const rawHours = d.getHours();
+          const mm = String(d.getMinutes()).padStart(2, "0");
+          const period = rawHours >= 12 ? "PM" : "AM";
+          const h12 = rawHours % 12 || 12;
+          const hh = String(h12).padStart(2, "0");
+          return `${datePart}, ${hh}:${mm} ${period}`;
+        }
+        return datePart;
+      }
     }
 
     // Check YYYY-MM-DD or YYYY-MM-DD HH:mm(:ss) format
@@ -60,8 +82,12 @@ export function formatDate(
       const datePart = `${day} ${month} ${year}`;
 
       if (options?.includeTime && match[4] && match[5]) {
-        const timePart = match[6] ? `${match[4]}:${match[5]}:${match[6]}` : `${match[4]}:${match[5]}`;
-        return `${datePart}, ${timePart}`;
+        const rawHours = parseInt(match[4], 10);
+        const mm = match[5];
+        const period = rawHours >= 12 ? "PM" : "AM";
+        const h12 = rawHours % 12 || 12;
+        const hh = String(h12).padStart(2, "0");
+        return `${datePart}, ${hh}:${mm} ${period}`;
       }
       return datePart;
     }
@@ -88,9 +114,12 @@ export function formatDate(
   const datePart = `${day} ${month} ${year}`;
 
   if (options?.includeTime) {
-    const hh = String(d.getHours()).padStart(2, "0");
+    const rawHours = d.getHours();
     const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${datePart}, ${hh}:${mm}`;
+    const period = rawHours >= 12 ? "PM" : "AM";
+    const h12 = rawHours % 12 || 12;
+    const hh = String(h12).padStart(2, "0");
+    return `${datePart}, ${hh}:${mm} ${period}`;
   }
 
   return datePart;

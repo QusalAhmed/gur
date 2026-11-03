@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Metadata } from "next";
+import { connection } from "next/server";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
 import {
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 export const instant = false;
 
 async function ProductsDataLoader() {
+  await connection();
   const queryClient = getQueryClient();
 
   // Prefetch products and categories on the server

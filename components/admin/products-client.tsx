@@ -24,7 +24,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  Share2,
 } from "lucide-react";
+import { MetaCatalogManager } from "@/components/admin/meta-catalog-manager";
+import { syncSingleProductToMetaCatalogAction } from "@/actions/meta-catalog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import {
@@ -500,6 +503,39 @@ export function ProductsClient() {
                 <DropdownMenuItem onClick={() => duplicateMutation.mutate(p)}>
                   <Copy className="h-3.5 w-3.5 mr-2" /> Duplicate
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    try {
+                      setToast({
+                        type: "info",
+                        title: "Syncing to Meta Catalog...",
+                        message: `Submitting "${p.name}" to Meta Catalog.`,
+                      });
+                      const res = await syncSingleProductToMetaCatalogAction(p.id);
+                      if (res.success) {
+                        setToast({
+                          type: "success",
+                          title: "Meta Catalog Synced",
+                          message: `Successfully synced "${p.name}" to Meta Catalog.`,
+                        });
+                      } else {
+                        setToast({
+                          type: "destructive",
+                          title: "Meta Catalog Sync Failed",
+                          message: res.error || "Failed to sync to Meta Catalog.",
+                        });
+                      }
+                    } catch (err: any) {
+                      setToast({
+                        type: "destructive",
+                        title: "Meta Catalog Error",
+                        message: err?.message || "Unexpected error syncing to Meta.",
+                      });
+                    }
+                  }}
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-2 text-[#1877F2]" /> Sync to Meta Catalog
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() =>
@@ -575,6 +611,7 @@ export function ProductsClient() {
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
+          <MetaCatalogManager />
           <Button
             size="sm"
             asChild

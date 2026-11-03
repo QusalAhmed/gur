@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Metadata } from "next";
+import { connection } from "next/server";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
 import { fetchProductDetailById, fetchCategoriesList } from "@/lib/supabase";
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 async function EditProductDataLoader({ id }: { id: string }) {
+  await connection();
   const queryClient = getQueryClient();
 
   // Prefetch product details and categories on the server

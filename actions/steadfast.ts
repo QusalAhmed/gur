@@ -751,6 +751,16 @@ export async function updateOrderStatusWithSteadfastAction(
     };
   }
 
+  // Enforce delivery division and district requirement before changing status
+  const orderDivision = (resolvedOrder.address?.division || dbRow?.shipping_address?.division || "").trim();
+  const orderDistrict = (resolvedOrder.address?.district || dbRow?.shipping_address?.district || "").trim();
+  if (!orderDivision || !orderDistrict) {
+    return {
+      success: false,
+      error: `Cannot change status for Order ${orderId}: Delivery division and district are required before changing order status.`,
+    };
+  }
+
   // 2. Strict Check: If this order ALREADY has a courier booking in DB or memory, NEVER re-book!
   const hasExistingBooking = Boolean(
     dbRow?.courier_consignment_id ||

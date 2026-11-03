@@ -455,7 +455,9 @@ export function validateOrderStatusTransition(
   customerAddress?: string | null,
   itemsCount?: number | null,
   courierName?: string | null,
-  cancelReason?: string | null
+  cancelReason?: string | null,
+  division?: string | null,
+  district?: string | null
 ): TransitionValidationResult {
   const normalizedCurrent = currentStatus === "partially_delivered" ? "delivered" : currentStatus;
   const normalizedTarget = targetStatus === "partially_delivered" ? "delivered" : targetStatus;
@@ -465,7 +467,18 @@ export function validateOrderStatusTransition(
     return { valid: true };
   }
 
-  // 2. Already final
+  // 2. Division and district are mandatory to change order status
+  const trimmedDivision = (division || "").trim();
+  const trimmedDistrict = (district || "").trim();
+  if (!trimmedDivision || !trimmedDistrict) {
+    return {
+      valid: false,
+      code: "GEO_LOCATION_REQUIRED",
+      reason: "Delivery division and district are required before changing order status.",
+    };
+  }
+
+  // 3. Already final
   if (normalizedCurrent === "cancelled" || normalizedCurrent === "returned") {
     return {
       valid: false,

@@ -23,6 +23,7 @@ import {
   Minus,
   Receipt,
   Clock,
+  Calendar,
   X,
 } from "lucide-react";
 import {
@@ -54,7 +55,7 @@ import {
   FormFieldLabel,
   FormFieldError,
 } from "@/components/ui/tanstack-form";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct } from "@/types/order";
 import {
@@ -896,19 +897,28 @@ export function OrderFormDialog({
           className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] max-w-7xl h-[96vh] max-h-[96vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8"
         >
           <DialogHeader className="border-b pb-3">
-            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              {mode === "edit" ? (
-                <>
-                  <Edit className="h-5 w-5 text-amber-600" />
-                  <span>Edit Order {order?.id}</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="h-5 w-5 text-amber-600" />
-                  <span>Create Manual Order</span>
-                </>
-              )}
-            </DialogTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                {mode === "edit" ? (
+                  <>
+                    <Edit className="h-5 w-5 text-amber-600" />
+                    <span>Edit Order {order?.id}</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5 text-amber-600" />
+                    <span>Create Manual Order</span>
+                  </>
+                )}
+              </DialogTitle>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-muted/60 border text-xs sm:text-sm text-muted-foreground font-medium w-fit">
+                <Calendar className="h-4 w-4 text-amber-600 shrink-0" />
+                <span className="text-muted-foreground">{mode === "edit" ? "Order Placed:" : "Order Date:"}</span>
+                <span className="text-foreground font-semibold">
+                  {order?.date ? formatDateTime(order.date) : formatDateTime(new Date())}
+                </span>
+              </div>
+            </div>
             <DialogDescription>
               {mode === "edit"
                 ? "Update customer contact info, shipping destination, payment, status, and purchased product quantities."
@@ -1391,14 +1401,14 @@ export function OrderFormDialog({
                     <RefreshCw className="h-4 w-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">Order Status & Channel</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Order Status, Channel & Date</h3>
                     <p className="text-[11px] text-muted-foreground">
-                      Current workflow processing status and incoming order sales channel
+                      Current workflow processing status, incoming order sales channel, and order placement timestamp
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-0.5">
                   <form.Field name="status">
                     {(field) => (
                       <FormFieldItem>
@@ -1483,6 +1493,22 @@ export function OrderFormDialog({
                       </FormFieldItem>
                     )}
                   </form.Field>
+
+                  <FormFieldItem>
+                    <FormFieldLabel htmlFor="order_form_datetime_display">
+                      Order Date & Time
+                    </FormFieldLabel>
+                    <div
+                      id="order_form_datetime_display"
+                      className="w-full h-9 rounded-lg border border-input bg-muted/40 px-3 flex items-center gap-2 text-sm text-foreground select-all"
+                      title={order?.date ? `Order placed on ${formatDateTime(order.date)}` : `Current order timestamp`}
+                    >
+                      <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="font-medium text-xs sm:text-sm truncate">
+                        {order?.date ? formatDateTime(order.date) : formatDateTime(new Date())}
+                      </span>
+                    </div>
+                  </FormFieldItem>
                 </div>
 
                 {/* Conditional Cancellation / Return Reason */}
@@ -1645,8 +1671,8 @@ export function OrderFormDialog({
                         ) : (
                           <div className="space-y-3">
                             <div className="overflow-x-auto rounded-lg border">
-                              <table className="w-full text-left text-xs">
-                                <thead className="bg-muted/60 text-muted-foreground uppercase text-[10px] font-semibold tracking-wider border-b">
+                              <table className="w-full text-left text-sm">
+                                <thead className="bg-muted/60 text-muted-foreground uppercase text-xs font-semibold tracking-wider border-b">
                                   <tr>
                                     <th className="py-2.5 px-3">Product</th>
                                     <th className="py-2.5 px-3 w-32">Unit Price (BDT)</th>
@@ -1678,19 +1704,19 @@ export function OrderFormDialog({
                                               </div>
                                             )}
                                             <div className="min-w-0">
-                                              <p className="font-medium text-foreground text-xs truncate max-w-sm sm:max-w-md">
+                                              <p className="font-medium text-foreground text-sm truncate max-w-sm sm:max-w-md">
                                                 {item.product_name}
                                               </p>
                                               <div className="flex items-center gap-1.5 mt-0.5">
                                                 {item.variant_name && (
                                                   <Badge
                                                     variant="outline"
-                                                    className="text-[10px] py-0 px-1.5 h-4 border-amber-600/30 text-amber-700 dark:text-amber-400 font-medium"
+                                                    className="text-xs py-0.5 px-2 border-amber-600/30 text-amber-700 dark:text-amber-400 font-medium"
                                                   >
                                                     {item.variant_name}
                                                   </Badge>
                                                 )}
-                                                <span className="text-[10px] font-mono text-muted-foreground">
+                                                <span className="text-xs font-mono text-muted-foreground">
                                                   SKU: {item.sku}
                                                 </span>
                                               </div>
@@ -1699,7 +1725,7 @@ export function OrderFormDialog({
                                         </td>
                                         <td className="py-2.5 px-3">
                                           <div className="relative">
-                                            <span className="absolute left-2.5 top-1.5 text-xs text-muted-foreground font-mono">
+                                            <span className="absolute left-2.5 top-2 text-xs text-muted-foreground font-mono">
                                               ৳
                                             </span>
                                             <Input
@@ -1709,7 +1735,7 @@ export function OrderFormDialog({
                                               onChange={(e) =>
                                                 handleUpdateItemPrice(item.id, Number(e.target.value) || 0)
                                               }
-                                              className="h-7 w-28 pl-5 text-xs font-mono font-medium"
+                                              className="h-8 w-28 pl-5 text-sm font-mono font-medium"
                                               title="Editable unit price"
                                             />
                                           </div>
@@ -1727,7 +1753,7 @@ export function OrderFormDialog({
                                             >
                                               <Minus className="h-3 w-3" />
                                             </Button>
-                                            <span id={`item-qty-val-${item.sku}`} className="w-8 text-center font-bold font-mono text-xs">
+                                            <span id={`item-qty-val-${item.sku}`} className="w-8 text-center font-bold font-mono text-sm">
                                               {item.quantity}
                                             </span>
                                             <Button
@@ -1743,7 +1769,7 @@ export function OrderFormDialog({
                                           </div>
                                         </td>
                                         <td className="py-2.5 px-3 text-right">
-                                          <span className="font-mono font-semibold text-foreground text-xs">
+                                          <span className="font-mono font-semibold text-foreground text-sm">
                                             ৳ {item.line_total.toLocaleString()}
                                           </span>
                                         </td>
@@ -2099,7 +2125,7 @@ export function OrderFormDialog({
                                         Staff
                                       </Badge>
                                     )}
-                                    <span className="text-[10px] text-muted-foreground font-mono">{n.created_at}</span>
+                                    <span className="text-[10px] text-muted-foreground font-mono">{formatDateTime(n.created_at)}</span>
 
                                     {/* Edit and Delete Actions */}
                                     <div className="flex items-center gap-0.5 ml-1">
