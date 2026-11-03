@@ -61,8 +61,13 @@ import {
   trackInitiateCheckout,
   trackAddToCart,
   resetInitiateCheckoutTracking,
+  trackUserProperties,
+  resetUserPropertiesTracking,
   setPixelUserPhone,
+  generateEventId,
+  getClientFbpAndFbc,
 } from "@/lib/facebook-pixel";
+import { sendCapiInitiateCheckoutAction } from "@/actions/facebook-capi";
 
 interface CheckoutSectionProps {
   lang: StorefrontLang;
@@ -118,18 +123,34 @@ export function CheckoutSection({
         0
       );
 
-      trackInitiateCheckout({
-        items: currentItems.map((item) => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          productName: item.productName,
-          quantity: Number(item.quantity) || 1,
-          unitPrice: Number(item.unitPrice) || 0,
-        })),
+      const itemsPayload = currentItems.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        quantity: Number(item.quantity) || 1,
+        unitPrice: Number(item.unitPrice) || 0,
+      }));
+
+      const { eventId, fired } = trackInitiateCheckout({
+        items: itemsPayload,
         value: totalVal,
         phone: phoneInput?.trim() || undefined,
         currency: "BDT",
       });
+
+      if (fired && eventId) {
+        const { fbp, fbc } = getClientFbpAndFbc();
+        sendCapiInitiateCheckoutAction({
+          eventId,
+          items: itemsPayload,
+          value: totalVal,
+          phone: phoneInput?.trim() || undefined,
+          currency: "BDT",
+          url: typeof window !== "undefined" ? window.location.href : undefined,
+          fbp,
+          fbc,
+        }).catch(() => {});
+      }
     },
     [store]
   );
@@ -147,6 +168,7 @@ export function CheckoutSection({
       clearDraftRef.current?.();
       dispatch(clearCart());
       resetInitiateCheckoutTracking();
+      resetUserPropertiesTracking();
 
       const successMsg = lang === "bn"
         ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${result.orderNumber})`
@@ -465,6 +487,9 @@ const form = useForm({
     // Cancel any pending debounced sync so no redundant background draft requests occur
     cancelPendingSyncRef.current?.();
 
+    const purchaseEventId = generateEventId();
+    const { fbp, fbc } = getClientFbpAndFbc();
+
     try {
       await createOrderMutation.mutateAsync({
         orderId: draftOrderIdRef.current || undefined,
@@ -474,6 +499,10 @@ const form = useForm({
         deliveryZone,
         addressLine: value.addressLine?.trim() || undefined,
         customerNote: value.customerNote?.trim() || undefined,
+        eventId: purchaseEventId,
+        fbp: fbp || undefined,
+        fbc: fbc || undefined,
+        eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
         items: cartItems.map((item) => ({
           productId: item.productId,
           productName: item.productName,
@@ -791,7 +820,13 @@ return (
                         }}
                         onBlur={() => {
                           field.handleBlur();
-                          if (field.state.value) setPixelUserPhone(field.state.value);
+                          const name = form.getFieldValue("customerName");
+                          if (field.state.value) {
+                            trackUserProperties({
+                              phone: field.state.value,
+                              name: name?.trim() || undefined,
+                            });
+                          }
                           if (!isOrderProcessing) triggerSyncNow();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"

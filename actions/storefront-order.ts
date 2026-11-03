@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { normalizeBdPhone } from "@/lib/supabase/api";
 import { getOtherOrderInsight } from "@/types/order";
+import { captureStorefrontMetaTracking } from "@/actions/facebook-capi";
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -34,6 +35,11 @@ export interface StorefrontOrderPayload {
   variantName?: string;
   quantity?: number;
   unitPrice?: number;
+  // Facebook CAPI Attribution & Deduplication
+  eventId?: string;
+  fbp?: string;
+  fbc?: string;
+  eventSourceUrl?: string;
 }
 
 export interface StorefrontOrderResult {
@@ -47,6 +53,7 @@ export interface StorefrontOrderResult {
   customerName?: string;
   phone?: string;
   deliveryZone?: "inside_dhaka" | "outside_dhaka";
+  eventId?: string;
   error?: string;
 }
 
@@ -190,6 +197,13 @@ export async function placeStorefrontOrderAction(
 
       const client = supabaseAdmin || supabase;
 
+      const metaTracking = await captureStorefrontMetaTracking({
+        eventId: payload.eventId,
+        fbp: payload.fbp,
+        fbc: payload.fbc,
+        eventSourceUrl: payload.eventSourceUrl,
+      });
+
       // =========================================================================
       // Tier 1: Database-Level Atomic Transaction via PostgreSQL RPC
       // If public.process_storefront_order is available, the entire order creation,
@@ -222,6 +236,35 @@ export async function placeStorefrontOrderAction(
         const { data: rpcData, error: rpcErr } = await client.rpc("process_storefront_order", rpcPayload);
 
         if (!rpcErr && rpcData?.success) {
+          // Persist meta_tracking in order's attribution for delayed CAPI purchase upon admin confirmation
+          try {
+            const { data: currentOrderRow } = await client
+              .from("orders")
+              .select("attribution")
+              .eq("id", rpcData.order_id)
+              .maybeSingle();
+
+            const currentAttr =
+              currentOrderRow?.attribution && typeof currentOrderRow.attribution === "object"
+                ? currentOrderRow.attribution
+                : {};
+
+            await client
+              .from("orders")
+              .update({
+                attribution: {
+                  ...currentAttr,
+                  meta_tracking: {
+                    ...(currentAttr.meta_tracking || {}),
+                    ...metaTracking,
+                  },
+                },
+              })
+              .eq("id", rpcData.order_id);
+          } catch (attrErr) {
+            console.warn("[Storefront Order] Failed to update attribution with meta_tracking:", attrErr);
+          }
+
           return {
             success: true,
             orderId: rpcData.order_id,
@@ -233,6 +276,7 @@ export async function placeStorefrontOrderAction(
             customerName: rpcData.customer_name || undefined,
             phone: rpcData.phone,
             deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
+            eventId: payload.eventId,
           };
         }
 
@@ -470,6 +514,7 @@ export async function placeStorefrontOrderAction(
             has_other_orders: hasOtherOrders,
             other_order_numbers: otherOrderNumbers,
             other_orders: otherOrdersList,
+            meta_tracking: metaTracking,
           },
           updated_at: new Date().toISOString(),
         };
@@ -516,6 +561,7 @@ export async function placeStorefrontOrderAction(
             has_other_orders: hasOtherOrders,
             other_order_numbers: otherOrderNumbers,
             other_orders: otherOrdersList,
+            meta_tracking: metaTracking,
           },
         };
 
@@ -682,6 +728,7 @@ export async function placeStorefrontOrderAction(
         customerName: resolvedCustomerName || undefined,
         phone: normalizedPhone,
         deliveryZone: payload.deliveryZone,
+        eventId: payload.eventId,
       };
     } catch (err: any) {
       console.error("Unexpected error in placeStorefrontOrderAction:", err);

@@ -20,6 +20,7 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { selectCartItems } from "@/lib/redux/slices/cart-slice";
 import { StorefrontOrderItem } from "@/actions/storefront-order";
 import { useToast } from "@/components/ui/toast-notification";
+import { setPixelUserPhone } from "@/lib/facebook-pixel";
 
 interface PhoneHelpFormProps {
   lang?: StorefrontLang;
@@ -97,8 +98,9 @@ export function PhoneHelpForm({
                   items: resolvedItems,
                 });
 
-                  if(res.success) {
-              lastSubmittedPhoneRef.current = validNormalizedPhone;
+                  if (res.success) {
+                    setPixelUserPhone(validNormalizedPhone);
+                    lastSubmittedPhoneRef.current = validNormalizedPhone;
               setSubmittedData({
                 phone: validLocalPhone,
                 orderNumber: res.orderNumber || "",
@@ -232,6 +234,11 @@ export function PhoneHelpForm({
                       onChange={(e) => {
                         setPhone(e.target.value);
                         if (errorMessage) setErrorMessage(null);
+                      }}
+                      onBlur={() => {
+                        if (parsedPhone.isValid && parsedPhone.normalized) {
+                          setPixelUserPhone(parsedPhone.normalized);
+                        }
                       }}
                       placeholder={t.phoneHelpInputPlaceholder}
                       className={`w-full font-mono text-base sm:text-lg font-bold px-3.5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl border-2 transition-all outline-hidden bg-stone-50/80 dark:bg-stone-850 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 placeholder:font-sans placeholder:text-sm ${isPhoneValid

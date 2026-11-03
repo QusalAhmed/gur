@@ -254,7 +254,7 @@ function PrintContent() {
             margin: 0 !important;
             padding: 0 !important;
             width: ${paperFormat === "a4" ? "100%" : paperFormat === "58mm" ? "58mm" : "50.8mm"} !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            font-family: var(--font-hind-siliguri), "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Bengali", sans-serif !important;
           }
 
           /* Hide UI Chrome */

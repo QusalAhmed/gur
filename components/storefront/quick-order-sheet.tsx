@@ -16,8 +16,12 @@ import { useToast } from "@/components/ui/toast-notification";
 import {
   trackInitiateCheckout,
   resetInitiateCheckoutTracking,
+  resetUserPropertiesTracking,
   setPixelUserPhone,
+  generateEventId,
+  getClientFbpAndFbc,
 } from "@/lib/facebook-pixel";
+import { sendCapiInitiateCheckoutAction } from "@/actions/facebook-capi";
 
 export interface SelectedProductData {
   productId: string;
@@ -106,11 +110,12 @@ export function QuickOrderSheet({
 
   // TanStack Query Mutation for Order Creation
   const createOrderMutation = useCreateOrderMutation({
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       // Clear draft tracking, Redux cart, and pixel checkout tracking on successful order
       clearDraft();
       dispatch(clearCart());
       resetInitiateCheckoutTracking();
+      resetUserPropertiesTracking();
       setOrderResult(res);
 
       if (toast.isAvailable) {
@@ -158,18 +163,34 @@ export function QuickOrderSheet({
   const triggerQuickOrderInitiateCheckout = React.useCallback(
     (phoneInput?: string) => {
       if (resolvedItems.length === 0) return;
-      trackInitiateCheckout({
-        items: resolvedItems.map((i) => ({
-          productId: i.productId,
-          variantId: i.variantId,
-          productName: i.productName,
-          quantity: Number(i.quantity) || 1,
-          unitPrice: Number(i.unitPrice) || 0,
-        })),
+      const itemsPayload = resolvedItems.map((i) => ({
+        productId: i.productId,
+        variantId: i.variantId,
+        productName: i.productName,
+        quantity: Number(i.quantity) || 1,
+        unitPrice: Number(i.unitPrice) || 0,
+      }));
+
+      const { eventId, fired } = trackInitiateCheckout({
+        items: itemsPayload,
         value: subtotal,
         phone: phoneInput?.trim() || customerPhone?.trim() || undefined,
         currency: "BDT",
       });
+
+      if (fired && eventId) {
+        const { fbp, fbc } = getClientFbpAndFbc();
+        sendCapiInitiateCheckoutAction({
+          eventId,
+          items: itemsPayload,
+          value: subtotal,
+          phone: phoneInput?.trim() || customerPhone?.trim() || undefined,
+          currency: "BDT",
+          url: typeof window !== "undefined" ? window.location.href : undefined,
+          fbp,
+          fbc,
+        }).catch(() => {});
+      }
     },
     [resolvedItems, subtotal, customerPhone]
   );
@@ -209,6 +230,9 @@ export function QuickOrderSheet({
     // Cancel any pending debounced sync before submitting final order
     cancelPendingSync();
 
+    const purchaseEventId = generateEventId();
+    const { fbp, fbc } = getClientFbpAndFbc();
+
     try {
       await createOrderMutation.mutateAsync({
         orderId: draftOrderId || undefined,
@@ -217,6 +241,10 @@ export function QuickOrderSheet({
         customerPhone: parseBdPhone(customerPhone).local || customerPhone.trim(),
         deliveryZone,
         addressLine: addressLine.trim() || undefined,
+        eventId: purchaseEventId,
+        fbp: fbp || undefined,
+        fbc: fbc || undefined,
+        eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
         items: formattedItems,
       });
     } catch {

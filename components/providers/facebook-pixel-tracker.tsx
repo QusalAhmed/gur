@@ -2,22 +2,34 @@
 
 import { useEffect, useRef, Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { trackPageView } from "@/lib/facebook-pixel";
+import { trackPageView, getClientFbpAndFbc } from "@/lib/facebook-pixel";
+import { sendCapiPageViewAction } from "@/actions/facebook-capi";
 
 function FacebookPixelTrackerInner() {
   const pathname = usePathname();
-  const isFirstLoad = useRef(true);
+  const lastTrackedPath = useRef<string | null>(null);
 
   useEffect(() => {
-    // The base inline script in layout.tsx already executes PageView on initial page load.
-    // We only trigger PageView on subsequent client-side route transitions.
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
+    if (!pathname || pathname.startsWith("/admin")) {
       return;
     }
 
-    if (pathname && !pathname.startsWith("/admin")) {
-      trackPageView();
+    // Prevent duplicate firing for identical path in single session
+    if (lastTrackedPath.current === pathname) {
+      return;
+    }
+    lastTrackedPath.current = pathname;
+
+    const eventId = trackPageView();
+    if (eventId) {
+      const { fbp, fbc } = getClientFbpAndFbc();
+      const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
+      sendCapiPageViewAction({
+        eventId,
+        url: currentUrl,
+        fbp,
+        fbc,
+      }).catch(() => {});
     }
   }, [pathname]);
 

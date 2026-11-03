@@ -17,7 +17,11 @@ import {
   recordProductView,
   selectHasViewedProduct,
 } from "@/lib/redux/slices/pixel-slice";
-import { trackViewContent, trackAddToCart } from "@/lib/facebook-pixel";
+import { trackViewContent, trackAddToCart, getClientFbpAndFbc } from "@/lib/facebook-pixel";
+import {
+  sendCapiViewContentAction,
+  sendCapiAddToCartAction,
+} from "@/actions/facebook-capi";
 import {
   Carousel,
   CarouselContent,
@@ -110,12 +114,23 @@ export function ProductCard({
       if (isActive) {
         timer = setTimeout(() => {
           dispatch(recordProductView(product.id));
-          trackViewContent({
+          const eventId = trackViewContent({
             productId: product.id,
             productName: product.name,
             price: Number(selectedVariant.price) || 0,
             currency: "BDT",
           });
+          const { fbp, fbc } = getClientFbpAndFbc();
+          sendCapiViewContentAction({
+            eventId,
+            productId: product.id,
+            productName: product.name,
+            price: Number(selectedVariant.price) || 0,
+            currency: "BDT",
+            url: typeof window !== "undefined" ? window.location.href : undefined,
+            fbp,
+            fbc,
+          }).catch(() => {});
         }, 5000);
       }
       return () => {
@@ -134,12 +149,23 @@ export function ProductCard({
           if (!timer) {
             timer = setTimeout(() => {
               dispatch(recordProductView(product.id));
-              trackViewContent({
+              const eventId = trackViewContent({
                 productId: product.id,
                 productName: product.name,
                 price: Number(selectedVariant.price) || 0,
                 currency: "BDT",
               });
+              const { fbp, fbc } = getClientFbpAndFbc();
+              sendCapiViewContentAction({
+                eventId,
+                productId: product.id,
+                productName: product.name,
+                price: Number(selectedVariant.price) || 0,
+                currency: "BDT",
+                url: typeof window !== "undefined" ? window.location.href : undefined,
+                fbp,
+                fbc,
+              }).catch(() => {});
               timer = null;
             }, 5000);
           }
@@ -203,7 +229,7 @@ export function ProductCard({
     } else {
       // Whenever quantity increases (adding to cart or increasing pack count), fire AddToCart
       if (newUnit > currentUnit) {
-        trackAddToCart({
+        const eventId = trackAddToCart({
           productId: product.id,
           productName: product.name,
           variantId: selectedVariant.id,
@@ -212,6 +238,18 @@ export function ProductCard({
           quantity: newUnit,
           currency: "BDT",
         });
+        const { fbp, fbc } = getClientFbpAndFbc();
+        sendCapiAddToCartAction({
+          eventId,
+          productId: product.id,
+          productName: product.name,
+          price: unitPrice,
+          quantity: newUnit,
+          currency: "BDT",
+          url: typeof window !== "undefined" ? window.location.href : undefined,
+          fbp,
+          fbc,
+        }).catch(() => {});
       }
 
       if (currentUnit === 0) {

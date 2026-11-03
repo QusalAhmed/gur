@@ -17,7 +17,8 @@ import {
   removeFromCart,
   clearCart,
 } from "@/lib/redux/slices/cart-slice";
-import { trackAddToCart } from "@/lib/facebook-pixel";
+import { trackAddToCart, getClientFbpAndFbc } from "@/lib/facebook-pixel";
+import { sendCapiAddToCartAction } from "@/actions/facebook-capi";
 
 interface CartSheetProps {
   lang: StorefrontLang;
@@ -205,7 +206,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                 onClick={() => {
                                   const newQuantity = item.quantity + 1;
                                   dispatch(incrementQuantity({ productId: item.productId, variantId: item.variantId }));
-                                  trackAddToCart({
+                                  const eventId = trackAddToCart({
                                     productId: item.productId,
                                     productName: item.productName,
                                     variantId: item.variantId,
@@ -214,6 +215,18 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                     quantity: newQuantity,
                                     currency: "BDT",
                                   });
+                                  const { fbp, fbc } = getClientFbpAndFbc();
+                                  sendCapiAddToCartAction({
+                                    eventId,
+                                    productId: item.productId,
+                                    productName: item.productName,
+                                    price: item.unitPrice,
+                                    quantity: newQuantity,
+                                    currency: "BDT",
+                                    url: typeof window !== "undefined" ? window.location.href : undefined,
+                                    fbp,
+                                    fbc,
+                                  }).catch(() => {});
                                 }}
                                 disabled={item.quantity >= 50}
                                 className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-950 dark:text-amber-100 flex items-center justify-center font-bold active:scale-95 disabled:opacity-40 transition-all touch-manipulation"

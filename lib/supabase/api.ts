@@ -1667,6 +1667,16 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
       throw new Error(insertErr?.message || "Failed to save order in database");
     }
 
+    if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(createdOrder.status)) {
+      import("@/actions/facebook-capi")
+        .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+          triggerCapiPurchaseOnOrderConfirmedAction(createdOrder.id).catch(() => {});
+        })
+        .catch((err) => {
+          console.warn("[Create Order] Failed to import facebook-capi action:", err);
+        });
+    }
+
     return createdOrder;
   }
 
@@ -1869,6 +1879,16 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     } catch (e) {
       console.warn("Could not set phone fields on newly created RPC order:", e);
     }
+  }
+
+  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(createdResult.status)) {
+    import("@/actions/facebook-capi")
+      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+        triggerCapiPurchaseOnOrderConfirmedAction(createdResult.id).catch(() => {});
+      })
+      .catch((err) => {
+        console.warn("[Create Order] Failed to import facebook-capi action:", err);
+      });
   }
 
   return createdResult;
@@ -2130,7 +2150,7 @@ export async function updateOrderInDb(
     grand_total: grandTotal,
     amount_paid: updatedOrder.amount_paid ?? 0,
     customer_note: updatedOrder.customer_note || null,
-    attribution: {},
+    ...(updatedOrder.attribution ? { attribution: updatedOrder.attribution } : {}),
     cancel_reason: updatedOrder.cancel_reason || null,
     shipping_method_name: updatedOrder.courier_name || null,
     ...(updatedOrder.courier_consignment_id !== undefined
@@ -2315,6 +2335,17 @@ export async function updateOrderInDb(
 
   updatedOrder.subtotal = subtotal;
   updatedOrder.grand_total = grandTotal;
+
+  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
+    import("@/actions/facebook-capi")
+      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+        triggerCapiPurchaseOnOrderConfirmedAction(orderId).catch(() => {});
+      })
+      .catch((err) => {
+        console.warn("[Update Order] Failed to import facebook-capi action:", err);
+      });
+  }
+
   return updatedOrder;
 }
 
@@ -2526,6 +2557,16 @@ export async function updateOrderStatusInDb(
     courier_name: courierName !== undefined ? courierName : baseOrder?.courier_name,
     events: [newEvent, ...(baseOrder?.events || [])],
   };
+
+  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
+    import("@/actions/facebook-capi")
+      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+        triggerCapiPurchaseOnOrderConfirmedAction(orderId).catch(() => {});
+      })
+      .catch((err) => {
+        console.warn("[Update Order Status] Failed to import facebook-capi action:", err);
+      });
+  }
 
   return finalOrder;
 }
@@ -3318,6 +3359,18 @@ export async function bulkUpdateOrderStatusInDb(
         console.warn("Could not record packaging checklist notes for processing orders:", packErr);
       }
     }
+  }
+
+  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
+    import("@/actions/facebook-capi")
+      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+        for (const num of actuallyUpdatedNumbers) {
+          triggerCapiPurchaseOnOrderConfirmedAction(num).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.warn("[Bulk Update Order Status] Failed to import facebook-capi action:", err);
+      });
   }
 
   return {

@@ -829,6 +829,17 @@ export async function updateOrderStatusWithSteadfastAction(
     };
   }
 
+  // Trigger Meta CAPI Purchase event if order reached confirmed/progressed status (one-time guard built-in)
+  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
+    import("@/actions/facebook-capi")
+      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
+        triggerCapiPurchaseOnOrderConfirmedAction(orderId).catch(() => {});
+      })
+      .catch((err) => {
+        console.warn("[Steadfast Action] Failed to import facebook-capi action:", err);
+      });
+  }
+
   const updatedOrder = updatedRows && updatedRows[0]
     ? formatDbOrderRecord(updatedRows[0])
     : {
