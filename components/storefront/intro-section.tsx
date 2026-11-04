@@ -163,7 +163,7 @@ export function IntroSection({
                       <RollingNumber
                         value={s.number}
                         isActive={isActive}
-                        delay={0.1 + idx * 0.08}
+                        delay={0.18 + idx * 0.1}
                       />
                     </span>
                   </div>

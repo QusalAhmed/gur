@@ -59,9 +59,9 @@ function formatNumberWithCommas(num: number, isBengali: boolean): string {
 }
 
 /**
- * Dynamic Rolling & Count-Up Number Component.
- * Visibly counts up from 0 to the culminated number (e.g. 0 -> 20+, 0 -> 5,000+, 0 -> 100%, 0 -> 64)
- * with smooth cubic-bezier easing, live ticking, and SSR/accessibility compliance.
+ * Dynamic Count-Up Number Component.
+ * First shows 0 (or "০+", "০%", "০") then visibly counts up to culmination
+ * using Framer Motion with smooth ease-out and an accent celebration pulse.
  */
 export function RollingNumber({
   value,
@@ -84,9 +84,12 @@ export function RollingNumber({
   const stringValue = String(value);
   const { target, prefix, suffix, isBengali } = parseNumberString(stringValue);
 
+  // Initial zero display (e.g. "০+", "০%", "০")
+  const zeroDisplay = `${prefix}${formatNumberWithCommas(0, isBengali)}${suffix}`;
+
   // Auto-calibrate duration if not provided
   const resolvedDuration =
-    duration ?? (target >= 1000 ? 2.0 : target >= 100 ? 1.7 : target >= 50 ? 1.5 : 1.3);
+    duration ?? (target >= 1000 ? 1.6 : target >= 100 ? 1.4 : target >= 50 ? 1.2 : 1.0);
 
   // IntersectionObserver fallback for standalone / non-snap environments
   useEffect(() => {
@@ -116,11 +119,14 @@ export function RollingNumber({
 
   const shouldAnimate = isActive !== undefined ? isActive : isInView;
 
-  // Active Count-up Animation Loop powered by Framer Motion
+  // Active Count-up Animation Loop powered by Framer Motion: starts strictly at 0 then counts to target
   useEffect(() => {
     if (!shouldAnimate || target <= 0) {
       return;
     }
+
+    setCurrentValue(0);
+    setIsComplete(false);
 
     const controls = animate(0, target, {
       duration: resolvedDuration,
@@ -138,14 +144,21 @@ export function RollingNumber({
     return () => controls.stop();
   }, [shouldAnimate, target, resolvedDuration, delay]);
 
-  // SSR fallback: render static culminated value for SEO & instant paint stability
+  // SSR fallback: render 0 with prefix/suffix so the user sees 0 first before hydration/animation
   if (!isHydrated) {
-    return <span className={className}>{stringValue}</span>;
+    return (
+      <span
+        className={`inline-flex items-center align-middle font-mono font-black tabular-nums ${className}`}
+        aria-label={stringValue}
+      >
+        <span className="sr-only">{stringValue}</span>
+        <span aria-hidden="true">{zeroDisplay}</span>
+      </span>
+    );
   }
 
-  const effectiveValue = shouldAnimate ? currentValue : 0;
   const isCulminated = shouldAnimate && isComplete;
-  const formattedDisplay = `${prefix}${formatNumberWithCommas(effectiveValue, isBengali)}${suffix}`;
+  const formattedDisplay = `${prefix}${formatNumberWithCommas(currentValue, isBengali)}${suffix}`;
 
   return (
     <span
@@ -155,11 +168,8 @@ export function RollingNumber({
     >
       <span className="sr-only">{stringValue}</span>
       <motion.span
-        key={isCulminated ? "culminated" : "counting"}
-        initial={{ opacity: 0.85 }}
         animate={{
-          opacity: 1,
-          scale: isCulminated ? [1, 1.08, 1] : 1,
+          scale: isCulminated ? [1, 1.12, 1] : 1,
         }}
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="inline-block tabular-nums"
