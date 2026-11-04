@@ -542,9 +542,9 @@ export const orderNoteTextSchema = z
   );
 
 export const orderNoteTypeSchema = z.enum(
-  ["internal", "customer", "delivery", "packaging"],
+  ["internal", "customer", "delivery", "packaging", "system"],
   {
-    message: "Note type must be internal, customer, delivery, or packaging",
+    message: "Note type must be internal, customer, delivery, packaging, or system",
   }
 );
 

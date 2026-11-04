@@ -16,9 +16,11 @@ export type OrderNoteType =
   | "customer"
   | "delivery"
   | "packaging"
+  | "system"
   | "internal_staff_note"
   | "delivery_note"
-  | "packaging_note";
+  | "packaging_note"
+  | "system_note";
 
 export interface OrderNote {
   id: string;

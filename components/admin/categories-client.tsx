@@ -48,7 +48,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
-import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import { CategoryFormDialog } from "@/components/admin/category-form-dialog";
 
 export function CategoriesClient() {
@@ -56,7 +56,6 @@ export function CategoriesClient() {
 
   const [activeTab, setActiveTab] = React.useState("all");
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [toast, setToast] = React.useState<ToastData | null>(null);
 
   // Modal Dialog States
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -87,19 +86,15 @@ export function CategoriesClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "categories-list"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      setToast({
-        type: res.archived ? "warning" : "success",
-        title: res.archived ? "Category Deactivated" : "Category Deleted",
-        message: res.message,
-      });
+      if (res.archived) {
+        toast.warning(res.message);
+      } else {
+        toast.success(res.message);
+      }
       setCategoryToDelete(null);
     },
     onError: (err: any) => {
-      setToast({
-        type: "destructive",
-        title: "Deletion Error",
-        message: err?.message || "Failed to delete category.",
-      });
+      toast.error(err?.message || "Failed to delete category.");
       setCategoryToDelete(null);
     },
     onSettled: () => {
@@ -116,18 +111,10 @@ export function CategoriesClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "categories-list"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      setToast({
-        type: "success",
-        title: "Status Updated",
-        message: "Category status updated successfully.",
-      });
+      toast.success("Category status updated successfully.");
     },
     onError: (err: any) => {
-      setToast({
-        type: "destructive",
-        title: "Update Failed",
-        message: err?.message || "Failed to update category status.",
-      });
+      toast.error(err?.message || "Failed to update category status.");
     },
   });
 
@@ -164,17 +151,9 @@ export function CategoriesClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "categories-list"] });
       clearSelection();
-      setToast({
-        type: "success",
-        title: "Bulk Status Updated",
-        message: `Updated ${selected.length} categories to ${isActive ? "Active" : "Draft"}.`,
-      });
+      toast.success(`Updated ${selected.length} categories to ${isActive ? "Active" : "Draft"}.`);
     } catch (err: any) {
-      setToast({
-        type: "destructive",
-        title: "Bulk Update Failed",
-        message: err?.message || "Failed to update some categories.",
-      });
+      toast.error(err?.message || "Failed to update some categories.");
     }
   };
 
@@ -193,17 +172,11 @@ export function CategoriesClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "categories-list"] });
       clearSelection();
-      setToast({
-        type: "success",
-        title: "Bulk Deletion Completed",
-        message: `Deleted ${deleted} categories. Safely deactivated ${deactivated} categories with products.`,
-      });
+      toast.success(
+        `Deleted ${deleted} categories. Safely deactivated ${deactivated} categories with products.`
+      );
     } catch (err: any) {
-      setToast({
-        type: "destructive",
-        title: "Bulk Delete Failed",
-        message: err?.message || "Failed to delete some categories.",
-      });
+      toast.error(err?.message || "Failed to delete some categories.");
     }
   };
 
@@ -442,8 +415,6 @@ export function CategoriesClient() {
 
   return (
     <div className="space-y-6">
-      <ToastNotificationPortal toast={toast} onDismiss={() => setToast(null)} />
-
       {/* Category Create/Edit Modal Dialog */}
       <CategoryFormDialog
         key={dialogOpen ? `${selectedCategory?.id || "create"}-${prefilledParentId || "none"}` : "closed"}
@@ -452,20 +423,8 @@ export function CategoriesClient() {
         category={selectedCategory}
         parentCategories={categories}
         prefilledParentId={prefilledParentId}
-        onSuccess={(msg) =>
-          setToast({
-            type: "success",
-            title: "Success",
-            message: msg,
-          })
-        }
-        onError={(err) =>
-          setToast({
-            type: "destructive",
-            title: "Error",
-            message: err,
-          })
-        }
+        onSuccess={(msg) => toast.success(msg)}
+        onError={(err) => toast.error(err)}
       />
 
       {/* Page Header */}

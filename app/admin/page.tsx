@@ -261,6 +261,13 @@ const recentOrderColumns: ColumnDef<RecentOrderItem>[] = [
 export default function AdminDashboard() {
   const router = useRouter();
   const { storeName } = useSiteSettings();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const displayStoreName = mounted ? storeName : "GUR";
 
   return (
     <div className="space-y-6">
@@ -273,8 +280,8 @@ export default function AdminDashboard() {
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">
-            Overview and real-time operations performance for {storeName}
+          <p className="text-muted-foreground text-sm" suppressHydrationWarning>
+            Overview and real-time operations performance for {displayStoreName}
           </p>
         </div>
       </motion.div>

@@ -1,0 +1,105 @@
+"use client";
+
+const SOUND_STORAGE_KEY = "gur_admin_sound_muted";
+
+let sharedAudioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const AudioCtxClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioCtxClass) return null;
+
+    if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+      sharedAudioCtx = new AudioCtxClass();
+    }
+
+    if (sharedAudioCtx.state === "suspended") {
+      // User gesture needed on some browsers to resume
+      sharedAudioCtx.resume().catch(() => {});
+    }
+
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if notification chime is muted
+ */
+export function isNotificationSoundMuted(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(SOUND_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Toggle or set notification chime mute state
+ */
+export function setNotificationSoundMuted(muted: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SOUND_STORAGE_KEY, muted ? "true" : "false");
+  } catch {}
+}
+
+/**
+ * Plays a clean, pleasant two-tone chime (E5 -> G#5) via Web Audio API
+ * No external MP3 file or network request required.
+ */
+export function playNotificationChime(): void {
+  if (typeof window === "undefined") return;
+  if (isNotificationSoundMuted()) return;
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+
+    // Tone 1: E5 (659.25 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(659.25, now);
+
+    gain1.gain.setValueAtTime(0.001, now);
+    gain1.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+
+    osc1.start(now);
+    osc1.stop(now + 0.2);
+
+    // Tone 2: G#5 (830.61 Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(830.61, now + 0.09);
+
+    gain2.gain.setValueAtTime(0.001, now + 0.09);
+    gain2.gain.exponentialRampToValueAtTime(0.22, now + 0.11);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+
+    osc2.start(now + 0.09);
+    osc2.stop(now + 0.5);
+  } catch {
+    // Audio context play error handled silently
+  }
+}
+

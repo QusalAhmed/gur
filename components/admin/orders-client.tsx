@@ -4,12 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  useToast,
-  ToastNotificationPortal,
-  type ToastData,
-  type ToastType,
-} from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import {
   Plus,
   Search,
@@ -50,6 +45,7 @@ import {
   Copy,
   AlertCircle,
   ShieldCheck,
+  Bot,
   Printer,
   Package,
   XCircle,
@@ -144,7 +140,7 @@ import {
   FormFieldError,
   FormFieldDescription,
 } from "@/components/ui/tanstack-form";
-import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, sortNotesNewestFirst } from "@/lib/utils";
 import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
 import { getOrdersAction } from "@/actions/orders";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
@@ -263,19 +259,30 @@ export function OrdersClient() {
   const queryClient = useQueryClient();
   const { currency, currencySymbol } = useSiteSettings();
 
-  // Toast notification context & local fallback (always portaled to document.body at z-[99999])
-  const toastContext = useToast();
-  const [localToast, setLocalToast] = React.useState<ToastData | null>(null);
-
+  // Toast notification helper powered by Sonner
   const showToast = React.useCallback(
-    (message: string, type: ToastType = "success", options?: { title?: string; duration?: number }) => {
-      if (toastContext.isAvailable) {
-        toastContext.showToast(message, type, options);
+    (
+      message: string,
+      type: "success" | "info" | "destructive" | "warning" = "success",
+      options?: { title?: string; duration?: number }
+    ) => {
+      const opts = {
+        description: options?.title ? message : undefined,
+        duration: options?.duration,
+      };
+      const text = options?.title ? options.title : message;
+
+      if (type === "destructive") {
+        toast.error(text, opts);
+      } else if (type === "warning") {
+        toast.warning(text, opts);
+      } else if (type === "info") {
+        toast.info(text, opts);
       } else {
-        setLocalToast({ message, type, title: options?.title, duration: options?.duration });
+        toast.success(text, opts);
       }
     },
-    [toastContext]
+    []
   );
 
   // ─── URL-DRIVEN SERVER-SIDE PAGINATION & FILTER STATE ────────────────────────
@@ -303,13 +310,8 @@ export function OrdersClient() {
     { id: sortByParam, desc: sortOrderParam === "desc" },
   ]);
 
-  // Debounce search query by 300ms
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+  // Track if search query change was initiated by direct user keyboard input
+  const isUserTypingRef = React.useRef(false);
 
   // Helper to sync state changes to URL query parameters
   const updateUrl = React.useCallback(
@@ -362,13 +364,37 @@ export function OrdersClient() {
       }
 
       const queryString = params.toString();
-      router.push(`/admin/orders${queryString ? `?${queryString}` : ""}`, { scroll: false });
+      const targetUrl = `/admin/orders${queryString ? `?${queryString}` : ""}`;
+      const currentQuery = searchParams.toString();
+      const currentUrl = `/admin/orders${currentQuery ? `?${currentQuery}` : ""}`;
+
+      // Prevent redundant history entries and infinite redirection cycles
+      if (targetUrl !== currentUrl) {
+        router.replace(targetUrl, { scroll: false });
+      }
     },
     [searchParams, page, pageSize, selectedTab, channelFilter, paymentFilter, debouncedSearch, sorting, router]
   );
 
-  // Sync state when browser back/forward buttons are pressed
+  // Debounce search query by 300ms ONLY when user is actively typing
   React.useEffect(() => {
+    if (!isUserTypingRef.current) return;
+
+    const timer = setTimeout(() => {
+      isUserTypingRef.current = false;
+      const trimmed = searchQuery.trim();
+      setDebouncedSearch(trimmed);
+      setPage(1);
+      updateUrl({ search: trimmed, page: 1 });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, updateUrl]);
+
+  // Sync state when URL searchParams change externally (notifications, direct links, back/forward)
+  React.useEffect(() => {
+    if (isUserTypingRef.current) return;
+
     const p = Math.max(1, Number(searchParams.get("page")) || 1);
     const ps = Number(searchParams.get("pageSize")) || 10;
     const st = searchParams.get("status") || "all";
@@ -385,19 +411,10 @@ export function OrdersClient() {
     }
     setChannelFilter(ch);
     setPaymentFilter(pay);
-    setSearchQuery((prev) => (prev === debouncedSearch ? s : prev));
+    setSearchQuery(s);
     setDebouncedSearch(s);
     setSorting([{ id: sb, desc: so === "desc" }]);
   }, [searchParams]);
-
-  // When debounced search query changes and differs from URL, reset page to 1 and update URL
-  React.useEffect(() => {
-    const currentUrlSearch = searchParams.get("search") || "";
-    if (debouncedSearch !== currentUrlSearch) {
-      setPage(1);
-      updateUrl({ search: debouncedSearch, page: 1 });
-    }
-  }, [debouncedSearch, searchParams, updateUrl]);
 
   const currentSort = sorting[0];
   const activeSortBy = currentSort?.id || "placed_at";
@@ -2658,7 +2675,9 @@ export function OrdersClient() {
         ),
         cell: ({ row }) => {
           const order = row.original;
-          const displayNotes = (order.notes || []).filter((n) => n.type !== "customer");
+          const displayNotes = sortNotesNewestFirst(
+            (order.notes || []).filter((n) => n.type !== "customer")
+          );
           const hasNotes = displayNotes.length > 0;
 
           return (
@@ -2727,10 +2746,13 @@ export function OrdersClient() {
                     {displayNotes.map((note) => {
                       const isPackaging = note.type === "packaging" || note.type === "packaging_note";
                       const isDelivery = note.type === "delivery" || note.type === "delivery_note";
+                      const isSystem = note.type === "system" || note.type === "system_note";
                       const noteTypeLabel = isPackaging
                         ? "Packaging Note"
                         : isDelivery
                         ? "Delivery Note"
+                        : isSystem
+                        ? "System Note"
                         : "Staff Note";
 
                       return (
@@ -2743,6 +2765,8 @@ export function OrdersClient() {
                               ? "bg-purple-500/10 dark:bg-purple-500/15 border-purple-500/30 text-purple-950 dark:text-purple-100 hover:bg-purple-500/20"
                               : isDelivery
                               ? "bg-indigo-500/10 dark:bg-indigo-500/15 border-indigo-500/30 text-indigo-950 dark:text-indigo-100 hover:bg-indigo-500/20"
+                              : isSystem
+                              ? "bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/30 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20"
                               : "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20"
                           )}
                           title="Click to manage staff notes"
@@ -2756,6 +2780,8 @@ export function OrdersClient() {
                                   ? "text-purple-800 dark:text-purple-300"
                                   : isDelivery
                                   ? "text-indigo-800 dark:text-indigo-300"
+                                  : isSystem
+                                  ? "text-sky-800 dark:text-sky-300"
                                   : "text-amber-800 dark:text-amber-300"
                               )}
                             >
@@ -2763,6 +2789,8 @@ export function OrdersClient() {
                                 <Package className="h-3.5 w-3.5 text-purple-600 shrink-0" />
                               ) : isDelivery ? (
                                 <Truck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                              ) : isSystem ? (
+                                <Bot className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                               ) : (
                                 <ShieldCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                               )}
@@ -2773,7 +2801,18 @@ export function OrdersClient() {
                             {note.created_at && (
                               <div className="text-right">
                                 <span className="text-[10px] font-normal text-muted-foreground/80 inline-flex items-center gap-1 font-sans">
-                                  <Clock className="h-2.5 w-2.5 text-amber-600/70 shrink-0" />
+                                  <Clock
+                                    className={cn(
+                                      "h-2.5 w-2.5 shrink-0",
+                                      isPackaging
+                                        ? "text-purple-600/70"
+                                        : isDelivery
+                                        ? "text-indigo-600/70"
+                                        : isSystem
+                                        ? "text-sky-600/70"
+                                        : "text-amber-600/70"
+                                    )}
+                                  />
                                   {formatDateTime(note.created_at)}
                                 </span>
                               </div>
@@ -3013,14 +3052,6 @@ export function OrdersClient() {
 
   return (
     <div className="space-y-6 w-full max-w-full">
-      {/* Toast Notification: Rendered via Portal directly in document.body at z-[99999] (always above all modals) */}
-      {!toastContext.isAvailable && (
-        <ToastNotificationPortal
-          toast={localToast}
-          onDismiss={() => setLocalToast(null)}
-        />
-      )}
-
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
         <div className="min-w-0 flex-1">
@@ -3313,7 +3344,10 @@ export function OrdersClient() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      isUserTypingRef.current = true;
+                      setSearchQuery(e.target.value);
+                    }}
                     placeholder="Search by order ID, customer name, phone, address..."
                     className="pl-8 pr-14 h-9 text-xs w-full bg-background"
                   />
@@ -3325,6 +3359,7 @@ export function OrdersClient() {
                       <button
                         type="button"
                         onClick={() => {
+                          isUserTypingRef.current = false;
                           setSearchQuery("");
                           setDebouncedSearch("");
                           setPage(1);
@@ -3381,6 +3416,7 @@ export function OrdersClient() {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
+                        isUserTypingRef.current = false;
                         setSearchQuery("");
                         setDebouncedSearch("");
                         setChannelFilter("all");
@@ -4320,7 +4356,7 @@ export function OrdersClient() {
                     Delivery Notes ({(noteOrder.notes || []).filter((n) => n.type === "delivery").length})
                   </span>
                   <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
-                    {(noteOrder.notes || []).filter((n) => n.type === "delivery").map((n) => (
+                    {sortNotesNewestFirst((noteOrder.notes || []).filter((n) => n.type === "delivery")).map((n) => (
                       <p key={n.id} className="text-[11px] text-emerald-950 dark:text-emerald-100 line-clamp-1">
                         • {n.text}
                       </p>
@@ -4337,9 +4373,26 @@ export function OrdersClient() {
                     Packaging Notes ({(noteOrder.notes || []).filter((n) => n.type === "packaging").length})
                   </span>
                   <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
-                    {(noteOrder.notes || []).filter((n) => n.type === "packaging").map((n) => (
+                    {sortNotesNewestFirst((noteOrder.notes || []).filter((n) => n.type === "packaging")).map((n) => (
                       <p key={n.id} className="text-[11px] text-purple-950 dark:text-purple-100 line-clamp-1">
                         • {n.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show system notes summary if present */}
+              {((noteOrder.notes || []).filter((n) => n.type === "system" || n.type === "system_note").length > 0) && (
+                <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
+                  <span className="flex items-center gap-1 font-bold text-sky-900 dark:text-sky-300">
+                    <Bot className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                    System Notes ({(noteOrder.notes || []).filter((n) => n.type === "system" || n.type === "system_note").length})
+                  </span>
+                  <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
+                    {sortNotesNewestFirst((noteOrder.notes || []).filter((n) => n.type === "system" || n.type === "system_note")).map((n) => (
+                      <p key={n.id} className="text-[11px] text-sky-950 dark:text-sky-100 line-clamp-1">
+                        • {n.text} <span className="text-[10px] text-muted-foreground">({n.created_at})</span>
                       </p>
                     ))}
                   </div>
@@ -4354,7 +4407,7 @@ export function OrdersClient() {
                     Internal Staff Notes ({(noteOrder.notes || []).filter((n) => n.type === "internal").length})
                   </span>
                   <div className="space-y-1 mt-1 max-h-16 overflow-y-auto pr-1">
-                    {(noteOrder.notes || []).filter((n) => n.type === "internal").map((n) => (
+                    {sortNotesNewestFirst((noteOrder.notes || []).filter((n) => n.type === "internal")).map((n) => (
                       <p key={n.id} className="text-[11px] text-amber-950 dark:text-amber-100 line-clamp-1">
                         • {n.text} <span className="text-[10px] text-muted-foreground">({n.created_at})</span>
                       </p>
@@ -4377,113 +4430,134 @@ export function OrdersClient() {
               {(field) => (
                 <FormFieldItem>
                   <FormFieldLabel htmlFor="modal_note_type">Select Note Type</FormFieldLabel>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* 1. Internal Staff Note */}
-                    <button
-                      type="button"
-                      onClick={() => field.handleChange("internal")}
-                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                        field.state.value === "internal"
-                          ? "border-amber-600 bg-amber-500/10 text-amber-950 dark:text-amber-200 font-semibold ring-1 ring-amber-600"
-                          : "border-input hover:bg-muted/50 text-muted-foreground"
-                      }`}
-                    >
-                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold leading-none">Internal Staff Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Order update & status (private)</p>
-                      </div>
-                    </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {/* 1. Internal Staff Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("internal")}
+                        className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                          field.state.value === "internal"
+                            ? "border-amber-600 bg-amber-500/10 text-amber-950 dark:text-amber-200 font-semibold ring-1 ring-amber-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold leading-none">Internal Staff Note</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Order update & status (private)</p>
+                        </div>
+                      </button>
 
-                    {/* 2. Customer Note */}
-                    <button
-                      type="button"
-                      onClick={() => field.handleChange("customer")}
-                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                        field.state.value === "customer"
-                          ? "border-blue-600 bg-blue-500/10 text-blue-950 dark:text-blue-200 font-semibold ring-1 ring-blue-600"
-                          : "border-input hover:bg-muted/50 text-muted-foreground"
-                      }`}
-                    >
-                      <MessageSquare className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold leading-none">Customer Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">For seller (order column)</p>
-                      </div>
-                    </button>
+                      {/* 2. Customer Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("customer")}
+                        className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                          field.state.value === "customer"
+                            ? "border-blue-600 bg-blue-500/10 text-blue-950 dark:text-blue-200 font-semibold ring-1 ring-blue-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <MessageSquare className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold leading-none">Customer Note</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">For seller (order column)</p>
+                        </div>
+                      </button>
 
-                    {/* 3. Delivery Note */}
-                    <button
-                      type="button"
-                      onClick={() => field.handleChange("delivery")}
-                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                        field.state.value === "delivery"
-                          ? "border-emerald-600 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200 font-semibold ring-1 ring-emerald-600"
-                          : "border-input hover:bg-muted/50 text-muted-foreground"
-                      }`}
-                    >
-                      <Truck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold leading-none">Delivery Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">For delivery man / rider</p>
-                      </div>
-                    </button>
+                      {/* 3. Delivery Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("delivery")}
+                        className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                          field.state.value === "delivery"
+                            ? "border-emerald-600 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200 font-semibold ring-1 ring-emerald-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Truck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold leading-none">Delivery Note</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">For delivery man / rider</p>
+                        </div>
+                      </button>
 
-                    {/* 4. Packaging Note */}
-                    <button
-                      type="button"
-                      onClick={() => field.handleChange("packaging")}
-                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
-                        field.state.value === "packaging"
-                          ? "border-purple-600 bg-purple-500/10 text-purple-950 dark:text-purple-200 font-semibold ring-1 ring-purple-600"
-                          : "border-input hover:bg-muted/50 text-muted-foreground"
-                      }`}
-                    >
-                      <Package className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold leading-none">Packaging Note</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">For checking while packaging</p>
-                      </div>
-                    </button>
-                  </div>
-                </FormFieldItem>
-              )}
-            </addNoteForm.Field>
+                      {/* 4. Packaging Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("packaging")}
+                        className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                          field.state.value === "packaging"
+                            ? "border-purple-600 bg-purple-500/10 text-purple-950 dark:text-purple-200 font-semibold ring-1 ring-purple-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Package className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold leading-none">Packaging Note</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">For checking while packaging</p>
+                        </div>
+                      </button>
 
-            <addNoteForm.Field
-              name="text"
-              validators={{
-                onChange: validateWithZod(orderNoteTextSchema),
-              }}
-            >
-              {(field) => (
-                <FormFieldItem>
-                  <addNoteForm.Subscribe selector={(state) => state.values.type}>
-                    {(noteType) => (
-                      <>
-                        <FormFieldLabel htmlFor="modal_note_text">
-                          {noteType === "internal"
-                            ? "Internal Staff Note Details"
-                            : noteType === "customer"
-                            ? "Customer Note Details (For Seller)"
-                            : noteType === "delivery"
-                            ? "Delivery Instructions (For Delivery Man)"
-                            : "Packaging Checklist & Instructions"}
-                        </FormFieldLabel>
-                        <Textarea
-                          id="modal_note_text"
-                          value={field.state.value}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          onBlur={field.handleBlur}
-                          placeholder={
-                            noteType === "internal"
-                              ? "Enter order status update, customer verification remarks, or internal follow-up..."
+                      {/* 5. System Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("system")}
+                        className={`flex items-start gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                          field.state.value === "system"
+                            ? "border-sky-600 bg-sky-500/10 text-sky-950 dark:text-sky-200 font-semibold ring-1 ring-sky-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Bot className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold leading-none">System Note</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Automated / System events</p>
+                        </div>
+                      </button>
+                    </div>
+                  </FormFieldItem>
+                )}
+              </addNoteForm.Field>
+
+              <addNoteForm.Field
+                name="text"
+                validators={{
+                  onChange: validateWithZod(orderNoteTextSchema),
+                }}
+              >
+                {(field) => (
+                  <FormFieldItem>
+                    <addNoteForm.Subscribe selector={(state) => state.values.type}>
+                      {(noteType) => (
+                        <>
+                          <FormFieldLabel htmlFor="modal_note_text">
+                            {noteType === "internal"
+                              ? "Internal Staff Note Details"
                               : noteType === "customer"
-                              ? "Enter customer note or special request for seller..."
+                              ? "Customer Note Details (For Seller)"
                               : noteType === "delivery"
-                              ? "Enter special delivery instructions (e.g. Call before delivery, ring doorbell twice)..."
-                              : "Enter packaging instructions (e.g. Check jar seals, bubble wrap bottle, add gift ribbon)..."
-                          }
+                              ? "Delivery Instructions (For Delivery Man)"
+                              : noteType === "packaging"
+                              ? "Packaging Checklist & Instructions"
+                              : "System / Automated Note Details"}
+                          </FormFieldLabel>
+                          <Textarea
+                            id="modal_note_text"
+                            value={field.state.value}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            onBlur={field.handleBlur}
+                            placeholder={
+                              noteType === "internal"
+                                ? "Enter order status update, customer verification remarks, or internal follow-up..."
+                                : noteType === "customer"
+                                ? "Enter customer note or special request for seller..."
+                                : noteType === "delivery"
+                                ? "Enter special delivery instructions (e.g. Call before delivery, ring doorbell twice)..."
+                                : noteType === "packaging"
+                                ? "Enter packaging instructions (e.g. Check jar seals, bubble wrap bottle, add gift ribbon)..."
+                                : "Enter automated system note or integration message..."
+                            }
                           rows={4}
                           className="text-xs"
                         />
@@ -4542,7 +4616,7 @@ export function OrdersClient() {
                 {(field) => (
                   <FormFieldItem>
                     <FormFieldLabel htmlFor="edit_modal_note_type">Note Category</FormFieldLabel>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {/* 1. Internal Staff Note */}
                       <button
                         type="button"
@@ -4597,6 +4671,20 @@ export function OrdersClient() {
                       >
                         <Package className="h-4 w-4 text-purple-600" />
                         <span className="text-xs font-semibold">Packaging</span>
+                      </button>
+
+                      {/* 5. System Note */}
+                      <button
+                        type="button"
+                        onClick={() => field.handleChange("system")}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center cursor-pointer transition-all ${
+                          field.state.value === "system"
+                            ? "border-sky-600 bg-sky-500/10 text-sky-950 dark:text-sky-200 font-semibold ring-1 ring-sky-600"
+                            : "border-input hover:bg-muted/50 text-muted-foreground"
+                        }`}
+                      >
+                        <Bot className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                        <span className="text-xs font-semibold">System</span>
                       </button>
                     </div>
                     {field.state.value === "customer" && (
@@ -4722,6 +4810,10 @@ export function OrdersClient() {
                 ) : deletingNoteTarget.type === "packaging" ? (
                   <Badge className="text-[10px] py-0 px-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border-emerald-300">
                     Packaging Note
+                  </Badge>
+                ) : deletingNoteTarget.type === "system" ? (
+                  <Badge className="text-[10px] py-0 px-1.5 bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 border-sky-300">
+                    System Note
                   </Badge>
                 ) : (
                   <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">

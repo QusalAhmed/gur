@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Search, LogOut, ShieldCheck, UserCheck, User, Save, Loader2 } from "lucide-react";
-import { useToast } from "@/components/ui/toast-notification";
+import { Search, LogOut, ShieldCheck, UserCheck, User, Save, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { AdminNotificationsPopover } from "@/components/admin/notifications-popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +48,6 @@ export function AdminHeader() {
   const breadcrumb = getBreadcrumb(pathname);
   const { user, role, logout, updateUser, saveProfile } = useAdminAuth();
   const { email: storeEmail } = useSiteSettings();
-  const toast = useToast();
 
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
   const [profileName, setProfileName] = React.useState(user?.name || "Admin Staff");
@@ -75,27 +75,13 @@ export function AdminHeader() {
       });
 
       if (res.success) {
-        if (toast.isAvailable) {
-          toast.showToast("Profile photo and details saved to database!", "success", {
-            title: "Profile Saved",
-          });
-        }
+        toast.success("Profile photo and details saved to database!");
         setIsProfileOpen(false);
       } else {
-        if (toast.isAvailable) {
-          toast.showToast(res.error || "Failed to save profile to database", "destructive", {
-            title: "Save Failed",
-          });
-        } else {
-          alert(res.error || "Failed to save profile to database");
-        }
+        toast.error(res.error || "Failed to save profile to database");
       }
     } catch (err: any) {
-      if (toast.isAvailable) {
-        toast.showToast(err?.message || "An unexpected error occurred", "destructive");
-      } else {
-        alert(err?.message || "An unexpected error occurred");
-      }
+      toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsSaving(false);
     }
@@ -147,41 +133,8 @@ export function AdminHeader() {
           </Badge>
         </div>
 
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9">
-              <Bell className="h-4 w-4" />
-              <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-amber-500 text-black font-bold">
-                9
-              </Badge>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">Notifications</p>
-                <p className="text-xs text-muted-foreground">9 unread operational alerts</p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {[
-              { title: "New order placed", desc: "MOL-2610-01022 · ৳ 12,500", time: "2m ago", dot: "bg-blue-500" },
-              { title: "Quote request received", desc: "RFQ-2610-01015 from Dairy Farm Ltd", time: "15m ago", dot: "bg-amber-500" },
-              { title: "Low stock alert", desc: "Blackstrap Molasses 200L Drum", time: "1h ago", dot: "bg-red-500" },
-              { title: "New B2B application", desc: "Rahman Feed Mills pending approval", time: "3h ago", dot: "bg-purple-500" },
-            ].map((n, i) => (
-              <DropdownMenuItem key={i} className="flex gap-3 p-3 cursor-pointer">
-                <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.dot}`} />
-                <div className="flex-1 space-y-0.5">
-                  <p className="text-sm font-medium">{n.title}</p>
-                  <p className="text-xs text-muted-foreground">{n.desc}</p>
-                  <p className="text-xs text-muted-foreground">{n.time}</p>
-                </div>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Realtime Notifications Center */}
+        <AdminNotificationsPopover />
 
         {/* User Account Menu with Live Session Data & Logout */}
         <DropdownMenu>

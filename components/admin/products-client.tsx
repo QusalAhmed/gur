@@ -68,7 +68,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
-import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 
 const statusStyle: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
@@ -91,7 +91,6 @@ export function ProductsClient() {
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [stockFilter, setStockFilter] = React.useState("all");
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [toast, setToast] = React.useState<ToastData | null>(null);
 
   // Deletion Modal State
   const [productToDelete, setProductToDelete] = React.useState<UiProductItem | null>(null);
@@ -125,19 +124,15 @@ export function ProductsClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       router.refresh();
-      setToast({
-        type: res.archived ? "warning" : "success",
-        title: res.archived ? "Product Archived" : "Product Deleted",
-        message: res.message,
-      });
+      if (res.archived) {
+        toast.warning(res.message);
+      } else {
+        toast.success(res.message);
+      }
       setProductToDelete(null);
     },
     onError: (err: any) => {
-      setToast({
-        type: "destructive",
-        title: "Delete Error",
-        message: err?.message || "Failed to delete product.",
-      });
+      toast.error(err?.message || "Failed to delete product.");
       setProductToDelete(null);
     },
     onSettled: () => {
@@ -160,18 +155,10 @@ export function ProductsClient() {
       queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       router.refresh();
-      setToast({
-        type: "success",
-        title: "Status Updated",
-        message: "Product status changed successfully.",
-      });
+      toast.success("Product status changed successfully.");
     },
     onError: (err: any) => {
-      setToast({
-        type: "destructive",
-        title: "Update Failed",
-        message: err?.message || "Could not update product status.",
-      });
+      toast.error(err?.message || "Could not update product status.");
     },
   });
 
@@ -189,18 +176,10 @@ export function ProductsClient() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      setToast({
-        type: "success",
-        title: "Product Duplicated",
-        message: "A draft copy of the product was created successfully.",
-      });
+      toast.success("A draft copy of the product was created successfully.");
     },
     onError: (err: any) => {
-      setToast({
-        type: "destructive",
-        title: "Duplicate Failed",
-        message: err?.message || "Could not duplicate product.",
-      });
+      toast.error(err?.message || "Could not duplicate product.");
     },
   });
 
@@ -242,17 +221,9 @@ export function ProductsClient() {
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       router.refresh();
       clearSelection();
-      setToast({
-        type: "success",
-        title: "Bulk Archive Completed",
-        message: `Successfully archived ${selected.length} products.`,
-      });
+      toast.success(`Successfully archived ${selected.length} products.`);
     } catch (err: any) {
-      setToast({
-        type: "destructive",
-        title: "Bulk Archive Failed",
-        message: err?.message || "Failed to archive some products.",
-      });
+      toast.error(err?.message || "Failed to archive some products.");
     }
   };
 
@@ -271,17 +242,9 @@ export function ProductsClient() {
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       router.refresh();
       clearSelection();
-      setToast({
-        type: "success",
-        title: "Bulk Status Updated",
-        message: `Updated ${selected.length} products to "${newStatus}".`,
-      });
+      toast.success(`Updated ${selected.length} products to "${newStatus}".`);
     } catch (err: any) {
-      setToast({
-        type: "destructive",
-        title: "Bulk Update Failed",
-        message: err?.message || "Failed to update some products.",
-      });
+      toast.error(err?.message || "Failed to update some products.");
     }
   };
 
@@ -300,17 +263,11 @@ export function ProductsClient() {
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       router.refresh();
       clearSelection();
-      setToast({
-        type: "success",
-        title: "Bulk Action Completed",
-        message: `Deleted ${deletedCount} products and archived ${archivedCount} referenced products.`,
-      });
+      toast.success(
+        `Deleted ${deletedCount} products and archived ${archivedCount} referenced products.`
+      );
     } catch (err: any) {
-      setToast({
-        type: "destructive",
-        title: "Bulk Delete Failed",
-        message: err?.message || "Failed to delete some products.",
-      });
+      toast.error(err?.message || "Failed to delete some products.");
     }
   };
 
@@ -530,31 +487,15 @@ export function ProductsClient() {
                 <DropdownMenuItem
                   onClick={async () => {
                     try {
-                      setToast({
-                        type: "info",
-                        title: "Syncing to Meta Catalog...",
-                        message: `Submitting "${p.name}" to Meta Catalog.`,
-                      });
+                      toast.info(`Submitting "${p.name}" to Meta Catalog...`);
                       const res = await syncSingleProductToMetaCatalogAction(p.id);
                       if (res.success) {
-                        setToast({
-                          type: "success",
-                          title: "Meta Catalog Synced",
-                          message: `Successfully synced "${p.name}" to Meta Catalog.`,
-                        });
+                        toast.success(`Successfully synced "${p.name}" to Meta Catalog.`);
                       } else {
-                        setToast({
-                          type: "destructive",
-                          title: "Meta Catalog Sync Failed",
-                          message: res.error || "Failed to sync to Meta Catalog.",
-                        });
+                        toast.error(res.error || "Failed to sync to Meta Catalog.");
                       }
                     } catch (err: any) {
-                      setToast({
-                        type: "destructive",
-                        title: "Meta Catalog Error",
-                        message: err?.message || "Unexpected error syncing to Meta.",
-                      });
+                      toast.error(err?.message || "Unexpected error syncing to Meta.");
                     }
                   }}
                 >
@@ -600,8 +541,6 @@ export function ProductsClient() {
 
   return (
     <div className="space-y-6">
-      <ToastNotificationPortal toast={toast} onDismiss={() => setToast(null)} />
-
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

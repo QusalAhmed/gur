@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ShieldCheck,
   PackageCheck,
+  Bot,
   Edit,
   Trash2,
   Printer,
@@ -70,7 +71,7 @@ import {
   orderNoteTextSchema,
   validateWithZod,
 } from "@/lib/validations/order";
-import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, sortNotesNewestFirst } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   bookSteadfastParcelAction,
@@ -458,13 +459,16 @@ export function OrderDetailsSheet({
       if (!validation.success || !order) return;
 
       const isCustomer = validation.data.type === "customer";
+      const isSystem = validation.data.type === "system";
       const newNoteObj: OrderNote = {
         id: `note-${Date.now()}`,
         author: isCustomer
           ? order.customer
             ? `${order.customer} (Customer)`
             : "Customer"
-          : "Admin Staff",
+          : isSystem
+            ? "System"
+            : "Admin Staff",
         text: validation.data.text.trim(),
         type: validation.data.type,
         created_at: new Date().toISOString().replace("T", " ").slice(0, 16),
@@ -1407,7 +1411,9 @@ export function OrderDetailsSheet({
                                       ? "Delivery instructions for rider (saves to notes table)..."
                                       : noteType === "packaging"
                                         ? "Packaging checklist notes for packing..."
-                                        : "Internal staff update note..."
+                                        : noteType === "system"
+                                          ? "System automated event / trigger note..."
+                                          : "Internal staff update note..."
                                 }
                                 rows={2}
                                 className="text-xs bg-background resize-none"
@@ -1429,6 +1435,8 @@ export function OrderDetailsSheet({
                               <MessageSquare className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                             ) : field.state.value === "delivery" ? (
                               <Truck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                            ) : field.state.value === "system" ? (
+                              <Bot className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                             ) : (
                               <PackageCheck className="h-3.5 w-3.5 text-purple-600 shrink-0" />
                             )}
@@ -1441,6 +1449,7 @@ export function OrderDetailsSheet({
                               <option value="customer">Customer Note (Buyer)</option>
                               <option value="delivery">Delivery Note (Courier)</option>
                               <option value="packaging">Packaging Note (Packer)</option>
+                              <option value="system">System Note (Automated)</option>
                             </select>
                           </div>
                         )}
@@ -1465,6 +1474,7 @@ export function OrderDetailsSheet({
                       const staffCount = (order.notes || []).filter((n) => n.type === "internal").length;
                       const delivCount = (order.notes || []).filter((n) => n.type === "delivery").length;
                       const packCount = (order.notes || []).filter((n) => n.type === "packaging").length;
+                      const sysCount = (order.notes || []).filter((n) => n.type === "system").length;
                       const custCount = order.customer_note ? 1 : 0;
 
                       return (
@@ -1489,6 +1499,17 @@ export function OrderDetailsSheet({
                           >
                             <ShieldCheck className="h-3 w-3" />
                             Staff ({staffCount})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNoteFilterType("system")}
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer ${noteFilterType === "system"
+                              ? "bg-sky-600 text-white font-semibold"
+                              : "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20"
+                              }`}
+                          >
+                            <Bot className="h-3 w-3" />
+                            System ({sysCount})
                           </button>
                           <button
                             type="button"
@@ -1566,10 +1587,12 @@ export function OrderDetailsSheet({
 
                     {/* Other Notes */}
                     {(() => {
-                      const filteredNotes = (order.notes || []).filter((n) => {
-                        if (noteFilterType === "all") return true;
-                        return n.type === noteFilterType;
-                      });
+                      const filteredNotes = sortNotesNewestFirst(
+                        (order.notes || []).filter((n) => {
+                          if (noteFilterType === "all") return true;
+                          return n.type === noteFilterType;
+                        })
+                      );
 
                       if (filteredNotes.length === 0 && (noteFilterType !== "all" || !order.customer_note)) {
                         return (
@@ -1582,12 +1605,15 @@ export function OrderDetailsSheet({
                       return filteredNotes.map((note) => {
                         const isDeliv = note.type === "delivery";
                         const isPack = note.type === "packaging";
+                        const isSystem = note.type === "system";
 
                         const bgClass = isDeliv
                           ? "bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
                           : isPack
                             ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
-                            : "bg-amber-500/[0.04] dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-900/40";
+                            : isSystem
+                              ? "bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-800"
+                              : "bg-amber-500/[0.04] dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-900/40";
 
                         return (
                           <div
@@ -1605,6 +1631,11 @@ export function OrderDetailsSheet({
                                   <Badge className="text-[10px] py-0 px-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border-emerald-300">
                                     <PackageCheck className="h-3 w-3 mr-1 inline" />
                                     Packing Note
+                                  </Badge>
+                                ) : isSystem ? (
+                                  <Badge className="text-[10px] py-0 px-1.5 bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 border-sky-300">
+                                    <Bot className="h-3 w-3 mr-1 inline text-sky-600 dark:text-sky-400" />
+                                    System Note
                                   </Badge>
                                 ) : (
                                   <Badge className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300">

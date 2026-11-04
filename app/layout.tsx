@@ -3,7 +3,7 @@ import { Geist, Geist_Mono, Hind_Siliguri } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { StoreProvider } from "@/components/providers/store-provider";
-import { ToastProvider } from "@/components/ui/toast-notification";
+import { Toaster } from "sonner";
 import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
@@ -92,11 +92,10 @@ export default function RootLayout({
         </noscript>
         <StoreProvider>
           <QueryProvider>
-            <ToastProvider>
-              <BrandFavicon />
-              <FacebookPixelTracker />
-              {children}
-            </ToastProvider>
+            <BrandFavicon />
+            <FacebookPixelTracker />
+            {children}
+            <Toaster position="top-right" richColors closeButton />
           </QueryProvider>
         </StoreProvider>
       </body>

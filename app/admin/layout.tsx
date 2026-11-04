@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ToastProvider } from "@/components/ui/toast-notification";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { AdminHeader } from "@/components/admin/header";
 import {
@@ -23,32 +22,28 @@ export default function AdminLayout({
   if (pathname === "/admin/login" || pathname === "/admin/orders/print") {
     return (
       <TooltipProvider>
-        <ToastProvider>
-          <Suspense fallback={null}>
-            <AdminAuthProvider>{children}</AdminAuthProvider>
-          </Suspense>
-        </ToastProvider>
+        <Suspense fallback={null}>
+          <AdminAuthProvider>{children}</AdminAuthProvider>
+        </Suspense>
       </TooltipProvider>
     );
   }
 
   return (
     <TooltipProvider>
-      <ToastProvider>
-        <Suspense fallback={null}>
-          <AdminAuthProvider>
-            <SidebarProvider className="min-w-0 max-w-full overflow-x-hidden">
-              <AdminSidebar />
-              <SidebarInset className="min-w-0 max-w-full">
-                <AdminHeader />
-                <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4">
-                  {children}
-                </div>
-              </SidebarInset>
-            </SidebarProvider>
-          </AdminAuthProvider>
-        </Suspense>
-      </ToastProvider>
+      <Suspense fallback={null}>
+        <AdminAuthProvider>
+          <SidebarProvider className="min-w-0 max-w-full overflow-x-hidden">
+            <AdminSidebar />
+            <SidebarInset className="min-w-0 max-w-full">
+              <AdminHeader />
+              <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4">
+                {children}
+              </div>
+            </SidebarInset>
+          </SidebarProvider>
+        </AdminAuthProvider>
+      </Suspense>
     </TooltipProvider>
   );
 }

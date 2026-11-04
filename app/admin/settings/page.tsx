@@ -35,13 +35,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSiteSettingsAction, updateSiteSettingsAction } from "@/actions/settings";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
 
 export default function SettingsPage() {
-  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   // Store Profile State
@@ -138,16 +137,16 @@ export default function SettingsPage() {
         setIsDbConnected(true);
       } else {
         setIsDbConnected(false);
-        showToast(res.error || "Failed to load site settings", "destructive");
+        toast.error(res.error || "Failed to load site settings");
       }
     } catch (e: any) {
       console.error("Failed to load settings:", e);
       setIsDbConnected(false);
-      showToast(e?.message || "Failed to connect to settings database", "destructive");
+      toast.error(e?.message || "Failed to connect to settings database");
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, []);
 
   React.useEffect(() => {
     loadSettings();
@@ -186,16 +185,16 @@ export default function SettingsPage() {
         setIsDbConnected(true);
         queryClient.invalidateQueries({ queryKey: SITE_SETTINGS_QUERY_KEY });
         setSaveMessage("Settings saved successfully!");
-        showToast("Settings saved to database.", "success");
+        toast.success("Settings saved to database.");
         setTimeout(() => setSaveMessage(null), 3500);
       } else {
-        showToast(res.error || "Could not save settings", "destructive");
+        toast.error(res.error || "Could not save settings");
         setSaveMessage("Failed to save settings");
         setTimeout(() => setSaveMessage(null), 3500);
       }
     } catch (e: any) {
       console.error("Could not save settings:", e);
-      showToast(e?.message || "Error saving settings", "destructive");
+      toast.error(e?.message || "Error saving settings");
       setSaveMessage("Save error");
       setTimeout(() => setSaveMessage(null), 3500);
     } finally {

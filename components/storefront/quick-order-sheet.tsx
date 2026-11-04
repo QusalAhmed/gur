@@ -12,7 +12,7 @@ import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { OrderSuccessView } from "./order-success-view";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearCart, CartItem } from "@/lib/redux/slices/cart-slice";
-import { useToast } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import {
   trackInitiateCheckout,
   resetInitiateCheckoutTracking,
@@ -54,7 +54,6 @@ export function QuickOrderSheet({
   hotline = "01843557389",
 }: QuickOrderSheetProps) {
   const dispatch = useAppDispatch();
-  const toast = useToast();
   const t = STOREFRONT_TEXT[lang];
 
   // Resolve checkout items: either multi-item cart or single direct product
@@ -124,27 +123,26 @@ export function QuickOrderSheet({
       setErrorMessage(null);
       setOrderResult(res);
 
-      if (toast.isAvailable) {
-        toast.showToast(
-          lang === "bn"
-            ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${res.orderNumber})`
-            : `Order stored successfully! (Order #${res.orderNumber})`,
-          "success",
-          {
-            title: lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Stored Successfully",
-            duration: 6000,
-          }
-        );
-      }
+      toast.success(
+        lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Stored Successfully",
+        {
+          description:
+            lang === "bn"
+              ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${res.orderNumber})`
+              : `Order stored successfully! (Order #${res.orderNumber})`,
+          duration: 6000,
+        }
+      );
     },
     onError: (err) => {
       const msg = err.message || (lang === "bn" ? "অর্ডার সম্পন্ন হতে সমস্যা হয়েছে।" : "Failed to place order.");
       setErrorMessage(msg);
-      if (toast.isAvailable) {
-        toast.showToast(msg, "destructive", {
-          title: lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
-        });
-      }
+      toast.error(
+        lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
+        {
+          description: msg,
+        }
+      );
     },
   });
 

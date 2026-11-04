@@ -33,7 +33,7 @@ import {
   Leaf,
   CheckCircle2,
 } from "lucide-react";
-import { useToast } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import {
   StorefrontLang,
   STOREFRONT_TEXT,
@@ -95,7 +95,6 @@ export function CheckoutSection({
   const displaySubtotal = mounted ? cartSubtotal : 0;
   const displayTotalQuantity = mounted ? cartTotalQuantity : 0;
 
-  const toast = useToast();
   const queryClient = useQueryClient();
   const [deliveryZone, setDeliveryZone] = useState<"inside_dhaka" | "outside_dhaka">("inside_dhaka");
   const [submissionError, setSubmissionError] = useState<string | null>(null);
@@ -179,12 +178,13 @@ export function CheckoutSection({
       setSubmissionError(null);
 
       // Trigger floating toast notification
-      if (toast.isAvailable) {
-        toast.showToast(successMsg, "success", {
-          title: lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Stored Successfully",
+      toast.success(
+        lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Stored Successfully",
+        {
+          description: successMsg,
           duration: 6000,
-        });
-      }
+        }
+      );
 
       // Pre-seed TanStack Query cache so /order-confirmed/[id] renders immediately with zero network delay
       if (result.orderId) {
@@ -244,11 +244,12 @@ export function CheckoutSection({
       setSubmissionError(errMsg);
       setSubmissionSuccess(null);
 
-      if (toast.isAvailable) {
-        toast.showToast(errMsg, "destructive", {
-          title: lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
-        });
-      }
+      toast.error(
+        lang === "bn" ? "অর্ডার ব্যর্থ হয়েছে" : "Order Failed",
+        {
+          description: errMsg,
+        }
+      );
     },
   });
 

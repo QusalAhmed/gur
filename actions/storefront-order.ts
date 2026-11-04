@@ -666,12 +666,12 @@ export async function placeStorefrontOrderAction(
 
       // Notes & Events logging for Rules 1, 2, and 3
       if (wasIncomplete && finalStatus === "pending") {
-        // Rule 2: Incomplete upgraded to pending -> write note about this upgradation
+        // Rule 2: Incomplete upgraded to pending -> write system note about this upgradation
         Promise.all([
           client.from("order_notes").insert({
             order_id: orderDbId,
             order_number: orderNumber,
-            type: "internal",
+            type: "system",
             author: "System",
             note: `Incomplete order upgraded to pending upon customer order submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
           }),
@@ -689,7 +689,7 @@ export async function placeStorefrontOrderAction(
           client.from("order_notes").insert({
             order_id: orderDbId,
             order_number: orderNumber,
-            type: "internal",
+            type: "system",
             author: "System",
             note: `Pending order updated with new items and details from customer submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
           }),
@@ -709,7 +709,7 @@ export async function placeStorefrontOrderAction(
           return {
             order_id: orderDbId,
             order_number: orderNumber,
-            type: "internal",
+            type: "system",
             author: "System",
             note: `Other order ${o.order_number || o.id}: ${insight.statusText}, note: ${insight.note}`,
           };

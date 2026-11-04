@@ -148,3 +148,44 @@ export function formatCurrency(
   const num = Number(amount) || 0;
   return `${currencySymbol} ${num.toLocaleString()}`;
 }
+
+/**
+ * Parses a note date or timestamp into a numeric millisecond value.
+ * Supports ISO strings, pre-formatted strings, Dates, numbers, or fallback ID-embedded timestamps.
+ */
+export function parseNoteTimestamp(
+  val?: string | number | Date | null,
+  idFallback?: string
+): number {
+  if (val) {
+    if (typeof val === "number") return val;
+    if (val instanceof Date) return val.getTime();
+    const s = String(val).trim();
+    const t = new Date(s).getTime();
+    if (!isNaN(t)) return t;
+    const isoT = new Date(s.replace(" ", "T")).getTime();
+    if (!isNaN(isoT)) return isoT;
+  }
+  if (idFallback && idFallback.startsWith("note-")) {
+    const num = Number(idFallback.replace("note-", ""));
+    if (!isNaN(num) && num > 1000000000) return num;
+  }
+  return 0;
+}
+
+/**
+ * Sorts notes newest-first (descending order by created_at timestamp).
+ */
+export function sortNotesNewestFirst<T extends { created_at?: string; id?: string }>(
+  notes: T[]
+): T[] {
+  return [...notes].sort((a, b) => {
+    const timeA = parseNoteTimestamp(a.created_at, a.id);
+    const timeB = parseNoteTimestamp(b.created_at, b.id);
+    if (timeA !== timeB) {
+      return timeB - timeA; // Descending: newest note first
+    }
+    return String(b.id || "").localeCompare(String(a.id || ""));
+  });
+}
+

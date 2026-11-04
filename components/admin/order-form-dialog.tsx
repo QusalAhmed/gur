@@ -116,7 +116,7 @@ export function OrderFormDialog({
     Record<string, { quantity: number; unit_price: number }>
   >({});
   const [productSearchQuery, setProductSearchQuery] = React.useState("");
-  const [newNoteType, setNewNoteType] = React.useState<"internal" | "packaging" | "customer" | "delivery">("internal");
+  const [newNoteType, setNewNoteType] = React.useState<OrderNoteType>("internal");
   const [newNoteText, setNewNoteText] = React.useState("");
   const [notesList, setNotesList] = React.useState<OrderNote[]>([]);
   const [editingNoteId, setEditingNoteId] = React.useState<string | null>(null);
@@ -136,7 +136,7 @@ export function OrderFormDialog({
     const newNoteId = `note-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newNote: OrderNote = {
       id: newNoteId,
-      author: "Admin Staff",
+      author: newNoteType === "system" ? "System" : newNoteType === "customer" ? (order?.customer || "Customer") : "Admin Staff",
       text,
       type: newNoteType,
       created_at: nowStr,
@@ -2056,6 +2056,7 @@ export function OrderFormDialog({
                                       className="h-7 rounded-md border border-input bg-background px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer font-medium"
                                     >
                                       <option value="internal" className="bg-popover">Internal Staff Note</option>
+                                      <option value="system" className="bg-popover">System Note</option>
                                       <option value="packaging" className="bg-popover">Packaging Note</option>
                                       <option value="delivery" className="bg-popover">Delivery Note</option>
                                       <option value="customer" className="bg-popover">Customer Instruction</option>
@@ -2115,6 +2116,10 @@ export function OrderFormDialog({
                                     ) : n.type === "packaging" || n.type === "packaging_note" ? (
                                       <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-400 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300">
                                         Packaging
+                                      </Badge>
+                                    ) : n.type === "system" || n.type === "system_note" ? (
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-400 text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300">
+                                        System
                                       </Badge>
                                     ) : n.type === "customer" ? (
                                       <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-400 text-blue-700 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300">
@@ -2176,6 +2181,7 @@ export function OrderFormDialog({
                           className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer font-medium"
                         >
                           <option value="internal" className="bg-popover">Internal Staff Note</option>
+                          <option value="system" className="bg-popover">System Note</option>
                           <option value="packaging" className="bg-popover">Packaging Note</option>
                           <option value="delivery" className="bg-popover">Delivery Note</option>
                           <option value="customer" className="bg-popover">Customer Instruction</option>
@@ -2189,9 +2195,11 @@ export function OrderFormDialog({
                             ? "e.g. Double bubble wrap glass jars, inspect seals, affix fragile label..."
                             : newNoteType === "delivery"
                               ? "e.g. Call before delivery, gate code, delivery after 4 PM..."
-                              : newNoteType === "customer"
-                                ? "e.g. Special customer request or customization instructions..."
-                                : "e.g. Phone verification note, manager approved adjustment, staff remarks..."
+                              : newNoteType === "system"
+                                ? "e.g. Automated system trigger, external synchronization notice..."
+                                : newNoteType === "customer"
+                                  ? "e.g. Special customer request or customization instructions..."
+                                  : "e.g. Phone verification note, manager approved adjustment, staff remarks..."
                         }
                         value={newNoteText}
                         onChange={(e) => setNewNoteText(e.target.value)}
@@ -2206,7 +2214,9 @@ export function OrderFormDialog({
                               ? "Packaging notes appear on packing lists."
                               : newNoteType === "delivery"
                                 ? "Delivery notes provide instructions to couriers."
-                                : "Customer requests recorded against this order."}
+                                : newNoteType === "system"
+                                  ? "System notes record automated updates and system triggers."
+                                  : "Customer requests recorded against this order."}
                         </p>
                         <Button
                           id="btn-add-order-note"

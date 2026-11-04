@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 
@@ -113,7 +113,6 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = React.useState("general");
-  const [toast, setToast] = React.useState<ToastData | null>(null);
   const { storeName, currency, currencySymbol } = useSiteSettings();
   const siteOrigin = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
 
@@ -280,11 +279,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
   const handleRemoveVariant = (index: number) => {
     if (variants.length <= 1) {
-      setToast({
-        type: "warning",
-        title: "At Least One Variant Required",
-        message: "Every catalog product must contain at least one packaging variant for pricing.",
-      });
+      toast.warning("Every catalog product must contain at least one packaging variant for pricing.");
       return;
     }
     const target = variants[index];
@@ -391,29 +386,19 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
       // Refresh Next.js server component router cache
       router.refresh();
 
-      setToast({
-        type: "success",
-        title: mode === "create" ? "Product Created" : "Product Updated",
-        message: `"${name}" has been saved successfully in the catalog database.`,
-      });
+      toast.success(`"${name}" has been saved successfully in the catalog database.`);
 
       setTimeout(() => {
         router.push("/admin/products");
       }, 700);
     },
     onError: (err: Error) => {
-      setToast({
-        type: "destructive",
-        title: "Error Saving Product",
-        message: err?.message || "Failed to save product to database.",
-      });
+      toast.error(err?.message || "Failed to save product to database.");
     },
   });
 
   return (
     <div className="space-y-6 pb-20">
-      <ToastNotificationPortal toast={toast} onDismiss={() => setToast(null)} />
-
       {/* Sticky Header with Actions */}
       <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3.5 bg-background/90 backdrop-blur-md border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">

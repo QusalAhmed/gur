@@ -19,7 +19,8 @@ import { useSubmitAssistedPhoneOrderMutation } from "@/hooks/use-order";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { selectCartItems } from "@/lib/redux/slices/cart-slice";
 import { StorefrontOrderItem } from "@/actions/storefront-order";
-import { useToast } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
+import { createNotificationAction } from "@/actions/notifications";
 import { setPixelUserPhone } from "@/lib/facebook-pixel";
 
 interface PhoneHelpFormProps {
@@ -36,7 +37,6 @@ export function PhoneHelpForm({
   hotline = "01843557389",
   onScrollToProducts,
 }: PhoneHelpFormProps) {
-  const toast = useToast();
   const [phone, setPhone] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -108,18 +108,28 @@ export function PhoneHelpForm({
               setIsModalOpen(true);
               setErrorMessage(null);
 
-              if (toast.isAvailable) {
-                toast.showToast(
-                  lang === "bn"
-                    ? `আপনার ফোন নম্বরটি সফলভাবে ডাটাবেজে সংরক্ষিত হয়েছে! (অর্ডার নং: ${res.orderNumber})`
-                    : `Your phone number was stored successfully! (Order #${res.orderNumber})`,
-                  "success",
-                  {
-                    title: lang === "bn" ? "অর্ডার ড্রাফট সংরক্ষিত" : "Order Draft Saved",
-                    duration: 6000,
-                  }
-                );
-              }
+              toast.success(
+                lang === "bn" ? "অর্ডার ড্রাফট সংরক্ষিত" : "Order Draft Saved",
+                {
+                  description:
+                    lang === "bn"
+                      ? `আপনার ফোন নম্বরটি সফলভাবে ডাটাবেজে সংরক্ষিত হয়েছে! (অর্ডার নং: ${res.orderNumber})`
+                      : `Your phone number was stored successfully! (Order #${res.orderNumber})`,
+                  duration: 6000,
+                }
+              );
+
+              // Notify Admin Center of callback inquiry
+              createNotificationAction({
+                type: "customer_inquiry",
+                title: "Phone Callback Request",
+                message: `Customer ${validLocalPhone} requested phone assistance (Draft: ${res.orderNumber || "New"})`,
+                data: {
+                  phone: validLocalPhone,
+                  order_number: res.orderNumber,
+                  link: res.orderNumber ? `/admin/orders?search=${res.orderNumber}` : "/admin/orders",
+                },
+              }).catch(() => {});
 
               try {
                 sessionStorage.removeItem(DRAFT_ORDER_SESSION_KEY);

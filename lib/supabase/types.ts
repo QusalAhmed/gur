@@ -210,9 +210,11 @@ export type DbOrderNoteType =
   | "packaging"
   | "customer"
   | "staff"
+  | "system"
   | "internal_staff_note"
   | "delivery_note"
-  | "packaging_note";
+  | "packaging_note"
+  | "system_note";
 
 export interface DbOrderNote {
   id: string;

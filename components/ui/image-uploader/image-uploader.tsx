@@ -4,7 +4,7 @@ import * as React from "react";
 import { useDropzone, FileRejection } from "react-dropzone";
 import { FolderOpen, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ToastNotificationPortal, ToastData } from "@/components/ui/toast-notification";
+import { toast } from "sonner";
 import { ImageUploaderProps, UploadedImage } from "./types";
 import {
   calculateFileHash,
@@ -46,7 +46,6 @@ export function ImageUploader({
   // Internal state of uploaded items
   const [items, setItems] = React.useState<UploadedImage[]>(() => normalizeValue(value));
   const [galleryOpen, setGalleryOpen] = React.useState(false);
-  const [toast, setToast] = React.useState<ToastData | null>(null);
 
   // Sync internal state when external value changes
   React.useEffect(() => {
@@ -67,12 +66,12 @@ export function ImageUploader({
     type: "warning" | "destructive" | "success" | "info" = "warning",
     title?: string
   ) => {
-    setToast({
-      message,
-      type,
-      title,
-      duration: 5000,
-    });
+    const opts = { description: title ? message : undefined, duration: 5000 };
+    const text = title || message;
+    if (type === "destructive") toast.error(text, opts);
+    else if (type === "success") toast.success(text, opts);
+    else if (type === "info") toast.info(text, opts);
+    else toast.warning(text, opts);
   };
 
   // Helper to commit state changes and call onChange
@@ -365,9 +364,6 @@ export function ImageUploader({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {/* Toast Portal for Warnings & Errors */}
-      <ToastNotificationPortal toast={toast} onDismiss={() => setToast(null)} />
-
       {/* Gallery Selection Modal */}
       {allowGallery && (
         <GalleryDialog

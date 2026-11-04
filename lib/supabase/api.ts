@@ -1468,13 +1468,15 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
                   ? "delivery"
                   : n.type === "packaging" || n.type === "packaging_note"
                   ? "packaging"
+                  : n.type === "system" || n.type === "system_note"
+                  ? "system"
                   : "internal";
               return {
                 order_id: orderDbId,
                 order_number: orderNumber,
                 type: dbType,
                 author: n.author || "Admin Staff",
-                note: n.text.trim().replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, ""),
+                note: n.text.trim().replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, ""),
                 created_at: n.created_at || new Date().toISOString(),
               };
             });
@@ -1660,7 +1662,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         id: `note-${Date.now()}`,
         author: "System",
         text: `Order created and confirmed.`,
-        type: "internal",
+        type: "system",
         created_at: formatDateTime(nowStr),
       },
     ],
@@ -1791,6 +1793,12 @@ export function formatDbOrderRecord(data: any): Order {
     notes: Array.isArray(data.order_notes)
       ? data.order_notes
           .filter((n: any) => n && (n.note || n.text))
+          .sort((a: any, b: any) => {
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            if (timeA !== timeB) return timeB - timeA;
+            return String(b.id || "").localeCompare(String(a.id || ""));
+          })
           .map((n: any, idx: number) => {
             const rawText = (n.note || n.text || "").trim();
             let parsedType: OrderNoteType = "internal";
@@ -1802,6 +1810,8 @@ export function formatDbOrderRecord(data: any): Order {
               parsedType = "delivery";
             } else if (n.type === "packaging" || n.type === "packaging_note") {
               parsedType = "packaging";
+            } else if (n.type === "system" || n.type === "system_note") {
+              parsedType = "system";
             } else {
               parsedType = "internal";
             }
@@ -1813,6 +1823,8 @@ export function formatDbOrderRecord(data: any): Order {
               parsedText = rawText.replace("[Packaging Note] ", "").trim();
             } else if (rawText.startsWith("[Internal Note] ")) {
               parsedText = rawText.replace("[Internal Note] ", "").trim();
+            } else if (rawText.startsWith("[System Note] ")) {
+              parsedText = rawText.replace("[System Note] ", "").trim();
             }
 
             return {
@@ -2119,12 +2131,14 @@ export async function updateOrderInDb(
 
       if (newNotesToInsert.length > 0) {
         for (const n of newNotesToInsert) {
-          const rawText = n.text.trim().replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+          const rawText = n.text.trim().replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, "");
           const dbType =
             n.type === "delivery" || n.type === "delivery_note"
               ? "delivery"
               : n.type === "packaging" || n.type === "packaging_note"
               ? "packaging"
+              : n.type === "system" || n.type === "system_note"
+              ? "system"
               : "internal";
           const notePayload = {
             order_id: orderUuid,
@@ -2410,6 +2424,8 @@ function parseDbNoteToDomain(n: any, defaultOrderNumber: string): OrderNote {
     parsedType = "delivery";
   } else if (n.type === "packaging" || n.type === "packaging_note") {
     parsedType = "packaging";
+  } else if (n.type === "system" || n.type === "system_note") {
+    parsedType = "system";
   } else {
     parsedType = "internal";
   }
@@ -2421,6 +2437,8 @@ function parseDbNoteToDomain(n: any, defaultOrderNumber: string): OrderNote {
     parsedText = rawText.replace("[Packaging Note] ", "").trim();
   } else if (rawText.startsWith("[Internal Note] ")) {
     parsedText = rawText.replace("[Internal Note] ", "").trim();
+  } else if (rawText.startsWith("[System Note] ")) {
+    parsedText = rawText.replace("[System Note] ", "").trim();
   }
 
   return {
@@ -2506,15 +2524,17 @@ export async function addOrderNoteInDb(
     return baseOrder;
   }
 
-  // 2. Rest of notes (internal, delivery, packaging): store directly in order_notes table
+  // 2. Rest of notes (internal, delivery, packaging, system): store directly in order_notes table
   const dbType =
     note.type === "delivery" || note.type === "delivery_note"
       ? "delivery"
       : note.type === "packaging" || note.type === "packaging_note"
       ? "packaging"
+      : note.type === "system" || note.type === "system_note"
+      ? "system"
       : "internal";
 
-  const cleanNoteText = trimmedText.replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+  const cleanNoteText = trimmedText.replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, "");
 
   const insertPayload = {
     order_id: orderUuid || null,
@@ -2662,14 +2682,16 @@ export async function updateOrderNoteInDb(
     return baseOrder;
   }
 
-  // Case 3: Target is in order_notes table (Internal, Delivery, Packaging)
+  // Case 3: Target is in order_notes table (Internal, Delivery, Packaging, System)
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(noteId);
-  const cleanText = trimmed.replace(/^\[(Delivery|Packaging|Internal) Note\]\s*/i, "");
+  const cleanText = trimmed.replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, "");
   const dbFinalType =
     finalType === "delivery" || finalType === "delivery_note"
       ? "delivery"
       : finalType === "packaging" || finalType === "packaging_note"
       ? "packaging"
+      : finalType === "system" || finalType === "system_note"
+      ? "system"
       : "internal";
 
   if (isUuid) {
