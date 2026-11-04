@@ -13,6 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
+import { RollingNumber } from "@/components/storefront/rolling-number";
 
 interface IntroSectionProps {
   lang?: StorefrontLang;
@@ -29,6 +30,7 @@ export function IntroSection({
   lang = "bn",
   storeName,
   storeSubtitle,
+  isActive = true,
   onScrollToWhyBuy,
   onScrollToContact,
 }: IntroSectionProps) {
@@ -158,7 +160,11 @@ export function IntroSection({
                   <div className="flex items-center justify-center gap-1.5 mb-1">
                     <Icon className={`w-4 h-4 ${s.color}`} />
                     <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
-                      {s.number}
+                      <RollingNumber
+                        value={s.number}
+                        isActive={isActive}
+                        delay={0.1 + idx * 0.08}
+                      />
                     </span>
                   </div>
                   <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">

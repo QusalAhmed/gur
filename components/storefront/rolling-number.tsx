@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
-import { motion } from "motion/react";
+import { motion, animate } from "motion/react";
 
 interface RollingNumberProps {
   /** The value string to animate, e.g. "২০+", "৫,০০০+", "১০০%", "৬৪", "20+", "5,000+" */
@@ -116,47 +116,26 @@ export function RollingNumber({
 
   const shouldAnimate = isActive !== undefined ? isActive : isInView;
 
-  // Active Count-up Animation Loop
+  // Active Count-up Animation Loop powered by Framer Motion
   useEffect(() => {
     if (!shouldAnimate || target <= 0) {
       return;
     }
 
-    let startTime: number | null = null;
-    let rafId: number;
+    const controls = animate(0, target, {
+      duration: resolvedDuration,
+      delay: delay,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (latest) => {
+        setCurrentValue(Math.round(latest));
+      },
+      onComplete: () => {
+        setCurrentValue(target);
+        setIsComplete(true);
+      },
+    });
 
-    const startVal = 0;
-    const endVal = target;
-    const totalDurationMs = resolvedDuration * 1000;
-    const delayMs = Math.max(0, delay * 1000);
-
-    const timeoutId = setTimeout(() => {
-      const step = (timestamp: number) => {
-        if (!startTime) startTime = timestamp;
-        const elapsed = timestamp - startTime;
-        const progress = Math.min(elapsed / totalDurationMs, 1);
-
-        // Smooth cubic-bezier easeOut: fast initial counting with smooth deceleration to culmination
-        const easeOut = 1 - Math.pow(1 - progress, 3.2);
-        const nextVal = Math.round(startVal + (endVal - startVal) * easeOut);
-
-        setCurrentValue(nextVal);
-
-        if (progress < 1) {
-          rafId = requestAnimationFrame(step);
-        } else {
-          setCurrentValue(endVal);
-          setIsComplete(true);
-        }
-      };
-
-      rafId = requestAnimationFrame(step);
-    }, delayMs);
-
-    return () => {
-      clearTimeout(timeoutId);
-      cancelAnimationFrame(rafId);
-    };
+    return () => controls.stop();
   }, [shouldAnimate, target, resolvedDuration, delay]);
 
   // SSR fallback: render static culminated value for SEO & instant paint stability
