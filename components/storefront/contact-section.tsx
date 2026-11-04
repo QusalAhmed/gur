@@ -330,18 +330,6 @@ export function ContactSection({
             </div>
             <button
               type="button"
-              onClick={handleScrollToWhyBuy}
-              className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/80 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-emerald-950 dark:text-emerald-200 transition-colors cursor-pointer"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-              <span>
-                {lang === "bn"
-                  ? "কেন আমাদের গুড় সেরা? ❯"
-                  : "Why Buy From Us? ❯"}
-              </span>
-            </button>
-            <button
-              type="button"
               onClick={handleScrollToStock}
               className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
             >

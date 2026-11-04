@@ -7,8 +7,6 @@ import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
 import dynamic from "next/dynamic";
-import { IntroSection } from "./intro-section";
-import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
 import type { SelectedProductData } from "./quick-order-sheet";
 import { MobileDock } from "./mobile-dock";
@@ -87,15 +85,11 @@ export function ProductShowcase({
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
   // Section mapping:
-  // Section 0: Business Introductory Section (Representing the business, origin, craft & pillars)
-  // Section 1: Why Buy From Us Section (Core value propositions, 6 reasons & guarantee)
-  // Section 2: Contact & Incomplete Order Form (combined under same section with normal scrolling)
-  // Sections 3..effectiveProductCount + 2: Products
+  // Section 0: Contact & Incomplete Order Form (combined under same section with normal scrolling)
+  // Sections 1..effectiveProductCount: Products
   // Section checkoutSectionIndex: Checkout Section
-  const introSectionIndex = 0;
-  const whyBuySectionIndex = 1;
-  const contactSectionIndex = 2;
-  const productsStartIndex = 3;
+  const contactSectionIndex = 0;
+  const productsStartIndex = 1;
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
@@ -313,31 +307,19 @@ export function ProductShowcase({
           </div>
         </button>
 
-        {/* Desktop Navigation Links: Intro, Why Us, Products, Contact & Phone Order, Checkout */}
+        {/* Desktop Navigation Links: Contact & Phone Order, Products & Checkout */}
         <nav className="hidden lg:flex items-center gap-1 bg-amber-200/60 dark:bg-stone-800/70 p-1 rounded-full border border-amber-300/60 dark:border-stone-700">
           <button
             type="button"
-            onClick={() => scrollToSection(introSectionIndex)}
+            onClick={() => scrollToSection(contactSectionIndex)}
             className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === introSectionIndex
-                ? "bg-white text-amber-900 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span>{t.navIntro}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection(whyBuySectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === whyBuySectionIndex
+              activeSectionIndex === contactSectionIndex
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{t.navWhyBuy}</span>
+            <Phone className="w-3.5 h-3.5" />
+            <span>{t.navContact}</span>
           </button>
           <button
             type="button"
@@ -350,18 +332,6 @@ export function ProductShowcase({
           >
             <Package className="w-3.5 h-3.5" />
             <span>{t.navProducts}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection(contactSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === contactSectionIndex
-                ? "bg-white text-emerald-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <Phone className="w-3.5 h-3.5" />
-            <span>{t.navContact}</span>
           </button>
           <button
             type="button"
@@ -437,33 +407,7 @@ export function ProductShowcase({
 
       {/* Bead / Dot Pagination (Visible on Tablets & Desktops for easy jumping) */}
       <aside className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col items-center gap-3 bg-amber-950/15 dark:bg-stone-900/40 backdrop-blur-md p-2 rounded-full border border-amber-300/40 select-none">
-        {/* Dot 0: Business Introduction Section */}
-        <button
-          type="button"
-          onClick={() => scrollToSection(introSectionIndex)}
-          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
-            activeSectionIndex === introSectionIndex
-              ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
-              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
-          }`}
-          title={t.navIntro}
-          aria-label="Scroll to Business Introduction"
-        />
-
-        {/* Dot 1: Why Buy From Us Section */}
-        <button
-          type="button"
-          onClick={() => scrollToSection(whyBuySectionIndex)}
-          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
-            activeSectionIndex === whyBuySectionIndex
-              ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
-              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
-          }`}
-          title={t.navWhyBuy}
-          aria-label="Scroll to Why Buy From Us"
-        />
-
-        {/* Dot 2: Contact & Incomplete Order Help Section */}
+        {/* Dot 0: Contact & Incomplete Order Help Section */}
         <button
           type="button"
           onClick={() => scrollToSection(contactSectionIndex)}
@@ -476,7 +420,7 @@ export function ProductShowcase({
           aria-label="Scroll to Contact & Order"
         />
 
-        {/* Dots 3..N: Product Cards or Skeleton */}
+        {/* Dots 1..N: Product Cards or Skeleton */}
         {isLoading ? (
           <button
             type="button"
@@ -542,27 +486,13 @@ export function ProductShowcase({
         className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth touch-pan-y overscroll-y-contain flex flex-col"
         style={{ scrollSnapType: "y mandatory" }}
       >
-        {/* Section 0: Business Introductory Section */}
-        <IntroSection
-          lang={lang}
-          storeName={displayStoreName}
-          storeSubtitle={storeSubtitle}
-          isActive={activeSectionIndex === introSectionIndex}
-          onScrollToWhyBuy={() => scrollToSection(whyBuySectionIndex)}
-          onScrollToContact={() => scrollToSection(contactSectionIndex)}
-        />
-
-        {/* Section 1: Why Buy From Us Section (Placed below Introductory Section) */}
-        <WhyBuyFromUs lang={lang} />
-
-        {/* Section 2: Full-Screen Contact & Incomplete Order Help Section (Combined) */}
+        {/* Section 0: Full-Screen Contact & Incomplete Order Help Section (Combined) */}
         <ContactSection
           lang={lang}
           hotline={defaultHotline}
           storeName={storeName}
           messengerUrl={messengerUrl}
           onScrollToProducts={() => scrollToSection(productsStartIndex)}
-          onScrollToWhyBuy={() => scrollToSection(whyBuySectionIndex)}
         />
 
         {/* Sections 1..N: Full-Screen Products or Skeleton */}
@@ -618,7 +548,7 @@ export function ProductShowcase({
         onToggleLang={toggleLanguage}
         defaultHotline={defaultHotline}
         storeName={storeName}
-        onIntroClick={() => scrollToSection(introSectionIndex)}
+        onIntroClick={() => scrollToSection(contactSectionIndex)}
         onCheckoutClick={() => scrollToSection(checkoutSectionIndex)}
       />
 
