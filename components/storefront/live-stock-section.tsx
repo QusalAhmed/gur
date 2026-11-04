@@ -529,7 +529,7 @@ function TimelineDayCard({
             <span>
               {isBn ? "বুকড: " : "Booked: "}
               <strong className="text-stone-700 dark:text-stone-300">
-                {isBn ? toBnNumber(proj.bookedKg) : proj.bookedKg} কেজি
+                {isBn ? toBnNumber(proj.bookedKg) : proj.bookedKg} {isBn ? "কেজি" : "KG"}
               </strong>
             </span>
             <span>
@@ -541,7 +541,7 @@ function TimelineDayCard({
                     : "text-rose-600 dark:text-rose-400 font-bold"
                 }
               >
-                {isBn ? toBnNumber(proj.availableKg) : proj.availableKg} কেজি
+                {isBn ? toBnNumber(proj.availableKg) : proj.availableKg} {isBn ? "কেজি" : "KG"}
               </strong>
             </span>
           </div>
