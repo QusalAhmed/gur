@@ -57,6 +57,7 @@ export interface BrevoConfig {
   senderName: string;
   adminEmails: string[];
   enabled: boolean;
+  notifyIncomplete?: boolean;
   source: {
     apiKeyFromEnv: boolean;
     adminEmailFromEnv: boolean;
@@ -105,6 +106,7 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
   const envAdminEmail = (process.env.BREVO_ADMIN_EMAIL || process.env.ADMIN_EMAIL || "").trim();
 
   let dbEnabled = true;
+  let dbNotifyIncomplete = true;
   let dbApiKey = "";
   let dbSenderEmail = "";
   let dbSenderName = "";
@@ -119,6 +121,7 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
         .select("key, value")
         .in("key", [
           "notifications.brevo_enabled",
+          "notifications.brevo_notify_incomplete",
           "notifications.brevo_api_key",
           "notifications.brevo_admin_email",
           "notifications.brevo_sender_email",
@@ -136,6 +139,9 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
           switch (row.key) {
             case "notifications.brevo_enabled":
               dbEnabled = val === true || val === "true" || val === 1;
+              break;
+            case "notifications.brevo_notify_incomplete":
+              dbNotifyIncomplete = val === true || val === "true" || val === 1;
               break;
             case "notifications.brevo_api_key":
               dbApiKey = cleanStr;
@@ -191,6 +197,7 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
     senderName,
     adminEmails,
     enabled: dbEnabled,
+    notifyIncomplete: dbNotifyIncomplete,
     source: {
       apiKeyFromEnv: Boolean(envApiKey),
       adminEmailFromEnv: Boolean(envAdminEmail),
@@ -346,6 +353,7 @@ export function renderAdminOrderEmailHtml(
   const baseUrl = getBaseAppUrl();
   const orderAdminUrl = `${baseUrl}/admin/orders?search=${encodeURIComponent(data.orderNumber)}`;
   const formattedDate = formatDhakaDateTime(data.createdAt);
+  const isIncomplete = data.status === "incomplete_order";
 
   const deliveryZoneText =
     data.deliveryZone === "inside_dhaka"
@@ -365,8 +373,15 @@ export function renderAdminOrderEmailHtml(
           .filter(Boolean)
           .join(", ") || "ঠিকানা প্রদান করা হয়নি";
 
-  const customerName = data.customerName || "Customer (গ্রাহক)";
+  const customerName = data.customerName || (isIncomplete ? "ড্রাফট ভিজিটর" : "Customer (গ্রাহক)");
   const cleanPhone = (data.customerPhone || "").trim();
+  const rawDigits = cleanPhone.replace(/\D/g, "");
+  const waNumber = rawDigits.startsWith("880")
+    ? rawDigits
+    : rawDigits.startsWith("0")
+    ? `88${rawDigits}`
+    : `880${rawDigits}`;
+  const waLink = `https://wa.me/${waNumber}`;
 
   // Generate table rows for items
   const itemsHtml = (data.items || [])
@@ -402,13 +417,33 @@ export function renderAdminOrderEmailHtml(
     })
     .join("");
 
+  const headerGradient = isIncomplete
+    ? "linear-gradient(135deg, #7c2d12 0%, #c2410c 60%, #ea580c 100%)"
+    : "linear-gradient(135deg, #78350f 0%, #b45309 60%, #d97706 100%)";
+
+  const badgeText = isIncomplete
+    ? "⚠️ Abandoned Checkout / ড্রাফট লিড"
+    : "🔔 New Store Order";
+
+  const bannerSubtitle = isIncomplete
+    ? "গ্রাহক চেকআউট শুরু করেছিলেন কিন্তু এখনো সাবমিট করেননি — এখনই যোগাযোগ করুন!"
+    : "ওয়েবসাইট থেকে একটি নতুন অর্ডার গ্রহণ করা হয়েছে";
+
+  const statusPillHtml = isIncomplete
+    ? `<div style="display: inline-block; padding: 4px 10px; background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; font-size: 11px; font-weight: 800; margin-top: 4px;">
+        ⚠️ Incomplete Draft Lead
+       </div>`
+    : `<div style="display: inline-block; padding: 3px 8px; background-color: #fef08a; color: #854d0e; border-radius: 6px; font-size: 11px; font-weight: 700; margin-top: 4px;">
+        Cash On Delivery
+       </div>`;
+
   return `
 <!DOCTYPE html>
 <html lang="bn">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>নতুন অর্ডার: ${data.orderNumber}</title>
+  <title>${isIncomplete ? "অসম্পূর্ণ অর্ডার (ড্রাফট)" : "নতুন অর্ডার"}: ${data.orderNumber}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <div style="background-color: #f8fafc; padding: 24px 12px;">
@@ -417,27 +452,27 @@ export function renderAdminOrderEmailHtml(
       
       <!-- Header Banner -->
       <tr>
-        <td style="background: linear-gradient(135deg, #78350f 0%, #b45309 60%, #d97706 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+        <td style="background: ${headerGradient}; padding: 28px 24px; text-align: center; color: #ffffff;">
           <div style="display: inline-block; padding: 4px 12px; background-color: rgba(255,255,255,0.2); border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;">
-            🔔 New Store Order
+            ${badgeText}
           </div>
           <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff;">
             ${config.senderName}
           </h1>
           <p style="margin: 0; font-size: 14px; color: #fef3c7; opacity: 0.95;">
-            ওয়েবসাইট থেকে একটি নতুন অর্ডার গ্রহণ করা হয়েছে
+            ${bannerSubtitle}
           </p>
         </td>
       </tr>
 
       <!-- Order Highlight Bar -->
       <tr>
-        <td style="padding: 20px 24px; background-color: #fffbeb; border-bottom: 1px solid #fef3c7;">
+        <td style="padding: 20px 24px; background-color: ${isIncomplete ? "#fff7ed" : "#fffbeb"}; border-bottom: 1px solid ${isIncomplete ? "#ffedd5" : "#fef3c7"};">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
             <tr>
               <td>
                 <div style="font-size: 12px; text-transform: uppercase; color: #92400e; font-weight: 700; letter-spacing: 0.5px;">
-                  অর্ডার নম্বর
+                  ${isIncomplete ? "ড্রাফট অর্ডার নম্বর" : "অর্ডার নম্বর"}
                 </div>
                 <div style="font-size: 18px; font-weight: 800; color: #78350f; font-family: monospace; margin-top: 2px;">
                   #${data.orderNumber}
@@ -448,14 +483,12 @@ export function renderAdminOrderEmailHtml(
               </td>
               <td style="text-align: right; vertical-align: middle;">
                 <div style="font-size: 12px; text-transform: uppercase; color: #92400e; font-weight: 700; letter-spacing: 0.5px;">
-                  সর্বমোট প্রদেয় বিল
+                  ${isIncomplete ? "কার্ট আইটেম মূল্য" : "সর্বমোট প্রদেয় বিল"}
                 </div>
                 <div style="font-size: 24px; font-weight: 900; color: #9a3412; margin-top: 2px;">
                   ${formatCurrency(data.grandTotal)}
                 </div>
-                <div style="display: inline-block; padding: 3px 8px; background-color: #fef08a; color: #854d0e; border-radius: 6px; font-size: 11px; font-weight: 700; margin-top: 4px;">
-                  Cash On Delivery
-                </div>
+                ${statusPillHtml}
               </td>
             </tr>
           </table>
@@ -463,6 +496,29 @@ export function renderAdminOrderEmailHtml(
       </tr>
 
       <!-- Quick Action CTA -->
+      ${
+        isIncomplete
+          ? `
+      <tr>
+        <td style="padding: 16px 20px; background-color: #fef2f2; border-bottom: 1px solid #fee2e2; text-align: center;">
+          <div style="font-size: 13px; font-weight: 700; color: #991b1b; margin-bottom: 10px;">
+            💡 এটি একটি অসম্পূর্ণ ড্রাফট লিড — দ্রুত কল করে বা মেসেজ দিয়ে অর্ডার নিশ্চিত করতে পারেন:
+          </div>
+          <div>
+            <a href="tel:${cleanPhone}" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #0284c7; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);">
+              📞 সরাসরি কল করুন (${cleanPhone})
+            </a>
+            <a href="${waLink}" target="_blank" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #16a34a; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.25);">
+              💬 হোয়াটসঅ্যাপে মেসেজ
+            </a>
+            <a href="${orderAdminUrl}" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #9a3412; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px;">
+              অর্ডারটি এডমিনে দেখুন &rarr;
+            </a>
+          </div>
+        </td>
+      </tr>
+      `
+          : `
       <tr>
         <td style="padding: 18px 24px; text-align: center; border-bottom: 1px solid #f1f5f9;">
           <a href="${orderAdminUrl}" style="display: inline-block; padding: 12px 28px; background-color: #9a3412; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 6px rgba(154, 52, 18, 0.35);">
@@ -470,6 +526,8 @@ export function renderAdminOrderEmailHtml(
           </a>
         </td>
       </tr>
+      `
+      }
 
       <!-- Customer Info Section -->
       <tr>
@@ -625,6 +683,7 @@ export function renderAdminOrderEmailText(
   const baseUrl = getBaseAppUrl();
   const orderAdminUrl = `${baseUrl}/admin/orders?search=${encodeURIComponent(data.orderNumber)}`;
   const formattedDate = formatDhakaDateTime(data.createdAt);
+  const isIncomplete = data.status === "incomplete_order";
 
   const addressText =
     typeof data.address === "string"
@@ -645,6 +704,43 @@ export function renderAdminOrderEmailText(
         )}`
     )
     .join("\n");
+
+  if (isIncomplete) {
+    return `
+==================================================
+⚠️ অসম্পূর্ণ অর্ডার (ড্রাফট লিড) - ${config.senderName}
+==================================================
+
+গ্রাহক চেকআউট শুরু করেছিলেন কিন্তু এখনো অর্ডার নিশ্চিত করেননি।
+অবিলম্বে কল বা মেসেজ দিয়ে অর্ডারটি নিশ্চিত করতে পারেন।
+
+ড্রাফট নম্বর: #${data.orderNumber}
+তারিখ: ${formattedDate} (বাংলাদেশ সময়)
+কার্ট পণ্যের মূল্য: ${formatCurrency(data.grandTotal)}
+
+--------------------------------------------------
+👤 গ্রাহকের বিবরণ:
+--------------------------------------------------
+নাম: ${data.customerName || "ড্রাফট ভিজিটর"}
+ফোন: ${data.customerPhone} (কল করতে চাপুন)
+ঠিকানা: ${addressText}
+ডেলিভারি জোন: ${data.deliveryZone || "N/A"}
+${data.customerNote ? `গ্রাহকের নোট: "${data.customerNote}"\n` : ""}
+--------------------------------------------------
+📦 কার্টে থাকা পণ্যসমূহ:
+--------------------------------------------------
+${itemsText}
+
+সাবটোটাল: ${formatCurrency(data.subtotal)}
+ডেলিভারি চার্জ: ${formatCurrency(data.shippingTotal)}
+সর্বমোট: ${formatCurrency(data.grandTotal)}
+
+--------------------------------------------------
+👉 এডমিন প্যানেলে ড্রাফট লিড দেখতে নিচের লিংকে যান:
+${orderAdminUrl}
+==================================================
+    `.trim();
+  }
 
   return `
 ==================================================
@@ -708,6 +804,19 @@ export async function sendAdminOrderNotification(
       };
     }
 
+    const isIncomplete = payload.status === "incomplete_order";
+
+    if (isIncomplete && config.notifyIncomplete === false) {
+      console.info(
+        "[Brevo] Incomplete order notification is disabled in site_settings. Notification skipped."
+      );
+      return {
+        success: false,
+        skipped: true,
+        error: "Incomplete draft lead notification disabled in site settings",
+      };
+    }
+
     if (config.adminEmails.length === 0) {
       console.warn(
         "[Brevo] No admin email address found in BREVO_ADMIN_EMAIL, ADMIN_EMAIL, or site_settings. Notification skipped."
@@ -724,9 +833,15 @@ export async function sendAdminOrderNotification(
       name: "Store Administrator",
     }));
 
-    const subject = `🔔 নতুন অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerName || payload.customerPhone}`;
+    const subject = isIncomplete
+      ? `⚠️ [ড্রাফট লিড] অসম্পূর্ণ অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerPhone}${payload.customerName ? ` (${payload.customerName})` : ""}`
+      : `🔔 নতুন অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerName || payload.customerPhone}`;
+
     const htmlContent = renderAdminOrderEmailHtml(payload, config);
     const textContent = renderAdminOrderEmailText(payload, config);
+    const tags = isIncomplete
+      ? ["incomplete-order", "abandoned-lead", "admin-alert"]
+      : ["order-notification", "admin-alert"];
 
     const result = await sendBrevoEmail(
       {
@@ -734,30 +849,15 @@ export async function sendAdminOrderNotification(
         subject,
         htmlContent,
         textContent,
-        tags: ["order-notification", "admin-alert"],
+        tags,
       },
       config
     );
 
     if (result.success) {
       console.log(
-        `[Brevo] Admin notification email sent successfully for order #${payload.orderNumber} to ${config.adminEmails.join(", ")} (Message ID: ${result.messageId})`
+        `[Brevo] Admin ${isIncomplete ? "incomplete order lead" : "order"} notification email sent successfully for #${payload.orderNumber} to ${config.adminEmails.join(", ")} (Message ID: ${result.messageId})`
       );
-
-      // Record system note in database for audit trail if orderId is available
-      if (payload.orderId && supabaseAdmin) {
-        try {
-          await supabaseAdmin.from("order_notes").insert({
-            order_id: payload.orderId,
-            order_number: payload.orderNumber,
-            type: "system",
-            author: "Brevo Outbox",
-            note: `Admin order notification email sent via Brevo to ${config.adminEmails.join(", ")} (Message ID: ${result.messageId}).`,
-          });
-        } catch (noteErr: any) {
-          console.warn("[Brevo] Could not write system note to order_notes:", noteErr);
-        }
-      }
     } else {
       console.error(
         `[Brevo] Failed to send admin order notification for #${payload.orderNumber}:`,

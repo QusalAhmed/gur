@@ -157,8 +157,14 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
   const [isRefetching, setIsRefetching] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
 
   const isMountedRef = useRef<boolean>(true);
+
+  // Set client-side date safely after mount to avoid prerender/SSR non-determinism
+  useEffect(() => {
+    setCurrentDate(new Date());
+  }, []);
 
   // Fetch production setting and active orders
   const fetchData = useCallback(async (isBackground: boolean = false) => {
@@ -261,11 +267,15 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
 
   // Frontend calculation: project availability day-by-day
   const { projections, nextAvailableDay } = useMemo(() => {
+    if (!currentDate) {
+      return { projections: [], nextAvailableDay: null };
+    }
+
     const list: StockDayProjection[] = [];
     const capacity = Math.max(1, dailyProductionKg);
     let remainingBacklog = totalActiveOrdersKg;
 
-    const now = new Date();
+    const now = currentDate;
 
     // Day 0: Today (Current stock is ALWAYS 0)
     const today = new Date(now);

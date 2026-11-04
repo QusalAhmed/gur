@@ -6,20 +6,36 @@ import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ShieldCheck
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
+import dynamic from "next/dynamic";
 import { IntroSection } from "./intro-section";
 import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
-import { CheckoutSection } from "./checkout-section";
-import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
-import { CartSheet } from "./cart-sheet";
+import type { SelectedProductData } from "./quick-order-sheet";
 import { MobileDock } from "./mobile-dock";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
   selectCartSubtotal,
+  selectIsCartOpen,
   openCart,
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
+
+// Code-split heavy interactive sections & modals to reduce initial mobile bundle size
+const CheckoutSection = dynamic(
+  () => import("./checkout-section").then((mod) => mod.CheckoutSection),
+  { ssr: true }
+);
+
+const QuickOrderSheet = dynamic(
+  () => import("./quick-order-sheet").then((mod) => mod.QuickOrderSheet),
+  { ssr: false }
+);
+
+const CartSheet = dynamic(
+  () => import("./cart-sheet").then((mod) => mod.CartSheet),
+  { ssr: false }
+);
 
 const emptySubscribe = () => () => {};
 
@@ -47,6 +63,7 @@ export function ProductShowcase({
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
   const cartSubtotal = useAppSelector(selectCartSubtotal);
+  const isCartOpen = useAppSelector(selectIsCartOpen);
 
   const [lang, setLang] = useState<StorefrontLang>("bn");
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -581,6 +598,7 @@ export function ProductShowcase({
               totalProducts={products.length}
               lang={lang}
               isActive={activeSectionIndex === productsStartIndex + idx}
+              priority={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
               onOrderClick={handleOpenOrder}
             />
           ))
@@ -605,7 +623,9 @@ export function ProductShowcase({
       />
 
       {/* Redux Cart Drawer Sheet */}
-      <CartSheet lang={lang} onProceedToCheckout={handleCheckoutFromCart} />
+      {isCartOpen && (
+        <CartSheet lang={lang} onProceedToCheckout={handleCheckoutFromCart} />
+      )}
 
       {/* Quick 1-Step Order Bottom Sheet */}
       {activeOrderModal.isOpen && (

@@ -20,16 +20,24 @@ function FacebookPixelTrackerInner() {
     }
     lastTrackedPath.current = pathname;
 
-    const eventId = trackPageView();
-    if (eventId) {
-      const { fbp, fbc } = getClientFbpAndFbc();
-      const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
-      sendCapiPageViewAction({
-        eventId,
-        url: currentUrl,
-        fbp,
-        fbc,
-      }).catch(() => {});
+    const runTracking = () => {
+      const eventId = trackPageView();
+      if (eventId) {
+        const { fbp, fbc } = getClientFbpAndFbc();
+        const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
+        sendCapiPageViewAction({
+          eventId,
+          url: currentUrl,
+          fbp,
+          fbc,
+        }).catch(() => {});
+      }
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      (window as any).requestIdleCallback(runTracking, { timeout: 2500 });
+    } else {
+      setTimeout(runTracking, 1000);
     }
   }, [pathname]);
 

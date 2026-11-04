@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
 import { ProductShowcase } from "./product-showcase";
 import { ProductPixelTracker } from "./product-pixel-tracker";
@@ -14,28 +15,33 @@ export function StorefrontProductsClient({
   featuredIdentifier,
   autoScrollToProduct = false,
 }: StorefrontProductsClientProps) {
+  const searchParams = useSearchParams();
+  const urlProduct = searchParams?.get("product") || searchParams?.get("p") || undefined;
+  const effectiveFeaturedId = featuredIdentifier || urlProduct;
+  const effectiveAutoScroll = autoScrollToProduct || Boolean(effectiveFeaturedId);
+
   // TanStack Query to get storefront products, variants, and store settings
   const { data, isLoading } = useStorefrontProducts();
 
   const featuredProduct = useMemo(() => {
-    if (!featuredIdentifier || !data?.products || data.products.length === 0) {
+    if (!effectiveFeaturedId || !data?.products || data.products.length === 0) {
       return null;
     }
     return (
       data.products.find(
-        (p) => p.slug === featuredIdentifier || p.id === featuredIdentifier
+        (p) => p.slug === effectiveFeaturedId || p.id === effectiveFeaturedId
       ) || null
     );
-  }, [data?.products, featuredIdentifier]);
+  }, [data?.products, effectiveFeaturedId]);
 
   const orderedProducts = useMemo(() => {
     const rawProducts = data?.products ?? [];
-    if (!featuredIdentifier || rawProducts.length === 0) {
+    if (!effectiveFeaturedId || rawProducts.length === 0) {
       return rawProducts;
     }
 
     const featuredIndex = rawProducts.findIndex(
-      (p) => p.slug === featuredIdentifier || p.id === featuredIdentifier
+      (p) => p.slug === effectiveFeaturedId || p.id === effectiveFeaturedId
     );
 
     if (featuredIndex > 0) {
@@ -45,7 +51,7 @@ export function StorefrontProductsClient({
     }
 
     return rawProducts;
-  }, [data?.products, featuredIdentifier]);
+  }, [data?.products, effectiveFeaturedId]);
 
   return (
     <>
@@ -56,8 +62,8 @@ export function StorefrontProductsClient({
         storeName={data?.storeName ?? "খেজুরের খাঁটি গুড়"}
         storeSubtitle={data?.storeSubtitle}
         isLoading={isLoading}
-        featuredIdentifier={featuredIdentifier}
-        autoScrollToProduct={autoScrollToProduct || Boolean(featuredIdentifier)}
+        featuredIdentifier={effectiveFeaturedId}
+        autoScrollToProduct={effectiveAutoScroll}
       />
     </>
   );

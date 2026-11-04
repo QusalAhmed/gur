@@ -67,6 +67,7 @@ interface ProductCardProps {
   totalProducts: number;
   lang: StorefrontLang;
   isActive?: boolean;
+  priority?: boolean;
   onOrderClick?: (selectedData: SelectedProductData, quantity: number) => void;
 }
 
@@ -76,6 +77,8 @@ export function ProductCard({
   totalProducts,
   lang,
   isActive,
+  priority = false,
+  onOrderClick,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
 
@@ -201,6 +204,17 @@ export function ProductCard({
   const [autoplayPlugin] = useState(() =>
     Autoplay({ delay: 2000, stopOnInteraction: false, stopOnMouseEnter: true })
   );
+
+  // Pause autoplay when product card is not active in the viewport to save CPU and main thread cycles
+  useEffect(() => {
+    if (typeof isActive === "boolean") {
+      if (isActive) {
+        autoplayPlugin.play();
+      } else {
+        autoplayPlugin.stop();
+      }
+    }
+  }, [isActive, autoplayPlugin]);
 
   // Track active slide in carousel
   useEffect(() => {
@@ -385,7 +399,7 @@ export function ProductCard({
                             src={imgSrc}
                             alt={`${displayName} - ${imgIdx + 1}`}
                             fill
-                            priority={index === 0 && imgIdx === 0}
+                            priority={priority && imgIdx === 0}
                             className="object-cover transition-transform duration-700 hover:scale-105"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                           />
@@ -421,7 +435,7 @@ export function ProductCard({
                   src={product.image}
                   alt={displayName}
                   fill
-                  priority={index === 0}
+                  priority={priority}
                   className="object-cover transition-transform duration-700 hover:scale-105"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                 />

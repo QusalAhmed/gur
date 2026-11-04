@@ -147,7 +147,7 @@ import {
 } from "@/components/ui/tanstack-form";
 import { cn, formatDate, formatDateTime, sortNotesNewestFirst } from "@/lib/utils";
 import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
-import { getOrdersAction } from "@/actions/orders";
+import { getOrdersAction, getOrderAction } from "@/actions/orders";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderFormDialog } from "@/components/admin/order-form-dialog";
@@ -1217,6 +1217,77 @@ export function OrdersClient() {
   // Dialog & Sheet States
   const [selectedOrder, setSelectedOrder] = React.useState<Order | null>(null);
   const [isViewOpen, setIsViewOpen] = React.useState(false);
+
+  // Auto-open order details sheet when navigated with ?search=MOL-XXXX or ?order=MOL-XXXX
+  const autoOpenedOrderRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const orderParam = (searchParams.get("order") || searchParams.get("search"))?.trim();
+    if (!orderParam) {
+      autoOpenedOrderRef.current = null;
+      return;
+    }
+
+    if (autoOpenedOrderRef.current === orderParam) return;
+
+    // 1. Try finding in current orders list first
+    const existing = orders.find(
+      (o) =>
+        o.order_number?.toLowerCase() === orderParam.toLowerCase() ||
+        o.id === orderParam
+    );
+
+    if (existing) {
+      autoOpenedOrderRef.current = orderParam;
+      setSelectedOrder(existing);
+      setIsViewOpen(true);
+      return;
+    }
+
+    // 2. If not found in current slice and not loading, fetch directly via Server Action
+    if (!isOrdersLoading) {
+      getOrderAction(orderParam).then((fetchedOrder) => {
+        if (fetchedOrder) {
+          autoOpenedOrderRef.current = orderParam;
+          setSelectedOrder(fetchedOrder);
+          setIsViewOpen(true);
+        }
+      });
+    }
+  }, [searchParams, orders, isOrdersLoading]);
+
+  // Listen for instant in-page open requests from notifications popover
+  React.useEffect(() => {
+    const handleOpenOrderEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ orderNumber?: string; orderId?: string }>;
+      const target = customEvent.detail?.orderNumber || customEvent.detail?.orderId;
+      if (!target) return;
+
+      const found = orders.find(
+        (o) =>
+          o.order_number?.toLowerCase() === target.toLowerCase() ||
+          o.id === target
+      );
+      if (found) {
+        autoOpenedOrderRef.current = target;
+        setSelectedOrder(found);
+        setIsViewOpen(true);
+      } else {
+        getOrderAction(target).then((order) => {
+          if (order) {
+            autoOpenedOrderRef.current = target;
+            setSelectedOrder(order);
+            setIsViewOpen(true);
+          }
+        });
+      }
+    };
+
+    window.addEventListener("gur:open-order", handleOpenOrderEvent);
+    return () => {
+      window.removeEventListener("gur:open-order", handleOpenOrderEvent);
+    };
+  }, [orders]);
 
   // Unified Order Dialog State (for creating and editing)
   const [orderModalState, setOrderModalState] = React.useState<{

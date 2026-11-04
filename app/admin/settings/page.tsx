@@ -741,7 +741,7 @@ export default function SettingsPage() {
                       Enable Brevo Admin Order Notifications
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Automatically sends an email to the admin with complete order items, customer details, and delivery address when a new order is received.
+                      Automatically sends an email alert to the admin for all incoming orders (including both completed customer orders and incomplete checkout draft leads).
                     </p>
                   </div>
                 </div>

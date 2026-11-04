@@ -238,6 +238,7 @@ export async function placeStorefrontOrderAction(
 
         if (!rpcErr && rpcData?.success) {
           // Persist meta_tracking in order's attribution for delayed CAPI purchase upon admin confirmation
+          let currentAttr: Record<string, any> = {};
           try {
             const { data: currentOrderRow } = await client
               .from("orders")
@@ -245,7 +246,7 @@ export async function placeStorefrontOrderAction(
               .eq("id", rpcData.order_id)
               .maybeSingle();
 
-            const currentAttr =
+            currentAttr =
               currentOrderRow?.attribution && typeof currentOrderRow.attribution === "object"
                 ? currentOrderRow.attribution
                 : {};
@@ -267,7 +268,7 @@ export async function placeStorefrontOrderAction(
           }
 
           // Trigger Brevo transactional email notification to admin upon order placement
-          if (rpcData.status === "pending") {
+          if (rpcData.status === "pending" || rpcData.status === "confirmed") {
             sendAdminOrderNotification({
               orderId: rpcData.order_id,
               orderNumber: rpcData.order_number,
@@ -296,6 +297,52 @@ export async function placeStorefrontOrderAction(
             }).catch((brevoErr) => {
               console.warn("[Storefront Order] Background Brevo admin notification error:", brevoErr);
             });
+          } else if (rpcData.status === "incomplete_order") {
+            // Trigger Brevo transactional email notification for incomplete draft order / abandoned lead (sent once per lead)
+            const alreadyNotifiedIncomplete = Boolean(currentAttr?.brevo_incomplete_notified_at);
+            if (!alreadyNotifiedIncomplete) {
+              const nowIso = new Date().toISOString();
+              Promise.resolve(
+                client
+                  .from("orders")
+                  .update({
+                    attribution: {
+                      ...currentAttr,
+                      brevo_incomplete_notified_at: nowIso,
+                    },
+                  })
+                  .eq("id", rpcData.order_id)
+              ).catch(() => {});
+
+              sendAdminOrderNotification({
+                orderId: rpcData.order_id,
+                orderNumber: rpcData.order_number,
+                customerName: rpcData.customer_name || payload.customerName || undefined,
+                customerPhone: rpcData.phone || normalizedPhone,
+                deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
+                address: {
+                  address_line: payload.addressLine,
+                  district: payload.district,
+                  division: payload.division,
+                },
+                courierName: payload.courierName,
+                items: resolvedItems.map((item) => ({
+                  productName: item.productName || "খেজুরের খাঁটি গুড়",
+                  variantName: item.variantName || "1 Pack",
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  lineTotal: item.quantity * item.unitPrice,
+                })),
+                subtotal: Number(rpcData.subtotal) || rawSubtotal,
+                shippingTotal: Number(rpcData.shipping_total) || baseShippingFee,
+                grandTotal: Number(rpcData.grand_total) || 0,
+                customerNote: payload.customerNote,
+                status: "incomplete_order",
+                channel: "web",
+              }).catch((brevoErr) => {
+                console.warn("[Storefront Order] Background Brevo incomplete order notification error:", brevoErr);
+              });
+            }
           }
 
           return {
@@ -782,6 +829,55 @@ export async function placeStorefrontOrderAction(
         }).catch((brevoErr) => {
           console.warn("[Storefront Order] Background Brevo admin notification error (Tier 2):", brevoErr);
         });
+      } else if (finalStatus === "incomplete_order") {
+        // Trigger Brevo transactional email notification for incomplete draft order / abandoned lead (sent once per lead)
+        const existingAttr = (existingOrder as any)?.attribution || {};
+        const alreadyNotifiedIncomplete = Boolean(existingAttr?.brevo_incomplete_notified_at);
+        if (!alreadyNotifiedIncomplete) {
+          const nowIso = new Date().toISOString();
+          Promise.resolve(
+            client
+              .from("orders")
+              .update({
+                attribution: {
+                  ...existingAttr,
+                  brevo_incomplete_notified_at: nowIso,
+                },
+              })
+              .eq("id", orderDbId)
+          ).catch(() => {});
+
+          sendAdminOrderNotification({
+            orderId: orderDbId,
+            orderNumber: orderNumber,
+            customerName: resolvedCustomerName || undefined,
+            customerPhone: normalizedPhone,
+            deliveryZone: payload.deliveryZone,
+            address: {
+              address_line: resolvedAddressLine || undefined,
+              district: resolvedDistrict || undefined,
+              division: resolvedDivision || undefined,
+            },
+            courierName: resolvedShippingMethodName || undefined,
+            items: resolvedItems.map((item) => ({
+              productName: item.productName || "খেজুরের খাঁটি গুড়",
+              variantName: item.variantName || "1 Pack",
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.quantity * item.unitPrice,
+            })),
+            subtotal: cleanSubtotal,
+            shippingTotal: cleanShippingTotal,
+            grandTotal: cleanGrandTotal,
+            customerNote: resolvedCustomerNote || undefined,
+            status: "incomplete_order",
+            channel: "web",
+            hasOtherOrders,
+            otherOrderNumbers,
+          }).catch((brevoErr) => {
+            console.warn("[Storefront Order] Background Brevo incomplete order notification error (Tier 2):", brevoErr);
+          });
+        }
       }
 
       return {

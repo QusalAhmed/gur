@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -38,7 +38,11 @@ export function StoreFooter({
 }: StoreFooterProps) {
   const t = STOREFRONT_TEXT[lang];
   const rawPhone = hotline.replace(/[^0-9]/g, "");
-  const currentYear = new Date().getFullYear();
+  const [currentYear, setCurrentYear] = useState<number>(2026);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   const intlPhone = rawPhone.startsWith("88")
     ? rawPhone

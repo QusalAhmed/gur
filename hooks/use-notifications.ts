@@ -75,6 +75,16 @@ export function useNotifications() {
               ? {
                   label: "View",
                   onClick: () => {
+                    if (typeof window !== "undefined" && (newNotif.data?.order_number || newNotif.data?.order_id)) {
+                      window.dispatchEvent(
+                        new CustomEvent("gur:open-order", {
+                          detail: {
+                            orderNumber: newNotif.data.order_number,
+                            orderId: newNotif.data.order_id,
+                          },
+                        })
+                      );
+                    }
                     router.push(newNotif.data.link);
                   },
                 }
@@ -115,7 +125,13 @@ export function useNotifications() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.info("[Notifications] Realtime connected successfully.");
+        } else if (err || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[Notifications] Realtime subscription status:", status, err);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

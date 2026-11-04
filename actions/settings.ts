@@ -37,6 +37,7 @@ export interface SiteSettingsMap {
   "notifications.sms_sender_id"?: string;
   "notifications.smtp_server"?: string;
   "notifications.brevo_enabled"?: boolean;
+  "notifications.brevo_notify_incomplete"?: boolean;
   "notifications.brevo_api_key"?: string;
   "notifications.brevo_admin_email"?: string;
   "notifications.brevo_sender_email"?: string;

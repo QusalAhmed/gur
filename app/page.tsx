@@ -1,22 +1,15 @@
+"use cache";
+
 import { Suspense } from "react";
+import { cacheLife } from "next/cache";
 import { Product, ProductLoading } from "@/components/storefront/product";
 
-export const instant = false;
-
-interface HomePageProps {
-  searchParams?: Promise<{ product?: string; p?: string }>;
-}
-
-export default async function HomePage({ searchParams }: HomePageProps) {
-  const sp = searchParams ? await searchParams : undefined;
-  const featuredId = sp?.product || sp?.p;
+export default async function HomePage() {
+  cacheLife("minutes");
 
   return (
     <Suspense fallback={<ProductLoading />}>
-      <Product
-        featuredIdentifier={featuredId}
-        autoScrollToProduct={Boolean(featuredId)}
-      />
+      <Product />
     </Suspense>
   );
 }

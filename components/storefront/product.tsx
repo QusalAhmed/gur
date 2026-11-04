@@ -1,5 +1,4 @@
 import * as React from "react";
-import { connection } from "next/server";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
 import {
@@ -37,7 +36,6 @@ export async function Product({
   featuredIdentifier,
   autoScrollToProduct,
 }: ProductProps = {}) {
-  await connection();
   const queryClient = getQueryClient();
 
   // Prefetch storefront products into TanStack Query cache on SSR

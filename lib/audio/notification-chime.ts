@@ -1,8 +1,11 @@
 "use client";
 
 const SOUND_STORAGE_KEY = "gur_admin_sound_muted";
+const COIN_DROP_AUDIO_SRC = "/audio/universfield-coin-drop.mp3";
 
 let sharedAudioCtx: AudioContext | null = null;
+let sharedAudioElement: HTMLAudioElement | null = null;
+let audioUnlocked = false;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -19,7 +22,6 @@ function getAudioContext(): AudioContext | null {
     }
 
     if (sharedAudioCtx.state === "suspended") {
-      // User gesture needed on some browsers to resume
       sharedAudioCtx.resume().catch(() => {});
     }
 
@@ -27,6 +29,49 @@ function getAudioContext(): AudioContext | null {
   } catch {
     return null;
   }
+}
+
+function getAudioElement(): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+
+  if (!sharedAudioElement) {
+    try {
+      sharedAudioElement = new Audio(COIN_DROP_AUDIO_SRC);
+      sharedAudioElement.preload = "auto";
+      sharedAudioElement.volume = 0.85;
+    } catch {
+      sharedAudioElement = null;
+    }
+  }
+
+  return sharedAudioElement;
+}
+
+// Global user gesture unlocker for modern browser autoplay policies
+if (typeof window !== "undefined") {
+  const unlockAudio = () => {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+
+    // 1. Resume AudioContext if initialized
+    if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+
+    // 2. Warm up Audio element
+    const audio = getAudioElement();
+    if (audio) {
+      audio.load();
+    }
+
+    window.removeEventListener("click", unlockAudio);
+    window.removeEventListener("keydown", unlockAudio);
+    window.removeEventListener("touchstart", unlockAudio);
+  };
+
+  window.addEventListener("click", unlockAudio, { once: true, passive: true });
+  window.addEventListener("keydown", unlockAudio, { once: true, passive: true });
+  window.addEventListener("touchstart", unlockAudio, { once: true, passive: true });
 }
 
 /**
@@ -52,13 +97,9 @@ export function setNotificationSoundMuted(muted: boolean): void {
 }
 
 /**
- * Plays a clean, pleasant two-tone chime (E5 -> G#5) via Web Audio API
- * No external MP3 file or network request required.
+ * Synthesizes a clean two-tone chime (E5 -> G#5) via Web Audio API
  */
-export function playNotificationChime(): void {
-  if (typeof window === "undefined") return;
-  if (isNotificationSoundMuted()) return;
-
+function playOscillatorFallback(): void {
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -103,3 +144,30 @@ export function playNotificationChime(): void {
   }
 }
 
+/**
+ * Plays the notification sound (custom coin-drop MP3 first, falling back to Web Audio chime)
+ */
+export function playNotificationChime(): void {
+  if (typeof window === "undefined") return;
+  if (isNotificationSoundMuted()) return;
+
+  const audio = getAudioElement();
+  if (audio) {
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // If HTML5 audio is blocked by browser autoplay policy, fall back to oscillator
+          console.debug("[Notification Chime] MP3 play blocked or failed, falling back to synthesized chime:", err);
+          playOscillatorFallback();
+        });
+        return;
+      }
+    } catch {
+      // Fall through to oscillator fallback
+    }
+  }
+
+  playOscillatorFallback();
+}

@@ -54,7 +54,10 @@ function formatRelativeTime(dateStr: string): string {
   }
 }
 
-function getNotificationIcon(type: NotificationType) {
+function getNotificationIcon(type: NotificationType, data?: Record<string, any>) {
+  if (data?.alert_subtype === "incomplete_order_lead" || data?.status === "incomplete_order") {
+    return <ShoppingCart className="h-4 w-4 text-amber-500" />;
+  }
   switch (type) {
     case "order_created":
       return <ShoppingCart className="h-4 w-4 text-emerald-500" />;
@@ -105,9 +108,26 @@ export function AdminNotificationsPopover() {
     if (!n.is_read) {
       markAsRead(n.id);
     }
-    if (n.data?.link) {
+    const targetLink =
+      n.data?.link ||
+      (n.data?.order_number
+        ? `/admin/orders?search=${n.data.order_number}`
+        : undefined);
+
+    if (targetLink) {
       setOpen(false);
-      router.push(n.data.link);
+      // Dispatch in-page event so OrdersClient opens the order sheet immediately if already on /admin/orders
+      if (typeof window !== "undefined" && (n.data?.order_number || n.data?.order_id)) {
+        window.dispatchEvent(
+          new CustomEvent("gur:open-order", {
+            detail: {
+              orderNumber: n.data.order_number,
+              orderId: n.data.order_id,
+            },
+          })
+        );
+      }
+      router.push(targetLink);
     }
   };
 
@@ -121,19 +141,20 @@ export function AdminNotificationsPopover() {
   const hasReadItems = notifications.some((n) => n.is_read);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={(val) => setOpen(val)} triggerId="admin-notifications-trigger">
+      <PopoverTrigger asChild id="admin-notifications-trigger">
         <Button
+          id="admin-notifications-trigger"
           variant="ghost"
           size="icon"
-          className="relative h-9 w-9 text-muted-foreground hover:text-foreground transition-colors"
+          className="relative h-9 w-9 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-4 w-4 pointer-events-none" />
           {mounted && unreadCount > 0 && (
             <span
               className={cn(
-                "absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full text-[10px] font-bold shadow-sm transition-transform",
+                "absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full text-[10px] font-bold shadow-sm transition-transform pointer-events-none select-none",
                 "bg-amber-500 text-black animate-in zoom-in"
               )}
             >
@@ -236,7 +257,7 @@ export function AdminNotificationsPopover() {
                 >
                   {/* Category Icon */}
                   <div className="mt-0.5 p-2 rounded-lg bg-muted shrink-0 flex items-center justify-center">
-                    {getNotificationIcon(n.type)}
+                    {getNotificationIcon(n.type, n.data)}
                   </div>
 
                   {/* Content */}

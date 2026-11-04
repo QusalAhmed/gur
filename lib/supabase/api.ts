@@ -3180,42 +3180,6 @@ export async function bulkUpdateOrderStatusInDb(
     }
   }
 
-  // 5. If moving to processing in bulk, record a packaging note with items checklist for packing
-  if (newStatus === "processing" && updatedOrders && updatedOrders.length > 0) {
-    const packagingNotes: {
-      order_id: string;
-      order_number: string;
-      type: string;
-      author: string;
-      note: string;
-      created_at: string;
-    }[] = [];
-
-    for (const o of updatedOrders) {
-      const matchingDbOrder = eligibleOrders.find((eo) => eo.order_number === o.order_number);
-      const itemDesc = matchingDbOrder?.order_items
-        ? formatSteadfastItemDescription(matchingDbOrder.order_items as any)
-        : "";
-      if (itemDesc) {
-        packagingNotes.push({
-          order_id: o.id,
-          order_number: o.order_number,
-          type: "packaging",
-          author: "System / Order Processing",
-          note: `[Packaging Checklist]: ${itemDesc}`,
-          created_at: nowIso,
-        });
-      }
-    }
-
-    if (packagingNotes.length > 0) {
-      try {
-        await supabase.from("order_notes").insert(packagingNotes);
-      } catch (packErr) {
-        console.warn("Could not record packaging checklist notes for processing orders:", packErr);
-      }
-    }
-  }
 
   if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
     import("@/actions/facebook-capi")
