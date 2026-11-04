@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { MetaCatalogManager } from "@/components/admin/meta-catalog-manager";
 import { syncSingleProductToMetaCatalogAction } from "@/actions/meta-catalog";
+import { updateProductStatusAction } from "@/actions/products";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import {
@@ -121,6 +122,9 @@ export function ProductsClient() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+      router.refresh();
       setToast({
         type: res.archived ? "warning" : "success",
         title: res.archived ? "Product Archived" : "Product Deleted",
@@ -144,10 +148,18 @@ export function ProductsClient() {
   // Status Update Mutation
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "active" | "draft" | "archived" }) => {
-      return await updateProductInDb(id, { status });
+      const res = await updateProductStatusAction(id, status);
+      if (!res.success) {
+        throw new Error(res.error || "Failed to update product status.");
+      }
+      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+      router.refresh();
       setToast({
         type: "success",
         title: "Status Updated",
@@ -222,9 +234,13 @@ export function ProductsClient() {
   const handleBulkArchive = async (selected: UiProductItem[], clearSelection: () => void) => {
     try {
       await Promise.all(
-        selected.map((item) => updateProductInDb(item.id, { status: "archived" }))
+        selected.map((item) => updateProductStatusAction(item.id, "archived"))
       );
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+      router.refresh();
       clearSelection();
       setToast({
         type: "success",
@@ -247,9 +263,13 @@ export function ProductsClient() {
   ) => {
     try {
       await Promise.all(
-        selected.map((item) => updateProductInDb(item.id, { status: newStatus }))
+        selected.map((item) => updateProductStatusAction(item.id, newStatus))
       );
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+      router.refresh();
       clearSelection();
       setToast({
         type: "success",
@@ -275,11 +295,15 @@ export function ProductsClient() {
         else deletedCount++;
       }
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+      router.refresh();
       clearSelection();
       setToast({
         type: "success",
-        title: "Bulk Deletion Processed",
-        message: `Deleted ${deletedCount} products. Safely archived ${archivedCount} products with orders.`,
+        title: "Bulk Action Completed",
+        message: `Deleted ${deletedCount} products and archived ${archivedCount} referenced products.`,
       });
     } catch (err: any) {
       setToast({

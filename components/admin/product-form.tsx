@@ -20,10 +20,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DbProduct,
-  saveProductWithDetails,
   deleteProductImageFromStorage,
   fetchCategoriesList,
 } from "@/lib/supabase";
+import { saveProductAction } from "@/actions/products";
 import { ImageUploader, UploadedImage } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -332,7 +332,19 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
       const finalStatus = submitStatus || status;
 
-      return await saveProductWithDetails({
+      // Sanitize variants before sending:
+      // If compare_at_price <= price, clear it so it doesn't violate database constraint
+      const sanitizedVariants = variants.map((v) => {
+        const p = Number(v.price) || 0;
+        const cp = v.compare_at_price ? Number(v.compare_at_price) : null;
+        return {
+          ...v,
+          price: p,
+          compare_at_price: cp !== null && cp > p ? cp : null,
+        };
+      });
+
+      const res = await saveProductAction({
         productId: initialData?.id,
         product: {
           name: name.trim(),
@@ -354,24 +366,30 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           seo_title: seoTitle.trim() || undefined,
           seo_description: seoDescription.trim() || undefined,
         },
-        variants,
+        variants: sanitizedVariants,
         images,
         deletedVariantIds,
         deletedImageIds,
       });
-    },
-    onSuccess: (result) => {
-      if (result.error) {
-        setToast({
-          type: "destructive",
-          title: "Save Failed",
-          message: result.error,
-        });
-        return;
+
+      if (!res.success) {
+        throw new Error(res.error || "Failed to save product to database.");
       }
 
+      return res;
+    },
+    onSuccess: () => {
+      // Invalidate all related react-query caches
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "catalog-products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "product"] });
+      if (initialData?.id) {
+        queryClient.invalidateQueries({ queryKey: ["admin", "product", initialData.id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+
+      // Refresh Next.js server component router cache
+      router.refresh();
 
       setToast({
         type: "success",

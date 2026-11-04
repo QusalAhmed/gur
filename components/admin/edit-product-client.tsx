@@ -90,7 +90,11 @@ export function EditProductClient({ id }: EditProductClientProps) {
 
   return (
     <div className="max-w-6xl mx-auto px-2 sm:px-4">
-      <ProductForm initialData={product} mode="edit" />
+      <ProductForm
+        key={`${product.id}-${product.updated_at || "latest"}`}
+        initialData={product}
+        mode="edit"
+      />
     </div>
   );
 }

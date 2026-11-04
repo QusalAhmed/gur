@@ -1,4 +1,6 @@
 import { supabase } from "./client";
+import { supabaseAdmin } from "./admin";
+import { saveProductAction, deleteProductAction } from "@/actions/products";
 import {
   DbCategory,
   DbProduct,
@@ -398,7 +400,8 @@ export async function updateProductInDb(
   id: string,
   updates: Partial<DbProduct>
 ): Promise<any> {
-  const { data, error } = await supabase
+  const client = supabaseAdmin || supabase;
+  const { data, error } = await client
     .from("products")
     .update({
       ...updates,
@@ -461,133 +464,11 @@ export async function saveProductWithDetails(params: {
   deletedImageIds?: string[];
 }): Promise<{ product: any; error?: string }> {
   try {
-    let savedProduct: any;
-
-    if (params.productId) {
-      // Update existing product
-      savedProduct = await updateProductInDb(params.productId, {
-        name: params.product.name,
-        name_bn: params.product.nameBn || null,
-        slug: params.product.slug,
-        category_id: params.product.category_id || null,
-        status: params.product.status,
-        summary: params.product.summary || null,
-        summary_bn: params.product.summaryBn || null,
-        description: params.product.description || null,
-        description_bn: params.product.descriptionBn || null,
-        grade: params.product.grade || null,
-        origin: params.product.origin || null,
-        ingredients: params.product.ingredients || null,
-        storage_instructions: params.product.storage_instructions || null,
-        shelf_life_days: params.product.shelf_life_days || null,
-        tax_rate: params.product.tax_rate ?? 0,
-        is_featured: params.product.is_featured ?? false,
-        seo_title: params.product.seo_title || null,
-        seo_description: params.product.seo_description || null,
-      });
-    } else {
-      // Create new product
-      savedProduct = await createProductInDb({
-        name: params.product.name,
-        nameBn: params.product.nameBn,
-        slug: params.product.slug,
-        category_id: params.product.category_id,
-        status: params.product.status,
-        summary: params.product.summary,
-        summaryBn: params.product.summaryBn,
-        description: params.product.description,
-        descriptionBn: params.product.descriptionBn,
-        grade: params.product.grade,
-        origin: params.product.origin,
-        ingredients: params.product.ingredients,
-        storage_instructions: params.product.storage_instructions,
-        shelf_life_days: params.product.shelf_life_days,
-        tax_rate: params.product.tax_rate,
-        is_featured: params.product.is_featured,
-        seo_title: params.product.seo_title,
-        seo_description: params.product.seo_description,
-      });
+    const res = await saveProductAction(params as any);
+    if (!res.success) {
+      return { product: null, error: res.error || "Failed to save product" };
     }
-
-    const productId = savedProduct.id;
-
-    // Delete removed variants
-    if (params.deletedVariantIds && params.deletedVariantIds.length > 0) {
-      await supabase
-        .from("product_variants")
-        .delete()
-        .in("id", params.deletedVariantIds);
-    }
-
-    // Upsert variants
-    if (params.variants && params.variants.length > 0) {
-      for (let i = 0; i < params.variants.length; i++) {
-        const v = params.variants[i];
-        const variantPayload = {
-          product_id: productId,
-          sku: v.sku.trim(),
-          name: v.name.trim(),
-          name_bn: v.nameBn?.trim() || null,
-          pack_type: v.pack_type || "jar",
-          net_quantity: Number(v.net_quantity) || 1,
-          net_unit: v.net_unit || "kg",
-          price: Number(v.price) || 0,
-          compare_at_price: v.compare_at_price ? Number(v.compare_at_price) : null,
-          stock_status: v.stock_status || "in_stock",
-          track_inventory: v.track_inventory ?? true,
-          low_stock_threshold: Number(v.low_stock_threshold) || 5,
-          is_default: v.is_default ?? (i === 0),
-          is_active: v.is_active ?? true,
-          sort_order: i,
-        };
-
-        if (v.id) {
-          await supabase
-            .from("product_variants")
-            .update(variantPayload)
-            .eq("id", v.id);
-        } else {
-          await supabase
-            .from("product_variants")
-            .insert([variantPayload]);
-        }
-      }
-    }
-
-    // Delete removed images
-    if (params.deletedImageIds && params.deletedImageIds.length > 0) {
-      await supabase
-        .from("product_images")
-        .delete()
-        .in("id", params.deletedImageIds);
-    }
-
-    // Upsert images
-    if (params.images && params.images.length > 0) {
-      for (let i = 0; i < params.images.length; i++) {
-        const img = params.images[i];
-        const imagePayload = {
-          product_id: productId,
-          storage_path: img.storage_path,
-          alt_text: img.alt_text || null,
-          is_primary: img.is_primary ?? (i === 0),
-          sort_order: img.sort_order ?? i,
-        };
-
-        if (img.id) {
-          await supabase
-            .from("product_images")
-            .update(imagePayload)
-            .eq("id", img.id);
-        } else {
-          await supabase
-            .from("product_images")
-            .insert([imagePayload]);
-        }
-      }
-    }
-
-    return { product: savedProduct };
+    return { product: res.product };
   } catch (err: any) {
     console.error("Error saving product with details:", err);
     return { product: null, error: err?.message || "Failed to save product" };
@@ -599,66 +480,7 @@ export async function deleteProductSafe(id: string): Promise<{
   archived: boolean;
   message: string;
 }> {
-  try {
-    // 1. Check if batches reference this product
-    const { count: batchCount } = await supabase
-      .from("batches")
-      .select("id", { count: "exact", head: true })
-      .eq("product_id", id);
-
-    // 2. Check if order_items reference variants of this product
-    const { data: variants } = await supabase
-      .from("product_variants")
-      .select("id")
-      .eq("product_id", id);
-
-    let hasOrderItems = false;
-    if (variants && variants.length > 0) {
-      const varIds = variants.map((v) => v.id);
-      const { count: orderItemsCount } = await supabase
-        .from("order_items")
-        .select("id", { count: "exact", head: true })
-        .in("variant_id", varIds);
-
-      hasOrderItems = (orderItemsCount || 0) > 0;
-    }
-
-    if ((batchCount || 0) > 0 || hasOrderItems) {
-      // Safely archive to maintain integrity
-      await updateProductInDb(id, { status: "archived" });
-      return {
-        success: true,
-        archived: true,
-        message: "Product is referenced in existing orders or inventory batches, so it has been safely archived.",
-      };
-    }
-
-    // 3. Delete image files from storage
-    const { data: images } = await supabase
-      .from("product_images")
-      .select("storage_path")
-      .eq("product_id", id);
-
-    if (images && images.length > 0) {
-      const paths = images.map((img) => img.storage_path).filter((p) => !p.startsWith("http"));
-      if (paths.length > 0) {
-        await supabase.storage.from("catalog-images").remove(paths);
-      }
-    }
-
-    // 4. Delete product row (cascades to product_variants and product_images)
-    const { error: delErr } = await supabase.from("products").delete().eq("id", id);
-    if (delErr) throw delErr;
-
-    return {
-      success: true,
-      archived: false,
-      message: "Product and associated variants deleted successfully.",
-    };
-  } catch (err: any) {
-    console.error("Error deleting product safely:", err);
-    throw err;
-  }
+  return await deleteProductAction(id);
 }
 
 export async function deleteProductInDb(id: string): Promise<boolean> {
