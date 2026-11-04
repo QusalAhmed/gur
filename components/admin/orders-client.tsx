@@ -92,6 +92,11 @@ import {
   type SteadfastDiffItem,
   type SteadfastPayloadSnapshot,
 } from "@/lib/steadfast";
+import {
+  isOrderReprintRequired,
+  getOrderReprintDiff,
+  formatOrderReprintDiffSummary,
+} from "@/lib/order-reprint";
 import { SteadfastFailureDialog } from "@/components/admin/steadfast-failure-dialog";
 import { SteadfastBulkDialog } from "@/components/admin/steadfast-bulk-dialog";
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
@@ -264,11 +269,12 @@ export function OrdersClient() {
     (
       message: string,
       type: "success" | "info" | "destructive" | "warning" = "success",
-      options?: { title?: string; duration?: number }
+      options?: { title?: string; duration?: number; action?: { label: string; onClick: () => void } }
     ) => {
       const opts = {
         description: options?.title ? message : undefined,
         duration: options?.duration,
+        action: options?.action,
       };
       const text = options?.title ? options.title : message;
 
@@ -754,7 +760,7 @@ export function OrdersClient() {
         consignment: undefined,
       };
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       if (!result || !result.order) return;
       const updated = result.order;
       queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
@@ -773,7 +779,23 @@ export function OrdersClient() {
       setIsStatusOpen(false);
       setStatusError(null);
 
-      if (result.bookedWithSteadfast && result.consignment) {
+      // Check if order was marked shipped with outdated printed courier details
+      const sourceOrder = variables.currentOrder || orders.find((o) => o.id === updated.id);
+      if (variables.newStatus === "shipped" && sourceOrder && isOrderReprintRequired(sourceOrder)) {
+        const reprintDiffs = getOrderReprintDiff(sourceOrder);
+        showToast(
+          `Order ${updated.id} was marked Shipped, but courier details changed after printing: ${formatOrderReprintDiffSummary(reprintDiffs)}. Physical label may be outdated!`,
+          "warning",
+          {
+            title: "⚠️ Outdated Shipping Label",
+            duration: 12000,
+            action: {
+              label: "Reprint Label",
+              onClick: () => handleBulkPrintInvoices([updated]),
+            },
+          }
+        );
+      } else if (result.bookedWithSteadfast && result.consignment) {
         showToast(
           `Order ${updated.id} moved to PROCESSING & booked with Steadfast! (Consignment: #${result.consignment.consignment_id}, Tracking: ${result.consignment.tracking_code})`,
           "success",
@@ -969,6 +991,27 @@ export function OrdersClient() {
           `Updated status to ${variables.targetStatus.replace(/_/g, " ")} for all ${result.updatedCount} order(s).`,
           "success"
         );
+      }
+
+      // Check for orders moved to 'shipped' with outdated printed labels
+      if (variables.targetStatus === "shipped") {
+        const outdatedShippedOrders = orders.filter(
+          (o) => variables.orderIds.includes(o.id) && isOrderReprintRequired(o)
+        );
+        if (outdatedShippedOrders.length > 0) {
+          showToast(
+            `${outdatedShippedOrders.length} order(s) marked as Shipped have courier details modified after printing! Physical labels may be outdated.`,
+            "warning",
+            {
+              title: "⚠️ Outdated Shipping Labels",
+              duration: 12000,
+              action: {
+                label: `Bulk Reprint (${outdatedShippedOrders.length})`,
+                onClick: () => handleBulkPrintInvoices(outdatedShippedOrders),
+              },
+            }
+          );
+        }
       }
     },
     onError: (err: any) => {
@@ -2536,10 +2579,12 @@ export function OrdersClient() {
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status & Courier" />,
         cell: ({ row }) => {
           const order = row.original;
+          const needsReprint = isOrderReprintRequired(order);
+          const reprintDiffs = needsReprint ? getOrderReprintDiff(order) : [];
           return (
             <div className="space-y-1.5 min-w-[125px] max-w-[165px]">
               {/* Order Status Badge */}
-              <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2554,6 +2599,21 @@ export function OrdersClient() {
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
                   {order.status.replace(/_/g, " ")}
                 </button>
+
+                {needsReprint && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBulkPrintInvoices([order]);
+                    }}
+                    title={`Courier details changed after printing (${formatOrderReprintDiffSummary(reprintDiffs)}). Click to reprint label.`}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border border-amber-400 bg-amber-500/15 text-amber-800 dark:text-amber-300 dark:border-amber-700/80 hover:bg-amber-500/25 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <Printer className="h-2.5 w-2.5 text-amber-600 animate-pulse shrink-0" />
+                    <span>Needs Reprint</span>
+                  </button>
+                )}
               </div>
 
               {/* Fulfillment Status */}

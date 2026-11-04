@@ -14,6 +14,7 @@ import {
   Info,
   Clock,
   ExternalLink,
+  Printer,
 } from "lucide-react";
 import {
   Popover,
@@ -266,6 +267,21 @@ export function AdminNotificationsPopover() {
                           <span>View</span>
                           <ExternalLink className="h-2.5 w-2.5" />
                         </span>
+                      )}
+                      {n.data?.reprint_url && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!n.is_read) markAsRead(n.id);
+                            window.open(n.data.reprint_url, "_blank");
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800 transition-colors cursor-pointer"
+                          title="Open label reprint preview in new tab"
+                        >
+                          <Printer className="h-2.5 w-2.5" />
+                          <span>Reprint Label</span>
+                        </button>
                       )}
                     </div>
                   </div>

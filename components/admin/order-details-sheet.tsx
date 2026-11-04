@@ -78,6 +78,10 @@ import {
   recreateSteadfastParcelAction,
 } from "@/actions/steadfast";
 import {
+  isOrderReprintRequired,
+  getOrderReprintDiff,
+} from "@/lib/order-reprint";
+import {
   formatSteadfastItemDescription,
   detectSteadfastPayloadDiff,
   buildSteadfastPayloadSnapshot,
@@ -678,6 +682,42 @@ export function OrderDetailsSheet({
         {/* 2. SCROLLABLE BODY CONTENT */}
         {/* ========================================================================= */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3.5 sm:py-4 space-y-4 sm:space-y-5">
+          {/* Outdated Shipping Label Warning Banner */}
+          {isOrderReprintRequired(order) && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-500/10 p-3.5 text-xs text-amber-950 dark:text-amber-200 space-y-2.5 shadow-xs">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>Shipping Label Outdated (Needs Reprint)</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5 border-amber-400 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
+                  onClick={() => onPrintInvoice([order])}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>Reprint 58mm Label</span>
+                </Button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                Courier details were edited after this order was printed at{" "}
+                <span className="font-semibold">{formatDateTime(order.printed_at || "")}</span>.
+                The physical thermal sticker / invoice must be reprinted to reflect the latest delivery instructions:
+              </p>
+              <div className="bg-white/80 dark:bg-black/20 rounded-md p-2 border border-amber-200 dark:border-amber-900/40 text-[11px] space-y-1">
+                {getOrderReprintDiff(order).map((diff, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-amber-900 dark:text-amber-200">{diff.field}:</span>
+                    <span className="text-muted-foreground line-through">{diff.old}</span>
+                    <span className="text-amber-600">→</span>
+                    <span className="font-semibold text-foreground">{diff.new}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Status Pipeline or Exception Banner */}
           {isCancelledOrReturned ? (
             <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">

@@ -1789,6 +1789,8 @@ export function formatDbOrderRecord(data: any): Order {
     courier_tracking_url: data.courier_tracking_url || undefined,
     courier_invoice: data.courier_invoice || undefined,
     courier_payload_snapshot: data.courier_payload_snapshot || null,
+    printed_at: data.printed_at || null,
+    printed_courier_snapshot: data.printed_courier_snapshot || null,
     items,
     notes: Array.isArray(data.order_notes)
       ? data.order_notes
@@ -3504,4 +3506,20 @@ export async function fetchOrderByIdFromDb(orderNumber: string): Promise<Order |
   if (!orderNumber) return null;
   const orders = await fetchOrdersByIdsFromDb([orderNumber]);
   return orders[0] || null;
+}
+
+export async function markOrdersAsPrintedInDb(orderNumbers: string[]): Promise<number> {
+  if (!orderNumbers || orderNumbers.length === 0) return 0;
+  const { data, error } = await supabase.rpc("mark_orders_as_printed", {
+    p_order_numbers: orderNumbers,
+  });
+
+  if (error) {
+    console.error("Failed to mark orders as printed in DB:", error);
+    throw new DatabaseOperationError(
+      parseDatabaseError(error)
+    );
+  }
+
+  return Number(data) || 0;
 }

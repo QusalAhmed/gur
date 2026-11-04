@@ -317,3 +317,34 @@ export async function getOrderAction(idOrNumber: string): Promise<Order | null> 
   await enrichOrderItemsWithImages(client, data);
   return formatDbOrderRecord(data);
 }
+
+/**
+ * Server Action: Marks orders as printed, capturing their current courier-related
+ * fields into printed_courier_snapshot and setting printed_at timestamp.
+ */
+export async function markOrdersAsPrintedAction(orderNumbers: string[]): Promise<{
+  success: boolean;
+  count: number;
+  error?: string;
+}> {
+  if (!orderNumbers || orderNumbers.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  const client = supabaseAdmin || supabase;
+  try {
+    const { data, error } = await client.rpc("mark_orders_as_printed", {
+      p_order_numbers: orderNumbers,
+    });
+
+    if (error) {
+      console.error("[markOrdersAsPrintedAction] Error marking orders as printed:", error);
+      return { success: false, count: 0, error: error.message };
+    }
+
+    return { success: true, count: Number(data) || 0 };
+  } catch (err: any) {
+    console.error("[markOrdersAsPrintedAction] Unexpected exception:", err);
+    return { success: false, count: 0, error: err.message || "Failed to mark orders as printed" };
+  }
+}

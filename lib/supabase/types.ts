@@ -270,6 +270,8 @@ export interface DbOrder {
   courier_tracking_url?: string | null;
   courier_invoice?: string | null;
   courier_payload_snapshot?: any;
+  printed_at?: string | null;
+  printed_courier_snapshot?: any;
   channel: string;
   created_at: string;
   updated_at: string;

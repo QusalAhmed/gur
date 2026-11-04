@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
 import { fetchOrdersByIdsFromDb } from "@/lib/supabase/api";
+import { markOrdersAsPrintedAction } from "@/actions/orders";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 
 type PaperFormat = "2inch" | "58mm" | "a4";
@@ -104,6 +105,14 @@ function PrintContent() {
         setLoading(true);
         const data = await fetchOrdersByIdsFromDb(idList);
         setOrders(data);
+
+        // Record print timestamp and snapshot to track courier field modifications
+        if (data.length > 0) {
+          const numbers = data.map((o) => o.id);
+          markOrdersAsPrintedAction(numbers).catch((err) => {
+            console.warn("Could not record print snapshot:", err);
+          });
+        }
       } catch (err: any) {
         console.error("Failed to load orders for print:", err);
         setError(err.message || "Failed to load order invoices");
@@ -163,17 +172,24 @@ function PrintContent() {
     generateQrs();
   }, [orders, storeConfig.website]);
 
+  const handlePrint = React.useCallback(() => {
+    if (orders.length > 0) {
+      markOrdersAsPrintedAction(orders.map((o) => o.id)).catch(() => {});
+    }
+    window.print();
+  }, [orders]);
+
   // Keyboard shortcut Ctrl+P / Cmd+P
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
-        window.print();
+        handlePrint();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handlePrint]);
 
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -427,7 +443,7 @@ function PrintContent() {
           {/* Right: Print Action */}
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => window.print()}
+              onClick={handlePrint}
               size="sm"
               className="bg-amber-700 hover:bg-amber-800 text-white font-bold gap-1.5 text-xs shadow-md cursor-pointer px-4"
             >
