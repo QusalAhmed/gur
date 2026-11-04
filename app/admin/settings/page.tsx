@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
+  Factory,
 } from "lucide-react";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export default function SettingsPage() {
   const [allowBackorders, setAllowBackorders] = React.useState("no");
   const [lowStockBulk, setLowStockBulk] = React.useState(10);
   const [lowStockRetail, setLowStockRetail] = React.useState(20);
+  const [dailyProductionKg, setDailyProductionKg] = React.useState(50);
 
   // SMS & Notifications State
   const [smsGateway, setSmsGateway] = React.useState("greenweb");
@@ -114,6 +116,9 @@ export default function SettingsPage() {
         }
         if (data["inventory.low_stock_threshold_retail"] !== undefined) {
           setLowStockRetail(Number(data["inventory.low_stock_threshold_retail"]));
+        }
+        if (data["inventory.daily_production_kg"] !== undefined) {
+          setDailyProductionKg(Number(data["inventory.daily_production_kg"]) || 50);
         }
 
         // SMS & Notifications
@@ -169,6 +174,7 @@ export default function SettingsPage() {
         "orders.allow_backorders": allowBackorders,
         "inventory.low_stock_threshold_bulk": Number(lowStockBulk),
         "inventory.low_stock_threshold_retail": Number(lowStockRetail),
+        "inventory.daily_production_kg": Number(dailyProductionKg) || 50,
         "notifications.sms_gateway": smsGateway,
         "notifications.sms_sender_id": smsSenderId,
         "store.whatsapp": whatsapp,
@@ -579,6 +585,37 @@ export default function SettingsPage() {
                     />
                     <p className="text-[11px] text-muted-foreground">
                       Triggers low-stock warnings across consumer retail bottles, pails, and jars.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Daily Production & Future Stock Capacity */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-amber-600" />
+                  Daily Production & Live Stock Capacity
+                </CardTitle>
+                <CardDescription>
+                  Set future production capacity per day in kilograms. The storefront live stock calculation deducts active orders from this to project tomorrow and future available stock.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Future Production Per Day (KG)</label>
+                    <Input
+                      type="number"
+                      value={dailyProductionKg}
+                      onChange={(e) => setDailyProductionKg(Math.max(1, Number(e.target.value)))}
+                      className="font-mono"
+                      min={1}
+                      placeholder="50"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Expected daily molasses (গুড়) yield. Active orders are subtracted from future days sequentially.
                     </p>
                   </div>
                 </div>

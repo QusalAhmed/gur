@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "motion/react";
 import {
   Phone,
   MessageCircle,
   MessageSquare,
   MapPin,
-  Clock,
   Copy,
   Check,
   ChevronDown,
@@ -15,17 +13,20 @@ import {
   ExternalLink,
   ShieldCheck,
   Truck,
+  Factory,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
-import { WhyBuyFromUs } from "./why-buy-from-us";
+import { LiveStockSection } from "./live-stock-section";
 
 interface ContactSectionProps {
   lang?: StorefrontLang;
   hotline?: string;
   storeName?: string;
   address?: string;
+  messengerUrl?: string;
   onScrollToProducts?: () => void;
+  onScrollToWhyBuy?: () => void;
   onScrollToHelp?: () => void;
 }
 
@@ -34,11 +35,18 @@ export function ContactSection({
   hotline = "01843557389",
   storeName,
   address = "বাঘা, রাজশাহী",
+  messengerUrl,
   onScrollToProducts,
+  onScrollToWhyBuy,
   onScrollToHelp,
 }: ContactSectionProps) {
   const [copied, setCopied] = useState(false);
   const t = STOREFRONT_TEXT[lang];
+
+  const finalMessengerUrl =
+    messengerUrl ||
+    process.env.NEXT_PUBLIC_MESSENGER_URL ||
+    "https://m.me/";
 
   const rawPhone = hotline.replace(/[^0-9]/g, "");
   // International format for WhatsApp & IMO (+880 for BD)
@@ -67,7 +75,18 @@ export function ContactSection({
     }
   };
 
+  const handleScrollToStock = () => {
+    const el = document.getElementById("live-stock-section");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   const handleScrollToWhyBuy = () => {
+    if (onScrollToWhyBuy) {
+      onScrollToWhyBuy();
+      return;
+    }
     const el = document.getElementById("why-buy-from-us");
     if (el) {
       el.scrollIntoView({ behavior: "smooth" });
@@ -103,7 +122,7 @@ export function ContactSection({
   return (
     <section
       id="contact"
-      data-section-index="0"
+      data-section-index="2"
       className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-14 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#FAF8F5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
     >
       {/* Soft Ambient Warm Glow (Clean & Elegant, no noisy dots) */}
@@ -187,21 +206,21 @@ export function ContactSection({
             </div>
           </div>
 
-          {/* 2. Secondary Channels Grid: WhatsApp, IMO, SMS */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+          {/* 2. Direct Channels Grid: WhatsApp, Messenger, IMO, SMS */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {/* WhatsApp */}
             <a
               href={`https://wa.me/${intlPhone}?text=${whatsappMsg}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-2 touch-manipulation"
+              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 w-full">
                 <div className="w-9 h-9 rounded-xl bg-[#25D366]/15 text-[#128C7E] dark:text-[#25D366] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <MessageCircle className="w-5 h-5 fill-current" />
                 </div>
                 <div className="min-w-0 text-left">
-                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100">
+                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.whatsappTitle}
                   </span>
                   <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
@@ -209,20 +228,52 @@ export function ContactSection({
                   </span>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 bg-[#25D366] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shrink-0 shadow-xs sm:w-full sm:justify-center sm:mt-1 group-hover:bg-[#20ba59]">
+              <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
                 <span>{t.whatsappChatBtn}</span>
                 <ExternalLink className="w-3 h-3" />
               </span>
             </a>
 
+            {/* Facebook Messenger */}
+            <a
+              href={finalMessengerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
+            >
+              <div className="flex items-center gap-2.5 min-w-0 w-full">
+                <div className="w-9 h-9 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <svg
+                    className="w-5 h-5 fill-current"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.2 5.42 3.16 7.15V22l3.03-1.67c1.17.33 2.44.52 3.81.52 5.64 0 10-4.13 10-9.7S17.64 2 12 2zm1.06 13.06l-2.58-2.75-5.04 2.75 5.54-5.88 2.65 2.75 4.97-2.75-5.54 5.88z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 text-left">
+                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
+                    {t.messengerTitle}
+                  </span>
+                  <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                    {lang === "bn" ? "ইনবক্সে অর্ডার" : "Inbox & Order"}
+                  </span>
+                </div>
+              </div>
+              <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+                <span>{t.messengerChatBtn}</span>
+                <ExternalLink className="w-3 h-3" />
+              </span>
+            </a>
+
             {/* IMO */}
-            <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
+            <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0 w-full">
                 <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-black text-xs">
                   imo
                 </div>
                 <div className="min-w-0 text-left">
-                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100">
+                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.imoTitle}
                   </span>
                   <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
@@ -232,7 +283,7 @@ export function ContactSection({
               </div>
               <a
                 href={`imo://call?phone=${intlPhone}`}
-                className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation sm:w-full sm:mt-1"
+                className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
               >
                 <span>{t.imoLaunchBtn}</span>
               </a>
@@ -241,14 +292,14 @@ export function ContactSection({
             {/* SMS */}
             <a
               href={`sms:${rawPhone}?body=${smsMsg}`}
-              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-2 touch-manipulation"
+              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 w-full">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <MessageSquare className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 text-left">
-                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100">
+                  <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.smsTitle}
                   </span>
                   <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
@@ -256,7 +307,7 @@ export function ContactSection({
                   </span>
                 </div>
               </div>
-              <span className="inline-flex items-center justify-center gap-1 bg-amber-600 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shrink-0 shadow-xs sm:w-full sm:justify-center sm:mt-1 group-hover:bg-amber-700">
+              <span className="inline-flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
                 <span>{t.smsSendBtn}</span>
               </span>
             </a>
@@ -290,6 +341,18 @@ export function ContactSection({
             </button>
             <button
               type="button"
+              onClick={handleScrollToStock}
+              className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
+            >
+              <Factory className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <span>
+                {lang === "bn"
+                  ? "লাইভ স্টক আপডেট ❯"
+                  : "Live Stock Update ❯"}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={handleScrollToHelp}
               className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
             >
@@ -315,10 +378,10 @@ export function ContactSection({
         />
 
         {/* Soft Decorative Separator for Normal Scrolling */}
-        <div className="my-6 sm:my-8 border-t border-dashed border-amber-300/80 dark:border-stone-800" />
+        <div className="my-5 sm:my-6 border-t border-dashed border-amber-300/80 dark:border-stone-800" />
 
-        {/* Why Customer Will Buy From Us Section (Below the Easy One Tap Order Section) */}
-        <WhyBuyFromUs
+        {/* Live Stock & Future Production Availability Section */}
+        <LiveStockSection
           lang={lang}
           onScrollToProducts={handleScrollDown}
         />

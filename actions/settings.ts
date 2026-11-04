@@ -27,9 +27,10 @@ export interface SiteSettingsMap {
   "orders.auto_cancel_cod_hours"?: string | number;
   "orders.allow_backorders"?: string;
 
-  // Inventory Thresholds
+  // Inventory Thresholds & Production
   "inventory.low_stock_threshold_bulk"?: number;
   "inventory.low_stock_threshold_retail"?: number;
+  "inventory.daily_production_kg"?: number;
 
   // SMS & Notifications
   "notifications.sms_gateway"?: string;
@@ -145,6 +146,23 @@ export async function updateSiteSettingsAction(
 
     const now = new Date().toISOString();
 
+    const publicKeys = new Set([
+      "store.name",
+      "store.name_bn",
+      "store.currency",
+      "store.support_phone",
+      "store.whatsapp",
+      "store.email",
+      "store.address",
+      "store.timezone",
+      "store.language",
+      "store.logo_url",
+      "store.favicon_url",
+      "checkout.cod_enabled",
+      "checkout.guest_checkout_enabled",
+      "inventory.daily_production_kg",
+    ]);
+
     // Perform upserts for each setting key
     const updates = entries.map(([key, value]) =>
       supabaseAdmin
@@ -154,6 +172,7 @@ export async function updateSiteSettingsAction(
             key,
             value,
             updated_at: now,
+            ...(publicKeys.has(key) ? { is_public: true } : {}),
           },
           { onConflict: "key" }
         )

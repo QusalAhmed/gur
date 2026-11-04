@@ -10,13 +10,15 @@ import {
   Box,
   Truck,
   CheckCircle2,
-  Award,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 
 interface WhyBuyFromUsProps {
   lang?: StorefrontLang;
+  hotline?: string;
   onScrollToProducts?: () => void;
+  onScrollToContact?: () => void;
+  isStandaloneSection?: boolean;
 }
 
 // Container staggered children animation variants (Linear / Stripe inspiration)
@@ -50,7 +52,10 @@ const cardVariants: Variants = {
   },
 };
 
-export function WhyBuyFromUs({ lang = "bn" }: WhyBuyFromUsProps) {
+export function WhyBuyFromUs({
+  lang = "bn",
+  isStandaloneSection = true,
+}: WhyBuyFromUsProps) {
   const t = STOREFRONT_TEXT[lang];
 
   const reasons = [
@@ -104,11 +109,8 @@ export function WhyBuyFromUs({ lang = "bn" }: WhyBuyFromUsProps) {
     },
   ];
 
-  return (
-    <section
-      id="why-buy-from-us"
-      className="w-full pt-2 pb-3 select-none text-stone-900 dark:text-stone-100"
-    >
+  const sectionContent = (
+    <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4">
       {/* Header Pill & Title with Smooth Slide-Up Reveal */}
       <div className="text-center mb-4 sm:mb-6 px-2 space-y-1 sm:space-y-1.5">
         <motion.div
@@ -228,6 +230,26 @@ export function WhyBuyFromUs({ lang = "bn" }: WhyBuyFromUsProps) {
           {t.whyBuyGuaranteeDesc}
         </p>
       </motion.div>
+    </div>
+  );
+
+  if (!isStandaloneSection) {
+    return (
+      <section id="why-buy-from-us" className="w-full pt-2 pb-3 select-none text-stone-900 dark:text-stone-100">
+        {sectionContent}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      id="why-buy-from-us"
+      data-section-index="1"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+    >
+      {/* Soft Ambient Warm Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-gradient-to-b from-amber-300/35 via-amber-200/15 to-transparent dark:from-amber-950/30 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
+      {sectionContent}
     </section>
   );
 }

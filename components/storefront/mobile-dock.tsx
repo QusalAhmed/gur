@@ -15,23 +15,23 @@ interface MobileDockProps {
   onToggleLang: () => void;
   defaultHotline?: string;
   storeName?: string;
+  onIntroClick?: () => void;
   onCheckoutClick?: () => void;
 }
+
+const emptySubscribe = () => () => {};
 
 export function MobileDock({
   lang,
   onToggleLang,
   defaultHotline = "01843557389",
   storeName,
+  onIntroClick,
   onCheckoutClick,
 }: MobileDockProps) {
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const t = STOREFRONT_TEXT[lang];
 
@@ -47,19 +47,23 @@ export function MobileDock({
         className="pointer-events-auto w-full max-w-sm bg-gradient-to-r from-amber-100/95 via-amber-50/95 to-amber-100/95 dark:from-stone-900/95 dark:via-stone-900/95 dark:to-stone-850/95 backdrop-blur-xl border-2 border-amber-300/80 dark:border-amber-700/60 rounded-full shadow-[0_12px_32px_rgba(120,53,15,0.22)] py-1.5 px-2.5 flex items-center justify-between gap-1 select-none"
         aria-label="Mobile Store Navigation"
       >
-        {/* 1. Store Brand & Logo (1-Tap shortcut to Contact Section) */}
+        {/* 1. Store Brand & Logo (1-Tap shortcut to Top Intro Section) */}
         <button
           type="button"
           onClick={() => {
-            const contactEl = document.getElementById("contact");
-            if (contactEl) {
-              contactEl.scrollIntoView({ behavior: "smooth" });
+            if (onIntroClick) {
+              onIntroClick();
             } else {
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              const introEl = document.getElementById("intro") || document.getElementById("contact");
+              if (introEl) {
+                introEl.scrollIntoView({ behavior: "smooth" });
+              } else {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }
           }}
           className="flex items-center gap-1.5 min-w-0 pl-1 pr-1.5 text-left active:scale-95 transition-transform touch-manipulation cursor-pointer"
-          title="যোগাযোগ ও তথ্য দেখুন"
+          title="ব্যবসায়ের পরিচিতি ও হোমপেইজ"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
             <Sparkles className="w-4 h-4 text-amber-100" />

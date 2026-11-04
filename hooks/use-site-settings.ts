@@ -24,6 +24,7 @@ export interface ParsedSiteSettings {
   allowBackorders: string;
   lowStockBulk: number;
   lowStockRetail: number;
+  dailyProductionKg: number;
   smsGateway: string;
   smsSenderId: string;
   smtpServer: string;
@@ -54,6 +55,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsMap = {
   "orders.allow_backorders": "no",
   "inventory.low_stock_threshold_bulk": 10,
   "inventory.low_stock_threshold_retail": 20,
+  "inventory.daily_production_kg": 50,
   "notifications.sms_gateway": "greenweb",
   "notifications.sms_sender_id": "MOLASSES",
   "notifications.smtp_server": "smtp.sendgrid.net (Port 587)",
@@ -98,6 +100,7 @@ export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSett
     ),
     lowStockBulk: Number(merged["inventory.low_stock_threshold_bulk"] ?? 10),
     lowStockRetail: Number(merged["inventory.low_stock_threshold_retail"] ?? 20),
+    dailyProductionKg: Number(merged["inventory.daily_production_kg"] ?? 50),
     smsGateway: String(merged["notifications.sms_gateway"] || DEFAULT_SITE_SETTINGS["notifications.sms_gateway"]),
     smsSenderId: String(merged["notifications.sms_sender_id"] || DEFAULT_SITE_SETTINGS["notifications.sms_sender_id"]),
     smtpServer: String(merged["notifications.smtp_server"] || DEFAULT_SITE_SETTINGS["notifications.smtp_server"]),

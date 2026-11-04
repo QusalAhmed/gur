@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package } from "lucide-react";
+import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ShieldCheck } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
+import { IntroSection } from "./intro-section";
+import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
 import { CheckoutSection } from "./checkout-section";
 import { QuickOrderSheet, SelectedProductData } from "./quick-order-sheet";
@@ -14,16 +16,18 @@ import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
   selectCartSubtotal,
-  selectCartItems,
   openCart,
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
+
+const emptySubscribe = () => () => {};
 
 interface ProductShowcaseProps {
   products: StorefrontProduct[];
   defaultHotline?: string;
   storeName?: string;
   storeSubtitle?: string;
+  messengerUrl?: string;
   isLoading?: boolean;
   featuredIdentifier?: string;
   autoScrollToProduct?: boolean;
@@ -34,17 +38,17 @@ export function ProductShowcase({
   defaultHotline = "01843557389",
   storeName,
   storeSubtitle,
+  messengerUrl,
   isLoading = false,
   featuredIdentifier,
   autoScrollToProduct = false,
 }: ProductShowcaseProps) {
   const dispatch = useAppDispatch();
-  const cartItems = useAppSelector(selectCartItems);
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
   const cartSubtotal = useAppSelector(selectCartSubtotal);
 
   const [lang, setLang] = useState<StorefrontLang>("bn");
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [activeOrderModal, setActiveOrderModal] = useState<{
     isOpen: boolean;
     product: SelectedProductData | null;
@@ -65,19 +69,18 @@ export function ProductShowcase({
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
   // Section mapping:
-  // Section 0: Contact & Incomplete Order Form (combined under same section with normal scrolling)
-  // Sections 1..effectiveProductCount: Products
+  // Section 0: Business Introductory Section (Representing the business, origin, craft & pillars)
+  // Section 1: Why Buy From Us Section (Core value propositions, 6 reasons & guarantee)
+  // Section 2: Contact & Incomplete Order Form (combined under same section with normal scrolling)
+  // Sections 3..effectiveProductCount + 2: Products
   // Section checkoutSectionIndex: Checkout Section
-  const contactSectionIndex = 0;
-  const productsStartIndex = 1;
+  const introSectionIndex = 0;
+  const whyBuySectionIndex = 1;
+  const contactSectionIndex = 2;
+  const productsStartIndex = 3;
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
-
-  // Prevent SSR hydration mismatch for client-side state
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Track active full-screen section on scroll
   useEffect(() => {
@@ -292,19 +295,31 @@ export function ProductShowcase({
           </div>
         </button>
 
-        {/* Desktop Navigation Links: Contact & Phone Order, Products & Checkout */}
+        {/* Desktop Navigation Links: Intro, Why Us, Products, Contact & Phone Order, Checkout */}
         <nav className="hidden lg:flex items-center gap-1 bg-amber-200/60 dark:bg-stone-800/70 p-1 rounded-full border border-amber-300/60 dark:border-stone-700">
           <button
             type="button"
-            onClick={() => scrollToSection(contactSectionIndex)}
+            onClick={() => scrollToSection(introSectionIndex)}
             className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === contactSectionIndex
+              activeSectionIndex === introSectionIndex
+                ? "bg-white text-amber-900 shadow-xs"
+                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+            <span>{t.navIntro}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection(whyBuySectionIndex)}
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSectionIndex === whyBuySectionIndex
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
             }`}
           >
-            <Phone className="w-3.5 h-3.5" />
-            <span>{lang === "bn" ? "যোগাযোগ ও অর্ডার" : "Contact & Order"}</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{t.navWhyBuy}</span>
           </button>
           <button
             type="button"
@@ -316,7 +331,19 @@ export function ProductShowcase({
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            <span>{lang === "bn" ? "পণ্যসমূহ" : "Products"}</span>
+            <span>{t.navProducts}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection(contactSectionIndex)}
+            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSectionIndex === contactSectionIndex
+                ? "bg-white text-emerald-800 shadow-xs"
+                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+            }`}
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span>{t.navContact}</span>
           </button>
           <button
             type="button"
@@ -328,7 +355,7 @@ export function ProductShowcase({
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            <span>{lang === "bn" ? "চেকআউট" : "Checkout"}</span>
+            <span>{t.navCheckout}</span>
             {isMounted && cartTotalQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
                 {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
@@ -385,7 +412,33 @@ export function ProductShowcase({
 
       {/* Bead / Dot Pagination (Visible on Tablets & Desktops for easy jumping) */}
       <aside className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col items-center gap-3 bg-amber-950/15 dark:bg-stone-900/40 backdrop-blur-md p-2 rounded-full border border-amber-300/40 select-none">
-        {/* Dot 0: Contact & Incomplete Order Help Section */}
+        {/* Dot 0: Business Introduction Section */}
+        <button
+          type="button"
+          onClick={() => scrollToSection(introSectionIndex)}
+          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+            activeSectionIndex === introSectionIndex
+              ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
+              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
+          }`}
+          title={t.navIntro}
+          aria-label="Scroll to Business Introduction"
+        />
+
+        {/* Dot 1: Why Buy From Us Section */}
+        <button
+          type="button"
+          onClick={() => scrollToSection(whyBuySectionIndex)}
+          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+            activeSectionIndex === whyBuySectionIndex
+              ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
+              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
+          }`}
+          title={t.navWhyBuy}
+          aria-label="Scroll to Why Buy From Us"
+        />
+
+        {/* Dot 2: Contact & Incomplete Order Help Section */}
         <button
           type="button"
           onClick={() => scrollToSection(contactSectionIndex)}
@@ -394,11 +447,11 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={lang === "bn" ? "যোগাযোগ ও অর্ডার" : "Contact & Order"}
+          title={t.navContact}
           aria-label="Scroll to Contact & Order"
         />
 
-        {/* Dots 1..N: Product Cards or Skeleton */}
+        {/* Dots 3..N: Product Cards or Skeleton */}
         {isLoading ? (
           <button
             type="button"
@@ -420,7 +473,7 @@ export function ProductShowcase({
                 ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
                 : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
             }`}
-            title={lang === "bn" ? "পণ্য" : "Products"}
+            title={t.navProducts}
             aria-label="Scroll to Products"
           />
         ) : (
@@ -453,7 +506,7 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={lang === "bn" ? "চেকআউট" : "Checkout"}
+          title={t.navCheckout}
           aria-label="Scroll to Checkout"
         />
       </aside>
@@ -464,12 +517,27 @@ export function ProductShowcase({
         className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth touch-pan-y overscroll-y-contain flex flex-col"
         style={{ scrollSnapType: "y mandatory" }}
       >
-        {/* Section 0: Full-Screen Contact & Incomplete Order Help Section (Combined) */}
+        {/* Section 0: Business Introductory Section */}
+        <IntroSection
+          lang={lang}
+          storeName={displayStoreName}
+          storeSubtitle={storeSubtitle}
+          isActive={activeSectionIndex === introSectionIndex}
+          onScrollToWhyBuy={() => scrollToSection(whyBuySectionIndex)}
+          onScrollToContact={() => scrollToSection(contactSectionIndex)}
+        />
+
+        {/* Section 1: Why Buy From Us Section (Placed below Introductory Section) */}
+        <WhyBuyFromUs lang={lang} />
+
+        {/* Section 2: Full-Screen Contact & Incomplete Order Help Section (Combined) */}
         <ContactSection
           lang={lang}
           hotline={defaultHotline}
           storeName={storeName}
+          messengerUrl={messengerUrl}
           onScrollToProducts={() => scrollToSection(productsStartIndex)}
+          onScrollToWhyBuy={() => scrollToSection(whyBuySectionIndex)}
         />
 
         {/* Sections 1..N: Full-Screen Products or Skeleton */}
@@ -524,6 +592,7 @@ export function ProductShowcase({
         onToggleLang={toggleLanguage}
         defaultHotline={defaultHotline}
         storeName={storeName}
+        onIntroClick={() => scrollToSection(introSectionIndex)}
         onCheckoutClick={() => scrollToSection(checkoutSectionIndex)}
       />
 
