@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "motion/react";
 import {
   Sparkles,
   ShieldCheck,
@@ -14,7 +13,6 @@ import {
   Clock,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
-import { RollingNumber } from "@/components/storefront/rolling-number";
 
 interface IntroSectionProps {
   lang?: StorefrontLang;
@@ -27,36 +25,10 @@ interface IntroSectionProps {
   onScrollToContact?: () => void;
 }
 
-// Stagger container animation
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.05,
-    },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      type: "spring",
-      damping: 24,
-      stiffness: 280,
-    },
-  },
-};
-
 export function IntroSection({
   lang = "bn",
   storeName,
   storeSubtitle,
-  isActive = true,
   onScrollToWhyBuy,
   onScrollToContact,
 }: IntroSectionProps) {
@@ -135,15 +107,10 @@ export function IntroSection({
       {/* Soft Ambient Warm Glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-gradient-to-b from-amber-300/35 via-amber-200/15 to-transparent dark:from-amber-950/30 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
 
-      {/* Main Content Container */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6"
-      >
+      {/* Main Content Container - completely static without render-blocking animation delays */}
+      <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
         {/* Top Heritage Pill & Badges */}
-        <motion.div variants={itemVariants} className="text-center space-y-2 px-2">
+        <div className="text-center space-y-2 px-2">
           <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
             <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
             <span>{t.introBadge}</span>
@@ -176,10 +143,10 @@ export function IntroSection({
               {t.introCodBadge}
             </span>
           </div>
-        </motion.div>
+        </div>
 
         {/* Business Key Stats Grid */}
-        <motion.div variants={itemVariants} className="px-1">
+        <div className="px-1">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {stats.map((s, idx) => {
               const Icon = s.icon;
@@ -191,11 +158,7 @@ export function IntroSection({
                   <div className="flex items-center justify-center gap-1.5 mb-1">
                     <Icon className={`w-4 h-4 ${s.color}`} />
                     <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
-                      <RollingNumber
-                        value={s.number}
-                        isActive={isActive}
-                        delay={0.08 + idx * 0.05}
-                      />
+                      {s.number}
                     </span>
                   </div>
                   <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">
@@ -205,10 +168,10 @@ export function IntroSection({
               );
             })}
           </div>
-        </motion.div>
+        </div>
 
         {/* 4 Core Pillars of the Business */}
-        <motion.div variants={itemVariants} className="space-y-2 px-1">
+        <div className="space-y-2 px-1">
           <div className="text-center sm:text-left mb-1.5">
             <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
               {t.introMissionTitle}
@@ -240,13 +203,10 @@ export function IntroSection({
               );
             })}
           </div>
-        </motion.div>
+        </div>
 
         {/* Business Story & Heritage Statement */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200"
-        >
+        <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
           <div className="flex items-center gap-2">
             <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
             <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
@@ -279,8 +239,8 @@ export function IntroSection({
               )}
             </div>
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </section>
   );
 }
