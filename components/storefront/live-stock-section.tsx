@@ -558,15 +558,23 @@ function TimelineDayCard({
           )
         ) : isAvailable ? (
           isBn ? (
-            `উৎপাদন ক্ষমতা ${toBnNumber(proj.capacityKg)} কেজি থেকে বর্তমান অর্ডার বাদ দিয়ে ${toBnNumber(proj.availableKg)} কেজি উন্মুক্ত আছে।`
+            `${proj.dayNameBn} (${proj.dateFormattedBn})-এর উৎপাদন ক্ষমতা ${toBnNumber(proj.capacityKg)} কেজি থেকে বর্তমান অর্ডার বাদ দিয়ে ${toBnNumber(proj.availableKg)} কেজি উন্মুক্ত আছে।`
           ) : (
-            `${proj.availableKg} KG remains open out of ${proj.capacityKg} KG daily yield after existing orders.`
+            `For ${proj.dayNameEn} (${proj.dateFormattedEn}), ${proj.availableKg} KG remains open out of ${proj.capacityKg} KG daily yield after existing orders.`
           )
         ) : (
           isBn ? (
-            `আগামীকালের পুরো ${toBnNumber(proj.capacityKg)} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে। নতুন অর্ডার পরশু বা পরবর্তী ব্যাচে অন্তর্ভুক্ত হবে।`
+            proj.dayIndex === 1
+              ? `আগামীকালের (${proj.dateFormattedBn}) পুরো ${toBnNumber(proj.capacityKg)} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
+              : proj.dayIndex === 2
+              ? `পরশুর (${proj.dateFormattedBn}) পুরো ${toBnNumber(proj.capacityKg)} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
+              : `${proj.dateFormattedBn} তারিখের পুরো ${toBnNumber(proj.capacityKg)} কেজি উৎপাদন পূর্ববর্তী অর্ডারে সম্পূর্ণ বুকড।`
           ) : (
-            `The entire ${proj.capacityKg} KG batch is booked by prior orders. Fresh orders will roll to subsequent batch.`
+            proj.dayIndex === 1
+              ? `Tomorrow's (${proj.dateFormattedEn}) entire ${proj.capacityKg} KG batch is booked by prior orders.`
+              : proj.dayIndex === 2
+              ? `Day after tomorrow's (${proj.dateFormattedEn}) entire ${proj.capacityKg} KG batch is booked by prior orders.`
+              : `The entire ${proj.capacityKg} KG batch for ${proj.dateFormattedEn} is fully booked by prior orders.`
           )
         )}
       </p>
