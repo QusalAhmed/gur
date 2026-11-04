@@ -1120,8 +1120,17 @@ function OrderConfirmedContent() {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
-        © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
+      <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500 space-y-2">
+        <p>© 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা</p>
+        <div className="flex items-center justify-center gap-3 text-xs text-stone-500">
+          <Link href="/contact" className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors">
+            যোগাযোগ
+          </Link>
+          <span>•</span>
+          <Link href="/privacy-policy" className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors">
+            গোপনীয়তা নীতি
+          </Link>
+        </div>
       </footer>
     </main>
   );

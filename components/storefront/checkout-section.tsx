@@ -69,6 +69,8 @@ import {
 } from "@/lib/facebook-pixel";
 import { sendCapiInitiateCheckoutAction } from "@/actions/facebook-capi";
 
+import { StoreFooter } from "./store-footer";
+
 interface CheckoutSectionProps {
   lang: StorefrontLang;
   hotline: string;
@@ -1043,13 +1045,18 @@ return (
     </div>
 
     {/* Footer Support Guarantee Note */}
-    <div className="relative z-10 w-full text-center py-1 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
+    <div className="relative z-10 w-full text-center py-2 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
       <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
       <span>
         {lang === "bn"
           ? "সরাসরি গাছিদের প্রস্তুত করা খাঁটি খেজুরের গুড় • কোনো কৃত্রিম চিনি বা কেমিক্যাল নেই"
           : "Pure Artisanal Date Jaggery Directly From Village Artisans • No Added Sugar or Chemicals"}
       </span>
+    </div>
+
+    {/* Comprehensive Storefront Footer */}
+    <div className="relative z-10 w-[calc(100%+1.5rem)] sm:w-[calc(100%+3rem)] md:w-[calc(100%+6rem)] -mx-3 sm:-mx-6 md:-mx-12 mt-6 sm:mt-10">
+      <StoreFooter hotline={hotline} lang={lang} />
     </div>
   </section>
 );

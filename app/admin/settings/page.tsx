@@ -14,6 +14,10 @@ import {
   AlertCircle,
   Image as ImageIcon,
   Factory,
+  Mail,
+  Send,
+  Key,
+  ExternalLink,
 } from "lucide-react";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
@@ -38,6 +42,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSiteSettingsAction, updateSiteSettingsAction } from "@/actions/settings";
+import { testBrevoConnectionAction } from "@/actions/brevo";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
 
 export default function SettingsPage() {
@@ -71,6 +76,14 @@ export default function SettingsPage() {
   const [smsSenderId, setSmsSenderId] = React.useState("MOLASSES");
   const [whatsapp, setWhatsapp] = React.useState("+880 1711-234567");
   const [smtpServer, setSmtpServer] = React.useState("smtp.sendgrid.net (Port 587)");
+
+  // Brevo Transactional Email Notification State
+  const [brevoEnabled, setBrevoEnabled] = React.useState(true);
+  const [brevoApiKey, setBrevoApiKey] = React.useState("");
+  const [brevoAdminEmail, setBrevoAdminEmail] = React.useState("");
+  const [brevoSenderEmail, setBrevoSenderEmail] = React.useState("");
+  const [brevoSenderName, setBrevoSenderName] = React.useState("খেজুরের খাঁটি গুড়");
+  const [testingBrevo, setTestingBrevo] = React.useState(false);
 
   // UI State
   const [loading, setLoading] = React.useState(true);
@@ -134,6 +147,23 @@ export default function SettingsPage() {
           setSmtpServer(String(data["notifications.smtp_server"]));
         }
 
+        // Brevo Notification Settings
+        if (typeof data["notifications.brevo_enabled"] === "boolean") {
+          setBrevoEnabled(data["notifications.brevo_enabled"]);
+        }
+        if (data["notifications.brevo_api_key"] !== undefined) {
+          setBrevoApiKey(String(data["notifications.brevo_api_key"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.brevo_admin_email"] !== undefined) {
+          setBrevoAdminEmail(String(data["notifications.brevo_admin_email"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.brevo_sender_email"] !== undefined) {
+          setBrevoSenderEmail(String(data["notifications.brevo_sender_email"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.brevo_sender_name"] !== undefined) {
+          setBrevoSenderName(String(data["notifications.brevo_sender_name"]).replace(/^"|"$/g, ""));
+        }
+
         setIsDbConnected(true);
       } else {
         setIsDbConnected(false);
@@ -178,6 +208,11 @@ export default function SettingsPage() {
         "notifications.sms_sender_id": smsSenderId,
         "store.whatsapp": whatsapp,
         "notifications.smtp_server": smtpServer,
+        "notifications.brevo_enabled": brevoEnabled,
+        "notifications.brevo_api_key": brevoApiKey.trim(),
+        "notifications.brevo_admin_email": brevoAdminEmail.trim(),
+        "notifications.brevo_sender_email": brevoSenderEmail.trim(),
+        "notifications.brevo_sender_name": brevoSenderName.trim(),
       };
 
       const res = await updateSiteSettingsAction(payload);
@@ -199,6 +234,30 @@ export default function SettingsPage() {
       setTimeout(() => setSaveMessage(null), 3500);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestBrevo = async () => {
+    setTestingBrevo(true);
+    try {
+      const targetEmail = brevoAdminEmail.trim() || email.trim();
+      if (!targetEmail) {
+        toast.error("Please enter at least one Admin Email address to receive the test email.");
+        return;
+      }
+
+      toast.info(`Sending test order notification via Brevo to ${targetEmail}...`);
+      const res = await testBrevoConnectionAction(targetEmail);
+
+      if (res.success) {
+        toast.success(`Test email sent successfully! Message ID: ${res.messageId || "sent"}`);
+      } else {
+        toast.error(`Brevo test failed: ${res.error || "Unknown error"}`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to trigger Brevo test email");
+    } finally {
+      setTestingBrevo(false);
     }
   };
 
@@ -623,7 +682,142 @@ export default function SettingsPage() {
           </TabsContent>
 
           {/* SMS & Outbox Tab */}
-          <TabsContent value="notifications">
+          <TabsContent value="notifications" className="space-y-6">
+            {/* Brevo Transactional Email (Admin Order Notifications) */}
+            <Card className="border-amber-200/70 bg-gradient-to-b from-white to-amber-50/20">
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-amber-100 rounded-lg text-amber-800">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Brevo Transactional Email & Admin Order Notifications
+                        <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                          v3 API
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Send instant, beautiful email notifications to store administrators whenever a customer places an order
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestBrevo}
+                      disabled={testingBrevo || saving}
+                      className="text-xs h-8 gap-1.5 border-amber-300 hover:bg-amber-100/50"
+                    >
+                      <Send className="h-3.5 w-3.5 text-amber-700" />
+                      {testingBrevo ? "Sending Test..." : "Send Test Email"}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Enable / Disable Brevo toggle */}
+                <div
+                  className={`flex items-start gap-3 p-3.5 rounded-lg border transition-colors ${
+                    brevoEnabled
+                      ? "bg-amber-50/50 border-amber-200 text-amber-950"
+                      : "bg-muted/40 border-border text-muted-foreground"
+                  }`}
+                >
+                  <Checkbox
+                    id="brevo-enabled"
+                    checked={brevoEnabled}
+                    onCheckedChange={(checked) => setBrevoEnabled(Boolean(checked))}
+                    className="mt-0.5 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                  />
+                  <div className="space-y-0.5">
+                    <label
+                      htmlFor="brevo-enabled"
+                      className="text-sm font-semibold cursor-pointer select-none"
+                    >
+                      Enable Brevo Admin Order Notifications
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically sends an email to the admin with complete order items, customer details, and delivery address when a new order is received.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold flex items-center justify-between">
+                      <span>Admin Recipient Email(s)</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Comma-separated</span>
+                    </label>
+                    <Input
+                      value={brevoAdminEmail}
+                      onChange={(e) => setBrevoAdminEmail(e.target.value)}
+                      placeholder="e.g. admin@molassesstore.com, owner@example.com"
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Order notification emails will be sent to these addresses. Defaults to <code>BREVO_ADMIN_EMAIL</code> or Store Email if empty.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold flex items-center justify-between">
+                      <span>Brevo API Key (xkeysib-...)</span>
+                      <a
+                        href="https://app.brevo.com/settings/keys/api"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-amber-700 hover:underline flex items-center gap-0.5"
+                      >
+                        Get Key <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    </label>
+                    <Input
+                      type="password"
+                      value={brevoApiKey}
+                      onChange={(e) => setBrevoApiKey(e.target.value)}
+                      placeholder="xkeysib-... (or leave empty if configured in .env)"
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Can also be provided via <code>BREVO_API_KEY</code> in <code>.env</code>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Verified Sender Email</label>
+                    <Input
+                      value={brevoSenderEmail}
+                      onChange={(e) => setBrevoSenderEmail(e.target.value)}
+                      placeholder="e.g. notifications@yourdomain.com"
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Must be a verified sender domain/address in your Brevo account dashboard.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Sender Display Name</label>
+                    <Input
+                      value={brevoSenderName}
+                      onChange={(e) => setBrevoSenderName(e.target.value)}
+                      placeholder="e.g. খেজুরের খাঁটি গুড়"
+                      className="text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Display name shown in the recipient inbox header.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">

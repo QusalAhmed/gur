@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Phone,
   MessageCircle,
@@ -388,15 +389,33 @@ export function ContactSection({
       </div>
 
       {/* Bottom Action: "View Products & Order" */}
-      <div className="relative z-10 w-full text-center pt-4 pb-4">
-        <button
-          type="button"
-          onClick={handleScrollDown}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
-        >
-          <span>{t.viewProductsBtn}</span>
-          <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" />
-        </button>
+      <div className="relative z-10 w-full text-center pt-4 pb-4 space-y-2.5">
+        <div>
+          <button
+            type="button"
+            onClick={handleScrollDown}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
+          >
+            <span>{t.viewProductsBtn}</span>
+            <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 text-xs text-stone-500 dark:text-stone-400">
+          <Link
+            href="/contact"
+            className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors"
+          >
+            {lang === "bn" ? "যোগাযোগ পেইজ" : "Contact Page"}
+          </Link>
+          <span>•</span>
+          <Link
+            href="/privacy-policy"
+            className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors"
+          >
+            {lang === "bn" ? "গোপনীয়তা নীতি" : "Privacy Policy"}
+          </Link>
+        </div>
       </div>
     </section>
   );

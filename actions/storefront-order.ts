@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase/client";
 import { normalizeBdPhone } from "@/lib/supabase/api";
 import { getOtherOrderInsight } from "@/types/order";
 import { captureStorefrontMetaTracking } from "@/actions/facebook-capi";
+import { sendAdminOrderNotification } from "@/lib/brevo";
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -263,6 +264,38 @@ export async function placeStorefrontOrderAction(
               .eq("id", rpcData.order_id);
           } catch (attrErr) {
             console.warn("[Storefront Order] Failed to update attribution with meta_tracking:", attrErr);
+          }
+
+          // Trigger Brevo transactional email notification to admin upon order placement
+          if (rpcData.status === "pending") {
+            sendAdminOrderNotification({
+              orderId: rpcData.order_id,
+              orderNumber: rpcData.order_number,
+              customerName: rpcData.customer_name || payload.customerName || "Customer",
+              customerPhone: rpcData.phone || normalizedPhone,
+              deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
+              address: {
+                address_line: payload.addressLine,
+                district: payload.district,
+                division: payload.division,
+              },
+              courierName: payload.courierName,
+              items: resolvedItems.map((item) => ({
+                productName: item.productName || "খেজুরের খাঁটি গুড়",
+                variantName: item.variantName || "1 Pack",
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                lineTotal: item.quantity * item.unitPrice,
+              })),
+              subtotal: Number(rpcData.subtotal) || rawSubtotal,
+              shippingTotal: Number(rpcData.shipping_total) || baseShippingFee,
+              grandTotal: Number(rpcData.grand_total) || 0,
+              customerNote: payload.customerNote,
+              status: rpcData.status,
+              channel: "web",
+            }).catch((brevoErr) => {
+              console.warn("[Storefront Order] Background Brevo admin notification error:", brevoErr);
+            });
           }
 
           return {
@@ -715,6 +748,40 @@ export async function placeStorefrontOrderAction(
           };
         });
         Promise.resolve(client.from("order_notes").insert(noteInserts)).catch(() => {});
+      }
+
+      // Trigger Brevo transactional email notification to admin upon order placement
+      if (finalStatus === "pending") {
+        sendAdminOrderNotification({
+          orderId: orderDbId,
+          orderNumber: orderNumber,
+          customerName: resolvedCustomerName || undefined,
+          customerPhone: normalizedPhone,
+          deliveryZone: payload.deliveryZone,
+          address: {
+            address_line: resolvedAddressLine || undefined,
+            district: resolvedDistrict || undefined,
+            division: resolvedDivision || undefined,
+          },
+          courierName: resolvedShippingMethodName || undefined,
+          items: resolvedItems.map((item) => ({
+            productName: item.productName || "খেজুরের খাঁটি গুড়",
+            variantName: item.variantName || "1 Pack",
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            lineTotal: item.quantity * item.unitPrice,
+          })),
+          subtotal: cleanSubtotal,
+          shippingTotal: cleanShippingTotal,
+          grandTotal: cleanGrandTotal,
+          customerNote: resolvedCustomerNote || undefined,
+          status: finalStatus,
+          channel: "web",
+          hasOtherOrders,
+          otherOrderNumbers,
+        }).catch((brevoErr) => {
+          console.warn("[Storefront Order] Background Brevo admin notification error (Tier 2):", brevoErr);
+        });
       }
 
       return {

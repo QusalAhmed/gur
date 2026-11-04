@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ShieldCheck } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
@@ -362,6 +363,13 @@ export function ProductShowcase({
               </span>
             )}
           </button>
+          <Link
+            href="/privacy-policy"
+            className="px-2.5 py-1 rounded-full text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-white/60 dark:hover:bg-stone-700 transition-all hidden xl:inline-block"
+            title={lang === "bn" ? "গোপনীয়তা নীতি" : "Privacy Policy"}
+          >
+            {lang === "bn" ? "প্রাইভেসি" : "Privacy"}
+          </Link>
         </nav>
 
         {/* Right Action Cluster: Redux Cart + Direct Hotline + Language Toggle */}
