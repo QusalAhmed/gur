@@ -179,9 +179,9 @@ export function IntroSection({
         {/* 4 Core Pillars of the Business */}
         <div className="space-y-2 px-1">
           <div className="text-center sm:text-left mb-1.5">
-            <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
+            <h2 className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
               {t.introMissionTitle}
-            </span>
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
@@ -195,7 +195,7 @@ export function IntroSection({
                   <div
                     className={`w-10 h-10 rounded-xl ${p.iconBg} ${p.iconColor} border flex items-center justify-center shrink-0 shadow-inner`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 leading-snug">
@@ -214,7 +214,7 @@ export function IntroSection({
         {/* Business Story & Heritage Statement */}
         <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
           <div className="flex items-center gap-2">
-            <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
+            <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
             <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
               {t.introHeritageHeading}
             </h2>
@@ -229,6 +229,7 @@ export function IntroSection({
                 <button
                   type="button"
                   onClick={onScrollToWhyBuy}
+                  aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Choose Us"}
                   className="text-amber-800 dark:text-amber-300 hover:underline font-bold shrink-0 cursor-pointer"
                 >
                   {lang === "bn" ? "কেন আমাদের গুড় সেরা? ❯" : "Why Choose Us? ❯"}
@@ -238,7 +239,8 @@ export function IntroSection({
                 <button
                   type="button"
                   onClick={onScrollToContact}
-                  className="text-stone-600 dark:text-stone-400 hover:underline font-semibold shrink-0 cursor-pointer"
+                  aria-label={lang === "bn" ? "যোগাযোগ সেকশনে যান" : "Scroll to Contact"}
+                  className="text-stone-700 dark:text-stone-300 hover:underline font-semibold shrink-0 cursor-pointer"
                 >
                   {lang === "bn" ? "যোগাযোগ ❯" : "Contact ❯"}
                 </button>

@@ -157,7 +157,7 @@ export function ContactSection({
           <div className="bg-white dark:bg-stone-900 border-2 border-emerald-500/90 dark:border-emerald-500/70 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-lg shadow-emerald-950/5 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-inner">
-                <Phone className="w-6 h-6 sm:w-7 sm:h-7 animate-pulse" />
+                <Phone className="w-6 h-6 sm:w-7 sm:h-7 animate-pulse" aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export function ContactSection({
                 <span className="block font-mono text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-50 tracking-wider leading-none mt-1">
                   {hotline}
                 </span>
-                <span className="block text-[11px] text-stone-500 dark:text-stone-400 mt-1">
+                <span className="block text-[11px] text-stone-600 dark:text-stone-400 mt-1">
                   {lang === "bn" ? "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা" : "Daily 8:00 AM - 10:00 PM"}
                 </span>
               </div>
@@ -180,29 +180,34 @@ export function ContactSection({
             <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
               <a
                 href={`tel:${rawPhone}`}
+                aria-label={`${t.phoneCallTitle}: ${hotline} - ${t.callNowBtn}`}
                 className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm py-2.5 sm:py-3 px-5 sm:px-6 rounded-xl sm:rounded-2xl shadow-md transition-all touch-manipulation cursor-pointer"
               >
-                <Phone className="w-4 h-4" />
+                <Phone className="w-4 h-4" aria-hidden="true" />
                 <span>{t.callNowBtn}</span>
               </a>
 
               <button
                 type="button"
                 onClick={handleCopyNumber}
+                aria-label={copied ? (lang === "bn" ? "হটলাইন নম্বর কপি হয়েছে" : "Hotline number copied") : (lang === "bn" ? "হটলাইন নম্বর কপি করুন" : "Copy hotline number")}
                 className="inline-flex items-center justify-center gap-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl border border-stone-200 dark:border-stone-700 transition-all touch-manipulation cursor-pointer"
                 title={t.copyNumberBtn}
               >
                 {copied ? (
                   <>
-                    <Check className="w-4 h-4 text-emerald-600" />
+                    <Check className="w-4 h-4 text-emerald-600" aria-hidden="true" />
                     <span className="text-[11px] text-emerald-600 font-bold">{t.numberCopied}</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-4 h-4" aria-hidden="true" />
                     <span className="hidden xs:inline text-[11px] font-semibold">{t.copyNumberBtn}</span>
                   </>
                 )}
+                <span className="sr-only" aria-live="polite">
+                  {copied ? (lang === "bn" ? "হটলাইন নম্বর ক্লিপবোর্ডে কপি হয়েছে" : "Hotline number copied to clipboard") : ""}
+                </span>
               </button>
             </div>
           </div>
@@ -214,24 +219,25 @@ export function ContactSection({
               href={`https://wa.me/${intlPhone}?text=${whatsappMsg}`}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`${t.whatsappTitle} - ${t.whatsappChatBtn}`}
               className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
             >
               <div className="flex items-center gap-2.5 min-w-0 w-full">
                 <div className="w-9 h-9 rounded-xl bg-[#25D366]/15 text-[#128C7E] dark:text-[#25D366] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <MessageCircle className="w-5 h-5 fill-current" />
+                  <MessageCircle className="w-5 h-5 fill-current" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 text-left">
                   <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.whatsappTitle}
                   </span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                  <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
                     {lang === "bn" ? "মেসেজে অর্ডার" : "Chat & Order"}
                   </span>
                 </div>
               </div>
               <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
                 <span>{t.whatsappChatBtn}</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3 h-3" aria-hidden="true" />
               </span>
             </a>
 
@@ -240,6 +246,7 @@ export function ContactSection({
               href={finalMessengerUrl}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`${t.messengerTitle} - ${t.messengerChatBtn}`}
               className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
             >
               <div className="flex items-center gap-2.5 min-w-0 w-full">
@@ -256,34 +263,35 @@ export function ContactSection({
                   <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.messengerTitle}
                   </span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                  <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
                     {lang === "bn" ? "ইনবক্সে অর্ডার" : "Inbox & Order"}
                   </span>
                 </div>
               </div>
               <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
                 <span>{t.messengerChatBtn}</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3 h-3" aria-hidden="true" />
               </span>
             </a>
 
             {/* IMO */}
             <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0 w-full">
-                <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-black text-xs">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-black text-xs" aria-hidden="true">
                   imo
                 </div>
                 <div className="min-w-0 text-left">
                   <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.imoTitle}
                   </span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                  <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
                     {lang === "bn" ? "ফ্রি কল ও চ্যাট" : "Free Call & Chat"}
                   </span>
                 </div>
               </div>
               <a
                 href={`imo://call?phone=${intlPhone}`}
+                aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
                 className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
               >
                 <span>{t.imoLaunchBtn}</span>
@@ -293,17 +301,18 @@ export function ContactSection({
             {/* SMS */}
             <a
               href={`sms:${rawPhone}?body=${smsMsg}`}
+              aria-label={`${t.smsTitle} - ${t.smsSendBtn}`}
               className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
             >
               <div className="flex items-center gap-2.5 min-w-0 w-full">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <MessageSquare className="w-4 h-4" />
+                  <MessageSquare className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 text-left">
                   <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
                     {t.smsTitle}
                   </span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                  <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
                     {lang === "bn" ? "অফলাইন বার্তা" : "Offline SMS"}
                   </span>
                 </div>
@@ -317,23 +326,24 @@ export function ContactSection({
           {/* Reassurance Trust Pill Row */}
           <div className="pt-1 flex flex-wrap items-center justify-center gap-2 text-xs text-stone-600 dark:text-stone-300">
             <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <MapPin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
               <span>{address}</span>
             </div>
             <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden="true" />
               <span>{lang === "bn" ? "ক্যাশ অন ডেলিভারি" : "Cash on Delivery"}</span>
             </div>
             <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
               <span>{t.guaranteeBadge}</span>
             </div>
             <button
               type="button"
               onClick={handleScrollToWhyBuy}
+              aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Buy From Us"}
               className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/80 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-emerald-950 dark:text-emerald-200 transition-colors cursor-pointer"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
               <span>
                 {lang === "bn"
                   ? "কেন আমাদের গুড় সেরা? ❯"
@@ -343,9 +353,10 @@ export function ContactSection({
             <button
               type="button"
               onClick={handleScrollToStock}
+              aria-label={lang === "bn" ? "লাইভ স্টক আপডেট সেকশনে যান" : "Scroll to Live Stock Update"}
               className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
             >
-              <Factory className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <Factory className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
               <span>
                 {lang === "bn"
                   ? "লাইভ স্টক আপডেট ❯"
@@ -355,9 +366,10 @@ export function ContactSection({
             <button
               type="button"
               onClick={handleScrollToHelp}
+              aria-label={lang === "bn" ? "সহায়তা ফর্ম সেকশনে যান" : "Scroll to Assisted Order Form"}
               className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
               <span>
                 {lang === "bn"
                   ? "সিস্টেম না বুঝলে শুধু নম্বর দিন ❯"
@@ -394,10 +406,11 @@ export function ContactSection({
           <button
             type="button"
             onClick={handleScrollDown}
+            aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
           >
             <span>{t.viewProductsBtn}</span>
-            <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" />
+            <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
           </button>
         </div>
 

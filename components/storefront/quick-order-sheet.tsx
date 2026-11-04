@@ -272,6 +272,9 @@ export function QuickOrderSheet({
 
           {/* Modal / Bottom Sheet Box */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-order-sheet-heading"
             initial={{ y: "100%", opacity: 0.8 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
@@ -279,12 +282,12 @@ export function QuickOrderSheet({
             className="relative z-10 w-full max-w-xl bg-amber-50/95 dark:bg-stone-900 border-t sm:border border-amber-200/80 dark:border-stone-800 rounded-t-[2rem] sm:rounded-3xl shadow-2xl overflow-hidden max-h-[94dvh] sm:max-h-[88dvh] flex flex-col text-stone-900 dark:text-stone-100"
           >
             {/* Sheet Handle for mobile */}
-            <div className="w-12 h-1 bg-amber-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
+            <div className="w-12 h-1 bg-amber-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 mb-1 sm:hidden shrink-0" aria-hidden="true" />
 
             {/* Header */}
             <div className="px-4 sm:px-6 pt-3 pb-2.5 sm:pt-4 sm:pb-3 flex items-center justify-between border-b border-amber-200/60 dark:border-stone-800 bg-amber-100/50 dark:bg-stone-800/40 shrink-0">
               <div>
-                <h3 className="text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 flex items-center gap-1.5 sm:gap-2">
+                <h3 id="quick-order-sheet-heading" className="text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 flex items-center gap-1.5 sm:gap-2">
                   <span>{t.orderSheetTitle}</span>
                   <span className="text-[10px] sm:text-xs bg-amber-700 text-amber-50 font-semibold px-2 py-0.5 rounded-full shrink-0">
                     {lang === "bn" ? "ক্যাশ অন ডেলিভারি" : "COD"}
@@ -299,9 +302,9 @@ export function QuickOrderSheet({
                 onClick={onClose}
                 disabled={isSubmitting}
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-200/60 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 transition-colors shrink-0 touch-manipulation"
-                aria-label="Close"
+                aria-label={lang === "bn" ? "অর্ডার ফর্ম বন্ধ করুন" : "Close order form"}
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -409,25 +412,28 @@ export function QuickOrderSheet({
                   {/* Error Notification Alert */}
                   {errorMessage && (
                     <motion.div
+                      id="quick-order-error"
+                      role="alert"
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="bg-red-50 dark:bg-red-950/60 border-2 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-medium flex items-center gap-2"
                     >
-                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
                       <span>{errorMessage}</span>
                     </motion.div>
                   )}
 
                   {/* Full Name (Optional) */}
                   <div className="space-y-1">
-                    <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
+                    <label htmlFor="quickOrderName" className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
                       {t.fullNameLabel}
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
-                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" />
+                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" aria-hidden="true" />
                       </div>
                       <input
+                        id="quickOrderName"
                         type="text"
                         value={customerName}
                         onChange={(e) => {
@@ -446,18 +452,20 @@ export function QuickOrderSheet({
 
                   {/* Mobile Phone Number (Mandatory) */}
                   <div className="space-y-1">
-                    <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
+                    <label htmlFor="quickOrderPhone" className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
                       {t.phoneLabel} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
-                        <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" />
+                        <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" aria-hidden="true" />
                       </div>
                       <input
                         id="quickOrderPhone"
                         type="tel"
                         required
+                        aria-required="true"
                         aria-invalid={!!errorMessage}
+                        aria-describedby={errorMessage ? "quick-order-error quick-order-phone-desc" : "quick-order-phone-desc"}
                         value={customerPhone}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -477,8 +485,8 @@ export function QuickOrderSheet({
                           }`}
                       />
                     </div>
-                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 italic flex items-center gap-1">
-                      <Info className="w-3.5 h-3.5 inline text-amber-700 dark:text-amber-400 shrink-0" />
+                    <p id="quick-order-phone-desc" className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 italic flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5 inline text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
                       <span>{t.phoneHelp}</span>
                     </p>
                   </div>
@@ -488,10 +496,12 @@ export function QuickOrderSheet({
                     <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
                       {t.zoneLabel}
                     </label>
-                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" aria-label={t.zoneLabel || "Delivery Zone"}>
                       {/* Inside Dhaka */}
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={deliveryZone === "inside_dhaka"}
                         onClick={() => setDeliveryZone("inside_dhaka")}
                         className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border-2 text-left flex items-start justify-between transition-all touch-manipulation ${deliveryZone === "inside_dhaka"
                           ? "bg-amber-100 dark:bg-amber-950/60 border-amber-600 dark:border-amber-500 shadow-md ring-2 ring-amber-500/20"
@@ -504,6 +514,7 @@ export function QuickOrderSheet({
                               ? "text-amber-700 dark:text-amber-400"
                               : "text-stone-400"
                               }`}
+                            aria-hidden="true"
                           />
                           <div>
                             <span className="font-bold text-xs sm:text-base block text-stone-900 dark:text-stone-100 leading-tight">
@@ -516,7 +527,7 @@ export function QuickOrderSheet({
                         </div>
                         {deliveryZone === "inside_dhaka" && (
                           <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-600 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 stroke-[3]" />
+                            <Check className="w-3 h-3 stroke-[3]" aria-hidden="true" />
                           </div>
                         )}
                       </button>
@@ -524,6 +535,8 @@ export function QuickOrderSheet({
                       {/* Outside Dhaka */}
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={deliveryZone === "outside_dhaka"}
                         onClick={() => setDeliveryZone("outside_dhaka")}
                         className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border-2 text-left flex items-start justify-between transition-all touch-manipulation ${deliveryZone === "outside_dhaka"
                           ? "bg-amber-100 dark:bg-amber-950/60 border-amber-600 dark:border-amber-500 shadow-md ring-2 ring-amber-500/20"
@@ -536,6 +549,7 @@ export function QuickOrderSheet({
                               ? "text-amber-700 dark:text-amber-400"
                               : "text-stone-400"
                               }`}
+                            aria-hidden="true"
                           />
                           <div>
                             <span className="font-bold text-xs sm:text-base block text-stone-900 dark:text-stone-100 leading-tight">
@@ -548,7 +562,7 @@ export function QuickOrderSheet({
                         </div>
                         {deliveryZone === "outside_dhaka" && (
                           <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-amber-600 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 stroke-[3]" />
+                            <Check className="w-3 h-3 stroke-[3]" aria-hidden="true" />
                           </div>
                         )}
                       </button>
@@ -557,14 +571,15 @@ export function QuickOrderSheet({
 
                   {/* Complete Address (Optional) */}
                   <div className="space-y-1">
-                    <label className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
+                    <label htmlFor="quickOrderAddress" className="block text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100">
                       {t.addressLabel}
                     </label>
                     <div className="relative">
                       <div className="absolute top-2.5 left-3 pointer-events-none text-stone-400">
-                        <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" />
+                        <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-800/70" aria-hidden="true" />
                       </div>
                       <textarea
+                        id="quickOrderAddress"
                         rows={2}
                         value={addressLine}
                         onChange={(e) => {

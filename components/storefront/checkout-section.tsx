@@ -379,10 +379,11 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                       })
                     )
                   }
+                  aria-label={lang === "bn" ? `${item.productNameBn || item.productName} পণ্যটি কার্ট থেকে মুছুন` : `Remove ${item.productName} from cart`}
                   className="inline-flex items-center gap-1 py-1 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
                   title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
                   <span className="hidden sm:inline text-[11px] font-medium text-rose-600 dark:text-rose-400">
                     {lang === "bn" ? "বাতিল" : "Remove"}
                   </span>
@@ -694,11 +695,12 @@ return (
                 <button
                   type="button"
                   onClick={onScrollToProducts}
+                  aria-label={lang === "bn" ? "গুড় দেখতে উপরে যান" : "Browse our collection above"}
                   className="mt-4 inline-flex items-center gap-2 bg-amber-100 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-amber-900 dark:text-amber-100 font-bold text-xs sm:text-sm py-2.5 px-5 rounded-xl border border-amber-300/80 dark:border-stone-700 transition-all cursor-pointer touch-manipulation"
                 >
-                  <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                  <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
                   <span>{lang === "bn" ? "গুড় দেখতে উপরে যান" : "Browse Our Collection"}</span>
-                  <ArrowUp className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                  <ArrowUp className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -867,9 +869,11 @@ return (
                 <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
                 <span>{lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}</span>
               </label>
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3" role="radiogroup" aria-label={lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={deliveryZone === "inside_dhaka"}
                   onClick={() => setDeliveryZone("inside_dhaka")}
                   className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
                     ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
@@ -886,6 +890,8 @@ return (
 
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={deliveryZone === "outside_dhaka"}
                   onClick={() => setDeliveryZone("outside_dhaka")}
                   className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
                     ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"

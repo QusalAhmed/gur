@@ -93,6 +93,7 @@ export function LiveStockSection({
           type="button"
           onClick={() => refresh()}
           disabled={isRefetching || isLoading}
+          aria-label={isBn ? "ডাটাবেজ থেকে লাইভ স্টক রিফ্রেশ করুন" : "Refresh live stock from database"}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200 dark:hover:bg-stone-750 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-800/60 transition-colors cursor-pointer"
           title={isBn ? "ডাটাবেজ থেকে রিফ্রেশ করুন" : "Refresh from database"}
         >
@@ -100,6 +101,7 @@ export function LiveStockSection({
             className={`w-3 h-3 text-amber-700 dark:text-amber-400 ${
               isRefetching || isLoading ? "animate-spin" : ""
             }`}
+            aria-hidden="true"
           />
           <span className="hidden xs:inline">
             {isRefetching || isLoading

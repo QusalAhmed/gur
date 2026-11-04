@@ -563,6 +563,8 @@ export function ProductCard({
               {sortedVariants.length > 1 && (
                 <div className="relative">
                   <select
+                    id={`variant-select-${product.id}`}
+                    aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
                     value={selectedVariant.id}
                     onChange={(e) => {
                       const found = sortedVariants.find((v) => v.id === e.target.value);
@@ -576,7 +578,7 @@ export function ProductCard({
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="w-4 h-4 text-amber-800 dark:text-amber-300 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronDown className="w-4 h-4 text-amber-800 dark:text-amber-300 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                 </div>
               )}
             </div>
@@ -720,7 +722,7 @@ export function ProductCard({
 
             {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
             <div className="flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
-              <span className="text-[10px] sm:text-[11px] font-semibold text-amber-900/70 dark:text-amber-400/70 mr-1">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-amber-900/80 dark:text-amber-400 mr-1">
                 {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
               </span>
               {[1, 2, 3, 5, 10].map((preset) => (
@@ -729,6 +731,8 @@ export function ProductCard({
                   type="button"
                   suppressHydrationWarning
                   onClick={() => handlePresetClick(preset)}
+                  aria-label={lang === "bn" ? `${toBnNumber(preset)}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
+                  aria-pressed={displayUnit === preset}
                   className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${
                     displayUnit === preset
                       ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"

@@ -297,11 +297,12 @@ export function ProductShowcase({
         <button
           type="button"
           onClick={() => scrollToSection(0)}
+          aria-label={lang === "bn" ? `${displayStoreName} - হোমপেইজ` : `${displayStoreName} - Homepage`}
           className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2 text-left cursor-pointer active:scale-95 transition-transform"
           title="যোগাযোগ ও হোমপেইজ"
         >
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" />
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base md:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight truncate">
@@ -396,9 +397,9 @@ export function ProductShowcase({
             type="button"
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
-            aria-label="Open Cart"
+            aria-label={lang === "bn" ? `কার্ট খুলুন, ${toBnNumber(cartTotalQuantity)}টি পণ্য রয়েছে` : `Open cart, ${cartTotalQuantity} items`}
           >
-            <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" />
+            <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.cartTitle}</span>
             {isMounted && cartTotalQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[11px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
@@ -415,10 +416,11 @@ export function ProductShowcase({
           {/* Direct Call Button (Specially optimized for aged shoppers on mobile) */}
           <a
             href={`tel:${rawHotlineDigits}`}
+            aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
             className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full shadow-md transition-all touch-manipulation"
             title={t.hotlineLabel}
           >
-            <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" />
+            <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.hotlineLabel}:</span>
             <span className="font-mono text-xs sm:text-sm">{defaultHotline}</span>
           </a>
@@ -427,9 +429,10 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={toggleLanguage}
+            aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
             className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-xs sm:text-sm py-1.5 px-2.5 sm:px-3 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
           >
-            <Globe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <Globe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
             <span>{t.langToggle}</span>
           </button>
         </div>

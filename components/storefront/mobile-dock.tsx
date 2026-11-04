@@ -62,11 +62,12 @@ export function MobileDock({
               }
             }
           }}
+          aria-label={lang === "bn" ? `${displayName} - হোমপেইজ` : `${displayName} - Homepage`}
           className="flex items-center gap-1.5 min-w-0 pl-1 pr-1.5 text-left active:scale-95 transition-transform touch-manipulation cursor-pointer"
           title="ব্যবসায়ের পরিচিতি ও হোমপেইজ"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
-            <Sparkles className="w-4 h-4 text-amber-100" />
+            <Sparkles className="w-4 h-4 text-amber-100" aria-hidden="true" />
           </div>
           <div className="min-w-0 hidden xs:block">
             <span className="block font-black text-xs text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
@@ -82,10 +83,11 @@ export function MobileDock({
         <motion.a
           whileTap={{ scale: 0.92 }}
           href={`tel:${rawHotlineDigits}`}
+          aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
           className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3 rounded-full shadow-md transition-all touch-manipulation shrink-0"
           title={t.hotlineLabel}
         >
-          <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" />
+          <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" aria-hidden="true" />
           <span className="font-mono text-xs">{defaultHotline}</span>
         </motion.a>
 
@@ -101,9 +103,9 @@ export function MobileDock({
             }
           }}
           className="relative inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all touch-manipulation shrink-0"
-          aria-label={t.cartTitle}
+          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${toBnNumber(cartTotalQuantity)}টি পণ্য` : `Cart & Order, ${cartTotalQuantity} items`}
         >
-          <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+          <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
           {mounted && cartTotalQuantity > 0 && (
             <motion.span
               initial={{ scale: 0 }}
@@ -121,9 +123,9 @@ export function MobileDock({
           type="button"
           onClick={onToggleLang}
           className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-[11px] py-1.5 px-2.5 rounded-full transition-all shadow-sm touch-manipulation shrink-0"
-          aria-label="Change Language"
+          aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
         >
-          <Globe className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+          <Globe className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
           <span>{t.langToggle}</span>
         </motion.button>
       </motion.nav>

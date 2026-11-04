@@ -180,6 +180,18 @@ export function PhoneHelpForm({
     setIsModalOpen(false);
   };
 
+  // Close modal on Escape key for keyboard accessibility
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen]);
+
   const handleModalBrowseClick = () => {
     setIsModalOpen(false);
     if (onScrollToProducts) {
@@ -223,17 +235,19 @@ export function PhoneHelpForm({
                 </label>
 
                 {/* Live Auto-Submission Status Indicator */}
-                {submitMutation.isPending ? (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
-                    <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
-                    <span>{t.phoneHelpAutoSubmitting}</span>
-                  </span>
-                ) : isPhoneValid ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    <span>{t.phoneHelpValidBadge}</span>
-                  </span>
-                ) : null}
+                <div aria-live="polite" className="inline-flex items-center">
+                  {submitMutation.isPending ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                      <Loader2 className="w-3 h-3 animate-spin text-amber-600" aria-hidden="true" />
+                      <span>{t.phoneHelpAutoSubmitting}</span>
+                    </span>
+                  ) : isPhoneValid ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" aria-hidden="true" />
+                      <span>{t.phoneHelpValidBadge}</span>
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
                   <div className="relative">
@@ -251,6 +265,9 @@ export function PhoneHelpForm({
                         }
                       }}
                       placeholder={t.phoneHelpInputPlaceholder}
+                      aria-required="true"
+                      aria-invalid={Boolean(errorMessage)}
+                      aria-describedby={errorMessage ? "assisted-phone-error assisted-phone-desc" : "assisted-phone-desc"}
                       className={`w-full font-mono text-base sm:text-lg font-bold px-3.5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl border-2 transition-all outline-hidden bg-stone-50/80 dark:bg-stone-850 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 placeholder:font-sans placeholder:text-sm ${isPhoneValid
                           ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20"
                           : errorMessage
@@ -263,19 +280,19 @@ export function PhoneHelpForm({
                     {/* Spinner inside input when auto-submitting */}
                     {submitMutation.isPending && (
                       <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-amber-600">
-                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
                       </div>
                     )}
                   </div>
 
                       {errorMessage && (
-                        <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 pt-0.5 font-medium">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <div id="assisted-phone-error" role="alert" className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 pt-0.5 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                           <span>{errorMessage}</span>
                         </div>
                       )}
 
-                    <p className="text-[11px] text-stone-500 dark:text-stone-400 pt-0.5 leading-relaxed">
+                    <p id="assisted-phone-desc" className="text-[11px] text-stone-600 dark:text-stone-400 pt-0.5 leading-relaxed">
                       {lang === "bn"
                         ? "সরাসরি আপনার মোবাইল নম্বরটি লিখলেই আমাদের সিস্টেমে চলে যাবে — কোনো বাটনে চাপ দিতে হবে না।"
                         : "Simply enter your mobile number and your request will submit automatically without pressing any button."}
@@ -288,13 +305,14 @@ export function PhoneHelpForm({
                     <span>{t.phoneHelpOrCallDirect}</span>
                     <a
                       href={`tel:${rawHotline}`}
+                      aria-label={`${t.phoneHelpOrCallDirect} ${hotline}`}
                       className="font-mono font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
                     >
                       {hotline}
                     </a>
                   </span>
                   <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <Clock className="w-3 h-3 text-emerald-600" />
+                    <Clock className="w-3 h-3 text-emerald-600" aria-hidden="true" />
                     <span>{lang === "bn" ? "অল্প সময়েই কল ব্যাক" : "Fast Callback"}</span>
                   </span>
                 </div>
@@ -305,6 +323,9 @@ export function PhoneHelpForm({
                 {isModalOpen && submittedData && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs select-none">
                     <motion.div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="assisted-phone-modal-heading"
                       initial={{ scale: 0.9, opacity: 0, y: 20 }}
                       animate={{ scale: 1, opacity: 1, y: 0 }}
                       exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -316,18 +337,18 @@ export function PhoneHelpForm({
                         type="button"
                         onClick={handleCloseModal}
                         className="absolute top-3.5 right-3.5 p-1.5 rounded-full text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
-                        aria-label="Close"
+                        aria-label={lang === "bn" ? "বন্ধ করুন" : "Close"}
                       >
-                        <X className="w-5 h-5" />
+                        <X className="w-5 h-5" aria-hidden="true" />
                       </button>
 
                       {/* Celebration Icon */}
                       <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-3 sm:mb-4 shadow-inner ring-8 ring-emerald-500/20">
-                        <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 animate-bounce" />
+                        <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 animate-bounce" aria-hidden="true" />
                       </div>
 
                       {/* Title & Description */}
-                      <h3 className="text-lg sm:text-xl font-black text-stone-900 dark:text-stone-50 leading-tight">
+                      <h3 id="assisted-phone-modal-heading" className="text-lg sm:text-xl font-black text-stone-900 dark:text-stone-50 leading-tight">
                         {t.phoneHelpModalTitle}
                       </h3>
 

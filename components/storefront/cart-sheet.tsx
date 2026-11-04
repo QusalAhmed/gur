@@ -104,10 +104,11 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                   <button
                     type="button"
                     onClick={() => dispatch(clearCart())}
+                    aria-label={t.clearCartBtn}
                     className="p-2 text-stone-500 hover:text-rose-600 dark:text-stone-400 dark:hover:text-rose-400 rounded-lg hover:bg-white dark:hover:bg-stone-800 transition-colors touch-manipulation text-xs font-semibold flex items-center gap-1"
                     title={t.clearCartBtn}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
                     <span className="hidden xs:inline">{t.clearCartBtn}</span>
                   </button>
                 )}
@@ -115,9 +116,9 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                   type="button"
                   onClick={() => dispatch(closeCart())}
                   className="p-2 text-stone-600 hover:text-stone-900 dark:text-stone-300 dark:hover:text-white rounded-full hover:bg-white dark:hover:bg-stone-800 transition-colors touch-manipulation"
-                  aria-label="Close cart"
+                  aria-label={lang === "bn" ? "কার্ট বন্ধ করুন" : "Close cart"}
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
             </div>
