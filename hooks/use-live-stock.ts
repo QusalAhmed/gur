@@ -313,11 +313,10 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
       percentBooked: Math.min(100, Math.round((tomorrowBooked / capacity) * 100)),
     });
 
-    // "if tomorrow's stock is 0, show stock till the day after tomorrow (show till available stock)"
-    // We continue projecting while tomorrow has 0 stock AND remaining backlog takes subsequent days,
-    // or until we hit the first day with available stock > 0 (capped at 7 days).
+    // "if tomorrow's stock is 0, show stock till the date when future order is not fully booked"
+    // We continue projecting forward until we reach the date when future order is NOT fully booked (availableKg > 0).
     let dayOffset = 2;
-    const maxDays = 7;
+    const maxDays = 120; // Support projecting ahead until an unbooked batch is found
 
     while (
       (list[list.length - 1].availableKg === 0 || list.length < 2) &&

@@ -304,11 +304,48 @@ export function LiveStockSection({
           {nextAvailableDay && (
             <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-800">
               {isBn
-                ? `পরবর্তী খালি ব্যাচ: ${nextAvailableDay.dayNameBn}`
-                : `Next available: ${nextAvailableDay.dayNameEn}`}
+                ? `উন্মুক্ত ব্যাচ: ${nextAvailableDay.dayNameBn}`
+                : `Available: ${nextAvailableDay.dayNameEn}`}
             </span>
           )}
         </motion.div>
+
+        {/* Prominent Next Available Date Spotlight Banner */}
+        {nextAvailableDay && !isLoading && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.35, delay: 0.2 }}
+            className="rounded-xl p-3 sm:p-3.5 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/15 dark:from-emerald-950/60 dark:via-emerald-900/40 dark:to-emerald-950/60 border border-emerald-400/50 dark:border-emerald-600/50 shadow-xs"
+          >
+            <div className="flex items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5 sm:mt-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-extrabold text-emerald-950 dark:text-emerald-100">
+                      {isBn
+                        ? `পরবর্তী উন্মুক্ত তারিখ: ${nextAvailableDay.dayNameBn} (${nextAvailableDay.dateFormattedBn}, ${nextAvailableDay.weekdayBn})`
+                        : `Next Available Date: ${nextAvailableDay.dayNameEn} (${nextAvailableDay.dateFormattedEn}, ${nextAvailableDay.weekdayEn})`}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
+                      {isBn
+                        ? `${toBnNumber(nextAvailableDay.availableKg)} কেজি বাকি`
+                        : `${nextAvailableDay.availableKg} KG Open`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-300 mt-0.5 leading-snug">
+                    {isBn
+                      ? `আজ থেকে পূর্ববর্তী তারিখগুলো প্রি-অর্ডারে পূর্ণ। এখন অর্ডার করলে এই তারিখে আপনার গুড় প্রস্তুত ও বরাদ্দ হবে।`
+                      : `Prior dates are 100% booked by active orders. Fresh orders placed now will be prepared for this batch.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Loading skeleton animation using Framer Motion */}
         {isLoading ? (
@@ -399,13 +436,13 @@ function TimelineDayCard({
           : { opacity: 0, y: 18, scale: 0.97 }
       }
       exit={{ opacity: 0, y: -10, scale: 0.97 }}
-      transition={{ duration: 0.36, delay: 0.1 + idx * 0.08, ease: "easeOut" }}
+      transition={{ duration: 0.32, delay: Math.min(0.35, 0.05 + idx * 0.03), ease: "easeOut" }}
       className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
         proj.isToday
           ? "bg-stone-100/90 dark:bg-stone-800/60 border-stone-300/80 dark:border-stone-700"
           : isAvailable
-          ? "bg-gradient-to-r from-emerald-50/90 via-emerald-100/60 to-teal-50/80 dark:from-emerald-950/40 dark:via-emerald-900/30 dark:to-stone-900 border-emerald-300 dark:border-emerald-700 shadow-sm"
-          : "bg-amber-100/50 dark:bg-stone-800/50 border-amber-300/80 dark:border-amber-900/40"
+          ? "bg-gradient-to-r from-emerald-50 via-emerald-100/70 to-teal-50 dark:from-emerald-950/70 dark:via-emerald-900/50 dark:to-stone-900 border-2 border-emerald-500 dark:border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20"
+          : "bg-amber-100/40 dark:bg-stone-800/40 border-amber-300/70 dark:border-amber-900/40"
       }`}
     >
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -423,13 +460,18 @@ function TimelineDayCard({
             {isBn ? toBnNumber(idx + 1) : idx + 1}
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-extrabold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                 {isBn ? proj.dayNameBn : proj.dayNameEn}
               </span>
               <span className="text-[11px] text-stone-500 dark:text-stone-400">
                 ({isBn ? `${proj.dateFormattedBn}, ${proj.weekdayBn}` : `${proj.dateFormattedEn}, ${proj.weekdayEn}`})
               </span>
+              {isAvailable && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs">
+                  {isBn ? "উন্মুক্ত" : "Open"}
+                </span>
+              )}
             </div>
           </div>
         </div>
