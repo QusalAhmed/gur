@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, CheckCircle2, FlaskConical, Beaker, AlertTriangle, FileText, Download, MoreHorizontal } from "lucide-react";
+import { Plus, CheckCircle2, FlaskConical, Beaker, AlertTriangle, MoreHorizontal, Ban, ShieldCheck, Download } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -24,135 +26,63 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-
-interface Batch {
-  id: string;
-  batchNo: string;
-  product: string;
-  supplier: string;
-  mfgDate: string;
-  expDate: string;
-  brix: number;
-  ph: number;
-  purity: number;
-  coaAttached: boolean;
-  status: "released" | "quarantine" | "blocked" | "expired";
-  quantity: string;
-  warehouse: string;
-}
-
-const batches: Batch[] = [
-  {
-    id: "BAT-2026-041",
-    batchNo: "LOT-BSM-2610-A1",
-    product: "Blackstrap Molasses Heavy",
-    supplier: "Carew & Co (Bangladesh) Ltd",
-    mfgDate: "18 Oct 2026",
-    expDate: "18 Oct 2028",
-    brix: 82.4,
-    ph: 5.6,
-    purity: 99.1,
-    coaAttached: true,
-    status: "released",
-    quantity: "60 Tons",
-    warehouse: "WH-DHK-01",
-  },
-  {
-    id: "BAT-2026-040",
-    batchNo: "LOT-DPG-2610-J2",
-    product: "Date Palm Liquid Nolen Gur",
-    supplier: "Jashore Date Palm Farmers Co-op",
-    mfgDate: "20 Oct 2026",
-    expDate: "20 Apr 2027",
-    brix: 76.8,
-    ph: 6.2,
-    purity: 99.8,
-    coaAttached: true,
-    status: "released",
-    quantity: "8 Tons",
-    warehouse: "WH-JSH-03",
-  },
-  {
-    id: "BAT-2026-039",
-    batchNo: "LOT-FGA-2610-R3",
-    product: "Feed Grade Molasses A",
-    supplier: "Rajshahi Sugar Refinery",
-    mfgDate: "22 Oct 2026",
-    expDate: "22 Oct 2027",
-    brix: 79.5,
-    ph: 5.4,
-    purity: 96.5,
-    coaAttached: false,
-    status: "quarantine",
-    quantity: "120 Tons",
-    warehouse: "WH-RAJ-02",
-  },
-  {
-    id: "BAT-2026-038",
-    batchNo: "LOT-FGM-2609-K4",
-    product: "Food Grade Sugarcane Molasses",
-    supplier: "Kushtia Agro Processing",
-    mfgDate: "15 Sep 2026",
-    expDate: "15 Sep 2028",
-    brix: 81.0,
-    ph: 5.8,
-    purity: 98.9,
-    coaAttached: true,
-    status: "released",
-    quantity: "25 Tons",
-    warehouse: "WH-DHK-01",
-  },
-  {
-    id: "BAT-2026-037",
-    batchNo: "LOT-IND-2608-X1",
-    product: "Industrial Molasses Raw",
-    supplier: "Faridpur Sugar Mill",
-    mfgDate: "10 Aug 2026",
-    expDate: "10 Aug 2027",
-    brix: 72.1,
-    ph: 4.8,
-    purity: 91.2,
-    coaAttached: true,
-    status: "blocked",
-    quantity: "15 Tons",
-    warehouse: "WH-CTG-01",
-  },
-  {
-    id: "BAT-2026-036",
-    batchNo: "LOT-EXP-2510-Z9",
-    product: "Seasonal Gur Block 2025",
-    supplier: "Natore Gur Mill",
-    mfgDate: "1 Oct 2025",
-    expDate: "1 Oct 2026",
-    brix: 75.0,
-    ph: 5.9,
-    purity: 97.0,
-    coaAttached: true,
-    status: "expired",
-    quantity: "1.2 Tons",
-    warehouse: "WH-DHK-01",
-  },
-];
+import {
+  getAdminBatchesAction,
+  updateBatchStatusAction,
+  BatchItem,
+} from "@/actions/inventory";
 
 const statusStyles: Record<string, string> = {
   released: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  quarantine: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  blocked: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+  quarantine: "bg-amber-100 text-amber-700 dark:text-amber-900/30 dark:text-amber-400",
+  blocked: "bg-rose-100 text-rose-700 dark:text-rose-900/30 dark:text-rose-400",
   expired: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
 };
 
 export default function BatchesPage() {
+  const queryClient = useQueryClient();
   const [tabFilter, setTabFilter] = React.useState<string>("all");
+
+  const { data: batches = [], isLoading } = useQuery({
+    queryKey: ["admin", "batches"],
+    queryFn: async () => {
+      const res = await getAdminBatchesAction();
+      if (!res.success) throw new Error(res.error || "Failed to load batches");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateBatchStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Lot status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "batches"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
+      } else {
+        toast.error(res.error || "Failed to update batch");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update batch");
+    },
+  });
 
   const filteredBatches = React.useMemo(() => {
     if (tabFilter === "all") return batches;
-    if (tabFilter === "blocked") {
-      return batches.filter((b) => b.status === "blocked" || b.status === "expired");
-    }
+    if (tabFilter === "blocked") return batches.filter((b) => b.status === "blocked" || b.status === "expired");
     return batches.filter((b) => b.status === tabFilter);
-  }, [tabFilter]);
+  }, [batches, tabFilter]);
 
-  const columns: ColumnDef<Batch>[] = React.useMemo(
+  const releasedCount = batches.filter((b) => b.status === "released").length;
+  const quarantineCount = batches.filter((b) => b.status === "quarantine").length;
+  const blockedCount = batches.filter((b) => b.status === "blocked" || b.status === "expired").length;
+
+  const brixLots = batches.filter((b) => b.brix !== null);
+  const avgBrix = brixLots.length > 0 ? (brixLots.reduce((acc, b) => acc + (b.brix || 0), 0) / brixLots.length).toFixed(1) : "–";
+
+  const columns: ColumnDef<BatchItem>[] = React.useMemo(
     () => [
       {
         id: "select",
@@ -181,137 +111,128 @@ export default function BatchesPage() {
       {
         accessorKey: "batchNo",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Lot / Batch Number" />
+          <DataTableColumnHeader column={column} title="Lot Number & Product" />
         ),
         cell: ({ row }) => {
           const b = row.original;
           return (
             <div>
-              <p className="font-mono text-xs font-bold text-amber-800 dark:text-amber-400">
-                {b.batchNo}
-              </p>
-              <p className="text-[10px] text-muted-foreground">Mfg: {formatDate(b.mfgDate)}</p>
+              <p className="font-mono font-bold text-xs text-foreground">{b.batchNo}</p>
+              <p className="text-xs text-muted-foreground">{b.product}</p>
             </div>
           );
         },
       },
       {
-        accessorKey: "product",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Product" />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium text-sm">{row.getValue("product")}</span>
-        ),
-      },
-      {
         accessorKey: "supplier",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Supplier Mill" />
+          <DataTableColumnHeader column={column} title="Sugar Mill / Source" />
         ),
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">{row.getValue("supplier")}</span>
-        ),
+        cell: ({ row }) => <span className="text-xs font-medium">{row.getValue("supplier")}</span>,
       },
       {
-        accessorKey: "quantity",
+        accessorKey: "mfgDate",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Quantity" />
+          <DataTableColumnHeader column={column} title="Production & Expiry" />
         ),
-        cell: ({ row }) => (
-          <span className="text-xs font-semibold">{row.getValue("quantity")}</span>
-        ),
-      },
-      {
-        accessorKey: "warehouse",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Location" />
-        ),
-        cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono text-[10px]">
-            {row.getValue("warehouse")}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const b = row.original;
+          return (
+            <div className="text-xs space-y-0.5">
+              <p className="text-foreground">Prod: {formatDate(b.mfgDate)}</p>
+              <p className="text-muted-foreground">Exp: {formatDate(b.expDate)}</p>
+            </div>
+          );
+        },
       },
       {
         accessorKey: "brix",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Brix (%)" />
         ),
-        cell: ({ row }) => (
-          <span className="font-bold text-sm text-amber-700 dark:text-amber-400">
-            {row.getValue("brix")}°
-          </span>
-        ),
-      },
-      {
-        accessorKey: "ph",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="pH" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-xs font-mono">{row.getValue("ph")}</span>
-        ),
-      },
-      {
-        accessorKey: "purity",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Purity" />
-        ),
-        cell: ({ row }) => (
-          <span className="text-xs font-medium">{row.getValue("purity")}%</span>
-        ),
-      },
-      {
-        accessorKey: "coaAttached",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="COA Doc" />
-        ),
         cell: ({ row }) => {
-          const coa = row.getValue("coaAttached") as boolean;
-          return coa ? (
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-[10px] cursor-pointer hover:bg-blue-200">
-              <FileText className="h-3 w-3 mr-1" /> PDF COA
-            </Badge>
+          const brix = row.getValue("brix");
+          return brix ? (
+            <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400">
+              {String(brix)}° Brix
+            </span>
           ) : (
-            <span className="text-xs text-muted-foreground italic">Pending</span>
+            <span className="text-xs text-muted-foreground">–</span>
           );
         },
       },
       {
-        accessorKey: "status",
+        accessorKey: "ph",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Status" />
+          <DataTableColumnHeader column={column} title="pH Level" />
         ),
         cell: ({ row }) => {
-          const status = row.getValue("status") as string;
+          const ph = row.getValue("ph");
+          return ph ? <span className="font-mono text-xs">{String(ph)}</span> : <span className="text-xs text-muted-foreground">–</span>;
+        },
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => {
+          const s = row.original.status;
           return (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusStyles[status] || ""}`}>
-              {status}
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[s] || ""}`}
+            >
+              {s}
             </span>
           );
         },
       },
       {
         id: "actions",
-        cell: () => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>View Lab Results</DropdownMenuItem>
-              <DropdownMenuItem>Upload New COA</DropdownMenuItem>
-              <DropdownMenuItem>Release from Quarantine</DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600">Mark Blocked</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => {
+          const b = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Open actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                {b.status !== "released" && (
+                  <DropdownMenuItem
+                    className="text-emerald-600 focus:text-emerald-600"
+                    onClick={() => updateStatusMutation.mutate({ id: b.id, status: "released" })}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-2" /> Release Lot
+                  </DropdownMenuItem>
+                )}
+                {b.status !== "quarantine" && (
+                  <DropdownMenuItem
+                    className="text-amber-600 focus:text-amber-600"
+                    onClick={() => updateStatusMutation.mutate({ id: b.id, status: "quarantine" })}
+                  >
+                    <FlaskConical className="h-4 w-4 mr-2" /> Quarantine
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                {b.status !== "blocked" && (
+                  <DropdownMenuItem
+                    className="text-rose-600 focus:text-rose-600"
+                    onClick={() => updateStatusMutation.mutate({ id: b.id, status: "blocked" })}
+                  >
+                    <Ban className="h-4 w-4 mr-2" /> Block Lot
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+        enableSorting: false,
+        enableHiding: false,
       },
     ],
-    []
+    [updateStatusMutation]
   );
 
   return (
@@ -320,27 +241,17 @@ export default function BatchesPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Batches, Lots & Quality Control</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Production Batches & QC Lots</h1>
           <p className="text-muted-foreground text-sm">
-            Monitor Brix refractometer tests, pH acidity, quarantine clearance, and Certificates of Analysis (COA)
+            Brix density assays, sugar percentage, laboratory release authorizations, and quarantine holds
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export Quality Logs
-          </Button>
-          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
-            <Plus className="h-4 w-4 mr-2" />
-            Receive New Batch
-          </Button>
         </div>
       </motion.div>
 
-      {/* KPI Cards */}
+      {/* KPI Stats */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -355,7 +266,11 @@ export default function BatchesPage() {
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">34 Lots</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-2" />
+            ) : (
+              <p className="text-2xl font-bold mt-2">{releasedCount} Lots</p>
+            )}
             <p className="text-xs text-muted-foreground mt-1">Available for sale & dispatch</p>
           </CardContent>
         </Card>
@@ -368,7 +283,11 @@ export default function BatchesPage() {
                 <FlaskConical className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">3 Lots</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-2" />
+            ) : (
+              <p className="text-2xl font-bold mt-2">{quarantineCount} Lots</p>
+            )}
             <p className="text-xs text-amber-600 font-medium mt-1">Awaiting Brix & microbiology report</p>
           </CardContent>
         </Card>
@@ -381,7 +300,11 @@ export default function BatchesPage() {
                 <Beaker className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">80.2° Brix</p>
+            {isLoading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded my-2" />
+            ) : (
+              <p className="text-2xl font-bold mt-2">{avgBrix}° Brix</p>
+            )}
             <p className="text-xs text-muted-foreground mt-1">Target range: 79.0° – 84.0° Brix</p>
           </CardContent>
         </Card>
@@ -394,8 +317,12 @@ export default function BatchesPage() {
                 <AlertTriangle className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">1 Lot</p>
-            <p className="text-xs text-rose-600 font-medium mt-1">Brix &lt; 74° below export grade</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-2" />
+            ) : (
+              <p className="text-2xl font-bold mt-2">{blockedCount} Lots</p>
+            )}
+            <p className="text-xs text-rose-600 font-medium mt-1">Non-compliant density holds</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -409,10 +336,10 @@ export default function BatchesPage() {
       >
         <Tabs value={tabFilter} onValueChange={setTabFilter}>
           <TabsList>
-            <TabsTrigger value="all">All Batches</TabsTrigger>
-            <TabsTrigger value="released">Released</TabsTrigger>
-            <TabsTrigger value="quarantine">Quarantine (3)</TabsTrigger>
-            <TabsTrigger value="blocked">Blocked / Expired</TabsTrigger>
+            <TabsTrigger value="all">All Batches ({batches.length})</TabsTrigger>
+            <TabsTrigger value="released">Released ({releasedCount})</TabsTrigger>
+            <TabsTrigger value="quarantine">Quarantine ({quarantineCount})</TabsTrigger>
+            <TabsTrigger value="blocked">Blocked / Expired ({blockedCount})</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -420,13 +347,14 @@ export default function BatchesPage() {
           <DataTable
             columns={columns}
             data={filteredBatches}
-            searchKey="batchNo"
             searchPlaceholder="Search lot number, mill, product..."
             enableRowSelection
             enableColumnVisibility
             enableSorting
             enablePagination
-            pageSize={10}
+            initialPageSize={10}
+            pageSizeOptions={[10, 25, 50]}
+            emptyMessage="No QC production batches found in database."
           />
         </Card>
       </motion.div>

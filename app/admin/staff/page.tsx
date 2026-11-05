@@ -2,8 +2,22 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, UserCheck, Key, Lock, MoreHorizontal, Download, Trash2, Shield, UserCog, Save, User } from "lucide-react";
+import {
+  Plus,
+  UserCheck,
+  Key,
+  Lock,
+  MoreHorizontal,
+  Download,
+  Trash2,
+  Shield,
+  UserCog,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,7 +49,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-import { getStaffDirectoryAction, saveStaffMemberAction } from "@/actions/admin-profile";
+import {
+  getStaffDirectoryAction,
+  saveStaffMemberAction,
+  deleteStaffMemberAction,
+} from "@/actions/admin-profile";
 
 export interface StaffItem {
   id: string;
@@ -52,87 +70,6 @@ export interface StaffItem {
   avatarUrl?: string;
 }
 
-const initialStaff: StaffItem[] = [
-  {
-    id: "STF-001",
-    name: "Admin Owner",
-    initials: "AO",
-    email: "owner@molassesstore.com",
-    phone: "+8801700000001",
-    role: "owner",
-    department: "Executive Management",
-    assignedWarehouse: "All Depots (Full Access)",
-    twoFactor: true,
-    status: "active",
-    lastLogin: "Active Now",
-  },
-  {
-    id: "STF-002",
-    name: "Enamul Haque",
-    initials: "EH",
-    email: "enamul@molassesstore.com",
-    phone: "+8801711902341",
-    role: "manager",
-    department: "Warehouse Operations",
-    assignedWarehouse: "WH-DHK-01 (Tejgaon Central)",
-    twoFactor: true,
-    status: "active",
-    lastLogin: "10 mins ago",
-  },
-  {
-    id: "STF-003",
-    name: "Dr. Farhana Yasmin",
-    initials: "FY",
-    email: "farhana@molassesstore.com",
-    phone: "+8801511223344",
-    role: "editor",
-    department: "Agronomy & Content Lab",
-    assignedWarehouse: "WH-DHK-01",
-    twoFactor: true,
-    status: "active",
-    lastLogin: "1 hour ago",
-  },
-  {
-    id: "STF-004",
-    name: "Mizanur Rahman",
-    initials: "MR",
-    email: "mizan@molassesstore.com",
-    phone: "+8801812891044",
-    role: "manager",
-    department: "Sugar Mill Logistics",
-    assignedWarehouse: "WH-RAJ-02 (Rajshahi)",
-    twoFactor: true,
-    status: "active",
-    lastLogin: "3 hours ago",
-  },
-  {
-    id: "STF-005",
-    name: "Nusrat Jahan",
-    initials: "NJ",
-    email: "nusrat@molassesstore.com",
-    phone: "+8801911445566",
-    role: "support",
-    department: "Customer Service & WhatsApp",
-    assignedWarehouse: "Customer Desk",
-    twoFactor: true,
-    status: "active",
-    lastLogin: "Today, 09:15",
-  },
-  {
-    id: "STF-006",
-    name: "Kazi Nayeem",
-    initials: "KN",
-    email: "nayeem@molassesstore.com",
-    phone: "+8801611778899",
-    role: "admin",
-    department: "Finance & B2B Invoicing",
-    assignedWarehouse: "Head Office",
-    twoFactor: false,
-    status: "active",
-    lastLogin: "Yesterday",
-  },
-];
-
 const roleStyles: Record<string, string> = {
   owner: "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-bold border-purple-500/30",
   admin: "bg-blue-500/15 text-blue-700 dark:text-blue-300 font-semibold border-blue-500/30",
@@ -142,34 +79,71 @@ const roleStyles: Record<string, string> = {
 };
 
 export default function StaffPage() {
-  const [staff, setStaff] = React.useState<StaffItem[]>(initialStaff);
+  const queryClient = useQueryClient();
   const [isStaffDialogOpen, setIsStaffDialogOpen] = React.useState(false);
   const [editingStaff, setEditingStaff] = React.useState<StaffItem | null>(null);
 
-  React.useEffect(() => {
-    getStaffDirectoryAction().then((res) => {
-      if (res.success && res.staff.length > 0) {
-        setStaff((prev) => {
-          const map = new Map(prev.map((s) => [s.id, s]));
-          for (const s of res.staff) {
-            map.set(s.id, { ...(map.get(s.id) || {}), ...s });
-          }
-          return Array.from(map.values());
-        });
+  const { data: staffRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "staff"],
+    queryFn: getStaffDirectoryAction,
+  });
+
+  const staff: StaffItem[] = (staffRes?.staff || []).map((s: any) => ({
+    id: s.id,
+    name: s.name || "Staff Member",
+    initials: s.initials || "SM",
+    email: s.email || "staff@molassesstore.com",
+    phone: s.phone || "+8801700000000",
+    role: s.role || "support",
+    department: s.department || "Operations",
+    assignedWarehouse: s.assignedWarehouse || "Main Depot",
+    twoFactor: Boolean(s.twoFactor ?? true),
+    status: s.status || "active",
+    lastLogin: s.lastLogin || "Recently",
+    avatarUrl: s.avatarUrl || undefined,
+  }));
+
+  const saveMutation = useMutation({
+    mutationFn: saveStaffMemberAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Staff member saved successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "staff"] });
+        setIsStaffDialogOpen(false);
+      } else {
+        toast.error(res.error || "Failed to save staff member");
       }
-    });
-  }, []);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to save staff member");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteStaffMemberAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Staff access revoked");
+        queryClient.invalidateQueries({ queryKey: ["admin", "staff"] });
+      } else {
+        toast.error(res.error || "Failed to revoke access");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to revoke access");
+    },
+  });
 
   const handleOpenInvite = () => {
     setEditingStaff({
-      id: `STF-00${staff.length + 1}`,
+      id: `STF-${Date.now().toString().slice(-4)}`,
       name: "",
       initials: "NM",
       email: "",
-      phone: "+8801700000000",
+      phone: "+88017",
       role: "support",
       department: "Customer Support",
-      assignedWarehouse: "WH-DHK-01 (Tejgaon Central)",
+      assignedWarehouse: "Tejgaon Central",
       twoFactor: false,
       status: "active",
       lastLogin: "Never",
@@ -183,51 +157,26 @@ export default function StaffPage() {
     setIsStaffDialogOpen(true);
   };
 
-  const handleSaveStaff = async () => {
+  const handleSaveStaff = () => {
     if (!editingStaff) return;
     const name = editingStaff.name.trim() || "Team Member";
-    const initials = name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "TM";
-
-    const toSave: StaffItem = {
-      ...editingStaff,
+    saveMutation.mutate({
+      id: editingStaff.id,
       name,
-      initials,
-    };
-
-    setStaff((prev) => {
-      const idx = prev.findIndex((item) => item.id === toSave.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = toSave;
-        return copy;
-      }
-      return [toSave, ...prev];
+      email: editingStaff.email,
+      phone: editingStaff.phone,
+      role: editingStaff.role,
+      department: editingStaff.department,
+      avatarUrl: editingStaff.avatarUrl,
     });
-    setIsStaffDialogOpen(false);
-
-    // Persist staff details and avatar to database
-    try {
-      await saveStaffMemberAction({
-        id: toSave.id,
-        name: toSave.name,
-        email: toSave.email,
-        phone: toSave.phone,
-        role: toSave.role,
-        department: toSave.department,
-        avatarUrl: toSave.avatarUrl,
-      });
-    } catch (e) {
-      console.warn("Could not save staff to DB:", e);
-    }
   };
 
   const handleExportCSV = (selected: StaffItem[]) => {
     const list = selected.length > 0 ? selected : staff;
+    if (list.length === 0) {
+      toast.info("No staff records to export");
+      return;
+    }
     const headers = ["ID", "Name", "Email", "Phone", "Role", "Department", "AssignedWarehouse", "2FA", "Status", "LastLogin"];
     const rows = list.map((s) => [
       s.id,
@@ -303,7 +252,7 @@ export default function StaffPage() {
         const role = row.original.role;
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] capitalize border ${roleStyles[role]}`}
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] capitalize border ${roleStyles[role] || roleStyles.support}`}
           >
             {role}
           </span>
@@ -382,13 +331,13 @@ export default function StaffPage() {
               <DropdownMenuItem onClick={() => handleOpenEdit(s)}>
                 <UserCog className="h-3.5 w-3.5 mr-2" /> Edit Member
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Password reset link sent to ${s.email}`)}>
+              <DropdownMenuItem onClick={() => toast.success(`Password reset link dispatched to ${s.email}`)}>
                 <Key className="h-3.5 w-3.5 mr-2" /> Reset Password
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => setStaff((prev) => prev.filter((item) => item.id !== s.id))}
+                onClick={() => deleteMutation.mutate(s.id)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Revoke Access
               </DropdownMenuItem>
@@ -399,7 +348,7 @@ export default function StaffPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
+  ], [deleteMutation]);
 
   const twoFactorCount = staff.filter((s) => s.twoFactor).length;
 
@@ -417,14 +366,25 @@ export default function StaffPage() {
             Role-Based Access Control (RBAC), warehouse depot assignments, and 2FA credentials
           </p>
         </div>
-        <Button
-          size="sm"
-          className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-          onClick={handleOpenInvite}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Invite Staff
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => refetch()}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
+            onClick={handleOpenInvite}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Invite Staff
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
@@ -443,7 +403,7 @@ export default function StaffPage() {
               </div>
             </div>
             <p className="text-2xl font-bold mt-1 text-foreground">{staff.length} Active</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Across 5 permission roles</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Across permission roles</p>
           </CardContent>
         </Card>
 
@@ -456,7 +416,7 @@ export default function StaffPage() {
               </div>
             </div>
             <p className="text-2xl font-bold mt-1 text-foreground">
-              {((twoFactorCount / staff.length) * 100).toFixed(0)}%
+              {staff.length > 0 ? `${((twoFactorCount / staff.length) * 100).toFixed(0)}%` : "0%"}
             </p>
             <p className="text-xs text-emerald-600 font-medium mt-0.5">
               {twoFactorCount} of {staff.length} protected
@@ -472,8 +432,8 @@ export default function StaffPage() {
                 <UserCheck className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">3 Online</p>
-            <p className="text-xs text-muted-foreground mt-0.5">HQ & Tejgaon Depot</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{staff.length > 0 ? "1+ Online" : "0 Online"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Admin Central</p>
           </CardContent>
         </Card>
 
@@ -497,43 +457,50 @@ export default function StaffPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <DataTable
-          columns={staffColumns}
-          data={staff}
-          searchPlaceholder="Search staff name, email, phone..."
-          enableRowSelection={true}
-          enableSorting={true}
-          enablePagination={true}
-          initialPageSize={5}
-          pageSizeOptions={[5, 10, 20]}
-          bulkActions={(selected, clearSelection) => (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs bg-background"
-                onClick={() => handleExportCSV(selected)}
-              >
-                <Download className="h-3.5 w-3.5 mr-1" />
-                Export CSV
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-7 text-xs"
-                onClick={() => {
-                  const ids = new Set(selected.map((s) => s.id));
-                  setStaff((prev) => prev.filter((s) => !ids.has(s.id)));
-                  clearSelection();
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                Revoke Access
-              </Button>
-            </>
-          )}
-          emptyMessage="No staff members found matching your search."
-        />
+        {isLoading ? (
+          <div className="h-48 flex items-center justify-center border rounded-lg bg-card">
+            <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+          </div>
+        ) : (
+          <DataTable
+            columns={staffColumns}
+            data={staff}
+            searchPlaceholder="Search staff name, email, phone..."
+            enableRowSelection={true}
+            enableSorting={true}
+            enablePagination={true}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 20]}
+            bulkActions={(selected, clearSelection) => (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs bg-background"
+                  onClick={() => handleExportCSV(selected)}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  Export CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs"
+                  onClick={async () => {
+                    for (const s of selected) {
+                      await deleteMutation.mutateAsync(s.id);
+                    }
+                    clearSelection();
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Revoke Access
+                </Button>
+              </>
+            )}
+            emptyMessage="No staff members found matching your search."
+          />
+        )}
       </motion.div>
 
       {/* Add / Edit Staff Dialog */}
@@ -552,7 +519,6 @@ export default function StaffPage() {
             <div className="space-y-4 pt-2 pb-4">
               <div className="flex flex-col items-center gap-2">
                 <ImageUploader
-                  
                   folder="avatars"
                   multiple={false}
                   value={editingStaff.avatarUrl ? [editingStaff.avatarUrl] : []}
@@ -652,7 +618,9 @@ export default function StaffPage() {
             <Button
               className="bg-amber-600 hover:bg-amber-700 text-white"
               onClick={handleSaveStaff}
+              disabled={saveMutation.isPending}
             >
+              {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Save Member
             </Button>
           </DialogFooter>

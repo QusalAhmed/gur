@@ -2,8 +2,22 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { MessageSquare, Phone, CheckCircle2, AlertOctagon, Reply, MoreHorizontal } from "lucide-react";
+import {
+  MessageSquare,
+  Phone,
+  CheckCircle2,
+  AlertOctagon,
+  Reply,
+  MoreHorizontal,
+  Mail,
+  Trash2,
+  Loader2,
+  RefreshCw,
+  CheckCircle,
+} from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,11 +26,21 @@ import {
   DataTable,
   DataTableColumnHeader,
 } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -24,104 +48,93 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-
-interface Message {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  subject: string;
-  message: string;
-  channel: string;
-  status: "new" | "read" | "replied" | "spam";
-  time: string;
-}
-
-const messages: Message[] = [
-  {
-    id: "MSG-001",
-    name: "Hafizur Rahman",
-    phone: "+8801711998877",
-    email: "hafiz@bografeed.com",
-    subject: "Bulk animal feed molasses monthly supply contract (15 MT)",
-    message: "We operate a cattle feed production facility in Sherpur, Bogura. We need 15 metric tons of 80° Brix blackstrap molasses every month. Please quote your best mill-gate price including tanker freight.",
-    channel: "Web Contact Form",
-    status: "new",
-    time: "Today, 11:45 AM",
-  },
-  {
-    id: "MSG-002",
-    name: "Farzana Parveen",
-    phone: "+8801812334455",
-    email: "farzana.p@gmail.com",
-    subject: "Retail delivery for winter wedding Payesh (50 bottles Nolen Gur)",
-    message: "I am hosting a family wedding next month in Gulshan-2, Dhaka. Can I order 50 units of the 500ml glass bottle date palm liquid gur with gift packaging? How soon can you deliver?",
-    channel: "WhatsApp Lead",
-    status: "new",
-    time: "Today, 10:10 AM",
-  },
-  {
-    id: "MSG-003",
-    name: "Dr. K. M. Saifuddin",
-    phone: "+8801913887766",
-    email: "saifuddin@vetagri.ac.bd",
-    subject: "Sample request for University agricultural microbiology research",
-    message: "We are conducting research at Bangladesh Agricultural University on microbial acceleration using raw cane molasses. Can you provide 5kg sample with COA purity sheet?",
-    channel: "Web Contact Form",
-    status: "new",
-    time: "Today, 08:30 AM",
-  },
-  {
-    id: "MSG-004",
-    name: "Md. Belal Hossain",
-    phone: "+8801614223344",
-    email: "belal@chittagongpoultry.org",
-    subject: "Urgent: Need 200L drum stock in Chattogram depot tomorrow",
-    message: "Do you have 4 steel drums of blackstrap molasses ready in stock at your Chattogram Halishahar depot for urgent pickup by our pickup truck?",
-    channel: "Direct Phone Inquiry",
-    status: "new",
-    time: "Yesterday, 19:20",
-  },
-  {
-    id: "MSG-005",
-    name: "Selim Reza",
-    phone: "+8801511556677",
-    email: "reza.bakery@yahoo.com",
-    subject: "Food grade pail pricing and sample approval",
-    message: "Our bakery sample was approved by our head pastry chef. Proceeding with quotation for 100 pails.",
-    channel: "Web Contact Form",
-    status: "replied",
-    time: "22 Oct 2026",
-  },
-  {
-    id: "MSG-006",
-    name: "Crypto Marketing Bot",
-    phone: "+1800123456",
-    email: "crypto@fastboost.xyz",
-    subject: "Rank your store #1 on Google with crypto backlinks",
-    message: "Boost website ranking and automated telegram signals...",
-    channel: "Spam Bot",
-    status: "spam",
-    time: "21 Oct 2026",
-  },
-];
+import {
+  getAdminMessagesAction,
+  updateMessageStatusAction,
+  deleteMessageAction,
+  MessageItem,
+} from "@/actions/messages";
 
 const statusStyles: Record<string, string> = {
   new: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold",
   read: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  replied: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium",
+  replied: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium",
   spam: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
 };
 
 export default function ContactMessagesPage() {
+  const queryClient = useQueryClient();
   const [tabFilter, setTabFilter] = React.useState<string>("new");
+  const [selectedMessage, setSelectedMessage] = React.useState<MessageItem | null>(null);
+  const [replyText, setReplyText] = React.useState("");
+  const [isReplyOpen, setIsReplyOpen] = React.useState(false);
+
+  const { data: messagesRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "messages"],
+    queryFn: getAdminMessagesAction,
+  });
+
+  const messages: MessageItem[] = messagesRes?.data || [];
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateMessageStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Message status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "messages"] });
+      } else {
+        toast.error(res.error || "Failed to update status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update status");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMessageAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Message deleted");
+        queryClient.invalidateQueries({ queryKey: ["admin", "messages"] });
+      } else {
+        toast.error(res.error || "Failed to delete message");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete message");
+    },
+  });
 
   const filteredMessages = React.useMemo(() => {
     if (tabFilter === "all") return messages;
     return messages.filter((m) => m.status === tabFilter);
-  }, [tabFilter]);
+  }, [messages, tabFilter]);
 
-  const columns: ColumnDef<Message>[] = React.useMemo(
+  const newCount = messages.filter((m) => m.status === "new").length;
+  const repliedCount = messages.filter((m) => m.status === "replied").length;
+  const spamCount = messages.filter((m) => m.status === "spam").length;
+
+  const handleOpenReply = (m: MessageItem) => {
+    setSelectedMessage(m);
+    setReplyText("");
+    setIsReplyOpen(true);
+  };
+
+  const handleSendReply = () => {
+    if (!selectedMessage) return;
+    if (replyText.trim()) {
+      window.open(
+        `mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(
+          selectedMessage.subject
+        )}&body=${encodeURIComponent(replyText)}`
+      );
+    }
+    updateStatusMutation.mutate({ id: selectedMessage.id, status: "replied" });
+    setIsReplyOpen(false);
+  };
+
+  const columns: ColumnDef<MessageItem>[] = React.useMemo(
     () => [
       {
         id: "select",
@@ -196,7 +209,7 @@ export default function ContactMessagesPage() {
           <DataTableColumnHeader column={column} title="Message Preview" />
         ),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground max-w-sm line-clamp-2 block">
+          <span className="text-xs text-muted-foreground max-w-sm line-clamp-2 block" title={row.getValue("message")}>
             {row.getValue("message")}
           </span>
         ),
@@ -228,26 +241,54 @@ export default function ContactMessagesPage() {
       },
       {
         id: "actions",
-        cell: () => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-amber-700 dark:text-amber-400 font-medium">
-                <Reply className="h-3.5 w-3.5 mr-2" /> Reply via Email
-              </DropdownMenuItem>
-              <DropdownMenuItem>Call on Phone</DropdownMenuItem>
-              <DropdownMenuItem>Mark as Read</DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600">Mark as Spam</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-amber-700 dark:text-amber-400 font-medium"
+                  onClick={() => handleOpenReply(m)}
+                >
+                  <Reply className="h-3.5 w-3.5 mr-2" /> View & Reply
+                </DropdownMenuItem>
+                {m.phone && m.phone !== "N/A" && (
+                  <DropdownMenuItem onClick={() => window.open(`tel:${m.phone}`)}>
+                    <Phone className="h-3.5 w-3.5 mr-2" /> Call Phone
+                  </DropdownMenuItem>
+                )}
+                {m.status !== "read" && m.status !== "replied" && (
+                  <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: m.id, status: "read" })}>
+                    <CheckCircle className="h-3.5 w-3.5 mr-2" /> Mark as Read
+                  </DropdownMenuItem>
+                )}
+                {m.status !== "spam" && (
+                  <DropdownMenuItem
+                    className="text-amber-600"
+                    onClick={() => updateStatusMutation.mutate({ id: m.id, status: "spam" })}
+                  >
+                    <AlertOctagon className="h-3.5 w-3.5 mr-2" /> Mark as Spam
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-rose-600 focus:text-rose-600"
+                  onClick={() => deleteMutation.mutate(m.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Message
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    []
+    [updateStatusMutation, deleteMutation]
   );
 
   return (
@@ -264,6 +305,15 @@ export default function ContactMessagesPage() {
             Handle incoming trade inquiries, WhatsApp leads, technical support questions, and spam filtering
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => refetch()}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </motion.div>
 
       {/* KPI Cards */}
@@ -281,34 +331,36 @@ export default function ContactMessagesPage() {
                 <MessageSquare className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">4 New</p>
-            <p className="text-xs text-blue-600 font-medium mt-1">3 commercial bulk leads</p>
+            <p className="text-2xl font-bold mt-2">{newCount} New</p>
+            <p className="text-xs text-blue-600 font-medium mt-1">Pending first response</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Replied Within 24h</p>
-              <div className="h-8 w-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+              <p className="text-sm font-medium text-muted-foreground">Replied Inquiries</p>
+              <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">96.8%</p>
-            <p className="text-xs text-green-600 font-medium mt-1">Avg response time: 28 mins</p>
+            <p className="text-2xl font-bold mt-2">{repliedCount}</p>
+            <p className="text-xs text-emerald-600 font-medium mt-1">
+              {messages.length > 0 ? `${((repliedCount / messages.length) * 100).toFixed(0)}% resolved` : "No inquiries yet"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">WhatsApp Channels</p>
-              <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+              <p className="text-sm font-medium text-muted-foreground">Total Inquiries</p>
+              <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
                 <Phone className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">42 Leads</p>
-            <p className="text-xs text-muted-foreground mt-1">High conversion mobile inquiries</p>
+            <p className="text-2xl font-bold mt-2">{messages.length} Total</p>
+            <p className="text-xs text-muted-foreground mt-1">Website contact & trade inquiries</p>
           </CardContent>
         </Card>
 
@@ -320,8 +372,8 @@ export default function ContactMessagesPage() {
                 <AlertOctagon className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">18</p>
-            <p className="text-xs text-muted-foreground mt-1">Auto-filtered by bot defense</p>
+            <p className="text-2xl font-bold mt-2">{spamCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">Filtered from inbox</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -335,27 +387,78 @@ export default function ContactMessagesPage() {
       >
         <Tabs value={tabFilter} onValueChange={setTabFilter}>
           <TabsList>
-            <TabsTrigger value="new">Unread (4)</TabsTrigger>
-            <TabsTrigger value="all">All Messages</TabsTrigger>
-            <TabsTrigger value="replied">Replied</TabsTrigger>
-            <TabsTrigger value="spam">Spam Box</TabsTrigger>
+            <TabsTrigger value="new">Unread ({newCount})</TabsTrigger>
+            <TabsTrigger value="all">All Messages ({messages.length})</TabsTrigger>
+            <TabsTrigger value="replied">Replied ({repliedCount})</TabsTrigger>
+            <TabsTrigger value="spam">Spam ({spamCount})</TabsTrigger>
           </TabsList>
         </Tabs>
 
         <Card className="p-4">
-          <DataTable
-            columns={columns}
-            data={filteredMessages}
-            searchKey="subject"
-            searchPlaceholder="Search sender, phone, subject..."
-            enableRowSelection
-            enableColumnVisibility
-            enableSorting
-            enablePagination
-            pageSize={10}
-          />
+          {isLoading ? (
+            <div className="h-48 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filteredMessages}
+              searchPlaceholder="Search sender, phone, subject..."
+              enableRowSelection
+              enableSorting
+              enablePagination
+              initialPageSize={10}
+              pageSizeOptions={[5, 10, 20]}
+              emptyMessage="No customer messages found."
+            />
+          )}
         </Card>
       </motion.div>
+
+      {/* Reply Dialog */}
+      <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Customer Inquiry: {selectedMessage?.subject}</DialogTitle>
+            <DialogDescription>
+              From {selectedMessage?.name} ({selectedMessage?.email || selectedMessage?.phone})
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedMessage && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-muted/50 rounded border text-xs space-y-1">
+                <p className="font-semibold text-foreground">Message Body:</p>
+                <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{selectedMessage.message}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">Draft Email Response</label>
+                <Textarea
+                  rows={4}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Dear customer, thank you for reaching out..."
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReplyOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleSendReply}
+            >
+              <Mail className="h-4 w-4 mr-1.5" />
+              Dispatch Reply & Mark Solved
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

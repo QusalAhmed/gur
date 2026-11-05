@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, FileText, Eye, CheckCircle2, Clock, MoreHorizontal, Database, RefreshCw } from "lucide-react";
+import { Plus, FileText, CheckCircle2, Clock, MoreHorizontal, RefreshCw, Loader2, Trash2 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
-import { fetchPostsFromDb } from "@/lib/supabase";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -25,123 +27,70 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-
-interface Post {
-  id: string;
-  title: string;
-  titleBn: string;
-  slug: string;
-  category: string;
-  author: string;
-  views: number;
-  status: "published" | "draft" | "archived";
-  publishedDate: string;
-  tags: string[];
-}
-
-const posts: Post[] = [
-  {
-    id: "PST-001",
-    title: "Why Blackstrap Molasses is the Ultimate Energy Supplement for Dairy Cattle",
-    titleBn: "ডেইরি গাভীর শক্তির ঘাটতি পূরণে কেন ব্ল্যাকস্ট্র্যাপ মোলাসেস সেরা",
-    slug: "blackstrap-molasses-dairy-cattle-energy",
-    category: "Livestock & Feed",
-    author: "Dr. Farhana Yasmin",
-    views: 3420,
-    status: "published",
-    publishedDate: "14 Oct 2026",
-    tags: ["Dairy", "Cattle Feed", "Brix 80", "Nutrition"],
-  },
-  {
-    id: "PST-002",
-    title: "Authentic Jashore Nolen Gur: Traditional Harvesting vs Industrial Adulteration",
-    titleBn: "যশোরের খাঁটি নলেন গুড় চেনার উপায় ও ভেজালমুক্তির আধুনিক পরীক্ষা",
-    slug: "authentic-jashore-nolen-gur-guide",
-    category: "Organic Farming",
-    author: "Alhaj Anisur Rahman",
-    views: 8940,
-    status: "published",
-    publishedDate: "2 Oct 2026",
-    tags: ["Khejur Gur", "Organic", "Winter Special", "Purity Test"],
-  },
-  {
-    id: "PST-003",
-    title: "How to Measure Molasses Brix Using an Optical Refractometer",
-    titleBn: "রিফ্র্যাক্টোমিটার দিয়ে সহজে মোলাসেসের ব্রিক্স মাত্রা নির্ণয়",
-    slug: "how-to-measure-molasses-brix",
-    category: "Quality & Testing",
-    author: "Engr. Shamsul Alam",
-    views: 1820,
-    status: "published",
-    publishedDate: "22 Sep 2026",
-    tags: ["Lab Guide", "Brix", "Quality Assurance"],
-  },
-  {
-    id: "PST-004",
-    title: "Molasses as an Organic Soil Conditioner & Microbial Accelerator in Bangladesh",
-    titleBn: "জৈব কৃষিতে মাটির অনুজীব বাড়াতে মোলাসেসের বৈজ্ঞানিক ব্যবহার",
-    slug: "molasses-organic-soil-conditioner",
-    category: "Agriculture",
-    author: "Tariqul Islam",
-    views: 2150,
-    status: "published",
-    publishedDate: "10 Sep 2026",
-    tags: ["Organic Farming", "Bio-Fertilizer", "Soil Health"],
-  },
-  {
-    id: "PST-005",
-    title: "Commercial Distilleries: Optimizing Fermentation Yield with Sugarcane Molasses",
-    titleBn: "বাণিজ্যিক ডিস্টিলারি উৎপাদনে সুগারকেন মোলাসেস ব্যবহারের প্রযুক্তি",
-    slug: "distillery-fermentation-yield-optimization",
-    category: "Industrial By-Products",
-    author: "Dr. Parvez Mahmud",
-    views: 0,
-    status: "draft",
-    publishedDate: "–",
-    tags: ["Distillery", "Bio-Ethanol", "Industrial"],
-  },
-];
+import {
+  getAdminPostsAction,
+  updatePostStatusAction,
+  deletePostAction,
+  PostItem,
+} from "@/actions/posts";
 
 const statusStyles: Record<string, string> = {
-  published: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   draft: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
   archived: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
 };
 
 export default function BlogPostsPage() {
-  const [postList, setPostList] = React.useState<Post[]>(posts);
+  const queryClient = useQueryClient();
   const [tabFilter, setTabFilter] = React.useState<string>("all");
-  const [loading, setLoading] = React.useState(true);
-  const [isDbConnected, setIsDbConnected] = React.useState(false);
 
-  const loadPosts = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const dbPosts = await fetchPostsFromDb();
-      if (dbPosts && dbPosts.length > 0) {
-        setPostList(dbPosts);
-        setIsDbConnected(true);
+  const { data: postsRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "posts"],
+    queryFn: getAdminPostsAction,
+  });
+
+  const posts = postsRes?.data || [];
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updatePostStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Post status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "posts"] });
       } else {
-        setIsDbConnected(false);
+        toast.error(res.error || "Failed to update status");
       }
-    } catch (e) {
-      console.warn("Failed to load posts from Supabase:", e);
-      setIsDbConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update status");
+    },
+  });
 
-  React.useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+  const deleteMutation = useMutation({
+    mutationFn: deletePostAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Post deleted");
+        queryClient.invalidateQueries({ queryKey: ["admin", "posts"] });
+      } else {
+        toast.error(res.error || "Failed to delete post");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete post");
+    },
+  });
 
   const filteredPosts = React.useMemo(() => {
-    if (tabFilter === "all") return postList;
-    return postList.filter((p) => p.status === tabFilter);
-  }, [postList, tabFilter]);
+    if (tabFilter === "all") return posts;
+    return posts.filter((p) => p.status === tabFilter);
+  }, [posts, tabFilter]);
 
-  const columns: ColumnDef<Post>[] = React.useMemo(
+  const publishedCount = posts.filter((p) => p.status === "published").length;
+  const draftCount = posts.filter((p) => p.status === "draft").length;
+  const archivedCount = posts.filter((p) => p.status === "archived").length;
+
+  const columns: ColumnDef<PostItem>[] = React.useMemo(
     () => [
       {
         id: "select",
@@ -177,7 +126,9 @@ export default function BlogPostsPage() {
           return (
             <div className="max-w-md">
               <p className="font-semibold text-sm line-clamp-1">{p.title}</p>
-              <p className="text-xs text-muted-foreground font-bangla line-clamp-1 mt-0.5">{p.titleBn}</p>
+              {p.titleBn && (
+                <p className="text-xs text-muted-foreground font-bangla line-clamp-1 mt-0.5">{p.titleBn}</p>
+              )}
               <p className="font-mono text-[10px] text-amber-700 dark:text-amber-400 mt-1">/{p.slug}</p>
             </div>
           );
@@ -222,20 +173,6 @@ export default function BlogPostsPage() {
         },
       },
       {
-        accessorKey: "views",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Reads" />
-        ),
-        cell: ({ row }) => {
-          const views = row.getValue("views") as number;
-          return (
-            <span className="text-xs font-mono">
-              {views > 0 ? views.toLocaleString() : "–"}
-            </span>
-          );
-        },
-      },
-      {
         accessorKey: "publishedDate",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Date" />
@@ -260,24 +197,45 @@ export default function BlogPostsPage() {
       },
       {
         id: "actions",
-        cell: () => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit Content</DropdownMenuItem>
-              <DropdownMenuItem>View on Live Blog</DropdownMenuItem>
-              <DropdownMenuItem>SEO Settings</DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600">Unpublish</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {p.status !== "published" && (
+                  <DropdownMenuItem
+                    className="text-emerald-600 focus:text-emerald-600 font-medium"
+                    onClick={() => updateStatusMutation.mutate({ id: p.id, status: "published" })}
+                  >
+                    Publish Post
+                  </DropdownMenuItem>
+                )}
+                {p.status !== "draft" && (
+                  <DropdownMenuItem
+                    onClick={() => updateStatusMutation.mutate({ id: p.id, status: "draft" })}
+                  >
+                    Move to Draft
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-rose-600 focus:text-rose-600"
+                  onClick={() => deleteMutation.mutate(p.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    []
+    [updateStatusMutation, deleteMutation]
   );
 
   return (
@@ -289,24 +247,26 @@ export default function BlogPostsPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Articles & Industry Insights</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Articles & Education Posts</h1>
           <p className="text-muted-foreground text-sm">
-            Publish educational content on feed nutrition, artisanal gur authenticity, and technical manuals
+            Publish agronomy insights, animal feed guidelines, Brix research, and organic harvesting methods
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={loadPosts}
-            disabled={loading}
+            onClick={() => refetch()}
             className="h-9 cursor-pointer"
-            title="Refresh articles"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white h-9 cursor-pointer">
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white h-9 cursor-pointer"
+            onClick={() => toast.info("Post editor can be accessed from CMS actions")}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Write Article
           </Button>
@@ -323,52 +283,52 @@ export default function BlogPostsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Published Articles</p>
-              <div className="h-8 w-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+              <p className="text-sm font-medium text-muted-foreground">Published Posts</p>
+              <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">18 Live</p>
-            <p className="text-xs text-muted-foreground mt-1">Bilingual (English & Bangla)</p>
+            <p className="text-2xl font-bold mt-2">{publishedCount} Live</p>
+            <p className="text-xs text-muted-foreground mt-1">Live on storefront blog</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Drafts in Progress</p>
+              <p className="text-sm font-medium text-muted-foreground">Drafts & In-Review</p>
               <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">4 Drafts</p>
-            <p className="text-xs text-muted-foreground mt-1">Written by agronomists & staff</p>
+            <p className="text-2xl font-bold mt-2">{draftCount} In Prep</p>
+            <p className="text-xs text-muted-foreground mt-1">Unpublished revisions</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Total Article Views</p>
+              <p className="text-sm font-medium text-muted-foreground">Total Database Posts</p>
               <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                <Eye className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold mt-2">48,250</p>
-            <p className="text-xs text-green-600 font-medium mt-1">+24% organic Google search traffic</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Top Performing</p>
-              <div className="h-8 w-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
                 <FileText className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-xl font-bold mt-2 truncate">Jashore Nolen Gur</p>
-            <p className="text-xs text-muted-foreground mt-1">8,940 reads this season</p>
+            <p className="text-2xl font-bold mt-2">{posts.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Managed via PostgreSQL</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Archived</p>
+              <div className="h-8 w-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                <FileText className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold mt-2">{archivedCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">De-indexed content</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -382,24 +342,31 @@ export default function BlogPostsPage() {
       >
         <Tabs value={tabFilter} onValueChange={setTabFilter}>
           <TabsList>
-            <TabsTrigger value="all">All Articles</TabsTrigger>
-            <TabsTrigger value="published">Published</TabsTrigger>
-            <TabsTrigger value="draft">Drafts</TabsTrigger>
+            <TabsTrigger value="all">All Articles ({posts.length})</TabsTrigger>
+            <TabsTrigger value="published">Published ({publishedCount})</TabsTrigger>
+            <TabsTrigger value="draft">Drafts ({draftCount})</TabsTrigger>
+            <TabsTrigger value="archived">Archived ({archivedCount})</TabsTrigger>
           </TabsList>
         </Tabs>
 
         <Card className="p-4">
-          <DataTable
-            columns={columns}
-            data={filteredPosts}
-            searchKey="title"
-            searchPlaceholder="Search article title or tags..."
-            enableRowSelection
-            enableColumnVisibility
-            enableSorting
-            enablePagination
-            pageSize={10}
-          />
+          {isLoading ? (
+            <div className="h-48 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filteredPosts}
+              searchPlaceholder="Search article title or slug..."
+              enableRowSelection
+              enableSorting
+              enablePagination
+              initialPageSize={10}
+              pageSizeOptions={[5, 10, 20]}
+              emptyMessage="No posts found in database."
+            />
+          )}
         </Card>
       </motion.div>
     </div>

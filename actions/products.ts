@@ -508,3 +508,152 @@ export async function updateProductStatusAction(
   }
 }
 
+export interface AdminVariantItem {
+  id: string;
+  product: string;
+  sku: string;
+  barcode: string;
+  title: string;
+  packType: string;
+  size: string;
+  weight: string;
+  costPrice: string;
+  retailPrice: string;
+  wholesalePrice: string;
+  stock: "in_stock" | "low_stock" | "out_of_stock";
+  stockQty: number;
+  active: boolean;
+}
+
+export async function getAdminVariantsAction(): Promise<{
+  success: boolean;
+  data: AdminVariantItem[];
+  error?: string;
+}> {
+  try {
+    const { data: rawVariants, error } = await supabaseAdmin
+      .from("product_variants")
+      .select(
+        `
+        id,
+        sku,
+        barcode,
+        name,
+        pack_type,
+        net_quantity,
+        net_unit,
+        weight_grams,
+        price,
+        compare_at_price,
+        stock_status,
+        is_active,
+        products:product_id (name),
+        inventory_levels:inventory_levels (quantity_on_hand)
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const variants: AdminVariantItem[] = (rawVariants || []).map((v: any) => {
+      const prodName = v.products?.name || "Product";
+      const stockLevels = Array.isArray(v.inventory_levels) ? v.inventory_levels : [];
+      const totalQty = stockLevels.reduce(
+        (acc: number, cur: any) => acc + Number(cur.quantity_on_hand || 0),
+        0
+      );
+
+      let stockVal: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
+      if (v.stock_status === "out_of_stock" || totalQty <= 0) stockVal = "out_of_stock";
+      else if (v.stock_status === "low_stock" || totalQty <= 5) stockVal = "low_stock";
+
+      return {
+        id: v.id,
+        product: prodName,
+        sku: v.sku,
+        barcode: v.barcode || "N/A",
+        title: v.name,
+        packType: v.pack_type || "jar",
+        size: `${v.net_quantity} ${v.net_unit}`,
+        weight: `${(Number(v.weight_grams || 0) / 1000).toFixed(1)} kg`,
+        costPrice: `৳ ${(Number(v.price || 0) * 0.75).toFixed(0)}`,
+        retailPrice: `৳ ${Number(v.price || 0).toLocaleString()}`,
+        wholesalePrice: `৳ ${(Number(v.compare_at_price || v.price || 0) * 0.9).toFixed(0)}`,
+        stock: stockVal,
+        stockQty: totalQty,
+        active: v.is_active ?? true,
+      };
+    });
+
+    return { success: true, data: variants };
+  } catch (error: any) {
+    console.error("getAdminVariantsAction error:", error);
+    return { success: false, error: error.message || "Failed to load variants", data: [] };
+  }
+}
+
+export interface AdminPriceTierItem {
+  id: string;
+  product: string;
+  sku: string;
+  tierRange: string;
+  minQty: number;
+  unitPrice: string;
+  discount: string;
+  businessType: string;
+  status: "active" | "inactive";
+}
+
+export async function getAdminPriceTiersAction(): Promise<{
+  success: boolean;
+  data: AdminPriceTierItem[];
+  error?: string;
+}> {
+  try {
+    const { data: rawTiers, error } = await supabaseAdmin
+      .from("price_tiers")
+      .select(
+        `
+        id,
+        min_qty,
+        unit_price,
+        product_variants:variant_id (
+          sku,
+          name,
+          price,
+          products:product_id (name)
+        )
+      `
+      )
+      .order("min_qty", { ascending: true });
+
+    if (error) throw error;
+
+    const tiers: AdminPriceTierItem[] = (rawTiers || []).map((t: any) => {
+      const v = t.product_variants || {};
+      const prodName = v.products?.name || v.name || "Molasses Product";
+      const basePrice = Number(v.price || t.unit_price);
+      const tierPrice = Number(t.unit_price);
+      const discountPct = basePrice > tierPrice ? (((basePrice - tierPrice) / basePrice) * 100).toFixed(1) : 0;
+
+      return {
+        id: t.id,
+        product: prodName,
+        sku: v.sku || "SKU-VAR",
+        tierRange: `${t.min_qty}+ units`,
+        minQty: Number(t.min_qty),
+        unitPrice: `৳ ${tierPrice.toLocaleString()}`,
+        discount: Number(discountPct) > 0 ? `${discountPct}% OFF` : "Base Retail Price",
+        businessType: Number(t.min_qty) >= 10 ? "Wholesale & Mill Accounts" : "All Accounts",
+        status: "active",
+      };
+    });
+
+    return { success: true, data: tiers };
+  } catch (error: any) {
+    console.error("getAdminPriceTiersAction error:", error);
+    return { success: false, error: error.message || "Failed to load price tiers", data: [] };
+  }
+}
+
+

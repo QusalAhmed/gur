@@ -3,7 +3,6 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import {
-  Plus,
   FileQuestion,
   Clock,
   CheckCircle2,
@@ -14,8 +13,11 @@ import {
   Download,
   Trash2,
   Phone,
+  Building2,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -26,6 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Tabs,
   TabsList,
   TabsTrigger,
@@ -33,94 +45,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-
-export interface QuoteRequestItem {
-  id: string;
-  company: string;
-  contact: string;
-  phone: string;
-  product: string;
-  quantity: string;
-  targetPrice: string;
-  destination: string;
-  requiredBy: string;
-  status: "new" | "quoted" | "converted" | "declined";
-  quotedPrice: string;
-  createdAt: string;
-}
-
-const initialQuotes: QuoteRequestItem[] = [
-  {
-    id: "RFQ-2610-095",
-    company: "Chittagong Poultry Alliance",
-    contact: "Mohammad Jahangir",
-    phone: "+8801814991122",
-    product: "Feed Grade Molasses A",
-    quantity: "25 Tons",
-    targetPrice: "৳ 72,000 / Ton",
-    destination: "Chattogram",
-    requiredBy: "5 Nov 2026",
-    status: "new",
-    quotedPrice: "Pending Review",
-    createdAt: "Today, 10:15 AM",
-  },
-  {
-    id: "RFQ-2610-094",
-    company: "Sonar Bangla Bakery",
-    contact: "Tanvir Ahmed",
-    phone: "+8801712445566",
-    product: "Food Grade Sugarcane Molasses",
-    quantity: "500 Pails (2.5 Tons)",
-    targetPrice: "৳ 750 / Pail",
-    destination: "Dhaka (Mirpur)",
-    requiredBy: "1 Nov 2026",
-    status: "new",
-    quotedPrice: "Pending Review",
-    createdAt: "Today, 09:30 AM",
-  },
-  {
-    id: "RFQ-2610-093",
-    company: "Sylhet Bio-Agro Fertilizers",
-    contact: "Shabbir Hossain",
-    phone: "+8801511883344",
-    product: "Blackstrap Molasses (Heavy)",
-    quantity: "40 Tons",
-    targetPrice: "৳ 18,500 / Drum",
-    destination: "Sylhet Sadar",
-    requiredBy: "10 Nov 2026",
-    status: "new",
-    quotedPrice: "Pending Review",
-    createdAt: "Yesterday, 17:40",
-  },
-  {
-    id: "RFQ-2610-092",
-    company: "Meghna Feeds & Agro",
-    contact: "Kabir Hossain",
-    phone: "+8801611009988",
-    product: "Feed Grade Molasses A (IBC Totes)",
-    quantity: "15 Totes (15 Tons)",
-    targetPrice: "৳ 74,000 / Ton",
-    destination: "Comilla",
-    requiredBy: "30 Oct 2026",
-    status: "quoted",
-    quotedPrice: "৳ 76,000 / Ton",
-    createdAt: "Yesterday, 14:10",
-  },
-  {
-    id: "RFQ-2610-091",
-    company: "Jamuna Distillery Intermediates",
-    contact: "Engr. Nayeem",
-    phone: "+8801719223344",
-    product: "High Brix Raw Cane Molasses",
-    quantity: "100 Tons (Tankers)",
-    targetPrice: "৳ 68,000 / Ton",
-    destination: "Sirajganj",
-    requiredBy: "15 Nov 2026",
-    status: "converted",
-    quotedPrice: "৳ 69,500 / Ton",
-    createdAt: "22 Oct 2026",
-  },
-];
+import {
+  getAdminQuotesAction,
+  submitQuoteReplyAction,
+  updateQuoteStatusAction,
+  deleteQuoteRequestAction,
+  QuoteRequestItem,
+} from "@/actions/quotes";
 
 const statusStyles: Record<string, string> = {
   new: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
@@ -130,8 +61,76 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function QuotesPage() {
-  const [quotes, setQuotes] = React.useState<QuoteRequestItem[]>(initialQuotes);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState("all");
+
+  // Respond quote dialog state
+  const [isReplyOpen, setIsReplyOpen] = React.useState(false);
+  const [selectedQuote, setSelectedQuote] = React.useState<QuoteRequestItem | null>(null);
+  const [quotedPriceInput, setQuotedPriceInput] = React.useState("");
+  const [replyMessageInput, setReplyMessageInput] = React.useState("");
+
+  const { data: quotes = [], isLoading } = useQuery({
+    queryKey: ["admin", "quotes"],
+    queryFn: async () => {
+      const res = await getAdminQuotesAction();
+      if (!res.success) throw new Error(res.error || "Failed to load quotes");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: submitQuoteReplyAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Quote response dispatched");
+        queryClient.invalidateQueries({ queryKey: ["admin", "quotes"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+        setIsReplyOpen(false);
+        setSelectedQuote(null);
+        setQuotedPriceInput("");
+        setReplyMessageInput("");
+      } else {
+        toast.error(res.error || "Failed to dispatch quote");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to dispatch quote");
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateQuoteStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Quote status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "quotes"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      } else {
+        toast.error(res.error || "Failed to update quote status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update quote status");
+    },
+  });
+
+  const deleteQuoteMutation = useMutation({
+    mutationFn: deleteQuoteRequestAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Quote request removed");
+        queryClient.invalidateQueries({ queryKey: ["admin", "quotes"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      } else {
+        toast.error(res.error || "Failed to delete quote");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete quote");
+    },
+  });
 
   const filteredQuotes = React.useMemo(() => {
     return quotes.filter((q) => {
@@ -142,17 +141,25 @@ export default function QuotesPage() {
     });
   }, [quotes, activeTab]);
 
+  const newCount = quotes.filter((q) => q.status === "new").length;
+  const convertedCount = quotes.filter((q) => q.status === "converted").length;
+  const pipelineValue = quotes
+    .filter((q) => q.status !== "declined")
+    .reduce((sum, q) => sum + (q.quotedPriceNumeric || 0), 0);
+
+  const conversionRate = quotes.length > 0 ? Math.round((convertedCount / quotes.length) * 100) : 0;
+
   const handleExportCSV = (selected: QuoteRequestItem[]) => {
     const list = selected.length > 0 ? selected : filteredQuotes;
-    const headers = ["RFQ_ID", "Company", "Contact", "Phone", "Product", "Quantity", "TargetPrice", "Destination", "NeededBy", "Status"];
+    const headers = ["RFQ_ID", "Company", "Contact", "Phone", "Product", "Quantity", "QuotedPrice", "Destination", "NeededBy", "Status"];
     const rows = list.map((q) => [
-      q.id,
+      q.referenceNo,
       `"${q.company}"`,
       `"${q.contact}"`,
       q.phone,
       `"${q.product}"`,
       `"${q.quantity}"`,
-      `"${q.targetPrice}"`,
+      `"${q.quotedPrice}"`,
       `"${q.destination}"`,
       formatDate(q.requiredBy),
       q.status,
@@ -188,25 +195,30 @@ export default function QuotesPage() {
       enableHiding: false,
     },
     {
-      accessorKey: "id",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="RFQ ID" />,
-      cell: ({ row }) => (
-        <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">
-          {row.getValue("id")}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "company",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Company & Contact" />,
+      accessorKey: "referenceNo",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="RFQ Reference" />,
       cell: ({ row }) => {
         const q = row.original;
         return (
-          <div className="min-w-[180px]">
-            <p className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
+          <div>
+            <p className="font-mono text-xs font-semibold text-foreground">{q.referenceNo}</p>
+            <p className="text-[11px] text-muted-foreground">{formatDate(q.createdAt)}</p>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "company",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Institution" />,
+      cell: ({ row }) => {
+        const q = row.original;
+        return (
+          <div>
+            <p className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               {q.company}
             </p>
-            <p className="text-xs text-muted-foreground">{q.contact} • {q.phone}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{q.contact} · {q.phone}</p>
           </div>
         );
       },
@@ -214,43 +226,54 @@ export default function QuotesPage() {
     {
       accessorKey: "product",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Requested Product" />,
-      cell: ({ row }) => <span className="text-xs font-medium text-foreground">{row.getValue("product")}</span>,
-    },
-    {
-      accessorKey: "quantity",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Quantity" />,
-      cell: ({ row }) => <span className="text-xs font-bold text-foreground">{row.getValue("quantity")}</span>,
-    },
-    {
-      accessorKey: "targetPrice",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Target Price" />,
-      cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium">{row.getValue("targetPrice")}</span>,
+      cell: ({ row }) => {
+        const q = row.original;
+        return (
+          <div>
+            <p className="font-medium text-xs text-foreground">{q.product}</p>
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">{q.quantity}</p>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "destination",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Destination" />,
-      cell: ({ row }) => (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <MapPin className="h-3 w-3 text-amber-600" />
-          {row.getValue("destination")}
-        </span>
-      ),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Destination & Date" />,
+      cell: ({ row }) => {
+        const q = row.original;
+        return (
+          <div className="text-xs">
+            <p className="flex items-center text-muted-foreground gap-1">
+              <MapPin className="h-3 w-3 shrink-0" />
+              {q.destination}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Need by: {formatDate(q.requiredBy)}</p>
+          </div>
+        );
+      },
     },
     {
-      accessorKey: "requiredBy",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Needed By" />,
-      cell: ({ row }) => <span className="text-xs text-muted-foreground">{formatDate(row.getValue("requiredBy"))}</span>,
+      accessorKey: "quotedPrice",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Quoted Price" />,
+      cell: ({ row }) => {
+        const q = row.original;
+        return (
+          <div className="font-mono text-xs">
+            <p className="font-bold text-foreground">{q.quotedPrice}</p>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => {
-        const status = row.original.status;
+        const s = row.original.status;
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${statusStyles[status]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${statusStyles[s]}`}
           >
-            {status}
+            {s}
           </span>
         );
       },
@@ -265,35 +288,43 @@ export default function QuotesPage() {
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
                 <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
+                <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
-                className="font-medium text-amber-700 dark:text-amber-400"
-                onClick={() => alert(`Prepare formal quotation for ${q.company}`)}
+                className="text-amber-600 focus:text-amber-600"
+                onClick={() => {
+                  setSelectedQuote(q);
+                  setQuotedPriceInput(String(q.quotedPriceNumeric || ""));
+                  setReplyMessageInput(q.quoteReply || "");
+                  setIsReplyOpen(true);
+                }}
               >
-                <Send className="h-3.5 w-3.5 mr-2" /> Send Quotation
+                <Send className="h-3.5 w-3.5 mr-2" /> Provide Quotation
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Calling ${q.contact} at ${q.phone}`)}>
-                <Phone className="h-3.5 w-3.5 mr-2" /> Call Buyer
-              </DropdownMenuItem>
+              {q.status !== "converted" && (
+                <DropdownMenuItem
+                  className="text-emerald-600 focus:text-emerald-600"
+                  onClick={() => updateStatusMutation.mutate({ id: q.id, status: "converted" })}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Mark Converted
+                </DropdownMenuItem>
+              )}
+              {q.status !== "declined" && (
+                <DropdownMenuItem
+                  className="text-rose-600 focus:text-rose-600"
+                  onClick={() => updateStatusMutation.mutate({ id: q.id, status: "declined" })}
+                >
+                  <Clock className="h-3.5 w-3.5 mr-2" /> Decline Request
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-emerald-600 focus:text-emerald-600"
-                onClick={() =>
-                  setQuotes((prev) =>
-                    prev.map((item) => (item.id === q.id ? { ...item, status: "converted" } : item))
-                  )
-                }
-              >
-                <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Convert to Order
-              </DropdownMenuItem>
-              <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => setQuotes((prev) => prev.filter((item) => item.id !== q.id))}
+                onClick={() => deleteQuoteMutation.mutate(q.id)}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Inquiry
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Request
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -302,9 +333,7 @@ export default function QuotesPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
-
-  const newCount = quotes.filter((q) => q.status === "new").length;
+  ], [updateStatusMutation, deleteQuoteMutation]);
 
   return (
     <div className="space-y-6">
@@ -312,38 +341,25 @@ export default function QuotesPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Quotations & RFQs</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Wholesale Quote Requests (RFQ)</h1>
           <p className="text-muted-foreground text-sm">
-            B2B bulk pricing requests, custom formulation inquiries, and contract negotiation
+            Bulk orders, industrial procurement, and tanker delivery quotation negotiation
           </p>
         </div>
-        <Button
-          size="sm"
-          className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-          onClick={() => {
-            const newRfq: QuoteRequestItem = {
-              id: `RFQ-2610-0${Math.floor(96 + Math.random() * 50)}`,
-              company: "New Agro Commercial Farm",
-              contact: "Rafiqul Islam",
-              phone: "+8801711002233",
-              product: "Pure Date Palm Syrup (Bulk Drums)",
-              quantity: "10 Tons",
-              targetPrice: "৳ 90,000 / Ton",
-              destination: "Gazipur",
-              requiredBy: "15 Nov 2026",
-              status: "new",
-              quotedPrice: "Pending Review",
-              createdAt: "Just now",
-            };
-            setQuotes((prev) => [newRfq, ...prev]);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Inquiry
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => handleExportCSV([])}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export RFQs
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
@@ -361,7 +377,11 @@ export default function QuotesPage() {
                 <FileQuestion className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{newCount}</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{newCount}</p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">Pending sales response</p>
           </CardContent>
         </Card>
@@ -374,7 +394,13 @@ export default function QuotesPage() {
                 <DollarSign className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">৳ 18.4M</p>
+            {isLoading ? (
+              <div className="h-8 w-24 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">
+                ৳ {pipelineValue.toLocaleString("en-BD")}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">Estimated gross wholesale value</p>
           </CardContent>
         </Card>
@@ -387,7 +413,11 @@ export default function QuotesPage() {
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">68.4%</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{conversionRate}%</p>
+            )}
             <p className="text-xs text-emerald-600 font-medium mt-0.5">Converted to confirmed orders</p>
           </CardContent>
         </Card>
@@ -395,13 +425,17 @@ export default function QuotesPage() {
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Avg Response Time</p>
+              <p className="text-xs uppercase font-medium text-muted-foreground">Total Inquiries</p>
               <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">3.4 hrs</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Within standard 6h SLA</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{quotes.length}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Total wholesale submissions</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -431,12 +465,12 @@ export default function QuotesPage() {
           <DataTable
             columns={quoteColumns}
             data={filteredQuotes}
-            searchPlaceholder="Search RFQ ID, company, product..."
+            searchPlaceholder="Search RFQ reference, institution, product..."
             enableRowSelection={true}
             enableSorting={true}
             enablePagination={true}
-            initialPageSize={5}
-            pageSizeOptions={[5, 10, 20]}
+            initialPageSize={10}
+            pageSizeOptions={[10, 25, 50]}
             bulkActions={(selected, clearSelection) => (
               <>
                 <Button
@@ -453,8 +487,7 @@ export default function QuotesPage() {
                   variant="destructive"
                   className="h-7 text-xs"
                   onClick={() => {
-                    const ids = new Set(selected.map((s) => s.id));
-                    setQuotes((prev) => prev.filter((q) => !ids.has(q.id)));
+                    selected.forEach((s) => deleteQuoteMutation.mutate(s.id));
                     clearSelection();
                   }}
                 >
@@ -463,10 +496,63 @@ export default function QuotesPage() {
                 </Button>
               </>
             )}
-            emptyMessage="No RFQs found matching your criteria."
+            emptyMessage="No RFQs found in database matching criteria."
           />
         </Tabs>
       </motion.div>
+
+      {/* Respond Quote Dialog */}
+      <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Provide Quotation</DialogTitle>
+            <DialogDescription>
+              Submit commercial offer for {selectedQuote?.company} ({selectedQuote?.referenceNo}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="qPrice">Quoted Total Amount (৳) *</Label>
+              <Input
+                id="qPrice"
+                type="number"
+                placeholder="e.g. 1500000"
+                value={quotedPriceInput}
+                onChange={(e) => setQuotedPriceInput(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="qReply">Customer Reply / Terms Note</Label>
+              <Input
+                id="qReply"
+                placeholder="e.g. Rate: ৳ 72,000/ton ex-factory, delivery within 4 days."
+                value={replyMessageInput}
+                onChange={(e) => setReplyMessageInput(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReplyOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!quotedPriceInput || replyMutation.isPending}
+              onClick={() => {
+                if (selectedQuote) {
+                  replyMutation.mutate({
+                    id: selectedQuote.id,
+                    quotedTotal: Number(quotedPriceInput),
+                    replyMessage: replyMessageInput,
+                  });
+                }
+              }}
+            >
+              {replyMutation.isPending ? "Sending..." : "Submit Quotation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

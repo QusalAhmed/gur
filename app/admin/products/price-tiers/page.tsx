@@ -2,130 +2,32 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, ArrowLeft, MoreHorizontal, Layers, Percent, Building2, Download, Trash2, Edit } from "lucide-react";
+import { ArrowLeft, Layers, Percent, Building2, Download, RefreshCw, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
-
-export interface PriceTierItem {
-  id: string;
-  product: string;
-  sku: string;
-  tierRange: string;
-  minQty: number;
-  unitPrice: string;
-  discount: string;
-  businessType: string;
-  status: "active" | "inactive";
-}
-
-const initialTiers: PriceTierItem[] = [
-  {
-    id: "PTR-001",
-    product: "Blackstrap Molasses (200L Steel Drum)",
-    sku: "BSM-200L-DRUM",
-    tierRange: "1 – 4 drums",
-    minQty: 1,
-    unitPrice: "৳ 24,000",
-    discount: "Base Retail Price",
-    businessType: "All Accounts",
-    status: "active",
-  },
-  {
-    id: "PTR-002",
-    product: "Blackstrap Molasses (200L Steel Drum)",
-    sku: "BSM-200L-DRUM",
-    tierRange: "5 – 19 drums",
-    minQty: 5,
-    unitPrice: "৳ 21,500",
-    discount: "10.4% OFF",
-    businessType: "General B2B",
-    status: "active",
-  },
-  {
-    id: "PTR-003",
-    product: "Blackstrap Molasses (200L Steel Drum)",
-    sku: "BSM-200L-DRUM",
-    tierRange: "20+ drums (Truckload)",
-    minQty: 20,
-    unitPrice: "৳ 19,800",
-    discount: "17.5% OFF",
-    businessType: "Feed Mills & Distilleries",
-    status: "active",
-  },
-  {
-    id: "PTR-004",
-    product: "Feed Grade Molasses A (1 Ton IBC Tote)",
-    sku: "FGA-1T-IBC",
-    tierRange: "1 – 4 totes (1-4 Tons)",
-    minQty: 1,
-    unitPrice: "৳ 87,000",
-    discount: "Base B2B Price",
-    businessType: "All Verified B2B",
-    status: "active",
-  },
-  {
-    id: "PTR-005",
-    product: "Feed Grade Molasses A (1 Ton IBC Tote)",
-    sku: "FGA-1T-IBC",
-    tierRange: "5 – 14 totes (5-14 Tons)",
-    minQty: 5,
-    unitPrice: "৳ 79,500",
-    discount: "8.6% OFF",
-    businessType: "Feed Mills",
-    status: "active",
-  },
-  {
-    id: "PTR-006",
-    product: "Feed Grade Molasses A (1 Ton IBC Tote)",
-    sku: "FGA-1T-IBC",
-    tierRange: "15+ totes (Bulk Contract)",
-    minQty: 15,
-    unitPrice: "৳ 72,000",
-    discount: "17.2% OFF",
-    businessType: "Contract Buyers",
-    status: "active",
-  },
-  {
-    id: "PTR-007",
-    product: "Date Palm Liquid Nolen Gur (500ml Bottle)",
-    sku: "DPG-500ML-BOT",
-    tierRange: "12 – 48 bottles",
-    minQty: 12,
-    unitPrice: "৳ 410",
-    discount: "8.8% OFF",
-    businessType: "Retailers & Cafes",
-    status: "active",
-  },
-  {
-    id: "PTR-008",
-    product: "Date Palm Liquid Nolen Gur (500ml Bottle)",
-    sku: "DPG-500ML-BOT",
-    tierRange: "50+ bottles (Case)",
-    minQty: 50,
-    unitPrice: "৳ 380",
-    discount: "15.5% OFF",
-    businessType: "Wholesale Supermarkets",
-    status: "active",
-  },
-];
+import { getAdminPriceTiersAction, AdminPriceTierItem } from "@/actions/products";
 
 export default function PriceTiersPage() {
-  const [tiers, setTiers] = React.useState<PriceTierItem[]>(initialTiers);
+  const { data: tiersRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "price-tiers"],
+    queryFn: getAdminPriceTiersAction,
+  });
 
-  const handleExportCSV = (selected: PriceTierItem[]) => {
+  const tiers = tiersRes?.data || [];
+
+  const handleExportCSV = (selected: AdminPriceTierItem[]) => {
     const list = selected.length > 0 ? selected : tiers;
+    if (list.length === 0) {
+      toast.info("No price tiers to export");
+      return;
+    }
     const headers = ["ID", "Product", "SKU", "Bracket", "MinQty", "UnitPrice", "Discount", "BusinessType", "Status"];
     const rows = list.map((t) => [
       t.id,
@@ -145,7 +47,7 @@ export default function PriceTiersPage() {
     link.click();
   };
 
-  const tierColumns = React.useMemo<ColumnDef<PriceTierItem>[]>(() => [
+  const tierColumns = React.useMemo<ColumnDef<AdminPriceTierItem>[]>(() => [
     {
       id: "select",
       header: ({ table }) => (
@@ -171,7 +73,10 @@ export default function PriceTiersPage() {
     {
       accessorKey: "id",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tier ID" />,
-      cell: ({ row }) => <span className="font-mono text-xs font-semibold text-foreground">{row.getValue("id")}</span>,
+      cell: ({ row }) => {
+        const id = row.getValue("id") as string;
+        return <span className="font-mono text-xs font-semibold text-foreground">PTR-{id.slice(0, 6)}</span>;
+      },
     },
     {
       accessorKey: "product",
@@ -199,25 +104,26 @@ export default function PriceTiersPage() {
     {
       accessorKey: "unitPrice",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tier Unit Price" />,
-      cell: ({ row }) => (
-        <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
-          {row.getValue("unitPrice")}
-        </span>
-      ),
+      cell: ({ row }) => <span className="font-bold text-xs text-foreground">{row.getValue("unitPrice")}</span>,
     },
     {
       accessorKey: "discount",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Savings / Discount" />,
-      cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-medium border-emerald-500/30">
-          {row.getValue("discount")}
-        </Badge>
-      ),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Volume Savings" />,
+      cell: ({ row }) => {
+        const disc = row.getValue("discount") as string;
+        return disc.includes("OFF") ? (
+          <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold text-[11px] border-emerald-500/30">
+            {disc}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">{disc}</span>
+        );
+      },
     },
     {
       accessorKey: "businessType",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Target Account Type" />,
-      cell: ({ row }) => <Badge variant="outline" className="text-xs">{row.getValue("businessType")}</Badge>,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer Segment" />,
+      cell: ({ row }) => <Badge variant="outline" className="text-xs font-normal">{row.getValue("businessType")}</Badge>,
     },
     {
       accessorKey: "status",
@@ -238,37 +144,6 @@ export default function PriceTiersPage() {
         );
       },
     },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) => {
-        const t = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => alert(`Edit ${t.id}`)}>
-                <Edit className="h-3.5 w-3.5 mr-2" /> Edit Tier
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setTiers((prev) => prev.filter((item) => item.id !== t.id))}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-      enableSorting: false,
-      enableHiding: false,
-    },
   ], []);
 
   return (
@@ -280,7 +155,7 @@ export default function PriceTiersPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+          <Button asChild variant="ghost" size="icon" className="h-9 w-9">
             <Link href="/admin/products">
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -288,31 +163,30 @@ export default function PriceTiersPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Wholesale & Volume Price Tiers</h1>
             <p className="text-muted-foreground text-sm">
-              Quantity breaks, commercial contract rates, and B2B client tier discounts
+              Quantity bracket discounts for cattle feed mills, industrial distilleries, and retail cases
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-          onClick={() => {
-            const newTier: PriceTierItem = {
-              id: `PTR-00${tiers.length + 1}`,
-              product: "Artisanal Date Palm Molasses",
-              sku: "DPM-1KG-JAR",
-              tierRange: "24 – 96 jars",
-              minQty: 24,
-              unitPrice: "৳ 610",
-              discount: "10.3% OFF",
-              businessType: "Wholesale Supermarkets",
-              status: "active",
-            };
-            setTiers((prev) => [newTier, ...prev]);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Price Tier
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => refetch()}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => handleExportCSV([])}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export Tiers
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
@@ -320,44 +194,57 @@ export default function PriceTiersPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid gap-4 sm:grid-cols-3"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase font-medium text-muted-foreground">Configured Tiers</p>
-              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
                 <Layers className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{tiers.length} Tiers</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Across commercial SKUs</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{tiers.length} Brackets</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Automated volume discounting</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Max Volume Discount</p>
+              <p className="text-xs uppercase font-medium text-muted-foreground">Max Volume Savings</p>
               <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                 <Percent className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">17.5%</p>
-            <p className="text-xs text-emerald-600 font-medium mt-0.5">For full truckload & bulk contract</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">Up to 20%</p>
+            <p className="text-xs text-emerald-600 font-medium mt-0.5">Bulk truckloads</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Eligible B2B Accounts</p>
+              <p className="text-xs uppercase font-medium text-muted-foreground">B2B Auto-Applied</p>
               <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
                 <Building2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">32 Approved</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Applied at checkout and invoicing</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">Active</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Applied at checkout & RFQ</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-xs">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase font-medium text-muted-foreground">Database Sync</p>
+              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                <Layers className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold mt-1 text-foreground">PostgreSQL</p>
+            <p className="text-xs text-muted-foreground mt-0.5">price_tiers table</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -368,43 +255,23 @@ export default function PriceTiersPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <DataTable
-          columns={tierColumns}
-          data={tiers}
-          searchPlaceholder="Search product variant, SKU or account type..."
-          enableRowSelection={true}
-          enableSorting={true}
-          enablePagination={true}
-          initialPageSize={5}
-          pageSizeOptions={[5, 10, 20]}
-          bulkActions={(selected, clearSelection) => (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs bg-background"
-                onClick={() => handleExportCSV(selected)}
-              >
-                <Download className="h-3.5 w-3.5 mr-1" />
-                Export CSV
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-7 text-xs"
-                onClick={() => {
-                  const ids = new Set(selected.map((s) => s.id));
-                  setTiers((prev) => prev.filter((t) => !ids.has(t.id)));
-                  clearSelection();
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                Delete Selected
-              </Button>
-            </>
-          )}
-          emptyMessage="No price tiers match your search."
-        />
+        {isLoading ? (
+          <div className="h-48 flex items-center justify-center border rounded-lg bg-card">
+            <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+          </div>
+        ) : (
+          <DataTable
+            columns={tierColumns}
+            data={tiers}
+            searchPlaceholder="Search product variant, SKU, bracket..."
+            enableRowSelection={true}
+            enableSorting={true}
+            enablePagination={true}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 20]}
+            emptyMessage="No price tiers configured in database."
+          />
+        )}
       </motion.div>
     </div>
   );

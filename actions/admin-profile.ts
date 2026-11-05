@@ -234,21 +234,99 @@ export async function saveStaffMemberAction(staff: {
  */
 export async function getStaffDirectoryAction(): Promise<{ success: boolean; staff: any[] }> {
   try {
-    const { data } = await supabaseAdmin
+    // 1. Get staff from site_settings custom list
+    const { data: customData } = await supabaseAdmin
       .from("site_settings")
       .select("value")
       .eq("key", "staff.directory_custom")
       .maybeSingle();
 
-    if (data?.value) {
-      const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+    let customList: any[] = [];
+    if (customData?.value) {
+      const parsed = typeof customData.value === "string" ? JSON.parse(customData.value) : customData.value;
       if (Array.isArray(parsed)) {
-        return { success: true, staff: parsed };
+        customList = parsed;
       }
     }
-    return { success: true, staff: [] };
-  } catch {
+
+    // 2. Also fetch any admin/super_admin profiles from public.profiles
+    const { data: dbProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, phone, avatar_path, role, is_active, created_at, updated_at")
+      .in("role", ["admin", "super_admin"]);
+
+    const staffMap = new Map<string, any>();
+
+    // Add DB profiles first
+    (dbProfiles || []).forEach((p) => {
+      const name = p.full_name || "Admin User";
+      const initials = name
+        .split(" ")
+        .map((w: string) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      staffMap.set(p.id, {
+        id: p.id,
+        name,
+        initials,
+        email: `${p.role}@molassesstore.com`,
+        phone: p.phone || "+8801700000000",
+        role: p.role === "super_admin" ? "owner" : "admin",
+        department: "System Administration",
+        assignedWarehouse: "All Depots",
+        twoFactor: true,
+        status: p.is_active ? "active" : "inactive",
+        lastLogin: "Active Now",
+        avatarUrl: p.avatar_path || undefined,
+      });
+    });
+
+    // Merge custom staff list
+    customList.forEach((s) => {
+      staffMap.set(s.id, { ...(staffMap.get(s.id) || {}), ...s });
+    });
+
+    return { success: true, staff: Array.from(staffMap.values()) };
+  } catch (err: any) {
+    console.error("getStaffDirectoryAction error:", err);
     return { success: false, staff: [] };
   }
 }
+
+/**
+ * Deletes a staff member from the database custom list.
+ */
+export async function deleteStaffMemberAction(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: currentCustom } = await supabaseAdmin
+      .from("site_settings")
+      .select("value")
+      .eq("key", "staff.directory_custom")
+      .maybeSingle();
+
+    if (currentCustom?.value) {
+      let list: any[] = [];
+      try {
+        list = typeof currentCustom.value === "string" ? JSON.parse(currentCustom.value) : currentCustom.value;
+      } catch {}
+      const updated = list.filter((item: any) => item.id !== id);
+      await supabaseAdmin.from("site_settings").upsert(
+        {
+          key: "staff.directory_custom",
+          value: updated,
+          description: "Custom staff members and avatars directory",
+          is_public: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      );
+    }
+    revalidatePath("/admin/staff");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to delete staff member" };
+  }
+}
+
 

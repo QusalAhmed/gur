@@ -14,9 +14,10 @@ import {
   ShieldCheck,
   Ban,
   Trash2,
-  Eye,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,58 +28,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-
-export interface CustomerItem {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  type: "individual" | "business";
-  orders: number;
-  spent: string;
-  spentNumeric: number;
-  joined: string;
-  lastOrder: string;
-}
-
-export interface BusinessItem {
-  id: string;
-  name: string;
-  industry: string;
-  trade: string;
-  status: "approved" | "pending" | "suspended";
-  members: number;
-  creditLimit: string;
-  terms: number;
-  contact: string;
-}
-
-const initialCustomers: CustomerItem[] = [
-  { id: "1", name: "Rahman Dairy Farm", email: "rahman@dairy.bd", phone: "+8801711234567", type: "business", orders: 18, spent: "৳ 4,12,000", spentNumeric: 412000, joined: "15 Mar 2026", lastOrder: "24 Oct 2026" },
-  { id: "2", name: "Karim Khan", email: "karim.khan@gmail.com", phone: "+8801812345678", type: "individual", orders: 5, spent: "৳ 22,400", spentNumeric: 22400, joined: "1 Jul 2026", lastOrder: "24 Oct 2026" },
-  { id: "3", name: "Nadia Begum", email: "nadia.b@yahoo.com", phone: "+8801612345678", type: "individual", orders: 12, spent: "৳ 67,800", spentNumeric: 67800, joined: "20 May 2026", lastOrder: "24 Oct 2026" },
-  { id: "4", name: "Dhaka Feed Mills Ltd", email: "admin@dhakafeed.bd", phone: "+8801912345678", type: "business", orders: 34, spent: "৳ 12,34,000", spentNumeric: 1234000, joined: "10 Jan 2026", lastOrder: "24 Oct 2026" },
-  { id: "5", name: "Sylhet Yeast Co.", email: "info@syly.bd", phone: "+8801511234567", type: "business", orders: 7, spent: "৳ 3,22,000", spentNumeric: 322000, joined: "5 Jun 2026", lastOrder: "23 Oct 2026" },
-  { id: "6", name: "Fatema Khatun", email: "fatema.k@gmail.com", phone: "+8801411234567", type: "individual", orders: 3, spent: "৳ 14,500", spentNumeric: 14500, joined: "12 Sep 2026", lastOrder: "23 Oct 2026" },
-  { id: "7", name: "Barisal Fisheries Agro", email: "sales@barisalfish.bd", phone: "+8801722334455", type: "business", orders: 15, spent: "৳ 5,40,000", spentNumeric: 540000, joined: "11 Apr 2026", lastOrder: "21 Oct 2026" },
-  { id: "8", name: "Tariqul Islam", email: "tariq.islam@gmail.com", phone: "+8801833445566", type: "individual", orders: 2, spent: "৳ 8,900", spentNumeric: 8900, joined: "19 Aug 2026", lastOrder: "18 Oct 2026" },
-  { id: "9", name: "Chittagong Cattle Care", email: "contact@chittagongcattle.bd", phone: "+8801944556677", type: "business", orders: 22, spent: "৳ 7,85,000", spentNumeric: 785000, joined: "14 Feb 2026", lastOrder: "20 Oct 2026" },
-];
-
-const initialBusinesses: BusinessItem[] = [
-  { id: "1", name: "Rahman Dairy Farm", industry: "dairy_farm", trade: "TL-2021-456789", status: "approved", members: 2, creditLimit: "৳ 5,00,000", terms: 30, contact: "Rahim Rahman" },
-  { id: "2", name: "Dhaka Feed Mills Ltd", industry: "feed_mill", trade: "TL-2019-123456", status: "approved", members: 5, creditLimit: "৳ 20,00,000", terms: 45, contact: "Arif Hossain" },
-  { id: "3", name: "Sylhet Yeast Co.", industry: "yeast", trade: "TL-2022-789012", status: "approved", members: 3, creditLimit: "৳ 8,00,000", terms: 15, contact: "Sumon Ahmed" },
-  { id: "4", name: "AgroTech BD", industry: "agricultural", trade: "TL-2023-345678", status: "pending", members: 1, creditLimit: "৳ 0", terms: 0, contact: "Nasrin Islam" },
-  { id: "5", name: "Chittagong Distillery", industry: "distillery", trade: "TL-2020-901234", status: "pending", members: 2, creditLimit: "৳ 0", terms: 0, contact: "Jamal Uddin" },
-  { id: "6", name: "Comilla Cosmetics Ltd", industry: "cosmetic", trade: "TL-2024-567890", status: "pending", members: 1, creditLimit: "৳ 0", terms: 0, contact: "Rina Akter" },
-  { id: "7", name: "Khulna Poultry Solutions", industry: "feed_mill", trade: "TL-2023-998877", status: "approved", members: 4, creditLimit: "৳ 10,00,000", terms: 30, contact: "Hasibul Hassan" },
-];
+import {
+  getAdminCustomersAction,
+  createBusinessAccountAction,
+  updateBusinessStatusAction,
+  deleteCustomerAction,
+  deleteBusinessAccountAction,
+  CustomerItem,
+  BusinessItem,
+} from "@/actions/customers";
 
 const bizStatusStyle: Record<string, string> = {
   approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
@@ -87,15 +60,100 @@ const bizStatusStyle: Record<string, string> = {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = React.useState<CustomerItem[]>(initialCustomers);
-  const [businesses, setBusinesses] = React.useState<BusinessItem[]>(initialBusinesses);
+  const queryClient = useQueryClient();
 
-  // Bulk actions for customers
-  const handleBulkCustomerDelete = (selected: CustomerItem[], clearSelection: () => void) => {
-    const ids = new Set(selected.map((c) => c.id));
-    setCustomers((prev) => prev.filter((c) => !ids.has(c.id)));
-    clearSelection();
-  };
+  // Create B2B modal state
+  const [isAddBizOpen, setIsAddBizOpen] = React.useState(false);
+  const [bizName, setBizName] = React.useState("");
+  const [bizIndustry, setBizIndustry] = React.useState("");
+  const [bizTradeLicense, setBizTradeLicense] = React.useState("");
+  const [bizContactName, setBizContactName] = React.useState("");
+  const [bizPhone, setBizPhone] = React.useState("");
+  const [bizEmail, setBizEmail] = React.useState("");
+  const [bizCreditLimit, setBizCreditLimit] = React.useState("0");
+  const [bizTerms, setBizTerms] = React.useState("30");
+
+  const { data: customerData, isLoading } = useQuery({
+    queryKey: ["admin", "customers"],
+    queryFn: async () => {
+      const res = await getAdminCustomersAction();
+      if (!res.success) throw new Error(res.error || "Failed to load customer directory");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const customers = customerData?.customers || [];
+  const businesses = customerData?.businesses || [];
+
+  const updateBizMutation = useMutation({
+    mutationFn: updateBusinessStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Business account status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      } else {
+        toast.error(res.error || "Failed to update business status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update business status");
+    },
+  });
+
+  const createBizMutation = useMutation({
+    mutationFn: createBusinessAccountAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("B2B account created successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+        setIsAddBizOpen(false);
+        setBizName("");
+        setBizIndustry("");
+        setBizTradeLicense("");
+        setBizContactName("");
+        setBizPhone("");
+        setBizEmail("");
+      } else {
+        toast.error(res.error || "Failed to create business account");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create business account");
+    },
+  });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: deleteCustomerAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Customer removed");
+        queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+      } else {
+        toast.error(res.error || "Failed to delete customer");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete customer");
+    },
+  });
+
+  const deleteBizMutation = useMutation({
+    mutationFn: deleteBusinessAccountAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Business account removed");
+        queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+      } else {
+        toast.error(res.error || "Failed to delete business account");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete business account");
+    },
+  });
 
   const handleExportCustomersCSV = (selected: CustomerItem[]) => {
     const list = selected.length > 0 ? selected : customers;
@@ -116,23 +174,6 @@ export default function CustomersPage() {
     link.href = encodeURI(csv);
     link.download = `customers_${Date.now()}.csv`;
     link.click();
-  };
-
-  // Bulk actions for businesses
-  const handleBulkBusinessApprove = (selected: BusinessItem[], clearSelection: () => void) => {
-    const ids = new Set(selected.map((b) => b.id));
-    setBusinesses((prev) =>
-      prev.map((b) => (ids.has(b.id) ? { ...b, status: "approved" as const } : b))
-    );
-    clearSelection();
-  };
-
-  const handleBulkBusinessSuspend = (selected: BusinessItem[], clearSelection: () => void) => {
-    const ids = new Set(selected.map((b) => b.id));
-    setBusinesses((prev) =>
-      prev.map((b) => (ids.has(b.id) ? { ...b, status: "suspended" as const } : b))
-    );
-    clearSelection();
   };
 
   const handleExportBusinessesCSV = (selected: BusinessItem[]) => {
@@ -195,9 +236,28 @@ export default function CustomersPage() {
               <p className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
                 {c.name}
               </p>
-              <p className="text-xs text-muted-foreground">{c.email}</p>
+              <p className="text-xs text-muted-foreground">{c.phone}</p>
             </div>
           </div>
+        );
+      },
+    },
+    {
+      accessorKey: "type",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Account" />,
+      cell: ({ row }) => {
+        const isBiz = row.getValue("type") === "business";
+        return (
+          <Badge
+            variant="outline"
+            className={`text-[11px] font-medium capitalize ${
+              isBiz
+                ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30"
+                : "bg-muted text-muted-foreground border-border"
+            }`}
+          >
+            {row.getValue("type")}
+          </Badge>
         );
       },
     },
@@ -207,47 +267,27 @@ export default function CustomersPage() {
       cell: ({ row }) => <span className="font-mono text-xs">{row.getValue("phone")}</span>,
     },
     {
-      accessorKey: "type",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
-      cell: ({ row }) => {
-        const type = row.original.type;
-        return (
-          <Badge
-            variant={type === "business" ? "default" : "outline"}
-            className="capitalize text-[11px] font-medium"
-          >
-            {type}
-          </Badge>
-        );
-      },
-    },
-    {
       accessorKey: "orders",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Orders" />,
       cell: ({ row }) => (
-        <span className="font-semibold text-xs">{row.getValue("orders")}</span>
+        <div className="text-left font-semibold text-xs text-foreground">
+          {row.getValue("orders")}
+        </div>
       ),
     },
     {
-      accessorKey: "spentNumeric",
+      accessorKey: "spent",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total Spent" />,
       cell: ({ row }) => (
-        <span className="font-semibold text-xs text-foreground">{row.original.spent}</span>
-      ),
-    },
-    {
-      accessorKey: "joined",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Joined" />,
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">{formatDate(row.getValue("joined"))}</span>
+        <div className="text-left font-bold font-mono text-xs text-amber-700 dark:text-amber-400">
+          {row.getValue("spent")}
+        </div>
       ),
     },
     {
       accessorKey: "lastOrder",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Last Order" />,
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">{formatDate(row.getValue("lastOrder"))}</span>
-      ),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Last Activity" />,
+      cell: ({ row }) => <span className="text-xs text-muted-foreground">{formatDate(row.getValue("lastOrder"))}</span>,
     },
     {
       id: "actions",
@@ -259,22 +299,19 @@ export default function CustomersPage() {
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
                 <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
+                <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => alert(`View Profile for ${c.name}`)}>
-                <Eye className="h-3.5 w-3.5 mr-2" /> View Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Send direct email to ${c.email}`)}>
-                <Mail className="h-3.5 w-3.5 mr-2" /> Send Email
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => toast.info(`Customer ${c.name} (${c.phone})`)}>
+                <Users2 className="h-3.5 w-3.5 mr-2" /> View Details
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => setCustomers((prev) => prev.filter((item) => item.id !== c.id))}
+                onClick={() => deleteCustomerMutation.mutate(c.id)}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Customer
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -283,7 +320,7 @@ export default function CustomersPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
+  ], [deleteCustomerMutation]);
 
   const businessColumns = React.useMemo<ColumnDef<BusinessItem>[]>(() => [
     {
@@ -310,26 +347,27 @@ export default function CustomersPage() {
     },
     {
       accessorKey: "name",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Business" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
       cell: ({ row }) => {
         const b = row.original;
         return (
-          <div className="min-w-[190px]">
+          <div>
             <p className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
               {b.name}
             </p>
-            <p className="text-xs text-muted-foreground">Contact: {b.contact}</p>
+            <p className="text-xs text-muted-foreground">{b.contact} {b.phone ? `· ${b.phone}` : ""}</p>
           </div>
         );
       },
     },
     {
       accessorKey: "industry",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Industry" />,
-      cell: ({ row }) => {
-        const ind = String(row.getValue("industry")).replace("_", " ");
-        return <span className="capitalize text-xs text-muted-foreground">{ind}</span>;
-      },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-[11px] capitalize bg-muted/50 border-border">
+          {String(row.getValue("industry")).replace(/_/g, " ")}
+        </Badge>
+      ),
     },
     {
       accessorKey: "trade",
@@ -337,35 +375,27 @@ export default function CustomersPage() {
       cell: ({ row }) => <span className="font-mono text-xs">{row.getValue("trade")}</span>,
     },
     {
+      accessorKey: "creditLimit",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Credit Limit" />,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-mono text-xs font-bold text-foreground">{row.getValue("creditLimit")}</p>
+          <p className="text-[11px] text-muted-foreground">{row.original.terms} days terms</p>
+        </div>
+      ),
+    },
+    {
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => {
-        const status = row.original.status;
+        const s = row.original.status;
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${bizStatusStyle[status]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${bizStatusStyle[s]}`}
           >
-            {status}
+            {s}
           </span>
         );
-      },
-    },
-    {
-      accessorKey: "members",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Members" />,
-      cell: ({ row }) => <span className="text-xs font-medium">{row.getValue("members")}</span>,
-    },
-    {
-      accessorKey: "creditLimit",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Credit Limit" />,
-      cell: ({ row }) => <span className="font-semibold text-xs">{row.getValue("creditLimit")}</span>,
-    },
-    {
-      accessorKey: "terms",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Terms (Days)" />,
-      cell: ({ row }) => {
-        const terms = Number(row.getValue("terms"));
-        return <span className="text-xs text-muted-foreground">{terms > 0 ? `Net ${terms}` : "–"}</span>;
       },
     },
     {
@@ -378,21 +408,14 @@ export default function CustomersPage() {
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
                 <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
+                <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => alert(`View details for ${b.name}`)}>
-                <Eye className="h-3.5 w-3.5 mr-2" /> View Details
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-48">
               {b.status === "pending" && (
                 <DropdownMenuItem
                   className="text-emerald-600 focus:text-emerald-600"
-                  onClick={() =>
-                    setBusinesses((prev) =>
-                      prev.map((item) => (item.id === b.id ? { ...item, status: "approved" } : item))
-                    )
-                  }
+                  onClick={() => updateBizMutation.mutate({ id: b.id, status: "approved" })}
                 >
                   <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Approve Account
                 </DropdownMenuItem>
@@ -400,17 +423,21 @@ export default function CustomersPage() {
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() =>
-                  setBusinesses((prev) =>
-                    prev.map((item) =>
-                      item.id === b.id
-                        ? { ...item, status: item.status === "suspended" ? "approved" : "suspended" }
-                        : item
-                    )
-                  )
+                  updateBizMutation.mutate({
+                    id: b.id,
+                    status: b.status === "suspended" ? "approved" : "suspended",
+                  })
                 }
               >
                 <Ban className="h-3.5 w-3.5 mr-2" />
                 {b.status === "suspended" ? "Reactivate" : "Suspend"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => deleteBizMutation.mutate(b.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete Account
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -419,7 +446,7 @@ export default function CustomersPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
+  ], [updateBizMutation, deleteBizMutation]);
 
   const totalCust = customers.length;
   const b2bTotal = businesses.length;
@@ -443,25 +470,11 @@ export default function CustomersPage() {
         <div className="flex gap-2">
           <Button
             size="sm"
-            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-            onClick={() => {
-              const newCust: CustomerItem = {
-                id: String(Date.now()),
-                name: "New Enterprise Client",
-                email: "buyer@enterprise.bd",
-                phone: "+8801799887766",
-                type: "business",
-                orders: 1,
-                spent: "৳ 50,000",
-                spentNumeric: 50000,
-                joined: "24 Oct 2026",
-                lastOrder: "24 Oct 2026",
-              };
-              setCustomers((prev) => [newCust, ...prev]);
-            }}
+            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9 cursor-pointer"
+            onClick={() => setIsAddBizOpen(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Customer
+            Add B2B Account
           </Button>
         </div>
       </motion.div>
@@ -484,7 +497,11 @@ export default function CustomersPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase font-medium text-muted-foreground">{s.label}</p>
-                  <p className="text-2xl font-bold mt-1 text-foreground">{s.value}</p>
+                  {isLoading ? (
+                    <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+                  ) : (
+                    <p className="text-2xl font-bold mt-1 text-foreground">{s.value}</p>
+                  )}
                 </div>
                 <div className={`rounded-xl p-2.5 ${s.color}`}>
                   <s.icon className="h-5 w-5" />
@@ -501,76 +518,80 @@ export default function CustomersPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <Tabs defaultValue="customers" className="w-full">
+        <Tabs defaultValue="all" className="w-full">
           <TabsList className="mb-4 bg-muted/60 p-1">
-            <TabsTrigger value="customers" className="text-xs">
-              All Customers <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{totalCust}</span>
+            <TabsTrigger value="all" className="text-xs">
+              All Customers <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{customers.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="businesses" className="text-xs">
-              B2B Accounts{" "}
-              {b2bPending > 0 && (
-                <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 text-[10px]">
-                  {b2bPending} pending
-                </span>
-              )}
+            <TabsTrigger value="individual" className="text-xs">
+              Direct Retail <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{customers.filter(c => c.type === "individual").length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="business" className="text-xs">
+              B2B Accounts <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{businesses.length}</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="customers">
+          <TabsContent value="all" className="m-0">
             <DataTable
               columns={customerColumns}
               data={customers}
-              searchPlaceholder="Search customers by name, email, or phone..."
+              searchPlaceholder="Search customers by name or phone..."
               enableRowSelection={true}
               enableSorting={true}
               enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
+              bulkActions={(selected, clearSelection) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs bg-background"
+                  onClick={() => handleExportCustomersCSV(selected)}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  Export Selected
+                </Button>
+              )}
+              emptyMessage="No customers found in database."
+            />
+          </TabsContent>
+
+          <TabsContent value="individual" className="m-0">
+            <DataTable
+              columns={customerColumns}
+              data={customers.filter((c) => c.type === "individual")}
+              searchPlaceholder="Search individual retail buyers..."
+              enableRowSelection={true}
+              enableSorting={true}
+              enablePagination={true}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
+              emptyMessage="No individual buyers registered."
+            />
+          </TabsContent>
+
+          <TabsContent value="business" className="m-0">
+            <DataTable
+              columns={businessColumns}
+              data={businesses}
+              searchPlaceholder="Search B2B enterprises..."
+              enableRowSelection={true}
+              enableSorting={true}
+              enablePagination={true}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
               bulkActions={(selected, clearSelection) => (
                 <>
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs bg-background"
-                    onClick={() => handleExportCustomersCSV(selected)}
+                    onClick={() => {
+                      selected.forEach((b) => updateBizMutation.mutate({ id: b.id, status: "approved" }));
+                      clearSelection();
+                    }}
                   >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Export CSV
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7 text-xs"
-                    onClick={() => handleBulkCustomerDelete(selected, clearSelection)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete Selected
-                  </Button>
-                </>
-              )}
-              emptyMessage="No customers match your search query."
-            />
-          </TabsContent>
-
-          <TabsContent value="businesses">
-            <DataTable
-              columns={businessColumns}
-              data={businesses}
-              searchPlaceholder="Search B2B accounts by company name or trade licence..."
-              enableRowSelection={true}
-              enableSorting={true}
-              enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
-              bulkActions={(selected, clearSelection) => (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs bg-background text-emerald-700 dark:text-emerald-400"
-                    onClick={() => handleBulkBusinessApprove(selected, clearSelection)}
-                  >
-                    <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
                     Approve Selected
                   </Button>
                   <Button
@@ -580,24 +601,123 @@ export default function CustomersPage() {
                     onClick={() => handleExportBusinessesCSV(selected)}
                   >
                     <Download className="h-3.5 w-3.5 mr-1" />
-                    Export CSV
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7 text-xs"
-                    onClick={() => handleBulkBusinessSuspend(selected, clearSelection)}
-                  >
-                    <Ban className="h-3.5 w-3.5 mr-1" />
-                    Suspend Selected
+                    Export Selected
                   </Button>
                 </>
               )}
-              emptyMessage="No B2B accounts match your search query."
+              emptyMessage="No B2B commercial accounts registered yet."
             />
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Add B2B Account Dialog */}
+      <Dialog open={isAddBizOpen} onOpenChange={setIsAddBizOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Register B2B Account</DialogTitle>
+            <DialogDescription>
+              Create a wholesale business account with credit limits and net payment terms.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="bizName">Company Name *</Label>
+              <Input
+                id="bizName"
+                placeholder="e.g. Meghna Cattle & Feed Mills Ltd"
+                value={bizName}
+                onChange={(e) => setBizName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="bizIndustry">Industry / Sector</Label>
+                <Input
+                  id="bizIndustry"
+                  placeholder="e.g. feed_mill, dairy_farm"
+                  value={bizIndustry}
+                  onChange={(e) => setBizIndustry(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bizTrade">Trade License No</Label>
+                <Input
+                  id="bizTrade"
+                  placeholder="e.g. TL-2026-98124"
+                  value={bizTradeLicense}
+                  onChange={(e) => setBizTradeLicense(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="bizContact">Contact Person *</Label>
+                <Input
+                  id="bizContact"
+                  placeholder="Full name"
+                  value={bizContactName}
+                  onChange={(e) => setBizContactName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bizPhone">Phone *</Label>
+                <Input
+                  id="bizPhone"
+                  placeholder="+8801700000000"
+                  value={bizPhone}
+                  onChange={(e) => setBizPhone(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="bizCredit">Credit Limit (৳)</Label>
+                <Input
+                  id="bizCredit"
+                  type="number"
+                  placeholder="500000"
+                  value={bizCreditLimit}
+                  onChange={(e) => setBizCreditLimit(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bizTerms">Terms (Days)</Label>
+                <Input
+                  id="bizTerms"
+                  type="number"
+                  placeholder="30"
+                  value={bizTerms}
+                  onChange={(e) => setBizTerms(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddBizOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!bizName || !bizContactName || !bizPhone || createBizMutation.isPending}
+              onClick={() =>
+                createBizMutation.mutate({
+                  name: bizName,
+                  industry: bizIndustry,
+                  tradeLicenseNo: bizTradeLicense,
+                  contactName: bizContactName,
+                  contactPhone: bizPhone,
+                  contactEmail: bizEmail || undefined,
+                  creditLimit: Number(bizCreditLimit) || 0,
+                  paymentTermsDays: Number(bizTerms) || 0,
+                })
+              }
+            >
+              {createBizMutation.isPending ? "Creating..." : "Save Account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

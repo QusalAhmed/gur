@@ -12,9 +12,10 @@ import {
   MoreHorizontal,
   Download,
   Trash2,
-  MessageSquare,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,87 +34,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-
-export interface ReviewItem {
-  id: string;
-  product: string;
-  customer: string;
-  rating: number;
-  title: string;
-  body: string;
-  isVerified: boolean;
-  status: "approved" | "pending" | "rejected";
-  date: string;
-}
-
-const initialReviews: ReviewItem[] = [
-  {
-    id: "REV-001",
-    product: "Blackstrap Molasses (200L Steel Drum)",
-    customer: "Rahman Dairy Farm (Gazipur)",
-    rating: 5,
-    title: "Best high brix molasses for cattle feed in Bangladesh",
-    body: "We tested the Brix at our farm lab and it came at 82.2°. The cows love the aroma and milk yield increased noticeably within 10 days. Clean delivery in fresh steel drums.",
-    isVerified: true,
-    status: "approved",
-    date: "24 Oct 2026, 11:20",
-  },
-  {
-    id: "REV-002",
-    product: "Date Palm Liquid Nolen Gur (500ml Bottle)",
-    customer: "Nadia Begum (Dhanmondi, Dhaka)",
-    rating: 5,
-    title: "Exact authentic taste of childhood winter gur!",
-    body: "Zero added sugar crystallization. The smoky caramel aroma is genuinely unadulterated. Prepared Payesh and everyone in the family was impressed.",
-    isVerified: true,
-    status: "approved",
-    date: "24 Oct 2026, 09:45",
-  },
-  {
-    id: "REV-003",
-    product: "Feed Grade Molasses A (1 Ton IBC Tote)",
-    customer: "Dhaka Feed Mills Ltd",
-    rating: 5,
-    title: "Consistent viscosity and high purity",
-    body: "Delivered on a dedicated truck directly to our mixing hopper. Very competitive bulk wholesale rate compared to local market intermediaries.",
-    isVerified: true,
-    status: "approved",
-    date: "23 Oct 2026, 16:30",
-  },
-  {
-    id: "REV-004",
-    product: "Food Grade Sugarcane Molasses (5kg Pail)",
-    customer: "Fatema Khatun (Sylhet)",
-    rating: 4,
-    title: "Good quality, packaging handle could be stronger",
-    body: "Molasses quality is pure food grade and dark. But the yellow pail handle got slightly deformed during courier handling. Fast delivery though.",
-    isVerified: true,
-    status: "pending",
-    date: "23 Oct 2026, 13:10",
-  },
-  {
-    id: "REV-005",
-    product: "Date Palm Patali Block (1kg Clay Mould)",
-    customer: "Kamrul Islam (Uttara)",
-    rating: 5,
-    title: "Solid clay mold aroma is unmistakable",
-    body: "Soft melt-in-mouth texture. No sugar grains at the center. Excellent authentic product from Jashore.",
-    isVerified: true,
-    status: "pending",
-    date: "23 Oct 2026, 10:20",
-  },
-  {
-    id: "REV-006",
-    product: "Blackstrap Molasses (25kg Heavy Jerrycan)",
-    customer: "Al-Amin Poultry (Narsingdi)",
-    rating: 5,
-    title: "Heavy concentration, perfect for winter poultry heat",
-    body: "Helps maintain body temperature of broiler birds during chilly weather. Will order monthly.",
-    isVerified: true,
-    status: "approved",
-    date: "22 Oct 2026, 15:40",
-  },
-];
+import {
+  getAdminReviewsAction,
+  updateReviewStatusAction,
+  deleteReviewAction,
+  ReviewItem,
+} from "@/actions/reviews";
 
 const statusStyles: Record<string, string> = {
   approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
@@ -122,8 +48,59 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = React.useState<ReviewItem[]>(initialReviews);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState("all");
+
+  const { data: reviewsData, isLoading } = useQuery({
+    queryKey: ["admin", "reviews"],
+    queryFn: async () => {
+      const res = await getAdminReviewsAction();
+      if (!res.success) throw new Error(res.error || "Failed to load reviews");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const reviews = reviewsData?.reviews || [];
+  const kpis = reviewsData?.kpis || {
+    averageRating: 5.0,
+    totalReviews: 0,
+    pendingCount: 0,
+    verifiedPercentage: 0,
+    recommendationRate: 100,
+  };
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateReviewStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Review status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      } else {
+        toast.error(res.error || "Failed to update review status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update review status");
+    },
+  });
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: deleteReviewAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Review deleted");
+        queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      } else {
+        toast.error(res.error || "Failed to delete review");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete review");
+    },
+  });
 
   const filteredReviews = React.useMemo(() => {
     return reviews.filter((r) => {
@@ -134,30 +111,19 @@ export default function ReviewsPage() {
     });
   }, [reviews, activeTab]);
 
-  const handleBulkStatusChange = (
-    selected: ReviewItem[],
-    newStatus: ReviewItem["status"],
-    clearSelection: () => void
-  ) => {
-    const ids = new Set(selected.map((s) => s.id));
-    setReviews((prev) =>
-      prev.map((r) => (ids.has(r.id) ? { ...r, status: newStatus } : r))
-    );
-    clearSelection();
-  };
-
   const handleExportCSV = (selected: ReviewItem[]) => {
     const list = selected.length > 0 ? selected : filteredReviews;
-    const headers = ["ReviewID", "Product", "Customer", "Rating", "Title", "Verified", "Status", "Date"];
+    const headers = ["ID", "Product", "Customer", "Rating", "Title", "Body", "Verified", "Date", "Status"];
     const rows = list.map((r) => [
       r.id,
       `"${r.product}"`,
       `"${r.customer}"`,
       r.rating,
       `"${r.title}"`,
-      r.isVerified,
-      r.status,
+      `"${r.body.replace(/"/g, '""')}"`,
+      r.isVerified ? "Yes" : "No",
       formatDate(r.date),
+      r.status,
     ]);
     const csv = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const link = document.createElement("a");
@@ -193,9 +159,9 @@ export default function ReviewsPage() {
       accessorKey: "product",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Product" />,
       cell: ({ row }) => (
-        <span className="font-semibold text-xs text-foreground line-clamp-1 max-w-[170px]" title={row.getValue("product")}>
-          {row.getValue("product")}
-        </span>
+        <div className="max-w-[200px]">
+          <span className="font-semibold text-xs text-foreground line-clamp-1">{row.getValue("product")}</span>
+        </div>
       ),
     },
     {
@@ -281,11 +247,7 @@ export default function ReviewsPage() {
               {r.status !== "approved" && (
                 <DropdownMenuItem
                   className="text-emerald-600 focus:text-emerald-600"
-                  onClick={() =>
-                    setReviews((prev) =>
-                      prev.map((item) => (item.id === r.id ? { ...item, status: "approved" } : item))
-                    )
-                  }
+                  onClick={() => updateStatusMutation.mutate({ id: r.id, status: "approved" })}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Approve Review
                 </DropdownMenuItem>
@@ -293,11 +255,7 @@ export default function ReviewsPage() {
               {r.status !== "rejected" && (
                 <DropdownMenuItem
                   className="text-rose-600 focus:text-rose-600"
-                  onClick={() =>
-                    setReviews((prev) =>
-                      prev.map((item) => (item.id === r.id ? { ...item, status: "rejected" } : item))
-                    )
-                  }
+                  onClick={() => updateStatusMutation.mutate({ id: r.id, status: "rejected" })}
                 >
                   <XCircle className="h-3.5 w-3.5 mr-2" /> Reject as Spam
                 </DropdownMenuItem>
@@ -305,7 +263,7 @@ export default function ReviewsPage() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => setReviews((prev) => prev.filter((item) => item.id !== r.id))}
+                onClick={() => deleteReviewMutation.mutate(r.id)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
               </DropdownMenuItem>
@@ -316,9 +274,7 @@ export default function ReviewsPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
-
-  const pendingCount = reviews.filter((r) => r.status === "pending").length;
+  ], [updateStatusMutation, deleteReviewMutation]);
 
   return (
     <div className="space-y-6">
@@ -329,10 +285,21 @@ export default function ReviewsPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Customer Reviews</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Product Reviews & Ratings</h1>
           <p className="text-muted-foreground text-sm">
-            Moderate verified buyer feedback, ratings distribution, and product satisfaction
+            Customer feedback, verified buyer ratings, quality moderation, and spam protection
           </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => handleExportCSV([])}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
         </div>
       </motion.div>
 
@@ -351,8 +318,12 @@ export default function ReviewsPage() {
                 <Star className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">4.85 / 5.0</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Based on 128 verified reviews</p>
+            {isLoading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{kpis.averageRating} / 5.0</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Based on {kpis.totalReviews} verified ratings</p>
           </CardContent>
         </Card>
 
@@ -364,7 +335,11 @@ export default function ReviewsPage() {
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{pendingCount}</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{kpis.pendingCount}</p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">Awaiting staff review</p>
           </CardContent>
         </Card>
@@ -377,7 +352,11 @@ export default function ReviewsPage() {
                 <ShieldCheck className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">94.5%</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{kpis.verifiedPercentage}%</p>
+            )}
             <p className="text-xs text-emerald-600 font-medium mt-0.5">Matched to completed order IDs</p>
           </CardContent>
         </Card>
@@ -390,8 +369,12 @@ export default function ReviewsPage() {
                 <ThumbsUp className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">98.2%</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Would recommend to other farms</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{kpis.recommendationRate}%</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">4-star and 5-star reviews</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -408,44 +391,38 @@ export default function ReviewsPage() {
               All Reviews <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{reviews.length}</span>
             </TabsTrigger>
             <TabsTrigger value="pending" className="text-xs">
-              Pending <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 text-[10px]">{pendingCount}</span>
+              Pending Moderation <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 text-[10px]">{kpis.pendingCount}</span>
             </TabsTrigger>
             <TabsTrigger value="approved" className="text-xs">
-              Approved
+              Published Approved
             </TabsTrigger>
             <TabsTrigger value="rejected" className="text-xs">
-              Rejected
+              Rejected / Spam
             </TabsTrigger>
           </TabsList>
 
           <DataTable
             columns={reviewColumns}
             data={filteredReviews}
-            searchPlaceholder="Search reviews, customer or product..."
+            searchPlaceholder="Search reviews by product, title, or reviewer..."
             enableRowSelection={true}
             enableSorting={true}
             enablePagination={true}
-            initialPageSize={5}
-            pageSizeOptions={[5, 10, 20]}
+            initialPageSize={10}
+            pageSizeOptions={[10, 25, 50]}
             bulkActions={(selected, clearSelection) => (
               <>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs bg-background text-emerald-700 dark:text-emerald-400"
-                  onClick={() => handleBulkStatusChange(selected, "approved", clearSelection)}
+                  className="h-7 text-xs bg-background"
+                  onClick={() => {
+                    selected.forEach((r) => updateStatusMutation.mutate({ id: r.id, status: "approved" }));
+                    clearSelection();
+                  }}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                   Approve Selected
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs bg-background text-rose-700 dark:text-rose-400"
-                  onClick={() => handleBulkStatusChange(selected, "rejected", clearSelection)}
-                >
-                  <XCircle className="h-3.5 w-3.5 mr-1" />
-                  Reject Selected
                 </Button>
                 <Button
                   size="sm"
@@ -454,11 +431,23 @@ export default function ReviewsPage() {
                   onClick={() => handleExportCSV(selected)}
                 >
                   <Download className="h-3.5 w-3.5 mr-1" />
-                  Export CSV
+                  Export Selected
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    selected.forEach((r) => deleteReviewMutation.mutate(r.id));
+                    clearSelection();
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete Selected
                 </Button>
               </>
             )}
-            emptyMessage="No reviews found matching your search or filters."
+            emptyMessage="No product reviews found matching your criteria."
           />
         </Tabs>
       </motion.div>

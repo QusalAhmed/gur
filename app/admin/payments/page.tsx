@@ -7,17 +7,16 @@ import {
   Download,
   ArrowUpRight,
   ArrowDownLeft,
-  CreditCard,
-  RefreshCw,
   MoreHorizontal,
   CheckCircle2,
   Clock,
-  AlertTriangle,
   Receipt,
-  FileText,
   ShieldCheck,
+  RotateCcw,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,6 +34,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Tabs,
   TabsContent,
@@ -57,129 +66,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDateTime } from "@/lib/utils";
 import { SteadfastBalanceCard } from "@/components/admin/steadfast-balance-card";
-
-export interface TransactionItem {
-  id: string;
-  orderId: string;
-  customer: string;
-  method: "bkash" | "nagad" | "bank_transfer" | "card" | "cod";
-  kind: "charge" | "refund";
-  amount: string;
-  amountNumeric: number;
-  gatewayRef: string;
-  status: "succeeded" | "pending" | "failed" | "cancelled";
-  date: string;
-}
-
-export interface PaymentLogItem {
-  id: string;
-  txnId: string;
-  gateway: string;
-  event: string;
-  status: string;
-  time: string;
-}
-
-const paymentVolumeData = [
-  { day: "Mon", amount: 145000 },
-  { day: "Tue", amount: 210000 },
-  { day: "Wed", amount: 180000 },
-  { day: "Thu", amount: 320000 },
-  { day: "Fri", amount: 410000 },
-  { day: "Sat", amount: 285000 },
-  { day: "Sun", amount: 160000 },
-];
-
-const methodShareData = [
-  { name: "bKash", value: 38, color: "#e11d48" },
-  { name: "Bank Transfer", value: 28, color: "#0ea5e9" },
-  { name: "Cash on Delivery", value: 20, color: "#64748b" },
-  { name: "Nagad", value: 10, color: "#f97316" },
-  { name: "Cards / Visa", value: 4, color: "#8b5cf6" },
-];
-
-const initialTransactions: TransactionItem[] = [
-  {
-    id: "TXN-98421",
-    orderId: "MOL-2610-01005",
-    customer: "Tareq Rahman",
-    method: "cod",
-    kind: "charge",
-    amount: "৳ 820",
-    amountNumeric: 820,
-    gatewayRef: "COD-01005",
-    status: "pending",
-    date: "25 Oct 2026, 13:01",
-  },
-  {
-    id: "TXN-98420",
-    orderId: "MOL-2610-01004",
-    customer: "Rana",
-    method: "cod",
-    kind: "charge",
-    amount: "৳ 4,768.6",
-    amountNumeric: 4768.6,
-    gatewayRef: "COD-01004",
-    status: "pending",
-    date: "25 Oct 2026, 06:45",
-  },
-  {
-    id: "TXN-98419",
-    orderId: "MOL-2610-01003",
-    customer: "Karim Ullah",
-    method: "cod",
-    kind: "charge",
-    amount: "৳ 820",
-    amountNumeric: 820,
-    gatewayRef: "COD-01003",
-    status: "pending",
-    date: "25 Oct 2026, 05:22",
-  },
-  {
-    id: "TXN-98418",
-    orderId: "MOL-2610-01002",
-    customer: "Qusal Ahmed",
-    method: "cod",
-    kind: "charge",
-    amount: "৳ 440",
-    amountNumeric: 440,
-    gatewayRef: "COD-01002",
-    status: "pending",
-    date: "25 Oct 2026, 04:30",
-  },
-  {
-    id: "TXN-98415",
-    orderId: "MOL-2610-01075",
-    customer: "Bengal Distilleries",
-    method: "bank_transfer",
-    kind: "charge",
-    amount: "৳ 340,000",
-    amountNumeric: 340000,
-    gatewayRef: "SCB-RTGS-781",
-    status: "succeeded",
-    date: "22 Oct 2026, 16:30",
-  },
-  {
-    id: "TXN-98414",
-    orderId: "MOL-2610-01071",
-    customer: "Green Agro Farm",
-    method: "cod",
-    kind: "charge",
-    amount: "৳ 14,800",
-    amountNumeric: 14800,
-    gatewayRef: "COD-COLLECTED",
-    status: "succeeded",
-    date: "22 Oct 2026, 10:15",
-  },
-];
-
-const initialLogs: PaymentLogItem[] = [
-  { id: "LOG-5512", txnId: "TXN-98420", gateway: "bKash Tokenized", event: "payment.create.callback", status: "200 OK", time: "25 Oct 2026, 12:35:10" },
-  { id: "LOG-5511", txnId: "TXN-98419", gateway: "Nagad API", event: "refund.process.completed", status: "200 OK", time: "25 Oct 2026, 18:10:04" },
-  { id: "LOG-5510", txnId: "TXN-98417", gateway: "SSLCommerz", event: "session.validate.success", status: "200 OK", time: "24 Oct 2026, 11:22:45" },
-  { id: "LOG-5509", txnId: "TXN-98416", gateway: "System COD", event: "cod.payment.scheduled", status: "200 OK", time: "24 Oct 2026, 09:40:12" },
-  { id: "LOG-5508", txnId: "TXN-98415", gateway: "Bank RTGS", event: "settlement.reconciliation", status: "200 OK", time: "23 Oct 2026, 16:30:00" },
-];
+import {
+  getAdminPaymentsAction,
+  recordManualPaymentAction,
+  refundPaymentAction,
+  updatePaymentStatusAction,
+  TransactionItem,
+  PaymentLogItem,
+} from "@/actions/payments";
 
 const statusStyles: Record<string, string> = {
   succeeded: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
@@ -189,10 +83,108 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function PaymentsPage() {
-  const [transactions, setTransactions] = React.useState<TransactionItem[]>(initialTransactions);
-  const [logs, setLogs] = React.useState<PaymentLogItem[]>(initialLogs);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState("all");
   const [methodFilter, setMethodFilter] = React.useState("all");
+
+  // Record payment dialog state
+  const [isRecordOpen, setIsRecordOpen] = React.useState(false);
+  const [orderNumber, setOrderNumber] = React.useState("");
+  const [amount, setAmount] = React.useState("");
+  const [method, setMethod] = React.useState<"bkash" | "nagad" | "bank_transfer" | "card" | "cod">("bkash");
+  const [gatewayRef, setGatewayRef] = React.useState("");
+
+  // Refund dialog state
+  const [isRefundOpen, setIsRefundOpen] = React.useState(false);
+  const [selectedTxnForRefund, setSelectedTxnForRefund] = React.useState<TransactionItem | null>(null);
+  const [refundAmount, setRefundAmount] = React.useState("");
+  const [refundReason, setRefundReason] = React.useState("");
+
+  const { data: paymentsData, isLoading } = useQuery({
+    queryKey: ["admin", "payments"],
+    queryFn: async () => {
+      const res = await getAdminPaymentsAction();
+      if (!res.success) throw new Error(res.error || "Failed to load payments");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const transactions = paymentsData?.transactions || [];
+  const logs = paymentsData?.logs || [];
+  const paymentVolumeData = paymentsData?.volumeData || [];
+  const methodShareData = paymentsData?.methodShareData || [];
+
+  const recordMutation = useMutation({
+    mutationFn: recordManualPaymentAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Payment recorded successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+        setIsRecordOpen(false);
+        setOrderNumber("");
+        setAmount("");
+        setGatewayRef("");
+      } else {
+        toast.error(res.error || "Failed to record payment");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to record payment");
+    },
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: refundPaymentAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Refund processed successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+        setIsRefundOpen(false);
+        setSelectedTxnForRefund(null);
+        setRefundAmount("");
+        setRefundReason("");
+      } else {
+        toast.error(res.error || "Failed to process refund");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to process refund");
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updatePaymentStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Payment status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+      } else {
+        toast.error(res.error || "Failed to update payment status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update payment status");
+    },
+  });
+
+  // Calculate dynamic stats
+  const totalProcessed = transactions
+    .filter((t) => t.kind === "charge" && t.status === "succeeded")
+    .reduce((sum, t) => sum + t.amountNumeric, 0);
+
+  const pendingSettlementTotal = transactions
+    .filter((t) => t.status === "pending")
+    .reduce((sum, t) => sum + t.amountNumeric, 0);
+
+  const pendingSettlementCount = transactions.filter((t) => t.status === "pending").length;
+
+  const totalRefunds = transactions
+    .filter((t) => t.kind === "refund")
+    .reduce((sum, t) => sum + t.amountNumeric, 0);
 
   const filteredTransactions = React.useMemo(() => {
     return transactions.filter((t) => {
@@ -258,9 +250,9 @@ export default function PaymentsPage() {
     },
     {
       accessorKey: "orderId",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Order" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Order ID" />,
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-amber-700 dark:text-amber-400 font-medium">
+        <span className="font-mono text-xs font-medium text-amber-700 dark:text-amber-400">
           {row.getValue("orderId")}
         </span>
       ),
@@ -268,21 +260,45 @@ export default function PaymentsPage() {
     {
       accessorKey: "customer",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
-      cell: ({ row }) => (
-        <span className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
-          {row.getValue("customer")}
-        </span>
-      ),
+      cell: ({ row }) => <span className="text-xs font-medium">{row.getValue("customer")}</span>,
     },
     {
       accessorKey: "method",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Method" />,
       cell: ({ row }) => {
-        const method = String(row.getValue("method")).replace("_", " ");
+        const m = row.getValue("method") as string;
         return (
-          <Badge variant="outline" className="capitalize text-xs font-normal">
-            {method}
-          </Badge>
+          <span className="inline-flex items-center text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {m}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "kind",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      cell: ({ row }) => {
+        const k = row.getValue("kind") as string;
+        return (
+          <span
+            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              k === "refund" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            }`}
+          >
+            {k}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "amount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
+      cell: ({ row }) => {
+        const isRefund = row.original.kind === "refund";
+        return (
+          <span className={`font-mono text-xs font-bold ${isRefund ? "text-rose-600 dark:text-rose-400" : "text-foreground"}`}>
+            {isRefund ? `-${row.original.amount}` : row.original.amount}
+          </span>
         );
       },
     },
@@ -290,47 +306,23 @@ export default function PaymentsPage() {
       accessorKey: "gatewayRef",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Gateway Ref" />,
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">{row.getValue("gatewayRef")}</span>
-      ),
-    },
-    {
-      accessorKey: "kind",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
-      cell: ({ row }) => {
-        const kind = row.original.kind;
-        return (
-          <span
-            className={`inline-flex items-center text-xs font-medium capitalize ${
-              kind === "refund" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
-            }`}
-          >
-            {kind === "refund" ? (
-              <ArrowDownLeft className="h-3 w-3 mr-1" />
-            ) : (
-              <ArrowUpRight className="h-3 w-3 mr-1" />
-            )}
-            {kind}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "amountNumeric",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Amount" />,
-      cell: ({ row }) => (
-        <span className="font-bold text-sm text-foreground">{row.original.amount}</span>
+        <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[120px] inline-block">
+          {row.getValue("gatewayRef")}
+        </span>
       ),
     },
     {
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => {
-        const status = row.original.status;
+        const s = row.getValue("status") as string;
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${statusStyles[status]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${
+              statusStyles[s] || "bg-muted text-muted-foreground border-border"
+            }`}
           >
-            {status}
+            {s}
           </span>
         );
       },
@@ -356,22 +348,27 @@ export default function PaymentsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => alert(`View receipt for ${t.id}`)}>
-                <Receipt className="h-3.5 w-3.5 mr-2" /> View Receipt
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Gateway ping: ${t.gatewayRef} is verified OK`)}>
+              <DropdownMenuItem onClick={() => toast.info(`Transaction ${t.id} Gateway Ref: ${t.gatewayRef}`)}>
                 <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Verify Gateway
               </DropdownMenuItem>
+              {t.kind === "charge" && t.status === "succeeded" && (
+                <DropdownMenuItem
+                  className="text-rose-600 focus:text-rose-600"
+                  onClick={() => {
+                    setSelectedTxnForRefund(t);
+                    setRefundAmount(String(t.amountNumeric));
+                    setIsRefundOpen(true);
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-2" /> Process Refund
+                </DropdownMenuItem>
+              )}
               {t.status === "pending" && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-emerald-600 focus:text-emerald-600"
-                    onClick={() =>
-                      setTransactions((prev) =>
-                        prev.map((item) => (item.id === t.id ? { ...item, status: "succeeded" } : item))
-                      )
-                    }
+                    onClick={() => updateStatusMutation.mutate({ transactionId: t.id, status: "succeeded" })}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Mark Settled
                   </DropdownMenuItem>
@@ -384,7 +381,7 @@ export default function PaymentsPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
+  ], [updateStatusMutation]);
 
   const logColumns = React.useMemo<ColumnDef<PaymentLogItem>[]>(() => [
     {
@@ -449,22 +446,8 @@ export default function PaymentsPage() {
           </Button>
           <Button
             size="sm"
-            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-            onClick={() => {
-              const newTxn: TransactionItem = {
-                id: `TXN-${Math.floor(98422 + Math.random() * 1000)}`,
-                orderId: `MOL-2610-0${Math.floor(1085 + Math.random() * 50)}`,
-                customer: "Direct Counter Sale",
-                method: "bkash",
-                kind: "charge",
-                amount: "৳ 6,500",
-                amountNumeric: 6500,
-                gatewayRef: `BK-${Date.now().toString().slice(-7)}`,
-                status: "succeeded",
-                date: "24 Oct 2026, 15:40",
-              };
-              setTransactions((prev) => [newTxn, ...prev]);
-            }}
+            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9 cursor-pointer"
+            onClick={() => setIsRecordOpen(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
             Record Payment
@@ -482,13 +465,19 @@ export default function PaymentsPage() {
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Total Processed (30d)</p>
+              <p className="text-xs uppercase font-medium text-muted-foreground">Total Processed</p>
               <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                 <ArrowUpRight className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">৳ 4,892,500</p>
-            <p className="text-xs text-emerald-600 font-medium mt-0.5">+14.2% from last month</p>
+            {isLoading ? (
+              <div className="h-8 w-24 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">
+                ৳ {totalProcessed.toLocaleString("en-BD")}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Settled order transactions</p>
           </CardContent>
         </Card>
 
@@ -500,8 +489,14 @@ export default function PaymentsPage() {
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">৳ 184,200</p>
-            <p className="text-xs text-muted-foreground mt-0.5">14 COD & bank invoices</p>
+            {isLoading ? (
+              <div className="h-8 w-24 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">
+                ৳ {pendingSettlementTotal.toLocaleString("en-BD")}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">{pendingSettlementCount} pending invoices</p>
           </CardContent>
         </Card>
 
@@ -513,174 +508,162 @@ export default function PaymentsPage() {
                 <ArrowDownLeft className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">৳ 41,000</p>
-            <p className="text-xs text-muted-foreground mt-0.5">1 batch quality adjustment</p>
+            {isLoading ? (
+              <div className="h-8 w-24 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">
+                ৳ {totalRefunds.toLocaleString("en-BD")}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Reconciled adjustments</p>
           </CardContent>
         </Card>
 
-        <Card className="border shadow-xs">
-          <CardContent className="pt-5 pb-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Success Rate</p>
-              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">99.1%</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Gateway uptimes optimal</p>
-          </CardContent>
-        </Card>
+        {/* Courier Balance Card */}
+        <SteadfastBalanceCard />
       </motion.div>
 
-      {/* Courier Remittance & Merchant Balance */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.12 }}
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-      >
-        <div className="lg:col-span-2">
-          <SteadfastBalanceCard />
-        </div>
-      </motion.div>
-
-      {/* Analytics Charts */}
+      {/* Analytics row */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="grid gap-4 lg:grid-cols-3"
+        className="grid gap-6 lg:grid-cols-3"
       >
         <Card className="lg:col-span-2 border shadow-xs">
           <CardHeader className="py-4">
-            <CardTitle className="text-base font-semibold">Payment Volume Trend (Past 7 Days)</CardTitle>
-            <CardDescription className="text-xs">Gross collections across all channels</CardDescription>
+            <CardTitle className="text-base font-semibold">Weekly Settlement Volume</CardTitle>
+            <CardDescription className="text-xs">Incoming revenue by day</CardDescription>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={paymentVolumeData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(val) => `৳${(val / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(val) => [`৳ ${Number(val).toLocaleString()}`, "Volume"]} />
+          <CardContent className="pt-0">
+            {paymentVolumeData.length === 0 ? (
+              <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">
+                No payment volume recorded this week
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={paymentVolumeData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    tickFormatter={(val) => `৳${(val / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    formatter={(val) => [`৳ ${Number(val).toLocaleString()}`, "Settled"]}
+                    contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                  />
                   <Bar dataKey="amount" fill="#d97706" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardHeader className="py-4">
-            <CardTitle className="text-base font-semibold">Gateway Distribution</CardTitle>
-            <CardDescription className="text-xs">Volume share by payment channel</CardDescription>
+            <CardTitle className="text-base font-semibold">Gateway Breakdown</CardTitle>
+            <CardDescription className="text-xs">Payment method market share</CardDescription>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="h-36">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={methodShareData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={38}
-                    outerRadius={58}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {methodShareData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(val) => [`${val}%`, "Share"]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 text-[11px] mt-2">
-              {methodShareData.map((item) => (
-                <div key={item.name} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="truncate">{item.name} ({item.value}%)</span>
+          <CardContent className="pt-0 flex flex-col items-center">
+            {methodShareData.length === 0 ? (
+              <div className="h-[140px] flex items-center justify-center text-sm text-muted-foreground">
+                No payment methods recorded yet
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={140}>
+                  <PieChart>
+                    <Pie data={methodShareData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
+                      {methodShareData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(val) => [`${val}%`, "Share"]}
+                      contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] w-full">
+                  {methodShareData.map((m) => (
+                    <div key={m.name} className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ background: m.color }} />
+                      <span className="text-muted-foreground truncate">{m.name}</span>
+                      <span className="ml-auto font-semibold">{m.value}%</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Tabs & Data Table */}
+      {/* Tabs and Data Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
             <TabsList className="bg-muted/60 p-1">
               <TabsTrigger value="all" className="text-xs">
                 All Transactions <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{transactions.length}</span>
               </TabsTrigger>
               <TabsTrigger value="charges" className="text-xs">
-                Charges
+                Charges <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{transactions.filter(t => t.kind === "charge").length}</span>
               </TabsTrigger>
               <TabsTrigger value="refunds" className="text-xs">
-                Refunds
+                Refunds <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{transactions.filter(t => t.kind === "refund").length}</span>
               </TabsTrigger>
               <TabsTrigger value="logs" className="text-xs">
-                Gateway Webhook Logs <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{logs.length}</span>
+                Gateway Logs <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{logs.length}</span>
               </TabsTrigger>
             </TabsList>
+
+            {activeTab !== "logs" && (
+              <div className="flex items-center gap-2">
+                <Select value={methodFilter} onValueChange={(val) => setMethodFilter(val || "all")}>
+                  <SelectTrigger className="h-8 w-[140px] text-xs">
+                    <SelectValue placeholder="All Methods" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Methods</SelectItem>
+                    <SelectItem value="bkash">bKash</SelectItem>
+                    <SelectItem value="nagad">Nagad</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="card">Cards / Visa</SelectItem>
+                    <SelectItem value="cod">Cash on Delivery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <TabsContent value="all" className="m-0">
             <DataTable
               columns={txnColumns}
               data={filteredTransactions}
-              searchPlaceholder="Search txn ID, order ID, customer..."
+              searchPlaceholder="Search by ID, order, or customer..."
               enableRowSelection={true}
               enableSorting={true}
               enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
-              toolbarPrefix={
-                <div className="flex items-center gap-2">
-                  <Select value={methodFilter} onValueChange={(v) => setMethodFilter(v || "all")}>
-                    <SelectTrigger className="w-36 h-9 text-xs">
-                      <SelectValue placeholder="Method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Methods</SelectItem>
-                      <SelectItem value="bkash">bKash</SelectItem>
-                      <SelectItem value="nagad">Nagad</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="card">Cards / Visa</SelectItem>
-                      <SelectItem value="cod">Cash on Delivery</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {methodFilter !== "all" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMethodFilter("all")}
-                      className="h-9 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Reset
-                    </Button>
-                  )}
-                </div>
-              }
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
               bulkActions={(selected, clearSelection) => (
                 <>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs bg-background text-emerald-700 dark:text-emerald-400"
+                    className="h-7 text-xs bg-background"
                     onClick={() => {
-                      const ids = new Set(selected.map((s) => s.id));
-                      setTransactions((prev) =>
-                        prev.map((t) => (ids.has(t.id) ? { ...t, status: "succeeded" as const } : t))
-                      );
+                      selected.forEach((s) => {
+                        updateStatusMutation.mutate({ transactionId: s.id, status: "succeeded" });
+                      });
                       clearSelection();
                     }}
                   >
@@ -710,8 +693,8 @@ export default function PaymentsPage() {
               enableRowSelection={true}
               enableSorting={true}
               enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
               emptyMessage="No charge records found."
             />
           </TabsContent>
@@ -724,8 +707,8 @@ export default function PaymentsPage() {
               enableRowSelection={true}
               enableSorting={true}
               enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
               emptyMessage="No refund records found."
             />
           </TabsContent>
@@ -744,8 +727,8 @@ export default function PaymentsPage() {
                   enableRowSelection={false}
                   enableSorting={true}
                   enablePagination={true}
-                  initialPageSize={5}
-                  pageSizeOptions={[5, 10, 20]}
+                  initialPageSize={10}
+                  pageSizeOptions={[10, 25, 50]}
                   emptyMessage="No gateway logs found."
                 />
               </CardContent>
@@ -753,6 +736,134 @@ export default function PaymentsPage() {
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Record Payment Dialog */}
+      <Dialog open={isRecordOpen} onOpenChange={setIsRecordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Record a payment received for an order via bank, counter, or mobile wallet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="orderNumber">Order Number</Label>
+              <Input
+                id="orderNumber"
+                placeholder="e.g. MOL-2610-01001"
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="amount">Amount (৳)</Label>
+              <Input
+                id="amount"
+                type="number"
+                placeholder="e.g. 5000"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="method">Payment Method</Label>
+              <Select value={method} onValueChange={(v: any) => setMethod(v)}>
+                <SelectTrigger id="method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bkash">bKash</SelectItem>
+                  <SelectItem value="nagad">Nagad</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cod">Cash on Delivery</SelectItem>
+                  <SelectItem value="card">Card / Visa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="gatewayRef">Transaction / Gateway Reference</Label>
+              <Input
+                id="gatewayRef"
+                placeholder="e.g. TRX12345678 or SCB-CHEQUE-99"
+                value={gatewayRef}
+                onChange={(e) => setGatewayRef(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRecordOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!orderNumber || !amount || recordMutation.isPending}
+              onClick={() =>
+                recordMutation.mutate({
+                  orderNumber: orderNumber.trim(),
+                  amount: Number(amount),
+                  method,
+                  gatewayRef: gatewayRef.trim() || undefined,
+                })
+              }
+            >
+              {recordMutation.isPending ? "Recording..." : "Save Transaction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Dialog */}
+      <Dialog open={isRefundOpen} onOpenChange={setIsRefundOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Process Refund</DialogTitle>
+            <DialogDescription>
+              Record a refund transaction for {selectedTxnForRefund?.id} ({selectedTxnForRefund?.orderId}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="refundAmount">Refund Amount (৳)</Label>
+              <Input
+                id="refundAmount"
+                type="number"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="refundReason">Reason for Refund</Label>
+              <Input
+                id="refundReason"
+                placeholder="e.g. Defective batch return, customer cancellation"
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRefundOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!refundAmount || refundMutation.isPending}
+              onClick={() => {
+                if (selectedTxnForRefund) {
+                  refundMutation.mutate({
+                    transactionId: selectedTxnForRefund.id,
+                    amount: Number(refundAmount),
+                    reason: refundReason.trim() || undefined,
+                  });
+                }
+              }}
+            >
+              {refundMutation.isPending ? "Processing..." : "Confirm Refund"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

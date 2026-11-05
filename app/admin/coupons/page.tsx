@@ -4,6 +4,8 @@ import * as React from "react";
 import { motion } from "motion/react";
 import { Plus, Tag, Percent, Copy, MoreHorizontal, Users, DollarSign, Download, Trash2, CheckCircle, Ban } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +17,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -23,109 +42,95 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-
-export interface CouponItem {
-  id: string;
-  code: string;
-  description: string;
-  type: "percentage" | "fixed_amount" | "free_shipping";
-  value: string;
-  minOrder: string;
-  maxDiscount: string;
-  usage: string;
-  status: "active" | "inactive" | "expired";
-  b2bOnly: boolean;
-  validUntil: string;
-}
-
-export interface RedemptionItem {
-  id: string;
-  coupon: string;
-  orderId: string;
-  customer: string;
-  discount: string;
-  date: string;
-}
-
-const initialCoupons: CouponItem[] = [
-  {
-    id: "CPN-001",
-    code: "RAMADAN2026",
-    description: "Special festive discount on Date Palm & Sugarcane Gur",
-    type: "percentage",
-    value: "15%",
-    minOrder: "৳ 2,000",
-    maxDiscount: "৳ 1,000",
-    usage: "218 / 500",
-    status: "active",
-    b2bOnly: false,
-    validUntil: "15 Nov 2026",
-  },
-  {
-    id: "CPN-002",
-    code: "BULKFEED100",
-    description: "Animal Feed Grade molasses B2B seasonal discount",
-    type: "fixed_amount",
-    value: "৳ 5,000",
-    minOrder: "৳ 50,000",
-    maxDiscount: "৳ 5,000",
-    usage: "42 / 100",
-    status: "active",
-    b2bOnly: true,
-    validUntil: "31 Dec 2026",
-  },
-  {
-    id: "CPN-003",
-    code: "FREESHIPDHAKA",
-    description: "Free shipping for retail orders within Dhaka Metro",
-    type: "free_shipping",
-    value: "Free Ship",
-    minOrder: "৳ 1,500",
-    maxDiscount: "৳ 120",
-    usage: "389 / 1000",
-    status: "active",
-    b2bOnly: false,
-    validUntil: "30 Nov 2026",
-  },
-  {
-    id: "CPN-004",
-    code: "NEWGUR10",
-    description: "First purchase coupon for newly registered customers",
-    type: "percentage",
-    value: "10%",
-    minOrder: "৳ 1,000",
-    maxDiscount: "৳ 500",
-    usage: "640 / 1000",
-    status: "active",
-    b2bOnly: false,
-    validUntil: "31 Dec 2026",
-  },
-  {
-    id: "CPN-005",
-    code: "EXPOWINTER",
-    description: "Agro Tech Expo 2026 promo voucher",
-    type: "percentage",
-    value: "20%",
-    minOrder: "৳ 5,000",
-    maxDiscount: "৳ 2,000",
-    usage: "50 / 50",
-    status: "expired",
-    b2bOnly: false,
-    validUntil: "15 Oct 2026",
-  },
-];
-
-const initialRedemptions: RedemptionItem[] = [
-  { id: "RED-1084", coupon: "RAMADAN2026", orderId: "MOL-2610-01084", customer: "Rahman Dairy Farm", discount: "৳ 1,000", date: "24 Oct 2026" },
-  { id: "RED-1081", coupon: "FREESHIPDHAKA", orderId: "MOL-2610-01081", customer: "Nadia Begum", discount: "৳ 120", date: "24 Oct 2026" },
-  { id: "RED-1078", coupon: "BULKFEED100", orderId: "MOL-2610-01078", customer: "AgroTech BD", discount: "৳ 5,000", date: "23 Oct 2026" },
-  { id: "RED-1077", coupon: "NEWGUR10", orderId: "MOL-2610-01072", customer: "Jamal Uddin", discount: "৳ 240", date: "23 Oct 2026" },
-  { id: "RED-1076", coupon: "RAMADAN2026", orderId: "MOL-2610-01069", customer: "Karim Khan", discount: "৳ 600", date: "22 Oct 2026" },
-];
+import {
+  getAdminCouponsAction,
+  createCouponAction,
+  toggleCouponActiveAction,
+  deleteCouponAction,
+  CouponItem,
+  RedemptionItem,
+} from "@/actions/coupons";
 
 export default function CouponsPage() {
-  const [coupons, setCoupons] = React.useState<CouponItem[]>(initialCoupons);
-  const [redemptions, setRedemptions] = React.useState<RedemptionItem[]>(initialRedemptions);
+  const queryClient = useQueryClient();
+
+  // Create modal state
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [code, setCode] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [discountType, setDiscountType] = React.useState<"percentage" | "fixed_amount" | "free_shipping">("percentage");
+  const [value, setValue] = React.useState("10");
+  const [minOrder, setMinOrder] = React.useState("0");
+  const [maxDiscount, setMaxDiscount] = React.useState("");
+  const [usageLimit, setUsageLimit] = React.useState("");
+  const [businessOnly, setBusinessOnly] = React.useState(false);
+
+  const { data: couponsData, isLoading } = useQuery({
+    queryKey: ["admin", "coupons"],
+    queryFn: async () => {
+      const res = await getAdminCouponsAction();
+      if (!res.success) throw new Error(res.error || "Failed to load coupons");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const coupons = couponsData?.coupons || [];
+  const redemptions = couponsData?.redemptions || [];
+
+  const createMutation = useMutation({
+    mutationFn: createCouponAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Coupon code created");
+        queryClient.invalidateQueries({ queryKey: ["admin", "coupons"] });
+        setIsOpen(false);
+        setCode("");
+        setDescription("");
+        setValue("10");
+        setMinOrder("0");
+        setMaxDiscount("");
+        setUsageLimit("");
+      } else {
+        toast.error(res.error || "Failed to create coupon");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create coupon");
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: toggleCouponActiveAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Coupon status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "coupons"] });
+      } else {
+        toast.error(res.error || "Failed to update coupon");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update coupon");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCouponAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Coupon deleted");
+        queryClient.invalidateQueries({ queryKey: ["admin", "coupons"] });
+      } else {
+        toast.error(res.error || "Failed to delete coupon");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete coupon");
+    },
+  });
+
+  const activeCount = coupons.filter((c) => c.status === "active").length;
 
   const handleExportCouponsCSV = (selected: CouponItem[]) => {
     const list = selected.length > 0 ? selected : coupons;
@@ -188,9 +193,9 @@ export default function CouponsPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   navigator.clipboard.writeText(c.code);
-                  alert(`Copied ${c.code}`);
+                  toast.success(`Copied code ${c.code}`);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
                 title="Copy code"
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -240,11 +245,6 @@ export default function CouponsPage() {
       },
     },
     {
-      accessorKey: "validUntil",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Valid Until" />,
-      cell: ({ row }) => <span className="text-xs text-muted-foreground">{formatDate(row.getValue("validUntil"))}</span>,
-    },
-    {
       id: "actions",
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
@@ -258,26 +258,23 @@ export default function CouponsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => alert(`Edit ${c.code}`)}>
-                Edit Coupon
-              </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() =>
-                  setCoupons((prev) =>
-                    prev.map((item) =>
-                      item.id === c.id
-                        ? { ...item, status: item.status === "active" ? "inactive" : "active" }
-                        : item
-                    )
-                  )
-                }
+                onClick={() => toggleMutation.mutate({ id: c.id, isActive: c.status !== "active" })}
               >
-                {c.status === "active" ? "Deactivate" : "Activate"}
+                {c.status === "active" ? (
+                  <>
+                    <Ban className="h-3.5 w-3.5 mr-2" /> Deactivate
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-3.5 w-3.5 mr-2" /> Activate
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={() => setCoupons((prev) => prev.filter((item) => item.id !== c.id))}
+                onClick={() => deleteMutation.mutate(c.id)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
               </DropdownMenuItem>
@@ -288,48 +285,7 @@ export default function CouponsPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
-
-  const redemptionColumns = React.useMemo<ColumnDef<RedemptionItem>[]>(() => [
-    {
-      accessorKey: "id",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Redemption ID" />,
-      cell: ({ row }) => <span className="font-mono text-xs font-semibold">{row.getValue("id")}</span>,
-    },
-    {
-      accessorKey: "coupon",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Coupon Used" />,
-      cell: ({ row }) => (
-        <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-          {row.getValue("coupon")}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "orderId",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Order ID" />,
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.getValue("orderId")}</span>,
-    },
-    {
-      accessorKey: "customer",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
-      cell: ({ row }) => <span className="font-medium text-xs text-foreground">{row.getValue("customer")}</span>,
-    },
-    {
-      accessorKey: "discount",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Discount Amount" />,
-      cell: ({ row }) => (
-        <span className="font-bold text-xs text-emerald-600 dark:text-emerald-400">
-          {row.getValue("discount")}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "date",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
-      cell: ({ row }) => <span className="text-xs text-muted-foreground">{formatDate(row.getValue("date"))}</span>,
-    },
-  ], []);
+  ], [toggleMutation, deleteMutation]);
 
   return (
     <div className="space-y-6">
@@ -340,34 +296,21 @@ export default function CouponsPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Coupons & Discounts</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Coupons & Campaigns</h1>
           <p className="text-muted-foreground text-sm">
-            Manage promotional codes, B2B wholesale vouchers, and monitor redemptions
+            Promotional voucher codes, wholesale discounts, and campaign redemptions
           </p>
         </div>
-        <Button
-          size="sm"
-          className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-          onClick={() => {
-            const newCpn: CouponItem = {
-              id: `CPN-00${coupons.length + 1}`,
-              code: `FESTIVE${Math.floor(10 + Math.random() * 90)}`,
-              description: "New seasonal promotional campaign",
-              type: "percentage",
-              value: "10%",
-              minOrder: "৳ 1,500",
-              maxDiscount: "৳ 500",
-              usage: "0 / 200",
-              status: "active",
-              b2bOnly: false,
-              validUntil: "31 Dec 2026",
-            };
-            setCoupons((prev) => [newCpn, ...prev]);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Coupon
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs cursor-pointer"
+            onClick={() => setIsOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Coupon
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
@@ -375,33 +318,22 @@ export default function CouponsPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
       >
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase font-medium text-muted-foreground">Active Coupons</p>
-              <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                 <Tag className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">
-              {coupons.filter((c) => c.status === "active").length}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Campaigns live</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-xs">
-          <CardContent className="pt-5 pb-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Total Discount Given</p>
-              <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                <DollarSign className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">৳ 384,600</p>
-            <p className="text-xs text-emerald-600 font-medium mt-0.5">Generated ৳ 3.8M in sales</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{activeCount} Codes</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Live for customer checkout</p>
           </CardContent>
         </Card>
 
@@ -409,102 +341,165 @@ export default function CouponsPage() {
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase font-medium text-muted-foreground">Total Redemptions</p>
-              <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
                 <Users className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">1,339</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Avg ৳ 287 per redemption</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{redemptions.length} Uses</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">Redeemed across completed orders</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">B2B Exclusive Codes</p>
-              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+              <p className="text-xs uppercase font-medium text-muted-foreground">Total Campaign Codes</p>
+              <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
                 <Percent className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">
-              {coupons.filter((c) => c.b2bOnly).length}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Commercial wholesale deals</p>
+            {isLoading ? (
+              <div className="h-8 w-16 bg-muted animate-pulse rounded my-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1 text-foreground">{coupons.length} Vouchers</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">All-time promotional inventory</p>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Tabs */}
+      {/* Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
+        transition={{ delay: 0.2 }}
       >
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="mb-4 bg-muted/60 p-1">
-            <TabsTrigger value="all" className="text-xs">
-              All Coupons <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{coupons.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="redemptions" className="text-xs">
-              Recent Redemptions <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{redemptions.length}</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="all">
-            <DataTable
-              columns={couponColumns}
-              data={coupons}
-              searchPlaceholder="Search coupon code or description..."
-              enableRowSelection={true}
-              enableSorting={true}
-              enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
-              bulkActions={(selected, clearSelection) => (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs bg-background"
-                    onClick={() => handleExportCouponsCSV(selected)}
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Export Selected
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      const ids = new Set(selected.map((s) => s.id));
-                      setCoupons((prev) => prev.filter((c) => !ids.has(c.id)));
-                      clearSelection();
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete Selected
-                  </Button>
-                </>
-              )}
-              emptyMessage="No coupons match your search query."
-            />
-          </TabsContent>
-
-          <TabsContent value="redemptions">
-            <DataTable
-              columns={redemptionColumns}
-              data={redemptions}
-              searchPlaceholder="Search redemption order or coupon..."
-              enableRowSelection={false}
-              enableSorting={true}
-              enablePagination={true}
-              initialPageSize={5}
-              pageSizeOptions={[5, 10, 20]}
-              emptyMessage="No redemptions found."
-            />
-          </TabsContent>
-        </Tabs>
+        <DataTable
+          columns={couponColumns}
+          data={coupons}
+          searchPlaceholder="Search coupon code or description..."
+          enableRowSelection={true}
+          enableSorting={true}
+          enablePagination={true}
+          initialPageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+          bulkActions={(selected, clearSelection) => (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs bg-background"
+              onClick={() => handleExportCouponsCSV(selected)}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export Selected
+            </Button>
+          )}
+          emptyMessage="No promotional coupons registered in database."
+        />
       </motion.div>
+
+      {/* Create Coupon Dialog */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Promotional Coupon</DialogTitle>
+            <DialogDescription>
+              Issue a discount voucher code for retail or wholesale buyers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="cCode">Coupon Code *</Label>
+              <Input
+                id="cCode"
+                placeholder="e.g. SUMMER2026"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="cDesc">Description</Label>
+              <Input
+                id="cDesc"
+                placeholder="e.g. 10% discount on 200L drums"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="cType">Discount Type</Label>
+                <Select value={discountType} onValueChange={(v: any) => setDiscountType(v)}>
+                  <SelectTrigger id="cType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed_amount">Fixed Amount (৳)</SelectItem>
+                    <SelectItem value="free_shipping">Free Shipping</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cVal">Discount Value</Label>
+                <Input
+                  id="cVal"
+                  type="number"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="cMin">Minimum Order (৳)</Label>
+                <Input
+                  id="cMin"
+                  type="number"
+                  value={minOrder}
+                  onChange={(e) => setMinOrder(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cMax">Max Discount Cap (৳)</Label>
+                <Input
+                  id="cMax"
+                  type="number"
+                  placeholder="Optional cap"
+                  value={maxDiscount}
+                  onChange={(e) => setMaxDiscount(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!code || createMutation.isPending}
+              onClick={() =>
+                createMutation.mutate({
+                  code,
+                  description: description.trim() || undefined,
+                  discountType,
+                  value: Number(value) || 0,
+                  minOrderAmount: Number(minOrder) || 0,
+                  maxDiscountAmount: maxDiscount ? Number(maxDiscount) : undefined,
+                  businessOnly,
+                })
+              }
+            >
+              {createMutation.isPending ? "Creating..." : "Save Coupon"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,10 +2,20 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Search, ScrollText, Download, ShieldAlert, User, Database, MoreHorizontal, Eye } from "lucide-react";
+import {
+  ScrollText,
+  Download,
+  ShieldAlert,
+  Database,
+  MoreHorizontal,
+  Eye,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -20,93 +30,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDateTime } from "@/lib/utils";
-
-export interface AuditLogItem {
-  id: string;
-  staff: string;
-  action: "INSERT" | "UPDATE" | "DELETE";
-  table: string;
-  recordId: string;
-  description: string;
-  ip: string;
-  date: string;
-}
-
-const initialAuditLogs: AuditLogItem[] = [
-  {
-    id: "AUD-99824",
-    staff: "Admin Owner (AO)",
-    action: "UPDATE",
-    table: "business_accounts",
-    recordId: "BIZ-001 (Rahman Dairy)",
-    description: "Credit limit raised from ৳ 300,000 to ৳ 500,000",
-    ip: "103.145.12.84",
-    date: "24 Oct 2026, 12:45:10",
-  },
-  {
-    id: "AUD-99823",
-    staff: "Enamul Haque (EH)",
-    action: "INSERT",
-    table: "batches",
-    recordId: "LOT-BSM-2610-A1",
-    description: "Registered 60 Tons molasses batch with Brix 82.4°",
-    ip: "103.145.12.85",
-    date: "24 Oct 2026, 11:30:22",
-  },
-  {
-    id: "AUD-99822",
-    staff: "Nusrat Jahan (NJ)",
-    action: "UPDATE",
-    table: "orders",
-    recordId: "MOL-2610-01084",
-    description: "Order status transitioned from 'pending' to 'processing'",
-    ip: "103.145.12.90",
-    date: "24 Oct 2026, 10:15:40",
-  },
-  {
-    id: "AUD-99821",
-    staff: "Kazi Nayeem (KN)",
-    action: "UPDATE",
-    table: "price_tiers",
-    recordId: "PTR-002",
-    description: "Adjusted wholesale tier price to ৳ 21,500",
-    ip: "103.145.12.91",
-    date: "23 Oct 2026, 16:50:18",
-  },
-  {
-    id: "AUD-99820",
-    staff: "Enamul Haque (EH)",
-    action: "INSERT",
-    table: "shipments",
-    recordId: "SHP-2026-0891",
-    description: "Created freight consignment with carrier Steadfast",
-    ip: "103.145.12.85",
-    date: "23 Oct 2026, 15:20:05",
-  },
-  {
-    id: "AUD-99819",
-    staff: "Admin Owner (AO)",
-    action: "UPDATE",
-    table: "coupons",
-    recordId: "CPN-001 (RAMADAN2026)",
-    description: "Extended expiration date to 15 Nov 2026",
-    ip: "103.145.12.84",
-    date: "23 Oct 2026, 14:00:12",
-  },
-  {
-    id: "AUD-99818",
-    staff: "System Automated Cron",
-    action: "DELETE",
-    table: "cart_items",
-    recordId: "BATCH-ABANDONED",
-    description: "Purged 42 expired guest cart sessions older than 7 days",
-    ip: "127.0.0.1 (Internal Worker)",
-    date: "23 Oct 2026, 04:00:00",
-  },
-];
+import { getAdminAuditLogsAction, AuditLogItem } from "@/actions/audit";
 
 const actionStyles: Record<string, string> = {
   INSERT: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold border-emerald-500/30",
@@ -115,9 +49,24 @@ const actionStyles: Record<string, string> = {
 };
 
 export default function AuditPage() {
-  const [logs] = React.useState<AuditLogItem[]>(initialAuditLogs);
   const [actionFilter, setActionFilter] = React.useState("all");
   const [tableFilter, setTableFilter] = React.useState("all");
+  const [inspectingLog, setInspectingLog] = React.useState<AuditLogItem | null>(null);
+
+  const { data: auditRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: getAdminAuditLogsAction,
+  });
+
+  const logs = auditRes?.data || [];
+
+  const availableTables = React.useMemo(() => {
+    const s = new Set<string>();
+    logs.forEach((l) => {
+      if (l.table) s.add(l.table);
+    });
+    return Array.from(s).sort();
+  }, [logs]);
 
   const filteredLogs = React.useMemo(() => {
     return logs.filter((log) => {
@@ -131,8 +80,16 @@ export default function AuditPage() {
     });
   }, [logs, actionFilter, tableFilter]);
 
+  const insertCount = logs.filter((l) => l.action === "INSERT").length;
+  const updateCount = logs.filter((l) => l.action === "UPDATE").length;
+  const deleteCount = logs.filter((l) => l.action === "DELETE").length;
+
   const handleExportCSV = (selected: AuditLogItem[]) => {
     const list = selected.length > 0 ? selected : filteredLogs;
+    if (list.length === 0) {
+      toast.info("No audit logs to export");
+      return;
+    }
     const headers = ["EventID", "Staff", "Operation", "TargetTable", "RecordID", "Description", "ClientIP", "Timestamp"];
     const rows = list.map((l) => [
       l.id,
@@ -194,7 +151,7 @@ export default function AuditPage() {
       cell: ({ row }) => {
         const action = row.original.action;
         return (
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${actionStyles[action]}`}>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${actionStyles[action] || ""}`}>
             {action}
           </span>
         );
@@ -253,11 +210,11 @@ export default function AuditPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => alert(`Inspecting diff for ${log.id}`)}>
-                <Eye className="h-3.5 w-3.5 mr-2" /> Inspect Diff
+              <DropdownMenuItem onClick={() => setInspectingLog(log)}>
+                <Eye className="h-3.5 w-3.5 mr-2" /> Inspect Details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Filtered records modified by ${log.staff}`)}>
-                <User className="h-3.5 w-3.5 mr-2" /> View Actor Logs
+              <DropdownMenuItem onClick={() => toast.info(`Actor: ${log.staff}`)}>
+                <ScrollText className="h-3.5 w-3.5 mr-2" /> Copy Event ID
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -282,15 +239,26 @@ export default function AuditPage() {
             Immutable append-only record of all database modifications, user actions, and security events
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
-          onClick={() => handleExportCSV([])}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export Audit Trail
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => refetch()}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => handleExportCSV([])}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export Audit Trail
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
@@ -303,52 +271,52 @@ export default function AuditPage() {
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Immutable Log</p>
+              <p className="text-xs uppercase font-medium text-muted-foreground">Total Audited Events</p>
               <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
                 <ScrollText className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">Active</p>
-            <p className="text-xs text-muted-foreground mt-0.5">SHA-256 hashed write logs</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{logs.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Immutable audit trail</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Events Today</p>
-              <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <p className="text-xs uppercase font-medium text-muted-foreground">Insert Operations</p>
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                 <Database className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">124 Actions</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Orders, stock updates & shipments</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{insertCount}</p>
+            <p className="text-xs text-emerald-600 font-medium mt-0.5">New records created</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Credit & Limit Edits</p>
-              <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+              <p className="text-xs uppercase font-medium text-muted-foreground">Update Modifications</p>
+              <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
                 <ShieldAlert className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">3 Edits</p>
-            <p className="text-xs text-purple-600 font-medium mt-0.5">Authorized by Owner role</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{updateCount}</p>
+            <p className="text-xs text-blue-600 font-medium mt-0.5">Field mutations recorded</p>
           </CardContent>
         </Card>
 
         <Card className="border shadow-xs">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase font-medium text-muted-foreground">Trusted IP Subnet</p>
-              <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                <User className="h-4 w-4" />
+              <p className="text-xs uppercase font-medium text-muted-foreground">Deletions</p>
+              <div className="h-8 w-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                <ShieldAlert className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">103.145.12.x</p>
-            <p className="text-xs text-emerald-600 font-medium mt-0.5">Corporate HQ static IP</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{deleteCount}</p>
+            <p className="text-xs text-rose-600 font-medium mt-0.5">Purges & removals</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -359,74 +327,122 @@ export default function AuditPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <DataTable
-          columns={auditColumns}
-          data={filteredLogs}
-          searchPlaceholder="Filter by record ID, staff, or description..."
-          enableRowSelection={true}
-          enableSorting={true}
-          enablePagination={true}
-          initialPageSize={5}
-          pageSizeOptions={[5, 10, 20]}
-          toolbarPrefix={
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={actionFilter} onValueChange={(v) => setActionFilter(v || "all")}>
-                <SelectTrigger className="w-36 h-9 text-xs">
-                  <SelectValue placeholder="Operation" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Operations</SelectItem>
-                  <SelectItem value="INSERT">INSERT</SelectItem>
-                  <SelectItem value="UPDATE">UPDATE</SelectItem>
-                  <SelectItem value="DELETE">DELETE</SelectItem>
-                </SelectContent>
-              </Select>
+        {isLoading ? (
+          <div className="h-48 flex items-center justify-center border rounded-lg bg-card">
+            <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+          </div>
+        ) : (
+          <DataTable
+            columns={auditColumns}
+            data={filteredLogs}
+            searchPlaceholder="Filter by record ID, staff, or description..."
+            enableRowSelection={true}
+            enableSorting={true}
+            enablePagination={true}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 20, 50]}
+            toolbarPrefix={
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select value={actionFilter} onValueChange={(v) => setActionFilter(v || "all")}>
+                  <SelectTrigger className="w-36 h-9 text-xs">
+                    <SelectValue placeholder="Operation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Operations</SelectItem>
+                    <SelectItem value="INSERT">INSERT</SelectItem>
+                    <SelectItem value="UPDATE">UPDATE</SelectItem>
+                    <SelectItem value="DELETE">DELETE</SelectItem>
+                  </SelectContent>
+                </Select>
 
-              <Select value={tableFilter} onValueChange={(v) => setTableFilter(v || "all")}>
-                <SelectTrigger className="w-40 h-9 text-xs">
-                  <SelectValue placeholder="Table" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tables</SelectItem>
-                  <SelectItem value="orders">orders</SelectItem>
-                  <SelectItem value="business_accounts">business_accounts</SelectItem>
-                  <SelectItem value="batches">batches</SelectItem>
-                  <SelectItem value="price_tiers">price_tiers</SelectItem>
-                  <SelectItem value="shipments">shipments</SelectItem>
-                  <SelectItem value="cart_items">cart_items</SelectItem>
-                  <SelectItem value="coupons">coupons</SelectItem>
-                </SelectContent>
-              </Select>
+                <Select value={tableFilter} onValueChange={(v) => setTableFilter(v || "all")}>
+                  <SelectTrigger className="w-40 h-9 text-xs">
+                    <SelectValue placeholder="Table" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tables</SelectItem>
+                    {availableTables.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              {(actionFilter !== "all" || tableFilter !== "all") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setActionFilter("all");
-                    setTableFilter("all");
-                  }}
-                  className="h-9 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          }
-          bulkActions={(selected) => (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs bg-background"
-              onClick={() => handleExportCSV(selected)}
-            >
-              <Download className="h-3.5 w-3.5 mr-1" />
-              Export Selected
-            </Button>
-          )}
-          emptyMessage="No audit logs match your filter criteria."
-        />
+                {(actionFilter !== "all" || tableFilter !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setActionFilter("all");
+                      setTableFilter("all");
+                    }}
+                    className="h-9 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            }
+            bulkActions={(selected) => (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs bg-background"
+                onClick={() => handleExportCSV(selected)}
+              >
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Export Selected
+              </Button>
+            )}
+            emptyMessage="No audit logs match your filter criteria."
+          />
+        )}
       </motion.div>
+
+      {/* Inspect Dialog */}
+      <Dialog open={!!inspectingLog} onOpenChange={(open) => !open && setInspectingLog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Audit Event Details: {inspectingLog?.id}</DialogTitle>
+            <DialogDescription>
+              Detailed metadata recorded by database triggers.
+            </DialogDescription>
+          </DialogHeader>
+          {inspectingLog && (
+            <div className="space-y-3 py-2 text-xs">
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-muted-foreground">Actor</span>
+                <span className="font-medium text-foreground">{inspectingLog.staff}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-muted-foreground">Operation</span>
+                <span className={`px-2 py-0.5 rounded font-bold ${actionStyles[inspectingLog.action] || ""}`}>
+                  {inspectingLog.action}
+                </span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-muted-foreground">Target Table</span>
+                <span className="font-mono font-medium text-foreground">{inspectingLog.table}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-muted-foreground">Record ID</span>
+                <span className="font-mono text-foreground">{inspectingLog.recordId}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-semibold text-muted-foreground">Timestamp</span>
+                <span className="text-foreground">{formatDateTime(inspectingLog.date)}</span>
+              </div>
+              <div className="flex flex-col gap-1 pt-1">
+                <span className="font-semibold text-muted-foreground">Summary Description</span>
+                <div className="p-2.5 rounded bg-muted/50 border text-foreground leading-relaxed">
+                  {inspectingLog.description}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

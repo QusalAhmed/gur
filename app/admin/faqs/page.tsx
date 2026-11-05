@@ -2,9 +2,19 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, MessageSquare, HelpCircle, CheckCircle2, ArrowUpDown, MoreHorizontal, Database, RefreshCw } from "lucide-react";
+import {
+  Plus,
+  MessageSquare,
+  HelpCircle,
+  CheckCircle2,
+  MoreHorizontal,
+  RefreshCw,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
-import { fetchFaqsFromDb } from "@/lib/supabase";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,99 +36,96 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-interface Faq {
-  id: string;
-  category: string;
-  question: string;
-  questionBn: string;
-  answer: string;
-  displayOrder: number;
-  status: string;
-}
-
-const faqs: Faq[] = [
-  {
-    id: "FAQ-001",
-    category: "Quality & Testing",
-    question: "What is the Brix value of your blackstrap molasses and how is it tested?",
-    questionBn: "আপনাদের ব্ল্যাকস্ট্র্যাপ মোলাসেসের ব্রিক্স মাত্রা কত এবং এটি কিভাবে পরীক্ষা করা হয়?",
-    answer: "Our industrial and feed-grade blackstrap molasses carries a guaranteed minimum of 79.5° to 82.5° Brix. Every lot comes with a laboratory Certificate of Analysis (COA) tested using calibrated optical refractometers.",
-    displayOrder: 1,
-    status: "active",
-  },
-  {
-    id: "FAQ-002",
-    category: "Bulk Commercial Orders",
-    question: "Can you supply bulk quantities via road tanker trucks to regional dairy mills?",
-    questionBn: "আপনারা কি ডেইরি ও ফিড মিলের জন্য সরাসরি ট্যাঙ্কার ট্রাকে মোলাসেস সরবরাহ করেন?",
-    answer: "Yes, we dispatch 10-ton to 20-ton road tanker trucks directly from our sugar mill depots in Rajshahi and Chuadanga with same-week scheduled delivery nationwide.",
-    displayOrder: 2,
-    status: "active",
-  },
-  {
-    id: "FAQ-003",
-    category: "Organic Date Palm Gur",
-    question: "Is your Jashore Nolen Gur 100% free from sugar and artificial chemicals?",
-    questionBn: "আপনাদের যশোরের নলেন গুড় কি সম্পূর্ণ চিনি ও হাইড্রোসমুক্ত?",
-    answer: "Yes, our organic date palm molasses and Patali gur are collected directly from registered date palm farmers in Jashore without added white sugar, chemical bleaching agents (hydros), or preservatives.",
-    displayOrder: 3,
-    status: "active",
-  },
-  {
-    id: "FAQ-004",
-    category: "Payments & Terms",
-    question: "What credit terms are available for registered B2B corporations and feed mills?",
-    questionBn: "রেজিস্টার্ড বি২বি কোম্পানি ও ফিড মিলের জন্য কি বাকিতে বা ক্রেডিট সুবিধা আছে?",
-    answer: "Verified corporations with valid Trade License and BIN can apply for Net-15, Net-30, or Net-45 credit terms with credit limits up to ৳ 3,000,000 upon KYC approval.",
-    displayOrder: 4,
-    status: "active",
-  },
-  {
-    id: "FAQ-005",
-    category: "Shipping & Delivery",
-    question: "How are 200L steel drums and 1-ton IBC totes transported to customer warehouses?",
-    questionBn: "২০০ লিটার ড্রাম এবং ১ টন আইবিসি টোট কিভাবে গ্রাহকের গুদামে পৌঁছানো হয়?",
-    answer: "We utilize dedicated 3-ton to 5-ton hydraulic tail-lift freight trucks ensuring zero spill risk and safe pallet offloading directly into client storage depots.",
-    displayOrder: 5,
-    status: "active",
-  },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getAdminFaqsAction,
+  createFaqAction,
+  deleteFaqAction,
+  FaqItem,
+} from "@/actions/faqs";
 
 export default function FaqsPage() {
-  const [faqList, setFaqList] = React.useState<Faq[]>(faqs);
+  const queryClient = useQueryClient();
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
-  const [loading, setLoading] = React.useState(true);
-  const [isDbConnected, setIsDbConnected] = React.useState(false);
+  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [newQuestion, setNewQuestion] = React.useState("");
+  const [newQuestionBn, setNewQuestionBn] = React.useState("");
+  const [newAnswer, setNewAnswer] = React.useState("");
+  const [newCategory, setNewCategory] = React.useState("Quality & Testing");
 
-  const loadFaqs = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const dbFaqs = await fetchFaqsFromDb();
-      if (dbFaqs && dbFaqs.length > 0) {
-        setFaqList(dbFaqs);
-        setIsDbConnected(true);
+  const { data: faqsRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "faqs"],
+    queryFn: getAdminFaqsAction,
+  });
+
+  const faqs = faqsRes?.data || [];
+
+  const createMutation = useMutation({
+    mutationFn: createFaqAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("FAQ published successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "faqs"] });
+        setIsCreateOpen(false);
+        setNewQuestion("");
+        setNewQuestionBn("");
+        setNewAnswer("");
       } else {
-        setIsDbConnected(false);
+        toast.error(res.error || "Failed to create FAQ");
       }
-    } catch (e) {
-      console.warn("Failed to load FAQs from Supabase:", e);
-      setIsDbConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create FAQ");
+    },
+  });
 
-  React.useEffect(() => {
-    loadFaqs();
-  }, [loadFaqs]);
+  const deleteMutation = useMutation({
+    mutationFn: deleteFaqAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("FAQ removed");
+        queryClient.invalidateQueries({ queryKey: ["admin", "faqs"] });
+      } else {
+        toast.error(res.error || "Failed to delete FAQ");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete FAQ");
+    },
+  });
 
   const filteredFaqs = React.useMemo(() => {
-    if (categoryFilter === "all") return faqList;
-    return faqList.filter((f) => f.category.toLowerCase().includes(categoryFilter.toLowerCase()));
-  }, [faqList, categoryFilter]);
+    if (categoryFilter === "all") return faqs;
+    return faqs.filter((f) => f.category.toLowerCase().includes(categoryFilter.toLowerCase()));
+  }, [faqs, categoryFilter]);
 
-  const columns: ColumnDef<Faq>[] = React.useMemo(
+  const bilingualCount = faqs.filter((f) => Boolean(f.questionBn && f.questionBn.trim())).length;
+  const categoriesCount = new Set(faqs.map((f) => f.category)).size;
+
+  const handleCreateFaq = () => {
+    if (!newQuestion.trim() || !newAnswer.trim()) {
+      toast.error("Please provide both English question and answer");
+      return;
+    }
+    createMutation.mutate({
+      question: newQuestion,
+      questionBn: newQuestionBn,
+      answer: newAnswer,
+      category: newCategory,
+      displayOrder: faqs.length + 1,
+    });
+  };
+
+  const columns: ColumnDef<FaqItem>[] = React.useMemo(
     () => [
       {
         id: "select",
@@ -176,7 +183,9 @@ export default function FaqsPage() {
           return (
             <div className="max-w-xs">
               <p className="font-semibold text-sm">{f.question}</p>
-              <p className="text-xs text-muted-foreground font-bangla mt-0.5">{f.questionBn}</p>
+              {f.questionBn && (
+                <p className="text-xs text-muted-foreground font-bangla mt-0.5">{f.questionBn}</p>
+              )}
             </div>
           );
         },
@@ -187,7 +196,7 @@ export default function FaqsPage() {
           <DataTableColumnHeader column={column} title="Answer Summary" />
         ),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground max-w-md line-clamp-2 block">
+          <span className="text-xs text-muted-foreground max-w-md line-clamp-2 block" title={row.getValue("answer")}>
             {row.getValue("answer")}
           </span>
         ),
@@ -198,31 +207,36 @@ export default function FaqsPage() {
           <DataTableColumnHeader column={column} title="Status" />
         ),
         cell: ({ row }) => (
-          <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs capitalize">
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-xs capitalize">
             {row.getValue("status")}
           </Badge>
         ),
       },
       {
         id: "actions",
-        cell: () => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit FAQ</DropdownMenuItem>
-              <DropdownMenuItem>Move Up</DropdownMenuItem>
-              <DropdownMenuItem>Move Down</DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+        cell: ({ row }) => {
+          const f = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => deleteMutation.mutate(f.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    []
+    [deleteMutation]
   );
 
   return (
@@ -243,19 +257,18 @@ export default function FaqsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={loadFaqs}
-            disabled={loading}
+            onClick={() => refetch()}
             className="h-9 cursor-pointer"
             title="Refresh FAQs"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button variant="outline" size="sm" className="h-9 cursor-pointer">
-            <ArrowUpDown className="h-4 w-4 mr-2" />
-            Reorder
-          </Button>
-          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white h-9 cursor-pointer">
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white h-9 cursor-pointer"
+            onClick={() => setIsCreateOpen(true)}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add FAQ
           </Button>
@@ -277,8 +290,8 @@ export default function FaqsPage() {
                 <HelpCircle className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">15 FAQs</p>
-            <p className="text-xs text-muted-foreground mt-1">Across 5 distinct topic categories</p>
+            <p className="text-2xl font-bold mt-2">{faqs.length} FAQs</p>
+            <p className="text-xs text-muted-foreground mt-1">Across {categoriesCount} distinct topic categories</p>
           </CardContent>
         </Card>
 
@@ -286,25 +299,27 @@ export default function FaqsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-muted-foreground">Bilingual Coverage</p>
-              <div className="h-8 w-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">100%</p>
-            <p className="text-xs text-green-600 font-medium mt-1">English and Bangla translations</p>
+            <p className="text-2xl font-bold mt-2">
+              {faqs.length > 0 ? `${((bilingualCount / faqs.length) * 100).toFixed(0)}%` : "0%"}
+            </p>
+            <p className="text-xs text-emerald-600 font-medium mt-1">English and Bangla translations</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Most Read Category</p>
+              <p className="text-sm font-medium text-muted-foreground">Knowledge Base Status</p>
               <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
                 <MessageSquare className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-2">Bulk Logistics</p>
-            <p className="text-xs text-muted-foreground mt-1">Drum & tanker transport inquiries</p>
+            <p className="text-2xl font-bold mt-2">{faqs.length > 0 ? "Active" : "Empty"}</p>
+            <p className="text-xs text-muted-foreground mt-1">Directly connected to PostgreSQL DB</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -333,19 +348,87 @@ export default function FaqsPage() {
         </div>
 
         <Card className="p-4">
-          <DataTable
-            columns={columns}
-            data={filteredFaqs}
-            searchKey="question"
-            searchPlaceholder="Search question or keyword..."
-            enableRowSelection
-            enableColumnVisibility
-            enableSorting
-            enablePagination
-            pageSize={10}
-          />
+          {isLoading ? (
+            <div className="h-48 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filteredFaqs}
+              searchPlaceholder="Search question or keyword..."
+              enableRowSelection
+              enableSorting
+              enablePagination
+              initialPageSize={10}
+              pageSizeOptions={[5, 10, 20]}
+              emptyMessage="No FAQs found in database."
+            />
+          )}
         </Card>
       </motion.div>
+
+      {/* Create Dialog */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Frequently Asked Question</DialogTitle>
+            <DialogDescription>
+              Create a new help center article for customer inquiries.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Category Topic</label>
+              <Input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="e.g. Quality & Testing"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Question (English)</label>
+              <Input
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
+                placeholder="e.g. What is the Brix value of your molasses?"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Question (Bangla - Optional)</label>
+              <Input
+                value={newQuestionBn}
+                onChange={(e) => setNewQuestionBn(e.target.value)}
+                placeholder="e.g. আপনাদের মোলাসেসের ব্রিক্স মাত্রা কত?"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Answer Explanation</label>
+              <Textarea
+                rows={3}
+                value={newAnswer}
+                onChange={(e) => setNewAnswer(e.target.value)}
+                placeholder="Detailed answer explanation..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleCreateFaq}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Publish FAQ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

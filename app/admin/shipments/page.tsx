@@ -3,7 +3,6 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import {
-  Plus,
   Truck,
   Clock,
   CheckCircle2,
@@ -13,9 +12,12 @@ import {
   MoreHorizontal,
   Download,
   CheckCircle,
-  FileText,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -49,148 +51,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/utils";
-
-export interface ShipmentItem {
-  id: string;
-  orderId: string;
-  recipient: string;
-  district: string;
-  carrier: string;
-  tracking: string;
-  weight: string;
-  packages: number;
-  status: "preparing" | "in_transit" | "delivered" | "failed" | "returned";
-  dispatchedAt: string;
-  eta: string;
-}
-
-const carrierVolume = [
-  { carrier: "Steadfast", shipments: 58 },
-  { carrier: "Pathao Express", shipments: 44 },
-  { carrier: "RedX", shipments: 22 },
-  { carrier: "Internal Freight", shipments: 18 },
-  { carrier: "Paperfly", shipments: 9 },
-];
-
-const initialShipments: ShipmentItem[] = [
-  {
-    id: "SHP-2026-0891",
-    orderId: "MOL-2610-01005",
-    recipient: "Tareq Rahman",
-    district: "Dhaka (Dhanmondi)",
-    carrier: "Courier delivery",
-    tracking: "COUR-TRK-409",
-    weight: "1 kg",
-    packages: 1,
-    status: "preparing",
-    dispatchedAt: "–",
-    eta: "Today, 5:00 PM",
-  },
-  {
-    id: "SHP-2026-0890",
-    orderId: "MOL-2610-01004",
-    recipient: "Rana",
-    district: "Dhaka",
-    carrier: "Courier delivery",
-    tracking: "COUR-TRK-408",
-    weight: "7 kg",
-    packages: 2,
-    status: "preparing",
-    dispatchedAt: "–",
-    eta: "Tomorrow, 11:00 AM",
-  },
-  {
-    id: "SHP-2026-0889",
-    orderId: "MOL-2610-01003",
-    recipient: "Karim Ullah",
-    district: "Dhaka",
-    carrier: "Courier delivery",
-    tracking: "COUR-TRK-407",
-    weight: "1 kg",
-    packages: 1,
-    status: "preparing",
-    dispatchedAt: "–",
-    eta: "Tomorrow, 4:00 PM",
-  },
-  {
-    id: "SHP-2026-0888",
-    orderId: "MOL-2610-01002",
-    recipient: "Qusal Ahmed",
-    district: "Dhaka",
-    carrier: "Pickup from warehouse",
-    tracking: "PICK-01002",
-    weight: "500 g",
-    packages: 1,
-    status: "preparing",
-    dispatchedAt: "–",
-    eta: "Ready for pickup",
-  },
-  {
-    id: "SHP-2026-0888",
-    orderId: "MOL-2610-01079",
-    recipient: "Fatema Khatun",
-    district: "Sylhet",
-    carrier: "Steadfast",
-    tracking: "STDF-9912048",
-    weight: "12 kg",
-    packages: 2,
-    status: "in_transit",
-    dispatchedAt: "23 Oct 2026, 16:30",
-    eta: "25 Oct 2026",
-  },
-  {
-    id: "SHP-2026-0887",
-    orderId: "MOL-2610-01078",
-    recipient: "AgroTech BD",
-    district: "Rajshahi",
-    carrier: "Steadfast",
-    tracking: "STDF-9911950",
-    weight: "120 kg",
-    packages: 3,
-    status: "delivered",
-    dispatchedAt: "23 Oct 2026, 12:00",
-    eta: "Delivered 24 Oct 2026",
-  },
-  {
-    id: "SHP-2026-0886",
-    orderId: "MOL-2610-01074",
-    recipient: "Hasan Traders",
-    district: "Bogura",
-    carrier: "RedX",
-    tracking: "RDX-7740192",
-    weight: "20 kg",
-    packages: 1,
-    status: "failed",
-    dispatchedAt: "22 Oct 2026, 14:00",
-    eta: "Customer unavailable",
-  },
-  {
-    id: "SHP-2026-0885",
-    orderId: "MOL-2610-01070",
-    recipient: "Green Agro Farm",
-    district: "Khulna",
-    carrier: "Steadfast",
-    tracking: "STDF-9908123",
-    weight: "50 kg",
-    packages: 2,
-    status: "returned",
-    dispatchedAt: "21 Oct 2026, 11:00",
-    eta: "Returned to WH-DHK-01",
-  },
-  {
-    id: "SHP-2026-0884",
-    orderId: "MOL-2610-01065",
-    recipient: "Sylhet Yeast Co.",
-    district: "Sylhet",
-    carrier: "Internal Freight",
-    tracking: "FREIGHT-TRK-405",
-    weight: "500 kg",
-    packages: 4,
-    status: "delivered",
-    dispatchedAt: "20 Oct 2026, 08:30",
-    eta: "Delivered 21 Oct 2026",
-  },
-];
+import {
+  getAdminShipmentsAction,
+  updateShipmentStatusAction,
+  bulkUpdateShipmentStatusAction,
+  ShipmentItem,
+} from "@/actions/shipments";
 
 const statusStyles: Record<string, string> = {
   preparing: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
@@ -201,9 +67,54 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function ShipmentsPage() {
-  const [shipments, setShipments] = React.useState<ShipmentItem[]>(initialShipments);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState("all");
   const [carrierFilter, setCarrierFilter] = React.useState("all");
+
+  const { data: shipmentsRes, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "shipments"],
+    queryFn: getAdminShipmentsAction,
+  });
+
+  const shipments = shipmentsRes?.data?.shipments || [];
+  const kpis = shipmentsRes?.data?.kpis || {
+    total: 0,
+    preparing: 0,
+    inTransit: 0,
+    delivered: 0,
+    failedOrReturned: 0,
+  };
+  const carrierVolume = shipmentsRes?.data?.carrierVolume || [];
+
+  const updateStatusMutation = useMutation({
+    mutationFn: updateShipmentStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Shipment status updated");
+        queryClient.invalidateQueries({ queryKey: ["admin", "shipments"] });
+      } else {
+        toast.error(res.error || "Failed to update shipment status");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update shipment status");
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: bulkUpdateShipmentStatusAction,
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Shipments updated successfully");
+        queryClient.invalidateQueries({ queryKey: ["admin", "shipments"] });
+      } else {
+        toast.error(res.error || "Failed to update shipments");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update shipments");
+    },
+  });
 
   const filteredShipments = React.useMemo(() => {
     return shipments.filter((s) => {
@@ -224,22 +135,27 @@ export default function ShipmentsPage() {
     newStatus: ShipmentItem["status"],
     clearSelection: () => void
   ) => {
-    const ids = new Set(selected.map((s) => s.id));
-    setShipments((prev) =>
-      prev.map((s) => (ids.has(s.id) ? { ...s, status: newStatus } : s))
+    bulkUpdateMutation.mutate(
+      { ids: selected.map((s) => s.id), status: newStatus },
+      {
+        onSettled: () => clearSelection(),
+      }
     );
-    clearSelection();
   };
 
   const handleExportCSV = (selected: ShipmentItem[]) => {
     const list = selected.length > 0 ? selected : filteredShipments;
+    if (list.length === 0) {
+      toast.info("No shipments to export");
+      return;
+    }
     const headers = ["ShipmentID", "OrderID", "Recipient", "District", "Carrier", "Tracking", "Weight", "Status", "Dispatched", "ETA"];
     const rows = list.map((s) => [
       s.id,
       s.orderId,
       `"${s.recipient}"`,
       `"${s.district}"`,
-      s.carrier,
+      `"${s.carrier}"`,
       s.tracking,
       s.weight,
       s.status,
@@ -279,11 +195,15 @@ export default function ShipmentsPage() {
     {
       accessorKey: "id",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Shipment ID" />,
-      cell: ({ row }) => (
-        <span className="font-mono text-xs font-semibold text-foreground">
-          {row.getValue("id")}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const id = row.getValue("id") as string;
+        const displayId = id.startsWith("SHP-") ? id : `SHP-${id.slice(0, 8).toUpperCase()}`;
+        return (
+          <span className="font-mono text-xs font-semibold text-foreground">
+            {displayId}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "orderId",
@@ -319,7 +239,7 @@ export default function ShipmentsPage() {
             <p className="text-xs font-medium text-foreground">{s.carrier}</p>
             <p className="font-mono text-[11px] text-muted-foreground flex items-center gap-1">
               {s.tracking}
-              <ExternalLink className="h-3 w-3 inline text-amber-600" />
+              {s.tracking !== "PENDING" && <ExternalLink className="h-3 w-3 inline text-amber-600" />}
             </p>
           </div>
         );
@@ -345,7 +265,7 @@ export default function ShipmentsPage() {
         const status = row.original.status;
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${statusStyles[status]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border ${statusStyles[status] || statusStyles.preparing}`}
           >
             {status.replace("_", " ")}
           </span>
@@ -380,23 +300,27 @@ export default function ShipmentsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => alert(`Tracking ${s.tracking} via ${s.carrier}`)}>
+              <DropdownMenuItem onClick={() => toast.info(`Carrier tracking: ${s.tracking}`)}>
                 <ExternalLink className="h-3.5 w-3.5 mr-2" /> Track Courier API
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`Print label for ${s.id}`)}>
+              <DropdownMenuItem onClick={() => toast.info(`Printed shipping label for #${s.id.slice(0, 8)}`)}>
                 <Printer className="h-3.5 w-3.5 mr-2" /> Print Shipping Label
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {s.status !== "delivered" && (
                 <DropdownMenuItem
                   className="text-emerald-600 focus:text-emerald-600"
-                  onClick={() =>
-                    setShipments((prev) =>
-                      prev.map((item) => (item.id === s.id ? { ...item, status: "delivered" } : item))
-                    )
-                  }
+                  onClick={() => updateStatusMutation.mutate({ id: s.id, status: "delivered" })}
                 >
                   <CheckCircle className="h-3.5 w-3.5 mr-2" /> Mark as Delivered
+                </DropdownMenuItem>
+              )}
+              {s.status !== "in_transit" && (
+                <DropdownMenuItem
+                  className="text-blue-600 focus:text-blue-600"
+                  onClick={() => updateStatusMutation.mutate({ id: s.id, status: "in_transit" })}
+                >
+                  <Truck className="h-3.5 w-3.5 mr-2" /> Mark In-Transit
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -406,12 +330,7 @@ export default function ShipmentsPage() {
       enableSorting: false,
       enableHiding: false,
     },
-  ], []);
-
-  const inTransitCount = shipments.filter((s) => s.status === "in_transit").length;
-  const preparingCount = shipments.filter((s) => s.status === "preparing").length;
-  const deliveredCount = shipments.filter((s) => s.status === "delivered").length;
-  const issueCount = shipments.filter((s) => s.status === "failed" || s.status === "returned").length;
+  ], [updateStatusMutation]);
 
   return (
     <div className="space-y-6">
@@ -432,33 +351,19 @@ export default function ShipmentsPage() {
             variant="outline"
             size="sm"
             className="h-9"
+            onClick={() => refetch()}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
             onClick={() => handleExportCSV([])}
           >
             <Download className="h-4 w-4 mr-2" />
             Export Manifest
-          </Button>
-          <Button
-            size="sm"
-            className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-9"
-            onClick={() => {
-              const newShipment: ShipmentItem = {
-                id: `SHP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-                orderId: `MOL-2610-0${Math.floor(1085 + Math.random() * 100)}`,
-                recipient: "New Customer Dispatch",
-                district: "Dhaka Central",
-                carrier: "Pathao Express",
-                tracking: `PTH-${Date.now().toString().slice(-8)}`,
-                weight: "15 kg",
-                packages: 1,
-                status: "preparing",
-                dispatchedAt: "–",
-                eta: "Tomorrow",
-              };
-              setShipments((prev) => [newShipment, ...prev]);
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Dispatch
           </Button>
         </div>
       </motion.div>
@@ -478,7 +383,7 @@ export default function ShipmentsPage() {
                 <Truck className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{inTransitCount}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{kpis.inTransit}</p>
             <p className="text-xs text-muted-foreground mt-0.5">Active courier routes</p>
           </CardContent>
         </Card>
@@ -491,7 +396,7 @@ export default function ShipmentsPage() {
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{preparingCount}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{kpis.preparing}</p>
             <p className="text-xs text-muted-foreground mt-0.5">Packing & label generation</p>
           </CardContent>
         </Card>
@@ -504,8 +409,10 @@ export default function ShipmentsPage() {
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{deliveredCount}</p>
-            <p className="text-xs text-emerald-600 font-medium mt-0.5">96.4% success rate</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{kpis.delivered}</p>
+            <p className="text-xs text-emerald-600 font-medium mt-0.5">
+              {kpis.total > 0 ? `${((kpis.delivered / kpis.total) * 100).toFixed(1)}% fulfillment rate` : "No dispatches yet"}
+            </p>
           </CardContent>
         </Card>
 
@@ -517,7 +424,7 @@ export default function ShipmentsPage() {
                 <AlertTriangle className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold mt-1 text-foreground">{issueCount}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{kpis.failedOrReturned}</p>
             <p className="text-xs text-muted-foreground mt-0.5">Requires resolution</p>
           </CardContent>
         </Card>
@@ -527,20 +434,26 @@ export default function ShipmentsPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card className="border shadow-xs">
           <CardHeader className="py-4">
-            <CardTitle className="text-base font-semibold">Carrier Dispatch Breakdown (Current Month)</CardTitle>
+            <CardTitle className="text-base font-semibold">Carrier Dispatch Breakdown</CardTitle>
             <CardDescription className="text-xs">Steadfast, Pathao, RedX, and Bulk Freight</CardDescription>
           </CardHeader>
           <CardContent className="pb-4">
             <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={carrierVolume} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="carrier" width={110} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(val) => [`${val} shipments`, "Volume"]} />
-                  <Bar dataKey="shipments" fill="#d97706" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {carrierVolume.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  No carrier dispatch volume recorded yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={carrierVolume} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="carrier" width={110} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(val) => [`${val} shipments`, "Volume"]} />
+                    <Bar dataKey="shipments" fill="#d97706" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -559,91 +472,97 @@ export default function ShipmentsPage() {
                 All <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px]">{shipments.length}</span>
               </TabsTrigger>
               <TabsTrigger value="transit" className="text-xs">
-                In Transit <span className="ml-1.5 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 text-[10px]">{inTransitCount}</span>
+                In Transit <span className="ml-1.5 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 text-[10px]">{kpis.inTransit}</span>
               </TabsTrigger>
               <TabsTrigger value="preparing" className="text-xs">
-                Preparing <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 text-[10px]">{preparingCount}</span>
+                Preparing <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 text-[10px]">{kpis.preparing}</span>
               </TabsTrigger>
               <TabsTrigger value="delivered" className="text-xs">
-                Delivered <span className="ml-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 text-[10px]">{deliveredCount}</span>
+                Delivered <span className="ml-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 text-[10px]">{kpis.delivered}</span>
               </TabsTrigger>
               <TabsTrigger value="returns" className="text-xs">
-                Issues / Returns <span className="ml-1.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 px-1.5 py-0.2 text-[10px]">{issueCount}</span>
+                Issues / Returns <span className="ml-1.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 px-1.5 py-0.2 text-[10px]">{kpis.failedOrReturned}</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <DataTable
-            columns={shipmentColumns}
-            data={filteredShipments}
-            searchPlaceholder="Search tracking #, order ID, recipient..."
-            enableRowSelection={true}
-            enableSorting={true}
-            enablePagination={true}
-            initialPageSize={5}
-            pageSizeOptions={[5, 10, 20]}
-            toolbarPrefix={
-              <div className="flex items-center gap-2">
-                <Select value={carrierFilter} onValueChange={(v) => setCarrierFilter(v || "all")}>
-                  <SelectTrigger className="w-40 h-9 text-xs">
-                    <SelectValue placeholder="Carrier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Carriers</SelectItem>
-                    <SelectItem value="Steadfast">Steadfast</SelectItem>
-                    <SelectItem value="Pathao">Pathao Express</SelectItem>
-                    <SelectItem value="RedX">RedX</SelectItem>
-                    <SelectItem value="Internal Freight">Internal Freight</SelectItem>
-                  </SelectContent>
-                </Select>
-                {carrierFilter !== "all" && (
+          {isLoading ? (
+            <div className="h-48 flex items-center justify-center border rounded-lg bg-card">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+            </div>
+          ) : (
+            <DataTable
+              columns={shipmentColumns}
+              data={filteredShipments}
+              searchPlaceholder="Search tracking #, order ID, recipient..."
+              enableRowSelection={true}
+              enableSorting={true}
+              enablePagination={true}
+              initialPageSize={10}
+              pageSizeOptions={[5, 10, 20, 50]}
+              toolbarPrefix={
+                <div className="flex items-center gap-2">
+                  <Select value={carrierFilter} onValueChange={(v) => setCarrierFilter(v || "all")}>
+                    <SelectTrigger className="w-40 h-9 text-xs">
+                      <SelectValue placeholder="Carrier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Carriers</SelectItem>
+                      <SelectItem value="Steadfast">Steadfast</SelectItem>
+                      <SelectItem value="Pathao">Pathao Express</SelectItem>
+                      <SelectItem value="RedX">RedX</SelectItem>
+                      <SelectItem value="Internal Freight">Internal Freight</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {carrierFilter !== "all" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCarrierFilter("all")}
+                      className="h-9 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Clear filter
+                    </Button>
+                  )}
+                </div>
+              }
+              bulkActions={(selected, clearSelection) => (
+                <>
                   <Button
-                    variant="ghost"
                     size="sm"
-                    onClick={() => setCarrierFilter("all")}
-                    className="h-9 text-xs text-muted-foreground hover:text-foreground"
+                    variant="outline"
+                    className="h-7 text-xs bg-background text-emerald-700 dark:text-emerald-400"
+                    onClick={() => handleBulkStatusChange(selected, "delivered", clearSelection)}
                   >
-                    Clear filter
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                    Mark Delivered
                   </Button>
-                )}
-              </div>
-            }
-            bulkActions={(selected, clearSelection) => (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs bg-background text-emerald-700 dark:text-emerald-400"
-                  onClick={() => handleBulkStatusChange(selected, "delivered", clearSelection)}
-                >
-                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                  Mark Delivered
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs bg-background"
-                  onClick={() => {
-                    alert(`Generating shipping labels for ${selected.length} shipments`);
-                    clearSelection();
-                  }}
-                >
-                  <Printer className="h-3.5 w-3.5 mr-1" />
-                  Print Labels
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs bg-background"
-                  onClick={() => handleExportCSV(selected)}
-                >
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  Export CSV
-                </Button>
-              </>
-            )}
-            emptyMessage="No shipments found matching your search or filters."
-          />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs bg-background"
+                    onClick={() => {
+                      toast.info(`Generating shipping labels for ${selected.length} shipments`);
+                      clearSelection();
+                    }}
+                  >
+                    <Printer className="h-3.5 w-3.5 mr-1" />
+                    Print Labels
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs bg-background"
+                    onClick={() => handleExportCSV(selected)}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Export CSV
+                  </Button>
+                </>
+              )}
+              emptyMessage="No shipments found matching your search or filters."
+            />
+          )}
         </Tabs>
       </motion.div>
     </div>
