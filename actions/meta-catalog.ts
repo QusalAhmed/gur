@@ -136,7 +136,14 @@ export async function syncAllProductsToMetaCatalogAction(payload?: {
   createdCount: number;
   updatedCount: number;
   error?: string;
-  items: Array<{ id: string; title: string; price: string; method: string }>;
+  items: Array<{
+    id: string;
+    title: string;
+    price: string;
+    method: string;
+    googleProductCategory?: string;
+    productType?: string;
+  }>;
 }> {
   try {
     return await syncProductsToMetaCatalog(payload);
@@ -167,7 +174,14 @@ export async function syncSingleProductToMetaCatalogAction(
   createdCount: number;
   updatedCount: number;
   error?: string;
-  items: Array<{ id: string; title: string; price: string; method: string }>;
+  items: Array<{
+    id: string;
+    title: string;
+    price: string;
+    method: string;
+    googleProductCategory?: string;
+    productType?: string;
+  }>;
 }> {
   try {
     return await syncProductsToMetaCatalog({

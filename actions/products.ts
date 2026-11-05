@@ -50,6 +50,8 @@ export interface SaveProductInput {
     is_featured?: boolean;
     seo_title?: string;
     seo_description?: string;
+    google_product_category?: string | null;
+    product_type?: string | null;
   };
   variants: SaveProductVariantInput[];
   images: SaveProductImageInput[];
@@ -118,6 +120,8 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       is_featured: Boolean(params.product.is_featured),
       seo_title: params.product.seo_title?.trim() || null,
       seo_description: params.product.seo_description?.trim() || null,
+      google_product_category: params.product.google_product_category?.trim() || null,
+      product_type: params.product.product_type?.trim() || null,
       updated_at: now,
     };
 

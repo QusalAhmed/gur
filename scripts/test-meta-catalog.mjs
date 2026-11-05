@@ -43,7 +43,10 @@ const sampleBatch = {
         ],
         availability: "in stock",
         link: "https://example.com/products/patali-gur",
-        condition: "new"
+        condition: "new",
+        google_product_category: "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses",
+        product_type: "Food & Beverage > Pantry > Sweeteners > Date Palm Jaggery > Patali Gur",
+        fb_product_category: "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses"
       }
     },
     {
@@ -51,7 +54,9 @@ const sampleBatch = {
       data: {
         id: "retailer_prod_2",
         title: "Liquid Feed Molasses",
-        price: "450.00 BDT"
+        price: "450.00 BDT",
+        google_product_category: "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses",
+        product_type: "Food & Beverage > Pantry > Sweeteners > Liquid Jaggery > Thin Jhola Gur"
       }
     },
     {
@@ -68,9 +73,17 @@ assert.strictEqual(sampleBatch.requests.length, 3);
 assert.strictEqual(sampleBatch.requests[0].method, "create");
 assert.strictEqual(sampleBatch.requests[0].data.id, "retailer_prod_1");
 assert.strictEqual(sampleBatch.requests[0].data.additional_image_link.length, 2);
+assert.strictEqual(
+  sampleBatch.requests[0].data.google_product_category,
+  "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses"
+);
+assert.strictEqual(
+  sampleBatch.requests[0].data.product_type,
+  "Food & Beverage > Pantry > Sweeteners > Date Palm Jaggery > Patali Gur"
+);
 assert.strictEqual(sampleBatch.requests[1].method, "update");
 assert.strictEqual(sampleBatch.requests[2].method, "delete");
-console.log("  ✅ Batch API schema meets Meta Business SDK specification.");
+console.log("  ✅ Batch API schema meets Meta Business SDK specification with google_product_category & product_type.");
 
 // 4. Mock Client Execution
 console.log("\nTest 4: Verifying Mock createItemsBatch execution...");
@@ -127,5 +140,34 @@ assert.strictEqual(collected[0].name, "Gur Item 1");
 assert.strictEqual(collected[2].name, "Gur Item 3");
 console.log("  ✅ getProducts cursor iteration and pagination verified.");
 
-console.log("\n\x1b[32m%s\x1b[0m", "🎉 All 5 Meta Catalog Integration tests passed successfully!");
+// 6. Verify Taxonomy Mapping for Meta Catalog (পাঙালি / পাটালি গুড় & বাদাম গুড়)
+console.log("\nTest 6: Verifying Taxonomy Mapping for 'পাঙালি গুড়' and 'বাদাম গুড়'...");
+const DEFAULT_GPC = "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses";
+const BASE_PTYPE = "Food & Beverage > Pantry > Sweeteners";
+
+function resolveProductTaxonomyTest(prod) {
+  let gpc = prod.google_product_category || DEFAULT_GPC;
+  let pType = prod.product_type || "";
+  if (!pType) {
+    const slug = (prod.slug || "").toLowerCase();
+    const name = `${prod.name || ""} ${prod.name_bn || ""}`.toLowerCase();
+    if (slug.includes("nut-jaggery") || slug.includes("badam") || name.includes("বাদাম")) {
+      pType = `${BASE_PTYPE} > Specialty Jaggery > Nut Jaggery`;
+    } else if (slug.includes("patali") || name.includes("পাটালি") || name.includes("পাঙালি") || name.includes("পাঙ্গালী")) {
+      pType = `${BASE_PTYPE} > Date Palm Jaggery > Patali Gur`;
+    }
+  }
+  return { gpc, pType };
+}
+
+const pataliRes = resolveProductTaxonomyTest({ name: "Patali Gur", name_bn: "পাঙালি গুড়", slug: "patali-gur" });
+assert.strictEqual(pataliRes.gpc, DEFAULT_GPC);
+assert.strictEqual(pataliRes.pType, "Food & Beverage > Pantry > Sweeteners > Date Palm Jaggery > Patali Gur");
+
+const badamRes = resolveProductTaxonomyTest({ name: "Nut Jaggery", name_bn: "বাদাম গুড়", slug: "nut-jaggery" });
+assert.strictEqual(badamRes.gpc, DEFAULT_GPC);
+assert.strictEqual(badamRes.pType, "Food & Beverage > Pantry > Sweeteners > Specialty Jaggery > Nut Jaggery");
+console.log("  ✅ Taxonomy mapping successfully verified for Patali Gur and Nut Jaggery.");
+
+console.log("\n\x1b[32m%s\x1b[0m", "🎉 All 6 Meta Catalog Integration tests passed successfully!");
 

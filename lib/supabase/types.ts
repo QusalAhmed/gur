@@ -11,6 +11,8 @@ export interface DbCategory {
   is_active: boolean;
   seo_title?: string | null;
   seo_description?: string | null;
+  google_product_category?: string | null;
+  product_type?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -70,6 +72,8 @@ export interface DbProduct {
   rating_count: number;
   seo_title?: string | null;
   seo_description?: string | null;
+  google_product_category?: string | null;
+  product_type?: string | null;
   published_at?: string | null;
   created_at?: string;
   updated_at?: string;

@@ -69,7 +69,14 @@ export function MetaCatalogManager({
     updatedCount: number;
     handles: string[];
     error?: string;
-    items: Array<{ id: string; title: string; price: string; method: string }>;
+    items: Array<{
+      id: string;
+      title: string;
+      price: string;
+      method: string;
+      googleProductCategory?: string;
+      productType?: string;
+    }>;
   } | null>(null);
 
   // Fetch Live Catalog Products State
@@ -397,6 +404,35 @@ export function MetaCatalogManager({
             </Card>
           </div>
 
+          {/* Feed URL & Taxonomy Enrichment Info */}
+          <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 rounded-xl space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold flex items-center gap-1.5 text-blue-900 dark:text-blue-200">
+                <Info className="h-4 w-4 text-[#1877F2]" />
+                Automated Meta &amp; Google Taxonomy Enrichment
+              </span>
+              <Badge variant="outline" className="border-blue-400/40 text-blue-700 dark:text-blue-300 text-[10px]">
+                Active
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Every product sync automatically includes the official <strong>Google Product Category</strong> (e.g. <code className="text-[10px]">Food, Beverages &amp; Tobacco &gt; Food Items &gt; Cooking &amp; Baking Ingredients &gt; Molasses</code>) and a hierarchical <strong>Product Type</strong> (e.g. <code className="text-[10px]">Food &amp; Beverage &gt; Pantry &gt; Sweeteners</code>) to resolve Meta Commerce Manager warnings and optimize ad delivery.
+            </p>
+            <div className="pt-1 flex items-center justify-between text-[11px] font-mono bg-background/80 p-2 rounded border border-border">
+              <span className="truncate text-muted-foreground">
+                Feed URL: <code className="text-foreground">{typeof window !== "undefined" ? `${window.location.origin}/api/catalog/feed` : "/api/catalog/feed"}</code>
+              </span>
+              <a
+                href="/api/catalog/feed"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-[10px] shrink-0 font-sans"
+              >
+                View XML <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+
           {/* Sync Result Banner */}
           {syncResult && (
             <div
@@ -432,17 +468,33 @@ export function MetaCatalogManager({
                   {syncResult.items.map((it, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between text-[11px] bg-background/50 p-1.5 rounded"
+                      className="text-[11px] bg-background/50 p-2 rounded space-y-1"
                     >
-                      <span className="truncate max-w-[280px]">
-                        <strong>{it.title}</strong>
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-muted-foreground">{it.price}</span>
-                        <Badge variant="outline" className="text-[9px] uppercase">
-                          {it.method}
-                        </Badge>
+                      <div className="flex items-center justify-between">
+                        <span className="truncate max-w-[280px]">
+                          <strong>{it.title}</strong>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-muted-foreground">{it.price}</span>
+                          <Badge variant="outline" className="text-[9px] uppercase">
+                            {it.method}
+                          </Badge>
+                        </div>
                       </div>
+                      {(it.googleProductCategory || it.productType) && (
+                        <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                          {it.productType && (
+                            <span className="truncate">
+                              <span className="font-medium text-foreground/80">Type:</span> {it.productType}
+                            </span>
+                          )}
+                          {it.googleProductCategory && (
+                            <span className="truncate">
+                              <span className="font-medium text-foreground/80">Google Cat:</span> {it.googleProductCategory}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

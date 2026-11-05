@@ -16,6 +16,7 @@ import {
   Package,
   Sliders,
   RefreshCw,
+  Share2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -140,6 +141,12 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const [seoTitle, setSeoTitle] = React.useState(initialData?.seo_title || "");
   const [seoDescription, setSeoDescription] = React.useState(
     initialData?.seo_description || ""
+  );
+  const [googleProductCategory, setGoogleProductCategory] = React.useState(
+    initialData?.google_product_category || ""
+  );
+  const [productType, setProductType] = React.useState(
+    initialData?.product_type || ""
   );
 
   // Variants State
@@ -355,6 +362,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           is_featured: isFeatured,
           seo_title: seoTitle.trim() || undefined,
           seo_description: seoDescription.trim() || undefined,
+          google_product_category: googleProductCategory.trim() || undefined,
+          product_type: productType.trim() || undefined,
         },
         variants: sanitizedVariants,
         images,
@@ -1234,6 +1243,170 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                         summary ||
                         "Experience the pure rich taste of artisanal molasses produced under strict quality testing. Delivered across Bangladesh."}
                     </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Meta / Facebook Catalog Taxonomy */}
+            <Card className="border shadow-xs md:col-span-2">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-[#1877F2]/10 flex items-center justify-center text-[#1877F2]">
+                    <Share2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      Facebook & Meta Catalog Taxonomy
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Enrich Meta Catalog feeds and dynamic product ads with precise Google product categories and hierarchical product types.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Google Product Category */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-foreground block">
+                      Google Product Category (<code className="text-[11px] font-mono">google_product_category</code>)
+                    </label>
+                    <Input
+                      placeholder="e.g. Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses"
+                      value={googleProductCategory}
+                      onChange={(e) => setGoogleProductCategory(e.target.value)}
+                      className="text-xs font-mono h-10"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Helps Meta show your ads to the most relevant audiences searching for food, sweeteners, and molasses.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[11px] text-muted-foreground self-center mr-1">Presets:</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setGoogleProductCategory(
+                            "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses"
+                          )
+                        }
+                      >
+                        Molasses (ID: 5766)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setGoogleProductCategory(
+                            "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Sugar & Sweeteners"
+                          )
+                        }
+                      >
+                        Sugar & Sweeteners (ID: 503734)
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Merchant Product Type */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-foreground block">
+                      Product Type (<code className="text-[11px] font-mono">product_type</code>)
+                    </label>
+                    <Input
+                      placeholder="e.g. Food & Beverage > Pantry > Sweeteners > Date Palm Jaggery > Patali Gur"
+                      value={productType}
+                      onChange={(e) => setProductType(e.target.value)}
+                      className="text-xs font-mono h-10"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Defines your store’s category hierarchy to organize catalog product sets and segment ad campaigns.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[11px] text-muted-foreground self-center mr-1">Presets:</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Date Palm Jaggery > Patali Gur"
+                          )
+                        }
+                      >
+                        Patali Gur
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Specialty Jaggery > Nut Jaggery"
+                          )
+                        }
+                      >
+                        Nut Jaggery
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Specialty Jaggery > Coconut Jaggery"
+                          )
+                        }
+                      >
+                        Coconut Jaggery
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Liquid Jaggery > Thin Jhola Gur"
+                          )
+                        }
+                      >
+                        Liquid Gur
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Liquid Jaggery > Granular Jhola Gur"
+                          )
+                        }
+                      >
+                        Grainy Liquid Gur
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() =>
+                          setProductType(
+                            "Food & Beverage > Pantry > Sweeteners > Flavored Jaggery > Sandesh Gur"
+                          )
+                        }
+                      >
+                        Sandesh / Chocolate Gur
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

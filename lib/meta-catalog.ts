@@ -22,6 +22,9 @@ export interface MetaCatalogItemData {
   item_group_id?: string; // Parent product ID for variants grouping
   category?: string; // Category string
   custom_label_0?: string; // Category or tags
+  google_product_category?: string; // Google Product Category for Meta Commerce & Dynamic Ads
+  product_type?: string; // Merchant taxonomy breadcrumbs (e.g. Food & Beverage > Pantry > Sweeteners)
+  fb_product_category?: string; // Meta Facebook native product category
   inventory?: number; // Stock level
   [key: string]: any;
 }
@@ -203,6 +206,81 @@ export function formatMetaApiError(err: any, catalogId?: string): string {
   }
 
   return msg || "Meta API request failed";
+}
+
+export const DEFAULT_GOOGLE_PRODUCT_CATEGORY =
+  "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses";
+
+export const DEFAULT_PRODUCT_TYPE_BASE = "Food & Beverage > Pantry > Sweeteners";
+
+export interface ResolvedTaxonomy {
+  googleProductCategory: string;
+  productType: string;
+  fbProductCategory?: string;
+}
+
+/**
+ * Resolves precise Google Product Category and hierarchical Product Type
+ * for Meta Catalog syncing. Respects database overrides first, then falls back
+ * to intelligent pattern matching on slug, name, and category.
+ */
+export function resolveProductCatalogTaxonomy(product: {
+  slug?: string | null;
+  name?: string | null;
+  name_bn?: string | null;
+  google_product_category?: string | null;
+  product_type?: string | null;
+  category?: any;
+}): ResolvedTaxonomy {
+  const explicitGpc = product.google_product_category?.trim();
+  const explicitProductType = product.product_type?.trim();
+
+  const categoryObj = Array.isArray(product.category) ? product.category[0] : product.category;
+  const categoryGpc = categoryObj?.google_product_category?.trim();
+  const categoryProductType = categoryObj?.product_type?.trim();
+
+  let googleProductCategory = explicitGpc || categoryGpc || DEFAULT_GOOGLE_PRODUCT_CATEGORY;
+  let productType = explicitProductType || categoryProductType || "";
+
+  if (!productType) {
+    const slug = (product.slug || "").toLowerCase();
+    const name = `${product.name || ""} ${product.name_bn || ""}`.toLowerCase();
+
+    if (slug.includes("nut-jaggery") || slug.includes("badam") || name.includes("বাদাম")) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Specialty Jaggery > Nut Jaggery`;
+    } else if (slug.includes("coconut") || name.includes("নারিকেল") || name.includes("নারকেল")) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Specialty Jaggery > Coconut Jaggery`;
+    } else if (slug.includes("grainy") || name.includes("দানাদার")) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Liquid Jaggery > Granular Jhola Gur`;
+    } else if (slug.includes("liquid") || name.includes("পাতলা") || name.includes("ঝোলা")) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Liquid Jaggery > Thin Jhola Gur`;
+    } else if (slug.includes("first-cut") || name.includes("প্রথম কাট")) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Date Palm Jaggery > First Cut Patali`;
+    } else if (
+      slug.includes("chocolate") ||
+      slug.includes("sandesh") ||
+      name.includes("সন্দেশ") ||
+      name.includes("চকলেট")
+    ) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Flavored Jaggery > Sandesh Gur`;
+    } else if (
+      slug.includes("patali") ||
+      name.includes("পাটালি") ||
+      name.includes("পাঙালি") ||
+      name.includes("পাঙ্গালী")
+    ) {
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > Date Palm Jaggery > Patali Gur`;
+    } else {
+      const catName = categoryObj?.name || "Date Palm Jaggery";
+      productType = `${DEFAULT_PRODUCT_TYPE_BASE} > ${catName}`;
+    }
+  }
+
+  return {
+    googleProductCategory,
+    productType,
+    fbProductCategory: googleProductCategory,
+  };
 }
 
 /**
@@ -454,7 +532,14 @@ export async function syncProductsToMetaCatalog(options?: {
   createdCount: number;
   updatedCount: number;
   error?: string;
-  items: Array<{ id: string; title: string; price: string; method: string }>;
+  items: Array<{
+    id: string;
+    title: string;
+    price: string;
+    method: string;
+    googleProductCategory?: string;
+    productType?: string;
+  }>;
 }> {
   const config = getMetaSdkConfig();
   if (!config.isConfigured && !options?.catalogId && !options?.accessToken) {
@@ -498,8 +583,8 @@ export async function syncProductsToMetaCatalog(options?: {
     .from("products")
     .select(`
       id, slug, name, name_bn, summary, summary_bn, description, description_bn,
-      origin, status, category_id,
-      category:categories(id, name, name_bn),
+      origin, status, category_id, google_product_category, product_type,
+      category:categories(id, name, name_bn, google_product_category, product_type),
       variants:product_variants(*),
       images:product_images(*)
     `)
@@ -549,9 +634,17 @@ export async function syncProductsToMetaCatalog(options?: {
 
   // 4. Transform products into Meta Catalog Batch requests
   const requests: MetaBatchRequest[] = [];
-  const syncedItemsSummary: Array<{ id: string; title: string; price: string; method: string }> = [];
+  const syncedItemsSummary: Array<{
+    id: string;
+    title: string;
+    price: string;
+    method: string;
+    googleProductCategory?: string;
+    productType?: string;
+  }> = [];
 
   for (const prod of dbProducts) {
+    const taxonomy = resolveProductCatalogTaxonomy(prod);
     const rawImages: any[] = Array.isArray(prod.images) ? prod.images : [];
     // Sort images by is_primary first, then sort_order
     rawImages.sort((a, b) => {
@@ -622,6 +715,9 @@ export async function syncProductsToMetaCatalog(options?: {
           condition: "new",
           category: categoryName,
           custom_label_0: categoryName,
+          google_product_category: taxonomy.googleProductCategory,
+          product_type: taxonomy.productType,
+          fb_product_category: taxonomy.fbProductCategory,
         },
       });
 
@@ -630,6 +726,8 @@ export async function syncProductsToMetaCatalog(options?: {
         title: productTitle,
         price: priceString,
         method,
+        googleProductCategory: taxonomy.googleProductCategory,
+        productType: taxonomy.productType,
       });
       continue;
     }
@@ -675,6 +773,9 @@ export async function syncProductsToMetaCatalog(options?: {
         condition: "new",
         category: categoryName,
         custom_label_0: categoryName,
+        google_product_category: taxonomy.googleProductCategory,
+        product_type: taxonomy.productType,
+        fb_product_category: taxonomy.fbProductCategory,
       },
     });
 
@@ -683,6 +784,8 @@ export async function syncProductsToMetaCatalog(options?: {
       title: productTitle,
       price: primaryPriceString,
       method: primaryMethod,
+      googleProductCategory: taxonomy.googleProductCategory,
+      productType: taxonomy.productType,
     });
 
     // If there are multiple variants, also register individual variants grouped by item_group_id
@@ -738,6 +841,9 @@ export async function syncProductsToMetaCatalog(options?: {
             condition: "new",
             category: categoryName,
             custom_label_0: categoryName,
+            google_product_category: taxonomy.googleProductCategory,
+            product_type: taxonomy.productType,
+            fb_product_category: taxonomy.fbProductCategory,
           },
         });
 
@@ -746,6 +852,8 @@ export async function syncProductsToMetaCatalog(options?: {
           title: variantTitle,
           price: vPriceString,
           method: variantMethod,
+          googleProductCategory: taxonomy.googleProductCategory,
+          productType: taxonomy.productType,
         });
       }
     }

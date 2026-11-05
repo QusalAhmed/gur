@@ -160,7 +160,8 @@ async function main() {
     .from("products")
     .select(`
       id, slug, name, name_bn, summary, summary_bn, description,
-      status, category:categories(name),
+      status, google_product_category, product_type,
+      category:categories(name, google_product_category, product_type),
       variants:product_variants(*),
       images:product_images(*)
     `)
@@ -219,6 +220,33 @@ async function main() {
     const priceStr = `${(Number(defaultVar.price) || 0).toFixed(2)} BDT`;
     const availability = defaultVar.stock_status === "out_of_stock" ? "out of stock" : "in stock";
 
+    const defaultGpc = "Food, Beverages & Tobacco > Food Items > Cooking & Baking Ingredients > Molasses";
+    const basePType = "Food & Beverage > Pantry > Sweeteners";
+    let gpc = prod.google_product_category?.trim() || prod.category?.google_product_category?.trim() || defaultGpc;
+    let pType = prod.product_type?.trim() || prod.category?.product_type?.trim() || "";
+
+    if (!pType) {
+      const slug = (prod.slug || "").toLowerCase();
+      const name = `${prod.name || ""} ${prod.name_bn || ""}`.toLowerCase();
+      if (slug.includes("nut-jaggery") || slug.includes("badam") || name.includes("বাদাম")) {
+        pType = `${basePType} > Specialty Jaggery > Nut Jaggery`;
+      } else if (slug.includes("coconut") || name.includes("নারিকেল") || name.includes("নারকেল")) {
+        pType = `${basePType} > Specialty Jaggery > Coconut Jaggery`;
+      } else if (slug.includes("grainy") || name.includes("দানাদার")) {
+        pType = `${basePType} > Liquid Jaggery > Granular Jhola Gur`;
+      } else if (slug.includes("liquid") || name.includes("পাতলা") || name.includes("ঝোলা")) {
+        pType = `${basePType} > Liquid Jaggery > Thin Jhola Gur`;
+      } else if (slug.includes("first-cut") || name.includes("প্রথম কাট")) {
+        pType = `${basePType} > Date Palm Jaggery > First Cut Patali`;
+      } else if (slug.includes("chocolate") || slug.includes("sandesh") || name.includes("সন্দেশ") || name.includes("চকলেট")) {
+        pType = `${basePType} > Flavored Jaggery > Sandesh Gur`;
+      } else if (slug.includes("patali") || name.includes("পাটালি") || name.includes("পাঙালি") || name.includes("পাঙ্গালী")) {
+        pType = `${basePType} > Date Palm Jaggery > Patali Gur`;
+      } else {
+        pType = `${basePType} > ${prod.category?.name || "Date Palm Jaggery"}`;
+      }
+    }
+
     const method =
       modeArg === "create" ? "create" : modeArg === "update" ? "update" : existingIds.has(prod.id) ? "update" : "create";
 
@@ -240,11 +268,17 @@ async function main() {
         availability,
         link,
         condition: "new",
+        google_product_category: gpc,
+        product_type: pType,
+        fb_product_category: gpc,
       },
     });
 
     console.log(
-      `   + Prepared [${method.toUpperCase()}] ${title} (${priceStr}) -> ID: ${prod.id} (${1 + extraImageUrls.length} total images: 1 primary + ${extraImageUrls.length} additional)`
+      `   + Prepared [${method.toUpperCase()}] ${title} (${priceStr})\n` +
+      `     • Google Product Category: ${gpc}\n` +
+      `     • Product Type:            ${pType}\n` +
+      `     • ID: ${prod.id} (${1 + extraImageUrls.length} total images)`
     );
   }
 
