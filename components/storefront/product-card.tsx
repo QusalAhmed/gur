@@ -464,13 +464,6 @@ export function ProductCard({
               </motion.div>
             )}
           </motion.div>
-
-          {/* Artisanal Clay/Wood Shelf Pedestal Bar */}
-          <div className="w-48 xs:w-56 sm:w-64 md:w-72 h-2 sm:h-2.5 bg-gradient-to-r from-transparent via-[#b47137] to-transparent rounded-full shadow-md mt-2 opacity-80" />
-          <p className="text-[11px] sm:text-xs text-amber-800 dark:text-amber-400 font-medium tracking-wide mt-1 flex items-center justify-center gap-1.5">
-            <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>{t.heritageBadge}</span>
-          </p>
         </div>
 
         {/* ================= RIGHT COLUMN: Info & Controls ================= */}

@@ -330,10 +330,10 @@ export default function VariantsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Packaging</SelectItem>
-                    <SelectItem value="bottle">Glass Bottles</SelectItem>
-                    <SelectItem value="jar">Jars & Pails</SelectItem>
-                    <SelectItem value="drum">Steel Drums (200L)</SelectItem>
-                    <SelectItem value="ibc">IBC Totes (1 Ton)</SelectItem>
+                    <SelectItem value="jar">Jar</SelectItem>
+                    <SelectItem value="foil">Foil</SelectItem>
+                    <SelectItem value="bottle">Bottle</SelectItem>
+                    <SelectItem value="box">Box</SelectItem>
                   </SelectContent>
                 </Select>
                 {packFilter !== "all" && (

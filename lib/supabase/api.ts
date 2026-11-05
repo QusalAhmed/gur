@@ -1119,7 +1119,7 @@ export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
   try {
     const [prodRes, varRes, catRes, imgRes] = await Promise.all([
       supabase.from("products").select("id, name, slug, category_id").order("sort_order", { ascending: true }),
-      supabase.from("product_variants").select("id, product_id, sku, name, price, stock_status").eq("is_active", true),
+      supabase.from("product_variants").select("id, product_id, sku, name, price, stock_status, pack_type").eq("is_active", true),
       supabase.from("categories").select("id, name"),
       supabase.from("product_images").select("id, product_id, storage_path, is_primary, sort_order").order("sort_order", { ascending: true }),
     ]);
@@ -1163,6 +1163,7 @@ export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
         unit_price: Number(v.price) || 0,
         stock: v.stock_status === "in_stock" ? "In Stock" : v.stock_status.replace("_", " "),
         image: imageMap.get(v.product_id) || "/images/products/raw-sugarcane-drum.jpg",
+        pack_type: v.pack_type || "jar",
       };
     });
   } catch (err) {

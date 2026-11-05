@@ -9,6 +9,7 @@ export interface OrderItem {
   variant_id?: string | null;
   product_id?: string | null;
   image?: string | null;
+  package_type?: string | null;
 }
 
 export type OrderNoteType =
@@ -109,6 +110,7 @@ export interface CatalogProduct {
   unit_price: number;
   stock: string;
   image: string;
+  pack_type?: string;
 }
 
 export interface OtherOrderInsight {

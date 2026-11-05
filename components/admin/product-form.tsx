@@ -88,15 +88,10 @@ const STOCK_STATUS_OPTIONS = [
 ] as const;
 
 const PACK_TYPES = [
-  { value: "jar", label: "Glass Jar" },
-  { value: "bottle", label: "Plastic / Glass Bottle" },
-  { value: "pail", label: "Plastic Pail / Bucket" },
-  { value: "drum", label: "Industrial Drum (200L)" },
-  { value: "bag", label: "Bag / Sack" },
-  { value: "block", label: "Solid Molded Block (Patali)" },
-  { value: "ibc_tote", label: "1 Ton IBC Tote Tank" },
-  { value: "pouch", label: "Stand-up Pouch" },
-  { value: "bulk", label: "Bulk Tanker" },
+  { value: "jar", label: "Jar" },
+  { value: "foil", label: "Foil" },
+  { value: "bottle", label: "Bottle" },
+  { value: "box", label: "Box" },
 ];
 
 const NET_UNITS = [
@@ -155,7 +150,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         sku: v.sku,
         name: v.name,
         nameBn: v.name_bn || "",
-        pack_type: v.pack_type || "jar",
+        pack_type: PACK_TYPES.some((pt) => pt.value === v.pack_type) ? v.pack_type : "jar",
         net_quantity: Number(v.net_quantity) || 1,
         net_unit: v.net_unit || "kg",
         price: Number(v.price) || 0,

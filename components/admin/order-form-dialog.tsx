@@ -94,6 +94,24 @@ export interface OrderFormDialogProps {
   showToast?: (message: string, type?: "success" | "info" | "destructive") => void;
 }
 
+const PACKAGE_TYPES = ["Jar", "Foil", "Bottle", "Box"] as const;
+
+function detectItemPackageType(name?: string, packType?: string): string {
+  if (packType) {
+    const pt = packType.toLowerCase();
+    if (pt === "jar") return "Jar";
+    if (pt === "foil") return "Foil";
+    if (pt === "bottle") return "Bottle";
+    if (pt === "box") return "Box";
+  }
+  if (!name) return "Jar";
+  const lower = name.toLowerCase();
+  if (lower.includes("foil") || lower.includes("pouch")) return "Foil";
+  if (lower.includes("bottle") || lower.includes("jerrycan") || lower.includes("liquid")) return "Bottle";
+  if (lower.includes("box") || lower.includes("block") || lower.includes("drum") || lower.includes("tote") || lower.includes("pail") || lower.includes("bag")) return "Box";
+  return "Jar";
+}
+
 export function OrderFormDialog({
   open,
   onOpenChange,
@@ -116,6 +134,7 @@ export function OrderFormDialog({
     Record<string, { quantity: number; unit_price: number }>
   >({});
   const [productSearchQuery, setProductSearchQuery] = React.useState("");
+  const [packageTypeFilter, setPackageTypeFilter] = React.useState<string>("all");
   const [newNoteType, setNewNoteType] = React.useState<OrderNoteType>("internal");
   const [newNoteText, setNewNoteText] = React.useState("");
   const [notesList, setNotesList] = React.useState<OrderNote[]>([]);
@@ -615,7 +634,12 @@ export function OrderFormDialog({
           packaging_note: "",
           courier_name: order.courier_name || "",
           cancel_reason: order.cancel_reason || "",
-          items: order.items ? order.items.map((it) => ({ ...it })) : [],
+          items: order.items
+            ? order.items.map((it) => ({
+                ...it,
+                package_type: it.package_type || detectItemPackageType(it.variant_name),
+              }))
+            : [],
         });
       } else {
         setNotesList([]);
@@ -683,36 +707,40 @@ export function OrderFormDialog({
 
   // Smart-filtered grouped catalog products for product selection modal
   const filteredGroupedProducts = React.useMemo(() => {
-    if (!productSearchQuery.trim()) return groupedCatalogProducts;
     const q = productSearchQuery.toLowerCase().trim();
+    const pkg = packageTypeFilter.toLowerCase();
 
     const results: typeof groupedCatalogProducts = [];
 
     groupedCatalogProducts.forEach((group) => {
-      const productNameMatch = group.product_name.toLowerCase().includes(q);
-      const categoryMatch = group.category.toLowerCase().includes(q);
+      const productNameMatch = q ? group.product_name.toLowerCase().includes(q) : false;
+      const categoryMatch = q ? group.category.toLowerCase().includes(q) : false;
 
-      if (productNameMatch || categoryMatch) {
-        // Parent matches -> show all variants
-        results.push(group);
-      } else {
-        // Check if any variant or SKU matches
-        const matchingVariants = group.variants.filter(
-          (v) =>
-            v.variant_name.toLowerCase().includes(q) ||
-            v.sku.toLowerCase().includes(q)
-        );
-        if (matchingVariants.length > 0) {
-          results.push({
-            ...group,
-            variants: matchingVariants,
-          });
+      const matchingVariants = group.variants.filter((v) => {
+        if (pkg !== "all") {
+          const vPkg = detectItemPackageType(v.variant_name, v.pack_type).toLowerCase();
+          if (vPkg !== pkg) return false;
         }
+
+        if (!q) return true;
+        if (productNameMatch || categoryMatch) return true;
+
+        return (
+          v.variant_name.toLowerCase().includes(q) ||
+          v.sku.toLowerCase().includes(q)
+        );
+      });
+
+      if (matchingVariants.length > 0) {
+        results.push({
+          ...group,
+          variants: matchingVariants,
+        });
       }
     });
 
     return results;
-  }, [groupedCatalogProducts, productSearchQuery]);
+  }, [groupedCatalogProducts, productSearchQuery, packageTypeFilter]);
 
   // Flat list of currently visible/filtered variants for bulk selection
   const filteredCatalogProducts = React.useMemo(() => {
@@ -723,6 +751,7 @@ export function OrderFormDialog({
   const handleOpenProductModal = () => {
     setSelectedModalProducts({});
     setProductSearchQuery("");
+    setPackageTypeFilter("all");
     setIsProductModalOpen(true);
   };
 
@@ -816,6 +845,7 @@ export function OrderFormDialog({
         sku: prod.sku,
         product_name: prod.product_name,
         variant_name: prod.variant_name,
+        package_type: detectItemPackageType(prod.variant_name, prod.pack_type),
         quantity,
         unit_price,
         line_total: quantity * unit_price,
@@ -877,6 +907,30 @@ export function OrderFormDialog({
           ? { ...it, unit_price: price, line_total: it.quantity * price }
           : it
       )
+    );
+  };
+
+  const handleUpdateItemPackageType = (itemId: string, newPackageType: string) => {
+    const current = form.getFieldValue("items") || [];
+    form.setFieldValue(
+      "items",
+      current.map((it) => {
+        if (it.id !== itemId) return it;
+        let newVariantName = it.variant_name || "";
+        if (/(jar|foil|bottle|box|pouch|drum|pail|jerrycan|tote|bag)/i.test(newVariantName)) {
+          newVariantName = newVariantName.replace(
+            /(glass jar|plastic jar|jar|foil pack|vacuum pouch|pouch|foil|plastic bottle|glass bottle|bottle|box|pail|drum|jerrycan|ibc tote|tote)/gi,
+            newPackageType
+          );
+        } else {
+          newVariantName = newVariantName ? `${newVariantName} (${newPackageType})` : newPackageType;
+        }
+        return {
+          ...it,
+          package_type: newPackageType,
+          variant_name: newVariantName,
+        };
+      })
     );
   };
 
@@ -1675,6 +1729,7 @@ export function OrderFormDialog({
                                 <thead className="bg-muted/60 text-muted-foreground uppercase text-xs font-semibold tracking-wider border-b">
                                   <tr>
                                     <th className="py-2.5 px-3">Product</th>
+                                    <th className="py-2.5 px-3 w-32">Package Type</th>
                                     <th className="py-2.5 px-3 w-32">Unit Price (BDT)</th>
                                     <th className="py-2.5 px-3 w-36 text-center">Quantity</th>
                                     <th className="py-2.5 px-3 w-32 text-right">Line Total</th>
@@ -1722,6 +1777,21 @@ export function OrderFormDialog({
                                               </div>
                                             </div>
                                           </div>
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          <select
+                                            id={`select-item-package-type-${item.id}`}
+                                            value={item.package_type || detectItemPackageType(item.variant_name)}
+                                            onChange={(e) => handleUpdateItemPackageType(item.id, e.target.value)}
+                                            className="h-8 w-28 text-xs rounded-md border border-input bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
+                                            title="Package Type"
+                                          >
+                                            {PACKAGE_TYPES.map((pt) => (
+                                              <option key={pt} value={pt} className="bg-popover">
+                                                {pt}
+                                              </option>
+                                            ))}
+                                          </select>
                                         </td>
                                         <td className="py-2.5 px-3">
                                           <div className="relative">
@@ -2750,6 +2820,19 @@ export function OrderFormDialog({
                       />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      <select
+                        id="modal-package-type-filter"
+                        value={packageTypeFilter}
+                        onChange={(e) => setPackageTypeFilter(e.target.value)}
+                        className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
+                        title="Filter by package type"
+                      >
+                        <option value="all" className="bg-popover">All Packaging</option>
+                        <option value="jar" className="bg-popover">Jar</option>
+                        <option value="foil" className="bg-popover">Foil</option>
+                        <option value="bottle" className="bg-popover">Bottle</option>
+                        <option value="box" className="bg-popover">Box</option>
+                      </select>
                       <Button
                         id="btn-modal-select-all"
                         type="button"
