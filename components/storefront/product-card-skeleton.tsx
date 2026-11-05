@@ -44,9 +44,9 @@ export function ProductCardSkeleton() {
           </div>
 
           <div className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5 animate-pulse">
+            <div className="h-8 w-full bg-amber-200/80 dark:bg-stone-800 rounded-xl" />
             <div className="flex items-center justify-between gap-2 px-1">
-              <div className="h-8 w-24 bg-amber-200/80 dark:bg-stone-800 rounded-xl" />
-              <div className="h-8 w-20 bg-amber-200/80 dark:bg-stone-800 rounded-xl" />
+              <div className="h-6 w-28 bg-amber-200/80 dark:bg-stone-800 rounded-lg" />
             </div>
             <div className="h-12 w-full bg-amber-200/80 dark:bg-stone-800 rounded-2xl" />
           </div>

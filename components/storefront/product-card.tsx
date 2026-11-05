@@ -502,68 +502,22 @@ export function ProductCard({
             <h2 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-[#451a03] dark:text-amber-100 tracking-tight leading-tight">
               {displayName}
             </h2>
-            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1 line-clamp-2 md:line-clamp-3 leading-relaxed">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1 leading-relaxed">
               {displaySummary}
             </p>
           </div>
 
-          {/* Control Deck: Price & Pack Size Selector + Quantity Stepper */}
+          {/* Control Deck: Variation Selector, Price & Quantity Stepper */}
           <div className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5">
-            {/* Price & Pack Size Selector */}
-            <div className="flex items-center justify-between gap-2 px-1">
-              <div>
-                {/* Unit Price */}
-                <div className="flex items-center gap-1 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
-                  <span>
-                    {displayUnit > 0
-                      ? lang === "bn"
-                        ? "একক দর:"
-                        : "Unit Price:"
-                      : lang === "bn"
-                        ? "মূল্য:"
-                        : "Price:"}
-                  </span>
-                  <span
-                    className={`font-mono ${
-                      displayUnit > 0
-                        ? "text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200"
-                        : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
-                    }`}
-                  >
-                    {formatStorePrice(unitPrice, lang)}
-                  </span>
-                  {selectedVariant.name && (
-                    <span className="text-[10px] sm:text-[11px] text-amber-700/70 dark:text-amber-400/70 font-normal">
-                      / {lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}
-                    </span>
-                  )}
-                </div>
-
-                {/* Total Price: Hidden when quantity is 0 */}
-                <AnimatePresence>
-                  {displayUnit > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0, y: -4 }}
-                      animate={{ opacity: 1, height: "auto", y: 0 }}
-                      exit={{ opacity: 0, height: 0, y: -4 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="flex items-baseline gap-1.5 mt-0.5 overflow-hidden"
-                    >
-                      <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
-                        {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
-                      </span>
-                      <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
-                        {formatStorePrice(unitPrice * displayUnit, lang)}
-                      </span>
-                      <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                        ({lang === "bn" ? `${toBnNumber(displayUnit)}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
-                      </span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {sortedVariants.length > 1 && (
+            {/* Variation Dropdown */}
+            {sortedVariants.length > 1 && (
+              <div className="space-y-1 px-1">
+                <label
+                  htmlFor={`variant-select-${product.id}`}
+                  className="block text-[11px] sm:text-xs font-bold text-amber-900/80 dark:text-amber-300"
+                >
+                  {t.packSizeLabel}
+                </label>
                 <div className="relative">
                   <select
                     id={`variant-select-${product.id}`}
@@ -573,7 +527,7 @@ export function ProductCard({
                       const found = sortedVariants.find((v) => v.id === e.target.value);
                       if (found) setSelectedVariant(found);
                     }}
-                    className="bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm py-1.5 px-3 pr-7 rounded-xl border border-amber-300 dark:border-stone-700 shadow-xs appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-3 pr-8 rounded-xl border border-amber-300 dark:border-stone-700 shadow-xs appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     {sortedVariants.map((v) => (
                       <option key={v.id} value={v.id}>
@@ -581,9 +535,62 @@ export function ProductCard({
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="w-4 h-4 text-amber-800 dark:text-amber-300 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+                  <ChevronDown className="w-4 h-4 text-amber-800 dark:text-amber-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
                 </div>
-              )}
+              </div>
+            )}
+
+            {/* Price (displayed below the variation dropdown) */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 px-1">
+              {/* Unit Price */}
+              <div className="flex items-center gap-1 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
+                <span>
+                  {displayUnit > 0
+                    ? lang === "bn"
+                      ? "একক দর:"
+                      : "Unit Price:"
+                    : lang === "bn"
+                      ? "মূল্য:"
+                      : "Price:"}
+                </span>
+                <span
+                  className={`font-mono ${
+                    displayUnit > 0
+                      ? "text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200"
+                      : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
+                  }`}
+                >
+                  {formatStorePrice(unitPrice, lang)}
+                </span>
+                {selectedVariant.name && (
+                  <span className="text-[10px] sm:text-[11px] text-amber-700/70 dark:text-amber-400/70 font-normal">
+                    / {lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}
+                  </span>
+                )}
+              </div>
+
+              {/* Total Price: Hidden when quantity is 0 */}
+              <AnimatePresence>
+                {displayUnit > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -4 }}
+                    animate={{ opacity: 1, height: "auto", y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -4 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="flex items-baseline gap-1.5 overflow-hidden"
+                  >
+                    <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
+                      {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
+                    </span>
+                    <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
+                      {formatStorePrice(unitPrice * displayUnit, lang)}
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      ({lang === "bn" ? `${toBnNumber(displayUnit)}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Quantity Stepper with Minus, Counter, Plus */}
