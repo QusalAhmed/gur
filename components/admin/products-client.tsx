@@ -344,7 +344,7 @@ export function ProductsClient() {
           const p = row.original;
           return (
             <div className="flex items-center gap-3 min-w-[240px]">
-              {/* Product Thumbnail from Supabase Storage / Fallback */}
+              {/* Product Thumbnail from ImageKit CDN / Fallback */}
               <div className="h-11 w-11 rounded-xl bg-muted/60 border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-xs relative">
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -550,7 +550,7 @@ export function ProductsClient() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Products Catalog</h1>
           <p className="text-muted-foreground text-sm">
-            Manage catalog items, packaging variants, pricing tiers, and Supabase media storage.
+            Manage catalog items, packaging variants, pricing tiers, and ImageKit CDN media storage.
           </p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
@@ -769,14 +769,14 @@ export function ProductsClient() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-2 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border">
+          <div className="py-2.5 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border mb-2">
             <p className="font-semibold text-foreground mb-1">Data Safety Note:</p>
             If this product is associated with existing customer orders or inventory batches, the
             system will automatically and safely <strong>archive</strong> it instead of deleting it,
             preserving invoice history and accounting accuracy.
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
             <Button
               variant="outline"
               size="sm"

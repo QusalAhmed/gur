@@ -85,7 +85,7 @@ export function SteadfastRecreateDialog({
         </div>
 
         {/* Changed Information Diff List */}
-        <div className="flex-1 overflow-y-auto max-h-[260px] space-y-2 pr-1">
+        <div className="flex-1 overflow-y-auto max-h-[260px] space-y-2 pr-1 pb-4">
           <p className="text-xs font-semibold text-foreground px-0.5">
             Detected Changes ({diffItems.length}):
           </p>
@@ -116,7 +116,7 @@ export function SteadfastRecreateDialog({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2 border-t mt-2">
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-4 pb-1 border-t mt-3">
           <Button
             type="button"
             variant="ghost"

@@ -200,7 +200,7 @@ export function CategoryFormDialog({
       form.setFieldValue("imageUrl", publicUrl);
     } catch (err: any) {
       console.error("Category image upload error:", err);
-      onError(err?.message || "Failed to upload image to Supabase Storage.");
+      onError(err?.message || "Failed to upload image to ImageKit CDN.");
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -247,7 +247,7 @@ export function CategoryFormDialog({
           className="flex-1 min-h-0 flex flex-col overflow-hidden"
         >
           {/* Scrollable Single Page Form Body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-5 pb-8 space-y-6">
             {/* ── Section 1: Basic Information & Hierarchy ── */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs font-bold text-foreground tracking-wide uppercase">
@@ -454,7 +454,7 @@ export function CategoryFormDialog({
                   <span>Media & Banner Image</span>
                 </div>
                 <span className="text-[11px] text-muted-foreground font-normal lowercase">
-                  supabase: catalog-images
+                  imagekit: categories
                 </span>
               </div>
 
@@ -483,7 +483,7 @@ export function CategoryFormDialog({
                           {((currentImagePath as string) || "").split("/").pop() || "Category Banner"}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          Public asset stored in Supabase Storage. Used on catalog badges and navigation tiles.
+                          Public asset stored in ImageKit CDN. Used on catalog badges and navigation tiles.
                         </p>
                         <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
                           <Button
@@ -521,8 +521,8 @@ export function CategoryFormDialog({
                         Upload Category Banner / Thumbnail
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
-                        Stored in Supabase Storage <code className="text-amber-600">catalog-images</code>{" "}
-                        bucket. Supports JPEG, PNG, WebP up to 5MB.
+                        Stored in ImageKit <code className="text-amber-600">categories</code>{" "}
+                        folder. Supports JPEG, PNG, WebP up to 5MB.
                       </p>
                       <Button
                         type="button"

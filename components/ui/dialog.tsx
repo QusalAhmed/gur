@@ -149,11 +149,27 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const hasMargin =
+    typeof className === "string" &&
+    (className.includes("m-") ||
+      className.includes("mx-") ||
+      className.includes("my-") ||
+      className.includes("mb-") ||
+      className.includes("-mx-") ||
+      className.includes("-mb-") ||
+      className.includes("-m-"))
+  const hasCustomPadding =
+    typeof className === "string" &&
+    (className.includes("p-") ||
+      className.includes("px-") ||
+      className.includes("py-"))
+
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        !hasMargin && !hasCustomPadding && "-mx-4 -mb-4 rounded-b-xl border-t bg-muted/50 p-4",
         className
       )}
       {...props}

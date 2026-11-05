@@ -790,19 +790,19 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           </div>
         </TabsContent>
 
-        {/* ── TAB 2: MEDIA & SUPABASE STORAGE ─────────────────────────────────── */}
+        {/* ── TAB 2: MEDIA & IMAGEKIT STORAGE ─────────────────────────────────── */}
         <TabsContent value="media" className="space-y-6">
           <Card className="border shadow-xs">
             <CardHeader>
               <CardTitle className="text-base font-semibold">
-                Product Media & Supabase Storage
+                Product Media & ImageKit Storage
               </CardTitle>
               <CardDescription className="text-xs">
-                Upload product photography directly to the public{" "}
+                Upload product photography directly to{" "}
                 <code className="text-amber-600 bg-amber-500/10 px-1 py-0.5 rounded">
-                  catalog-images
+                  ImageKit
                 </code>{" "}
-                storage bucket. Drag and drop cards to change serial order. The #1 serial image is automatically set as the primary catalog cover.
+                CDN media storage. Drag and drop cards to change serial order. The #1 serial image is automatically set as the primary catalog cover.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -813,7 +813,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                 }}
                 multiple={true}
                 maxFiles={12}
-                bucket="catalog-images"
+                
                 folder={`products/${slug || initialData?.id || "draft"}`}
                 label="Click or drag product images to upload"
                 description="Supported formats: JPEG, PNG, WebP, AVIF up to 50MB (files > 5MB auto-compressed). Drag to serialize order. Serial #1 is the primary cover."

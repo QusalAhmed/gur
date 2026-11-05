@@ -648,14 +648,14 @@ export function CategoriesClient() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-2 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border">
+          <div className="py-2.5 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border mb-2">
             <p className="font-semibold text-foreground mb-1">Catalog Integrity Protection:</p>
             If products currently belong to this category, the category will be safely{" "}
             <strong>deactivated (draft)</strong> instead of deleted to protect storefront
             organization and product relations.
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
             <Button
               variant="outline"
               size="sm"

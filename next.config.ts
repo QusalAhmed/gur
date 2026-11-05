@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
-const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
+  ? (() => {
+      try {
+        return new URL(process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT).hostname;
+      } catch {
+        return undefined;
+      }
+    })()
   : undefined;
 
 const nextConfig: NextConfig = {
@@ -20,23 +26,23 @@ const nextConfig: NextConfig = {
         remotePatterns: [
             {
                 protocol: "https",
-                hostname: "*.supabase.co",
+                hostname: "images.unsplash.com",
                 pathname: "/**",
             },
-            ...(supabaseHost
+            {
+                protocol: "https",
+                hostname: "ik.imagekit.io",
+                pathname: "/**",
+            },
+            ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
                 ? [
                     {
                         protocol: "https" as const,
-                        hostname: supabaseHost,
+                        hostname: imagekitHost,
                         pathname: "/**",
                     },
                 ]
                 : []),
-            {
-                protocol: "https",
-                hostname: "images.unsplash.com",
-                pathname: "/**",
-            },
         ],
     },
     experimental: {},

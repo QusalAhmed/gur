@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { formatDbOrderRecord } from "@/lib/supabase";
+import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import type { Order } from "@/types/order";
 
 export interface GetOrdersParams {
@@ -249,11 +250,7 @@ async function enrichOrderItemsWithImages(client: any, orderData: any) {
       const imgMap = new Map<string, string>();
       for (const row of imgRows) {
         if (!imgMap.has(row.product_id)) {
-          let pubUrl = row.storage_path;
-          if (pubUrl && !pubUrl.startsWith("http")) {
-            const { data: pubData } = client.storage.from("catalog-images").getPublicUrl(row.storage_path);
-            pubUrl = pubData?.publicUrl || "";
-          }
+          const pubUrl = resolveCdnImageUrl(row.storage_path);
           if (pubUrl) {
             imgMap.set(row.product_id, pubUrl);
           }

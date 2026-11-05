@@ -9,7 +9,7 @@ import { ImageUploaderProps, UploadedImage } from "./types";
 import {
   calculateFileHash,
   compressImage,
-  uploadToSupabaseWithProgress,
+  uploadImageWithProgress,
   normalizeValue,
   formatBytes,
 } from "./utils";
@@ -25,7 +25,7 @@ export function ImageUploader({
   maxInputSizeBytes = 50 * 1024 * 1024, // 50MB raw file accept limit
   compressThresholdBytes = 5 * 1024 * 1024, // 5MB trigger threshold
   targetCompressedSizeMB = 2, // Compresses to ~2MB (guaranteed < 5MB)
-  bucket = "catalog-images",
+  bucket = "general",
   folder = "general",
   compress = true,
   maxWidthOrHeight = 2048,
@@ -210,18 +210,19 @@ export function ImageUploader({
             setItems([...activeList]);
           });
         } else {
-          // Default: upload to Supabase Storage with clean folder path
+          // Default: upload directly to ImageKit with clean folder path and live progress
           const cleanBaseName = uploadFile.name
             .replace(/\.[^/.]+$/, "")
             .toLowerCase()
             .replace(/[^a-z0-9]/g, "-")
             .slice(0, 30);
           const ext = uploadFile.name.split(".").pop()?.toLowerCase() || "webp";
-          const storagePath = `${folder}/${Date.now()}-${cleanBaseName}.${ext}`;
+          const fileName = `${Date.now()}-${cleanBaseName}.${ext}`;
 
-          uploadResult = await uploadToSupabaseWithProgress(uploadFile, {
+          uploadResult = await uploadImageWithProgress(uploadFile, {
+            folder,
             bucket,
-            path: storagePath,
+            fileName,
             onProgress: (pct) => {
               placeholder.progress = pct;
               setItems([...activeList]);

@@ -221,7 +221,7 @@ export function AdminHeader() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 pt-2 pb-4">
             {/* Avatar Uploader */}
             <div className="space-y-2">
               <label className="text-xs font-semibold block">Profile Photo / Avatar</label>
@@ -233,7 +233,7 @@ export function AdminHeader() {
                 }}
                 onRemove={() => setProfileAvatarUrl("")}
                 multiple={false}
-                bucket="catalog-images"
+                
                 folder="avatars"
                 label="Upload Profile Photo"
                 description="Click or drag square photo (JPEG, PNG, WebP)"
@@ -267,7 +267,7 @@ export function AdminHeader() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
             <Button
               variant="outline"
               size="sm"

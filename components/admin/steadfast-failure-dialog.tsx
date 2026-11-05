@@ -53,7 +53,7 @@ export function SteadfastFailureDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="my-2 space-y-3">
+        <div className="my-2 space-y-3 pb-2">
           <div className="p-3 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-xs space-y-1.5">
             <p className="font-semibold">Steadfast API Error:</p>
             <p className="text-destructive/90 leading-relaxed font-mono text-[11px]">
@@ -83,7 +83,7 @@ export function SteadfastFailureDialog({
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+        <DialogFooter className="flex-col sm:flex-row gap-2 pt-4 pb-1 border-t mt-3">
           <Button
             type="button"
             variant="outline"

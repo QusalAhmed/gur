@@ -549,10 +549,10 @@ export default function StaffPage() {
           </DialogHeader>
 
           {editingStaff && (
-            <div className="space-y-4 py-2">
+            <div className="space-y-4 pt-2 pb-4">
               <div className="flex flex-col items-center gap-2">
                 <ImageUploader
-                  bucket="catalog-images"
+                  
                   folder="avatars"
                   multiple={false}
                   value={editingStaff.avatarUrl ? [editingStaff.avatarUrl] : []}
@@ -645,7 +645,7 @@ export default function StaffPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setIsStaffDialogOpen(false)}>
               Cancel
             </Button>

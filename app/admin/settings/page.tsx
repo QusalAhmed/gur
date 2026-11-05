@@ -365,7 +365,7 @@ export default function SettingsPage() {
                       }}
                       onRemove={() => setLogoUrl("")}
                       multiple={false}
-                      bucket="catalog-images"
+                      
                       folder="branding/logo"
                       label="Upload Business Logo"
                       description="Click or drag company logo (PNG, JPG, WebP)"
@@ -387,7 +387,7 @@ export default function SettingsPage() {
                       }}
                       onRemove={() => setFaviconUrl("")}
                       multiple={false}
-                      bucket="catalog-images"
+                      
                       folder="branding/favicon"
                       label="Upload Store Favicon"
                       description="Square icon (64x64 or 128x128 recommended)"

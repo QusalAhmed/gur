@@ -183,24 +183,6 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
 
     // 3. Handle Deleted Images
     if (params.deletedImageIds && params.deletedImageIds.length > 0) {
-      const { data: imgsToDelete } = await client
-        .from("product_images")
-        .select("storage_path")
-        .in("id", params.deletedImageIds);
-
-      if (imgsToDelete && imgsToDelete.length > 0) {
-        const paths = imgsToDelete
-          .map((img) => img.storage_path)
-          .filter((p) => p && !p.startsWith("http"));
-        if (paths.length > 0) {
-          try {
-            await client.storage.from("catalog-images").remove(paths);
-          } catch (storageErr) {
-            console.warn("Storage removal warning:", storageErr);
-          }
-        }
-      }
-
       await client
         .from("product_images")
         .delete()
@@ -461,24 +443,6 @@ export async function deleteProductAction(id: string): Promise<DeleteProductResu
     }
 
     // Delete image files from storage
-    const { data: images } = await client
-      .from("product_images")
-      .select("storage_path")
-      .eq("product_id", id);
-
-    if (images && images.length > 0) {
-      const paths = images
-        .map((img) => img.storage_path)
-        .filter((p) => p && !p.startsWith("http"));
-      if (paths.length > 0) {
-        try {
-          await client.storage.from("catalog-images").remove(paths);
-        } catch (storageErr) {
-          console.warn("Storage deletion warning:", storageErr);
-        }
-      }
-    }
-
     const { error: delErr } = await client.from("products").delete().eq("id", id);
     if (delErr) {
       return {

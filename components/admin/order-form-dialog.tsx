@@ -2648,7 +2648,7 @@ export function OrderFormDialog({
               </div>
             </div>
 
-            <DialogFooter className="pt-4 border-t sticky bottom-0 bg-popover/95 backdrop-blur-xs z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-2 mt-4 flex items-center justify-between sm:justify-between">
+            <DialogFooter className="pt-4 border-t sticky bottom-0 bg-popover/95 backdrop-blur-xs z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-5 mt-6 flex items-center justify-between sm:justify-between">
               <form.Subscribe
                 selector={(state) => ({
                   items: state.values.items,
@@ -2787,7 +2787,7 @@ export function OrderFormDialog({
                   </div>
 
                   {/* Grouped Product Cards List */}
-                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0 pb-4">
                     {filteredGroupedProducts.length === 0 ? (
                       <div className="p-8 text-center border border-dashed rounded-xl bg-muted/20 space-y-2">
                         <PackageCheck className="h-8 w-8 text-muted-foreground mx-auto" />
@@ -3004,7 +3004,7 @@ export function OrderFormDialog({
                   </div>
                 </div>
 
-                <DialogFooter className="pt-3 border-t shrink-0 flex flex-row items-center justify-between gap-2">
+                <DialogFooter className="pt-4 pb-2 sm:pb-3 border-t shrink-0 flex flex-row items-center justify-between gap-2">
                   <div className="text-left text-xs text-muted-foreground">
                     {selectedCount > 0 ? (
                       <span>

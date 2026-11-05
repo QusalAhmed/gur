@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
+import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import type { StorefrontProduct } from "@/components/storefront/product-card";
 
 export interface StorefrontDataResult {
@@ -12,11 +13,7 @@ export interface StorefrontDataResult {
 }
 
 function resolveProductImage(storageUrl?: string): string {
-  if (storageUrl && (storageUrl.startsWith("http://") || storageUrl.startsWith("https://"))) {
-    return storageUrl;
-  }
-  // Generic fallback placeholder
-  return "/images/products/blackstrap-drum.jpg";
+  return resolveCdnImageUrl(storageUrl, "/images/products/blackstrap-drum.jpg");
 }
 
 /**
@@ -88,11 +85,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const imagesByProduct = new Map<string, string[]>();
     if (imgRes.data) {
       for (const img of imgRes.data) {
-        let pubUrl = img.storage_path;
-        if (pubUrl && !pubUrl.startsWith("http")) {
-          const { data } = client.storage.from("catalog-images").getPublicUrl(img.storage_path);
-          pubUrl = data?.publicUrl || "";
-        }
+        const pubUrl = resolveCdnImageUrl(img.storage_path);
         if (pubUrl) {
           const list = imagesByProduct.get(img.product_id) || [];
           if (img.is_primary) {

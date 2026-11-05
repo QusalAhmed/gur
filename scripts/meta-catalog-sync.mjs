@@ -203,7 +203,7 @@ async function main() {
         const sp = img.storage_path;
         if (!sp) return null;
         if (sp.startsWith("http://") || sp.startsWith("https://")) return sp;
-        return supabase.storage.from("catalog-images").getPublicUrl(sp).data?.publicUrl || null;
+        return sp.startsWith("http") ? sp : `https://ik.imagekit.io/qusal/${sp.replace(/^\//, "")}`;
       })
       .filter((url, idx, arr) => Boolean(url) && arr.indexOf(url) === idx);
 

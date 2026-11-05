@@ -17,8 +17,8 @@ import {
   Check,
   RefreshCw,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
 import { GalleryAsset, UploadedImage } from "./types";
 import { formatBytes } from "./utils";
 
@@ -43,7 +43,7 @@ export function GalleryDialog({
   onOpenChange,
   onSelect,
   multiple = false,
-  bucket = "catalog-images",
+  bucket = "general",
   defaultFolder = "all",
 }: GalleryDialogProps) {
   const [loading, setLoading] = React.useState(false);
@@ -52,96 +52,65 @@ export function GalleryDialog({
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeFolder, setActiveFolder] = React.useState<string>(() => resolveInitialFolder(defaultFolder));
 
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
   const folders = [
     { id: "all", label: "All Assets" },
-    { id: "categories", label: "Categories" },
     { id: "products", label: "Products" },
+    { id: "categories", label: "Categories" },
+    { id: "branding", label: "Branding" },
+    { id: "avatars", label: "Avatars" },
   ];
 
-  // Fetch files from Supabase Storage
+  // Fetch files from ImageKit Media Library via server API route
   const loadStorageFiles = React.useCallback(
-    async (folderId: string = activeFolder) => {
+    async (folderId: string = activeFolder, search: string = searchQuery) => {
       setLoading(true);
+      setErrorMessage(null);
       try {
-        const results: GalleryAsset[] = [];
-
-        // Recursively scan storage up to 3 levels deep
-        const scanFolder = async (folderPrefix: string, depth = 0) => {
-          if (depth > 3) return;
-
-          const { data, error } = await supabase.storage
-            .from(bucket)
-            .list(folderPrefix, {
-              limit: 100,
-              sortBy: { column: "created_at", order: "desc" },
-            });
-
-          if (error) {
-            console.warn(`Error listing files in "${folderPrefix}":`, error);
-            return;
-          }
-
-          if (data) {
-            for (const item of data) {
-              if (!item.name || item.name.startsWith(".")) continue;
-
-              const fullPath = folderPrefix ? `${folderPrefix}/${item.name}` : item.name;
-              const isFolder = !item.id && !item.metadata;
-
-              if (isFolder) {
-                await scanFolder(fullPath, depth + 1);
-              } else {
-                const { data: urlData } = supabase.storage
-                  .from(bucket)
-                  .getPublicUrl(fullPath);
-
-                results.push({
-                  name: item.name,
-                  path: fullPath,
-                  publicUrl: urlData.publicUrl,
-                  size: item.metadata?.size,
-                  createdAt: item.created_at ?? undefined,
-                  updatedAt: item.updated_at ?? undefined,
-                });
-              }
-            }
-          }
-        };
-
-        if (folderId === "all") {
-          await Promise.all([
-            scanFolder("categories"),
-            scanFolder("products"),
-            scanFolder("general"),
-            scanFolder(""),
-          ]);
-        } else {
-          await scanFolder(folderId);
+        const queryParams = new URLSearchParams();
+        if (folderId && folderId !== "all") {
+          queryParams.set("folder", folderId);
+        }
+        if (search.trim()) {
+          queryParams.set("search", search.trim());
         }
 
-        // Deduplicate by path
-        const uniqueMap = new Map<string, GalleryAsset>();
-        results.forEach((r) => {
-          if (!uniqueMap.has(r.path)) {
-            uniqueMap.set(r.path, r);
-          }
+        const res = await fetch(`/api/imagekit/files?${queryParams.toString()}`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
         });
 
-        // Sort newest first
-        const sortedAssets = Array.from(uniqueMap.values()).sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeB - timeA;
-        });
+        const data = await res.json();
 
-        setAssets(sortedAssets);
-      } catch (err) {
-        console.error("Failed to load gallery files:", err);
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Failed to fetch files (HTTP ${res.status})`);
+        }
+
+        const items: GalleryAsset[] = (data.files || []).map((file: any) => ({
+          name: file.name,
+          path: file.publicUrl, // Store full ImageKit CDN URL as path
+          publicUrl: file.publicUrl,
+          size: file.size,
+          createdAt: file.createdAt,
+          updatedAt: file.updatedAt,
+        }));
+
+        setAssets(items);
+      } catch (err: any) {
+        console.warn("Failed to load ImageKit gallery files:", err);
+        setErrorMessage(
+          err?.message || "Failed to load files from ImageKit. Check API credentials in .env."
+        );
+        setAssets([]);
       } finally {
         setLoading(false);
       }
     },
-    [bucket, activeFolder]
+    [activeFolder, searchQuery]
   );
 
   // Load files whenever the modal opens or active folder changes
@@ -220,11 +189,10 @@ export function GalleryDialog({
               </div>
               <div>
                 <DialogTitle className="text-base font-semibold text-foreground">
-                  Storage Media Gallery
+                  ImageKit Media Gallery
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Browse and select previously uploaded assets from bucket{" "}
-                  <code className="text-amber-600 font-mono text-[11px]">{bucket}</code>
+                  Browse and select previously uploaded assets from ImageKit Media Library
                 </DialogDescription>
               </div>
             </div>
@@ -272,11 +240,27 @@ export function GalleryDialog({
         </DialogHeader>
 
         {/* Gallery Content Grid */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-8">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin text-amber-600 mb-2" />
-              <p className="text-xs">Loading media assets from Supabase Storage...</p>
+              <p className="text-xs">Loading media assets from ImageKit Media Library...</p>
+            </div>
+          ) : errorMessage ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center max-w-md mx-auto">
+              <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-semibold text-foreground mb-1">ImageKit Connection Notice</p>
+              <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{errorMessage}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadStorageFiles(activeFolder)}
+                className="text-xs cursor-pointer"
+              >
+                <RefreshCw className="h-3 w-3 mr-1.5" /> Retry
+              </Button>
             </div>
           ) : filteredAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
@@ -285,7 +269,7 @@ export function GalleryDialog({
               <p className="text-xs text-muted-foreground mt-0.5">
                 {searchQuery
                   ? `No files matching "${searchQuery}"`
-                  : `Folder "${activeFolder}" is currently empty in storage.`}
+                  : `Folder "${activeFolder}" is currently empty in ImageKit.`}
               </p>
             </div>
           ) : (
@@ -350,7 +334,7 @@ export function GalleryDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 border-t border-border bg-muted/20 shrink-0 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-border bg-muted/20 shrink-0 flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
             {selectedPaths.size > 0 ? (
               <span className="text-foreground font-medium">

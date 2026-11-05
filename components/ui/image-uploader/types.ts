@@ -71,7 +71,7 @@ export interface ImageUploaderProps {
 
   /**
    * Supabase Storage bucket name
-   * @default "catalog-images"
+   * @default "general"
    */
   bucket?: string;
 

@@ -1,6 +1,7 @@
 import bizSdk from "facebook-nodejs-business-sdk";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
+import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 
 const { FacebookAdsApi, ProductCatalog, ProductItem } = bizSdk;
 
@@ -178,18 +179,7 @@ export function resolvePublicImageUrl(storagePath?: string | null, siteUrl?: str
     return `${base.replace(/\/$/, "")}/images/products/blackstrap-drum.jpg`;
   }
 
-  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
-    return storagePath;
-  }
-
-  const client = supabaseAdmin || supabase;
-  const { data } = client.storage.from("catalog-images").getPublicUrl(storagePath);
-  if (data?.publicUrl) {
-    return data.publicUrl;
-  }
-
-  const base = siteUrl || getMetaSdkConfig().siteUrl;
-  return `${base.replace(/\/$/, "")}/${storagePath.replace(/^\//, "")}`;
+  return resolveCdnImageUrl(storagePath);
 }
 
 /**

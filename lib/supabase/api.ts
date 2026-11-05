@@ -27,6 +27,8 @@ import {
   type ParsedDatabaseError,
   type TransitionValidationResult,
 } from "./error-handler";
+import { uploadToImageKitWithProgress } from "@/lib/imagekit/upload";
+import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 
 export { parseDatabaseError, DatabaseOperationError, validateOrderStatusTransition, STATUS_WORKFLOW_FLOW };
 export type { ParsedDatabaseError, TransitionValidationResult };
@@ -185,14 +187,10 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
       // Prioritize is_primary or first image per product
       for (const img of imagesData) {
         if (!imageMap.has(img.product_id) || img.is_primary) {
-          let pubUrl = img.storage_path;
-          if (!pubUrl.startsWith("http")) {
-            const { data: pubData } = supabase.storage
-              .from("catalog-images")
-              .getPublicUrl(img.storage_path);
-            pubUrl = pubData?.publicUrl || "";
+          const pubUrl = resolveCdnImageUrl(img.storage_path);
+          if (pubUrl) {
+            imageMap.set(img.product_id, pubUrl);
           }
-          imageMap.set(img.product_id, pubUrl);
         }
       }
     }
@@ -251,19 +249,10 @@ export async function fetchProductDetailById(id: string): Promise<DbProduct | nu
       .eq("product_id", id)
       .order("sort_order", { ascending: true });
 
-    const mappedImages = (images || []).map((img) => {
-      let publicUrl = img.storage_path;
-      if (!publicUrl.startsWith("http")) {
-        const { data: pubData } = supabase.storage
-          .from("catalog-images")
-          .getPublicUrl(img.storage_path);
-        publicUrl = pubData?.publicUrl || "";
-      }
-      return {
-        ...img,
-        public_url: publicUrl,
-      };
-    });
+    const mappedImages = (images || []).map((img) => ({
+      ...img,
+      public_url: resolveCdnImageUrl(img.storage_path),
+    }));
 
     return {
       ...product,
@@ -293,54 +282,30 @@ export async function uploadProductImageToStorage(
   file: File,
   productId?: string
 ): Promise<{ path: string; publicUrl: string }> {
-  const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const fileExt = file.name.split(".").pop()?.toLowerCase() || "webp";
   const cleanBaseName = file.name
     .replace(/\.[^/.]+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "-")
     .slice(0, 30);
   const targetId = productId || "temp";
-  const filePath = `products/${targetId}/${Date.now()}-${cleanBaseName}.${fileExt}`;
-  const contentType = resolveImageContentType(file, fileExt);
+  const folder = `products/${targetId}`;
+  const fileName = `${Date.now()}-${cleanBaseName}.${fileExt}`;
 
-  const { data, error } = await supabase.storage
-    .from("catalog-images")
-    .upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: true,
-      contentType,
-    });
-
-  if (error) {
-    console.error("Supabase Storage upload error:", error);
-    throw error;
-  }
-
-  const { data: urlData } = supabase.storage
-    .from("catalog-images")
-    .getPublicUrl(data.path);
+  const result = await uploadToImageKitWithProgress(file, {
+    folder,
+    fileName,
+  });
 
   return {
-    path: data.path,
-    publicUrl: urlData.publicUrl,
+    path: result.url,
+    publicUrl: result.url,
   };
 }
 
-export async function deleteProductImageFromStorage(storagePath: string): Promise<boolean> {
-  if (!storagePath || storagePath.startsWith("http")) return true;
-  try {
-    const { error } = await supabase.storage
-      .from("catalog-images")
-      .remove([storagePath]);
-    if (error) {
-      console.warn("Supabase Storage delete warning:", error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn("Storage deletion exception:", err);
-    return false;
-  }
+export async function deleteProductImageFromStorage(_storagePath: string): Promise<boolean> {
+  // Storage is completely hosted on ImageKit CDN
+  return true;
 }
 
 export async function createProductInDb(payload: {
@@ -541,17 +506,7 @@ export async function fetchCategoriesFromDb(): Promise<UiCategoryItem[]> {
     categories.forEach((c) => categoryNameMap.set(c.id, c.name));
 
     return categories.map((c, idx) => {
-      let imageUrl: string | null = null;
-      if (c.image_path) {
-        if (c.image_path.startsWith("http")) {
-          imageUrl = c.image_path;
-        } else {
-          const { data: pubData } = supabase.storage
-            .from("catalog-images")
-            .getPublicUrl(c.image_path);
-          imageUrl = pubData?.publicUrl || null;
-        }
-      }
+      const imageUrl = c.image_path ? resolveCdnImageUrl(c.image_path) : null;
 
       return {
         id: c.id,
@@ -602,54 +557,30 @@ export async function uploadCategoryImageToStorage(
   file: File,
   categoryId?: string
 ): Promise<{ path: string; publicUrl: string }> {
-  const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const fileExt = file.name.split(".").pop()?.toLowerCase() || "webp";
   const cleanBaseName = file.name
     .replace(/\.[^/.]+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "-")
     .slice(0, 30);
   const targetId = categoryId || "general";
-  const filePath = `categories/${targetId}/${Date.now()}-${cleanBaseName}.${fileExt}`;
-  const contentType = resolveImageContentType(file, fileExt);
+  const folder = `categories/${targetId}`;
+  const fileName = `${Date.now()}-${cleanBaseName}.${fileExt}`;
 
-  const { data, error } = await supabase.storage
-    .from("catalog-images")
-    .upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: true,
-      contentType,
-    });
-
-  if (error) {
-    console.error("Supabase Storage category upload error:", error);
-    throw error;
-  }
-
-  const { data: urlData } = supabase.storage
-    .from("catalog-images")
-    .getPublicUrl(data.path);
+  const result = await uploadToImageKitWithProgress(file, {
+    folder,
+    fileName,
+  });
 
   return {
-    path: data.path,
-    publicUrl: urlData.publicUrl,
+    path: result.url,
+    publicUrl: result.url,
   };
 }
 
-export async function deleteCategoryImageFromStorage(imagePath: string): Promise<boolean> {
-  if (!imagePath || imagePath.startsWith("http")) return true;
-  try {
-    const { error } = await supabase.storage
-      .from("catalog-images")
-      .remove([imagePath]);
-    if (error) {
-      console.warn("Supabase Storage delete warning:", error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn("Storage deletion exception:", err);
-    return false;
-  }
+export async function deleteCategoryImageFromStorage(_imagePath: string): Promise<boolean> {
+  // Category storage is completely hosted on ImageKit CDN
+  return true;
 }
 
 export async function fetchCategoriesList(): Promise<
@@ -1211,13 +1142,7 @@ export async function fetchCatalogProductsFromDb(): Promise<CatalogProduct[]> {
     if (imgRes.data) {
       for (const img of imgRes.data) {
         if (!imageMap.has(img.product_id) || img.is_primary) {
-          let pubUrl = img.storage_path;
-          if (pubUrl && !pubUrl.startsWith("http")) {
-            const { data: pubData } = supabase.storage
-              .from("catalog-images")
-              .getPublicUrl(img.storage_path);
-            pubUrl = pubData?.publicUrl || "";
-          }
+          const pubUrl = resolveCdnImageUrl(img.storage_path);
           if (pubUrl) {
             imageMap.set(img.product_id, pubUrl);
           }

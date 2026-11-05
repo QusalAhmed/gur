@@ -47,8 +47,9 @@ export function useNotifications() {
 
   // 2. Realtime WebSocket subscription
   useEffect(() => {
+    const channelName = `admin-notifications-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
-      .channel("admin-notifications-realtime")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -128,8 +129,10 @@ export function useNotifications() {
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           console.info("[Notifications] Realtime connected successfully.");
+        } else if (status === "CLOSED") {
+          // Closed normally on unmount
         } else if (err || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("[Notifications] Realtime subscription status:", status, err);
+          console.warn("[Notifications] Realtime subscription status:", status, err?.message || err || "");
         }
       });
 

@@ -4004,7 +4004,7 @@ export function OrdersClient() {
             </div>
           )}
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 pt-2 pb-4">
             <div className="space-y-1.5">
               <Label>Select New Status</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -4146,7 +4146,7 @@ export function OrdersClient() {
             </label>
           </div>
 
-          <DialogFooter className="shrink-0 pt-3 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 -mb-2 mt-4">
+          <DialogFooter className="shrink-0 pt-3.5 pb-2 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 mt-4">
             <Button variant="outline" onClick={() => setIsStatusOpen(false)}>
               Cancel
             </Button>
@@ -4424,7 +4424,7 @@ export function OrdersClient() {
                 )}
               </recordPaymentForm.Field>
 
-              <DialogFooter className="pt-2">
+              <DialogFooter className="pt-4 pb-1 border-t mt-4">
                 <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)}>
                   Cancel
                 </Button>
@@ -4703,7 +4703,7 @@ export function OrdersClient() {
               )}
             </addNoteForm.Field>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="pt-4 pb-1 border-t mt-4">
               <Button type="button" variant="outline" onClick={() => setIsNoteOpen(false)}>
                 Cancel
               </Button>
@@ -4851,7 +4851,7 @@ export function OrdersClient() {
                 )}
               </editNoteForm.Field>
 
-              <DialogFooter className="flex items-center justify-between pt-2">
+              <DialogFooter className="flex items-center justify-between pt-4 pb-1 border-t mt-4">
                 <Button
                   type="button"
                   variant="ghost"
@@ -4958,7 +4958,7 @@ export function OrdersClient() {
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
             <Button
               type="button"
               variant="outline"
@@ -5007,7 +5007,7 @@ export function OrdersClient() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
               Cancel
             </Button>
@@ -5135,7 +5135,7 @@ export function OrdersClient() {
             </div>
           )}
 
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 pt-2 pb-4">
             <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-foreground">
@@ -5221,7 +5221,7 @@ export function OrdersClient() {
             )}
           </div>
 
-          <DialogFooter className="shrink-0 pt-3 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 -mb-2 mt-4">
+          <DialogFooter className="shrink-0 pt-3.5 pb-2 border-t bg-popover/95 backdrop-blur-xs sticky bottom-0 mt-4">
             <Button variant="outline" onClick={() => setIsBulkStatusOpen(false)}>
               Cancel
             </Button>
@@ -5296,7 +5296,7 @@ export function OrdersClient() {
             </div>
           )}
 
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 pt-2 pb-4">
             <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs space-y-1">
               <p className="font-semibold text-foreground">
                 Selected Orders ({effectiveBulkSelectedOrders.length}):
@@ -5323,7 +5323,7 @@ export function OrdersClient() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setIsBulkCourierOpen(false)}>
               Cancel
             </Button>
@@ -5406,7 +5406,7 @@ export function OrdersClient() {
             </p>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setIsBulkDeleteOpen(false)}>
               Cancel
             </Button>

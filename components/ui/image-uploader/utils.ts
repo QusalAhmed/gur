@@ -168,111 +168,56 @@ function compressImageCanvasFallback(
   });
 }
 
+import { uploadToImageKitWithProgress, type ImageKitUploadResult } from "@/lib/imagekit/upload";
+export { uploadToImageKitWithProgress, type ImageKitUploadResult };
+
+/**
+ * Universal image uploader: routes uploads to ImageKit with live progress tracking,
+ * returning the permanent CDN URL for the database and client display.
+ */
+export async function uploadImageWithProgress(
+  file: File,
+  options: {
+    folder?: string;
+    bucket?: string;
+    fileName?: string;
+    onProgress: (percent: number) => void;
+  }
+): Promise<{ path: string; publicUrl: string; fileId?: string }> {
+  const { folder = "products", fileName, onProgress } = options;
+
+  const result = await uploadToImageKitWithProgress(file, {
+    folder,
+    fileName,
+    onProgress,
+  });
+
+  return {
+    path: result.url,
+    publicUrl: result.url,
+    fileId: result.fileId,
+  };
+}
+
 /**
  * Direct upload to Supabase Storage with XMLHttpRequest for accurate 0-100% progress tracking.
  * Falls back to standard Supabase client upload if XHR is blocked by network constraints.
+ * Kept for backward compatibility.
  */
 export async function uploadToSupabaseWithProgress(
   file: File,
   options: {
-    bucket: string;
+    bucket?: string;
     path: string;
     onProgress: (percent: number) => void;
   }
 ): Promise<{ path: string; publicUrl: string }> {
-  const { bucket, path, onProgress } = options;
-
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hcfuqyidcxsqyjzmwxiw.supabase.co";
-  const supabaseAnonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "sb_publishable_dUobc3BkcfqlCtWKRWPBEw_hSCeOUF0";
-
-  // Check if we have an active authenticated session
-  let authBearer = supabaseAnonKey;
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session?.access_token) {
-      authBearer = sessionData.session.access_token;
-    }
-  } catch {
-    // Session retrieval non-critical, use anon key
-  }
-
-  // Attempt XHR upload for real progress events
-  try {
-    const uploadResult = await new Promise<{ path: string }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      // Supabase Storage REST endpoint for object upload
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(
-        bucket
-      )}/${path.split("/").map(encodeURIComponent).join("/")}`;
-
-      xhr.open("POST", uploadUrl, true);
-      xhr.setRequestHeader("apikey", supabaseAnonKey);
-      xhr.setRequestHeader("Authorization", `Bearer ${authBearer}`);
-      xhr.setRequestHeader("x-upsert", "true");
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && event.total > 0) {
-          const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
-          onProgress(percent);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress(100);
-          resolve({ path });
-        } else {
-          try {
-            const errData = JSON.parse(xhr.responseText);
-            reject(new Error(errData.message || errData.error || `Upload failed: ${xhr.status}`));
-          } catch {
-            reject(new Error(`Storage upload failed with HTTP status ${xhr.status}`));
-          }
-        }
-      };
-
-      xhr.onerror = () => {
-        reject(new Error("Network error during XHR upload"));
-      };
-
-      xhr.send(file);
-    });
-
-    const { data: publicUrlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(uploadResult.path);
-
-    return {
-      path: uploadResult.path,
-      publicUrl: publicUrlData.publicUrl,
-    };
-  } catch (xhrError) {
-    console.warn("XHR upload failed, falling back to Supabase client:", xhrError);
-
-    // Fallback: Standard Supabase client upload
-    onProgress(30);
-    const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
-      upsert: true,
-      contentType: file.type || "application/octet-stream",
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    onProgress(100);
-    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-
-    return {
-      path: data.path,
-      publicUrl: publicUrlData.publicUrl,
-    };
-  }
+  // Completely migrated to ImageKit CDN
+  const res = await uploadToImageKitWithProgress(file, {
+    fileName: options.path.split('/').pop(),
+    onProgress: options.onProgress,
+  });
+  return { path: res.url, publicUrl: res.url };
 }
 
 /**

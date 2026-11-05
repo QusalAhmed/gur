@@ -192,7 +192,7 @@ export function MetaCatalogManager({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-6 pb-8">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-[#1877F2]/10 flex items-center justify-center text-[#1877F2]">
@@ -209,7 +209,7 @@ export function MetaCatalogManager({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 pt-2">
+        <div className="space-y-6 pt-2 pb-4">
           {/* Status Bar */}
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="bg-muted/30 border-muted">

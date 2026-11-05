@@ -56,7 +56,7 @@ export function SteadfastBulkDialog({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto max-h-[340px] pr-1 space-y-2 text-xs">
+        <div className="flex-1 overflow-y-auto max-h-[340px] pr-1 space-y-2 text-xs pb-4">
           {result.results.map((res) => (
             <div
               key={res.orderId}
@@ -115,7 +115,7 @@ export function SteadfastBulkDialog({
           ))}
         </div>
 
-        <DialogFooter className="pt-2">
+        <DialogFooter className="pt-4 pb-1 border-t mt-3">
           <Button type="button" onClick={onClose} className="w-full sm:w-auto">
             Done
           </Button>
