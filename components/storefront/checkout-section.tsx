@@ -315,9 +315,31 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                 <span className="text-[10px] text-stone-500"> / {lang === "bn" ? "প্যাক" : "pack"}</span>
               </div>
 
-              {/* Bottom Controls: Interactive Quantity Stepper + Remove Button */}
-              <div className="flex items-center gap-2 pt-1">
-                {/* Stepper with - and + */}
+              {/* Delete Button (Displayed above the quantity section) */}
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    dispatch(
+                      removeFromCart({
+                        productId: item.productId,
+                        variantId: item.variantId,
+                      })
+                    )
+                  }
+                  aria-label={lang === "bn" ? `${item.productNameBn || item.productName} পণ্যটি কার্ট থেকে মুছুন` : `Remove ${item.productName} from cart`}
+                  className="inline-flex items-center gap-1 py-0.5 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
+                  title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
+                  <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                    {lang === "bn" ? "মুছুন" : "Delete"}
+                  </span>
+                </button>
+              </div>
+
+              {/* Interactive Quantity Stepper */}
+              <div className="pt-0.5">
                 <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 rounded-xl p-1 border border-stone-300/80 dark:border-stone-700 shadow-inner">
                   <button
                     type="button"
@@ -365,27 +387,6 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                     <Plus className="w-3.5 h-3.5 stroke-[3]" />
                   </button>
                 </div>
-
-                {/* Remove Button */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    dispatch(
-                      removeFromCart({
-                        productId: item.productId,
-                        variantId: item.variantId,
-                      })
-                    )
-                  }
-                  aria-label={lang === "bn" ? `${item.productNameBn || item.productName} পণ্যটি কার্ট থেকে মুছুন` : `Remove ${item.productName} from cart`}
-                  className="inline-flex items-center gap-1 py-1 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
-                  title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
-                  <span className="hidden sm:inline text-[11px] font-medium text-rose-600 dark:text-rose-400">
-                    {lang === "bn" ? "বাতিল" : "Remove"}
-                  </span>
-                </button>
               </div>
             </div>
           </div>

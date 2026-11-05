@@ -32,6 +32,7 @@ export function MobileDock({
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
   const mounted = React.useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const displayCartQuantity = mounted ? cartTotalQuantity : 0;
 
   const t = STOREFRONT_TEXT[lang];
 
@@ -103,16 +104,17 @@ export function MobileDock({
             }
           }}
           className="relative inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all touch-manipulation shrink-0"
-          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${toBnNumber(cartTotalQuantity)}টি পণ্য` : `Cart & Order, ${cartTotalQuantity} items`}
+          suppressHydrationWarning
+          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${toBnNumber(displayCartQuantity)}টি পণ্য` : `Cart & Order, ${displayCartQuantity} items`}
         >
           <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-          {mounted && cartTotalQuantity > 0 && (
+          {displayCartQuantity > 0 && (
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900"
             >
-              {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
+              {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
             </motion.span>
           )}
         </motion.button>

@@ -27,6 +27,7 @@ export function StoreHeader({
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
   const mounted = React.useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const displayCartQuantity = mounted ? cartTotalQuantity : 0;
 
   const rawHotlineDigits = hotline.replace(/[^0-9]/g, "");
 
@@ -107,14 +108,15 @@ export function StoreHeader({
           {/* Cart Button */}
           <button
             type="button"
+            suppressHydrationWarning
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-xs hover:bg-amber-50 active:scale-95 transition-all cursor-pointer"
             aria-label="শপিং কার্ট"
           >
             <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-            {mounted && cartTotalQuantity > 0 && (
+            {displayCartQuantity > 0 && (
               <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900">
-                {toBnNumber(cartTotalQuantity)}
+                {toBnNumber(displayCartQuantity)}
               </span>
             )}
           </button>

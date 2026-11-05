@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
-import Link from "next/link";
-import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ShieldCheck } from "lucide-react";
+import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
@@ -67,6 +66,8 @@ export function ProductShowcase({
 
   const [lang, setLang] = useState<StorefrontLang>("bn");
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const displayCartQuantity = isMounted ? cartTotalQuantity : 0;
+  const displayCartSubtotal = isMounted ? cartSubtotal : 0;
   const [activeOrderModal, setActiveOrderModal] = useState<{
     isOpen: boolean;
     product: SelectedProductData | null;
@@ -314,32 +315,8 @@ export function ProductShowcase({
           </div>
         </button>
 
-        {/* Desktop Navigation Links: Intro, Why Us, Products, Contact & Phone Order, Checkout */}
+        {/* Desktop Navigation Links: Products & Checkout */}
         <nav className="hidden lg:flex items-center gap-1 bg-amber-200/60 dark:bg-stone-800/70 p-1 rounded-full border border-amber-300/60 dark:border-stone-700">
-          <button
-            type="button"
-            onClick={() => scrollToSection(introSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === introSectionIndex
-                ? "bg-white text-amber-900 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span>{t.navIntro}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection(whyBuySectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === whyBuySectionIndex
-                ? "bg-white text-emerald-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{t.navWhyBuy}</span>
-          </button>
           <button
             type="button"
             onClick={() => scrollToSection(productsStartIndex)}
@@ -354,18 +331,6 @@ export function ProductShowcase({
           </button>
           <button
             type="button"
-            onClick={() => scrollToSection(contactSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === contactSectionIndex
-                ? "bg-white text-emerald-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
-          >
-            <Phone className="w-3.5 h-3.5" />
-            <span>{t.navContact}</span>
-          </button>
-          <button
-            type="button"
             onClick={() => scrollToSection(checkoutSectionIndex)}
             className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
@@ -375,19 +340,12 @@ export function ProductShowcase({
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             <span>{t.navCheckout}</span>
-            {isMounted && cartTotalQuantity > 0 && (
+            {displayCartQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
-                {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
+                {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
               </span>
             )}
           </button>
-          <Link
-            href="/privacy-policy"
-            className="px-2.5 py-1 rounded-full text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-white/60 dark:hover:bg-stone-700 transition-all hidden xl:inline-block"
-            title={lang === "bn" ? "গোপনীয়তা নীতি" : "Privacy Policy"}
-          >
-            {lang === "bn" ? "প্রাইভেসি" : "Privacy"}
-          </Link>
         </nav>
 
         {/* Right Action Cluster: Redux Cart + Direct Hotline + Language Toggle */}
@@ -395,20 +353,21 @@ export function ProductShowcase({
           {/* Redux Cart Button with Live Counter Badge */}
           <button
             type="button"
+            suppressHydrationWarning
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
-            aria-label={lang === "bn" ? `কার্ট খুলুন, ${toBnNumber(cartTotalQuantity)}টি পণ্য রয়েছে` : `Open cart, ${cartTotalQuantity} items`}
+            aria-label={lang === "bn" ? `কার্ট খুলুন, ${toBnNumber(displayCartQuantity)}টি পণ্য রয়েছে` : `Open cart, ${displayCartQuantity} items`}
           >
             <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.cartTitle}</span>
-            {isMounted && cartTotalQuantity > 0 && (
+            {displayCartQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[11px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
-                {lang === "bn" ? toBnNumber(cartTotalQuantity) : cartTotalQuantity}
+                {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
               </span>
             )}
-            {isMounted && cartSubtotal > 0 && (
+            {displayCartSubtotal > 0 && (
               <span className="hidden md:inline font-mono text-emerald-700 dark:text-emerald-400 text-xs">
-                ({formatStorePrice(cartSubtotal, lang)})
+                ({formatStorePrice(displayCartSubtotal, lang)})
               </span>
             )}
           </button>
