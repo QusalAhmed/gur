@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Minus, Sparkles, Check, ChevronDown, Award, Leaf } from "lucide-react";
+import { Plus, Minus, Sparkles, Check, ChevronDown, Award } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { SelectedProductData } from "./quick-order-sheet";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -207,14 +207,24 @@ export function ProductCard({
 
   // Pause autoplay when product card is not active in the viewport to save CPU and main thread cycles
   useEffect(() => {
-    if (typeof isActive === "boolean") {
-      if (isActive) {
-        autoplayPlugin.play();
-      } else {
-        autoplayPlugin.stop();
+    if (!carouselApi || !hasMultipleImages) return;
+    const autoplay = carouselApi.plugins()?.autoplay as
+      | { play: () => void; stop: () => void }
+      | undefined;
+    if (!autoplay || typeof autoplay.play !== "function") return;
+
+    try {
+      if (typeof isActive === "boolean") {
+        if (isActive) {
+          autoplay.play();
+        } else {
+          autoplay.stop();
+        }
       }
+    } catch {
+      // Safe guard against race conditions during unmount or engine re-init
     }
-  }, [isActive, autoplayPlugin]);
+  }, [isActive, carouselApi, hasMultipleImages]);
 
   // Track active slide in carousel
   useEffect(() => {
