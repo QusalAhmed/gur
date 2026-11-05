@@ -25,7 +25,10 @@ import {
   AlertTriangle,
   X,
   Share2,
+  ChevronDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ProductVariantsFlow } from "@/components/admin/product-variants-flow";
 import { MetaCatalogManager } from "@/components/admin/meta-catalog-manager";
 import { syncSingleProductToMetaCatalogAction } from "@/actions/meta-catalog";
 import { updateProductStatusAction } from "@/actions/products";
@@ -92,6 +95,10 @@ export function ProductsClient() {
   const [stockFilter, setStockFilter] = React.useState("all");
   const [searchQuery, setSearchQuery] = React.useState("");
 
+  // Product Row Expansion State (Default expanded so variants are shown below each product)
+  const [expandedRowIds, setExpandedRowIds] = React.useState<Set<string>>(() => new Set());
+  const [hasInitializedExpanded, setHasInitializedExpanded] = React.useState(false);
+
   // Deletion Modal State
   const [productToDelete, setProductToDelete] = React.useState<UiProductItem | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -106,6 +113,36 @@ export function ProductsClient() {
     queryKey: ["admin", "products"],
     queryFn: fetchProductsFromDb,
   });
+
+  // Automatically initialize all product rows with variants as expanded so variants are visible below products
+  React.useEffect(() => {
+    if (products.length > 0 && !hasInitializedExpanded) {
+      setExpandedRowIds(new Set(products.map((p) => p.id)));
+      setHasInitializedExpanded(true);
+    }
+  }, [products, hasInitializedExpanded]);
+
+  const toggleRowExpanded = React.useCallback((id: string) => {
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const allExpanded = products.length > 0 && expandedRowIds.size === products.length;
+
+  const toggleExpandAll = React.useCallback(() => {
+    if (allExpanded) {
+      setExpandedRowIds(new Set());
+    } else {
+      setExpandedRowIds(new Set(products.map((p) => p.id)));
+    }
+  }, [allExpanded, products]);
 
   // TanStack Query for Categories
   const { data: categories = [] } = useQuery({
@@ -201,7 +238,15 @@ export function ProductsClient() {
         const matchesNameBn = p.nameBn?.toLowerCase().includes(query);
         const matchesSlug = p.slug.toLowerCase().includes(query);
         const matchesCategory = p.category.toLowerCase().includes(query);
-        if (!matchesName && !matchesNameBn && !matchesSlug && !matchesCategory) {
+        const matchesVariant = p.variantList?.some(
+          (v) =>
+            v.sku.toLowerCase().includes(query) ||
+            v.name.toLowerCase().includes(query) ||
+            (v.nameBn && v.nameBn.toLowerCase().includes(query)) ||
+            (v.barcode && v.barcode.toLowerCase().includes(query)) ||
+            v.packType.toLowerCase().includes(query)
+        );
+        if (!matchesName && !matchesNameBn && !matchesSlug && !matchesCategory && !matchesVariant) {
           return false;
         }
       }
@@ -283,20 +328,30 @@ export function ProductsClient() {
       "Stock",
       "Variants",
       "Base_Price_BDT",
+      "Price_Range",
       "Rating",
     ];
-    const rows = dataToExport.map((p) => [
-      p.id,
-      `"${p.name.replace(/"/g, '""')}"`,
-      `"${(p.nameBn || "").replace(/"/g, '""')}"`,
-      p.slug,
-      p.category,
-      p.status,
-      p.stock,
-      p.variants,
-      p.basePrice || 0,
-      p.rating,
-    ]);
+    const rows = dataToExport.map((p) => {
+      const variants = p.variantList || [];
+      const prices = variants.map((v) => Number(v.price) || 0).filter((pr) => pr > 0);
+      const min = prices.length > 0 ? Math.min(...prices) : Number(p.basePrice || 0);
+      const max = prices.length > 0 ? Math.max(...prices) : Number(p.maxPrice || p.basePrice || 0);
+      const priceRange = variants.length > 1 && min < max ? `৳${min} - ৳${max}` : `৳${min}`;
+
+      return [
+        p.id,
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${(p.nameBn || "").replace(/"/g, '""')}"`,
+        p.slug,
+        p.category,
+        p.status,
+        p.stock,
+        p.variants,
+        p.basePrice || 0,
+        `"${priceRange}"`,
+        p.rating,
+      ];
+    });
     const csvContent =
       "data:text/csv;charset=utf-8," +
       [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -315,24 +370,26 @@ export function ProductsClient() {
       {
         id: "select",
         header: ({ table }) => (
-          <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-            aria-label="Select all products"
-            className="translate-y-[2px]"
-          />
+          <div className="flex items-center justify-center w-8">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
+              }
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="Select all products"
+            />
+          </div>
         ),
         cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Select product row"
-            className="translate-y-[2px]"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div className="flex items-center justify-center w-8 pt-2.5">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label="Select product row"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         ),
         enableSorting: false,
         enableHiding: false,
@@ -427,21 +484,62 @@ export function ProductsClient() {
       {
         accessorKey: "variants",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Variants" />,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-            <Layers className="h-3.5 w-3.5 text-muted-foreground/70" />
-            <span>{row.getValue("variants")} packs</span>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const p = row.original;
+          const count = p.variants || 0;
+          const isExpanded = expandedRowIds.has(p.id);
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRowExpanded(p.id);
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted/50 hover:bg-muted border border-border/60 transition-colors cursor-pointer group"
+              title={isExpanded ? "Collapse variants below" : "Expand variants below"}
+            >
+              <Layers className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="font-semibold text-foreground">
+                {count} pack{count !== 1 ? "s" : ""}
+              </span>
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
+                  isExpanded && "rotate-180 text-foreground"
+                )}
+              />
+            </button>
+          );
+        },
       },
       {
         accessorKey: "basePrice",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Base Price" />,
         cell: ({ row }) => {
-          const price = row.original.basePrice;
+          const p = row.original;
+          const variants = p.variantList || [];
+          const prices = variants
+            .map((v) => Number(v.price) || 0)
+            .filter((pr) => pr > 0);
+
+          const min = prices.length > 0 ? Math.min(...prices) : Number(p.basePrice || 0);
+          const max =
+            prices.length > 0
+              ? Math.max(...prices)
+              : Number(p.maxPrice || p.basePrice || 0);
+
+          if (variants.length > 1 && min < max) {
+            return (
+              <span className="font-semibold text-sm text-foreground whitespace-nowrap">
+                ৳{min.toLocaleString()} – ৳{max.toLocaleString()}
+              </span>
+            );
+          }
+
+          const price = min || Number(p.basePrice || 0);
           return (
-            <span className="font-semibold text-sm text-foreground">
-              ৳{price ? Number(price).toLocaleString() : "0"}
+            <span className="font-semibold text-sm text-foreground whitespace-nowrap">
+              ৳{price ? price.toLocaleString() : "0"}
             </span>
           );
         },
@@ -527,7 +625,39 @@ export function ProductsClient() {
         enableHiding: false,
       },
     ],
-    [duplicateMutation, statusMutation]
+    [duplicateMutation, statusMutation, expandedRowIds, toggleRowExpanded, router]
+  );
+
+  // Sub-row rendering to display packaging variants directly below each master product
+  const renderProductVariantsSubRow = React.useCallback(
+    (product: UiProductItem) => {
+      const variants = product.variantList || [];
+      if (variants.length === 0) {
+        return (
+          <div className="py-3 px-4 sm:px-8 bg-muted/20 border-l-4 border-amber-500/40 text-xs flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Layers className="h-4 w-4 text-amber-600" />
+              <span>
+                No packaging variants configured yet for{" "}
+                <strong className="text-foreground">{product.name}</strong>.
+              </span>
+            </div>
+            <Button variant="outline" size="sm" asChild className="h-7 text-xs cursor-pointer">
+              <Link href={`/admin/products/${product.id}/edit?tab=variants`}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Variant
+              </Link>
+            </Button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-muted/15 dark:bg-muted/10 border-y border-border/70 px-3 sm:px-6 py-2.5">
+          <ProductVariantsFlow product={product} />
+        </div>
+      );
+    },
+    []
   );
 
   // Statistics counters
@@ -617,7 +747,7 @@ export function ProductsClient() {
         transition={{ delay: 0.2 }}
       >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
             <TabsList className="bg-muted/60 p-1">
               <TabsTrigger value="all" className="text-xs">
                 All{" "}
@@ -644,109 +774,125 @@ export function ProductsClient() {
                 </span>
               </TabsTrigger>
             </TabsList>
-
-            {/* Filters & Search */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-48 sm:w-64">
-                <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-8 text-xs"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-
-              {/* Category Filter */}
-              <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || "all")}>
-                <SelectTrigger className="h-8 text-xs w-[140px]">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Stock Filter */}
-              <Select value={stockFilter} onValueChange={(val) => setStockFilter(val || "all")}>
-                <SelectTrigger className="h-8 text-xs w-[130px]">
-                  <SelectValue placeholder="Stock" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Stock</SelectItem>
-                  <SelectItem value="in_stock">In Stock</SelectItem>
-                  <SelectItem value="low_stock">Low Stock</SelectItem>
-                  <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                  <SelectItem value="backorder">Backorder</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <DataTable
             columns={columns}
             data={filteredProducts}
             enableRowSelection={true}
-            searchKey="name"
-            searchPlaceholder="Filter products..."
-            bulkActions={(selectedRows: UiProductItem[], clearSelection: () => void) => (
-              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs">
-                <span className="font-semibold text-amber-700 dark:text-amber-400">
-                  {selectedRows.length} selected
-                </span>
-                <div className="h-3 w-px bg-amber-500/30 mx-1" />
+            enableGlobalFilter={false}
+            toolbarPrefix={
+              <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap w-full">
+                {/* Unified Merged Search Bar */}
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search products, SKU, category..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-9 pl-9 pr-8 text-xs w-full bg-background"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Category Filter Select Button */}
+                <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || "all")}>
+                  <SelectTrigger className="h-9 data-[size=default]:h-9 text-xs w-[140px] bg-background">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Stock Filter Select Button */}
+                <Select value={stockFilter} onValueChange={(val) => setStockFilter(val || "all")}>
+                  <SelectTrigger className="h-9 data-[size=default]:h-9 text-xs w-[130px] bg-background">
+                    <SelectValue placeholder="Stock" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stock</SelectItem>
+                    <SelectItem value="in_stock">In Stock</SelectItem>
+                    <SelectItem value="low_stock">Low Stock</SelectItem>
+                    <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                    <SelectItem value="backorder">Backorder</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Expand / Collapse All Variants Button */}
                 <Button
-                  variant="ghost"
+                  type="button"
+                  variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs hover:bg-amber-500/20"
+                  onClick={toggleExpandAll}
+                  className="h-9 text-xs px-2.5 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                  title={allExpanded ? "Collapse all variants" : "Expand all variants below products"}
+                >
+                  <Layers className="h-3.5 w-3.5 mr-1 text-amber-600 dark:text-amber-400" />
+                  <span>{allExpanded ? "Collapse Variants" : "Expand Variants"}</span>
+                </Button>
+              </div>
+            }
+            renderSubRow={renderProductVariantsSubRow}
+            isRowExpanded={(row) => expandedRowIds.has(row.id)}
+            bulkActions={(selectedRows: UiProductItem[], clearSelection: () => void) => (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={() => handleBulkStatusChange(selectedRows, "active", clearSelection)}
                 >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-600" />
                   Set Active
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs hover:bg-amber-500/20"
+                  className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={() => handleBulkStatusChange(selectedRows, "draft", clearSelection)}
                 >
                   Set Draft
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs hover:bg-amber-500/20"
+                  className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={() => handleBulkArchive(selectedRows, clearSelection)}
                 >
+                  <Archive className="h-3.5 w-3.5 mr-1" />
                   Archive
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs hover:bg-amber-500/20 text-destructive"
+                  className="h-7 px-2.5 text-xs border-destructive/30 hover:bg-destructive/15 text-destructive cursor-pointer"
                   onClick={() => handleBulkDelete(selectedRows, clearSelection)}
                 >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
                   Delete
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs hover:bg-amber-500/20"
+                  className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={() => handleExportCSV(selectedRows)}
                 >
+                  <Download className="h-3.5 w-3.5 mr-1" />
                   Export
                 </Button>
               </div>

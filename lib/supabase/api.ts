@@ -114,6 +114,25 @@ export async function checkSupabaseHealth(): Promise<SupabaseHealthStatus> {
 // PRODUCTS & VARIANTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface UiProductVariantItem {
+  id: string;
+  productId: string;
+  sku: string;
+  barcode?: string | null;
+  name: string;
+  nameBn?: string | null;
+  packType: string;
+  netQuantity: number;
+  netUnit: string;
+  weightGrams?: number;
+  price: number;
+  compareAtPrice?: number | null;
+  stockStatus: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+  stockQty?: number;
+  isActive: boolean;
+  isDefault?: boolean;
+}
+
 export interface UiProductItem {
   id: string;
   name: string;
@@ -123,11 +142,13 @@ export interface UiProductItem {
   categoryId?: string | null;
   status: "active" | "draft" | "archived";
   variants: number;
+  variantList?: UiProductVariantItem[];
   stock: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
   rating: number;
   reviews: number;
   featured: boolean;
   basePrice?: number;
+  maxPrice?: number;
   imageUrl?: string | null;
   grade?: string | null;
   createdAt?: string;
@@ -155,19 +176,56 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
     }
 
     // 3. Fetch variants
-    const { data: variantsData } = await supabase.from("product_variants").select("*");
-    const variantCountMap = new Map<string, { count: number; minPrice: number; stock: string }>();
+    const { data: variantsData } = await supabase
+      .from("product_variants")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    const variantListMap = new Map<string, UiProductVariantItem[]>();
+    const variantCountMap = new Map<
+      string,
+      { count: number; minPrice: number; maxPrice: number; stock: string }
+    >();
 
     if (variantsData) {
       for (const v of variantsData) {
+        const item: UiProductVariantItem = {
+          id: v.id,
+          productId: v.product_id,
+          sku: v.sku,
+          barcode: v.barcode || null,
+          name: v.name,
+          nameBn: v.name_bn || null,
+          packType: v.pack_type || "jar",
+          netQuantity: Number(v.net_quantity) || 0,
+          netUnit: v.net_unit || "kg",
+          weightGrams: v.weight_grams ? Number(v.weight_grams) : undefined,
+          price: Number(v.price) || 0,
+          compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
+          stockStatus: v.stock_status || "in_stock",
+          isActive: v.is_active ?? true,
+          isDefault: Boolean(v.is_default),
+        };
+
+        const existing = variantListMap.get(v.product_id) || [];
+        existing.push(item);
+        variantListMap.set(v.product_id, existing);
+
+        const priceNum = Number(v.price) || 0;
         const cur = variantCountMap.get(v.product_id) || {
           count: 0,
-          minPrice: Number(v.price) || 0,
+          minPrice: priceNum,
+          maxPrice: priceNum,
           stock: v.stock_status || "in_stock",
         };
         cur.count += 1;
-        if (Number(v.price) < cur.minPrice) {
-          cur.minPrice = Number(v.price);
+        if (cur.count === 1) {
+          cur.minPrice = priceNum;
+          cur.maxPrice = priceNum;
+        } else {
+          if (priceNum < cur.minPrice) cur.minPrice = priceNum;
+          if (priceNum > cur.maxPrice) cur.maxPrice = priceNum;
         }
         if (v.stock_status === "out_of_stock" && cur.stock === "in_stock") {
           cur.stock = "out_of_stock";
@@ -196,7 +254,12 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
     }
 
     return productsData.map((p) => {
-      const vInfo = variantCountMap.get(p.id) || { count: 0, minPrice: 0, stock: "in_stock" };
+      const vInfo = variantCountMap.get(p.id) || {
+        count: 0,
+        minPrice: 0,
+        maxPrice: 0,
+        stock: "in_stock",
+      };
       return {
         id: p.id,
         name: p.name,
@@ -206,11 +269,13 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
         categoryId: p.category_id,
         status: p.status as "active" | "draft" | "archived",
         variants: vInfo.count,
+        variantList: variantListMap.get(p.id) || [],
         stock: (vInfo.stock as any) || "in_stock",
         rating: Number(p.rating_avg) || 0,
         reviews: p.rating_count || 0,
         featured: Boolean(p.is_featured),
         basePrice: vInfo.minPrice || 0,
+        maxPrice: vInfo.maxPrice || vInfo.minPrice || 0,
         imageUrl: imageMap.get(p.id) || null,
         grade: p.grade || null,
         createdAt: p.created_at,
