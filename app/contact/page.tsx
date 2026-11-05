@@ -240,9 +240,6 @@ export default async function ContactPage() {
               lang="bn"
               hotline={hotline}
               storeName={storeName}
-              onScrollToProducts={() => {
-                window.location.href = "/products";
-              }}
             />
           </div>
         </div>

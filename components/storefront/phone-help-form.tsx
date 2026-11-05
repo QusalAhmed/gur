@@ -196,6 +196,8 @@ export function PhoneHelpForm({
     setIsModalOpen(false);
     if (onScrollToProducts) {
       onScrollToProducts();
+    } else {
+      window.location.href = "/products";
     }
   };
 
