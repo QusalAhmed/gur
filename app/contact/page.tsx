@@ -15,7 +15,6 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
-import { StoreFooter } from "@/components/storefront/store-footer";
 import { PhoneHelpForm } from "@/components/storefront/phone-help-form";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
 
@@ -303,9 +302,6 @@ export default async function ContactPage() {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <StoreFooter hotline={hotline} storeName={storeName} />
     </div>
   );
 }

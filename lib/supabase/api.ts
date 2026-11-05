@@ -1788,6 +1788,10 @@ export function formatDbOrderRecord(data: any): Order {
     courier_tracking_code: data.courier_tracking_code || undefined,
     courier_tracking_url: data.courier_tracking_url || undefined,
     courier_invoice: data.courier_invoice || undefined,
+    courier_delivery_charge:
+      data.courier_delivery_charge !== undefined && data.courier_delivery_charge !== null
+        ? Number(data.courier_delivery_charge)
+        : null,
     courier_payload_snapshot: data.courier_payload_snapshot || null,
     printed_at: data.printed_at || null,
     printed_courier_snapshot: data.printed_courier_snapshot || null,

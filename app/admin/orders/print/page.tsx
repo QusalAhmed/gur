@@ -21,7 +21,6 @@ import {
   ShieldCheck,
   Package,
   Layers,
-  MessageSquare,
   Truck,
   Square,
 } from "lucide-react";
@@ -149,7 +148,8 @@ function PrintContent() {
 
       // Order specific tracking QR codes
       for (const ord of orders) {
-        const trackUrl = `${storeConfig.website}/track?order=${encodeURIComponent(ord.id)}`;
+        const trackOrderNum = ord.order_number || ord.id;
+        const trackUrl = `${storeConfig.website}/track?order=${encodeURIComponent(trackOrderNum)}`;
         try {
           const svg = await QRCode.toString(trackUrl, {
             type: "svg",
@@ -161,8 +161,11 @@ function PrintContent() {
             },
           });
           cache[ord.id] = svg;
+          if (ord.order_number) {
+            cache[ord.order_number] = svg;
+          }
         } catch (e) {
-          console.error(`Failed to generate QR for order ${ord.id}:`, e);
+          console.error(`Failed to generate QR for order ${trackOrderNum}:`, e);
         }
       }
 
@@ -305,9 +308,9 @@ function PrintContent() {
 
           .thermal-tear-line {
             display: block !important;
-            border-bottom: 1px dashed #000000 !important;
-            margin: 4mm 0 0 0 !important;
-            padding-bottom: 2mm !important;
+            border-bottom: 2px dotted #000000 !important;
+            margin: 3mm 0 2mm 0 !important;
+            padding-bottom: 1.5mm !important;
             text-align: center !important;
             font-size: 8px !important;
             font-family: monospace !important;
@@ -478,7 +481,12 @@ function PrintContent() {
           className={`space-y-8 print:space-y-0 print:transform-none ${getContainerWidth()}`}
         >
           {orders.map((order, orderIdx) => {
-            const qrSvgString = qrSvgs[order.id] || qrSvgs[storeConfig.website] || "";
+            const orderKey = order.order_number || order.id;
+            const qrSvgString =
+              qrSvgs[order.id] ||
+              (order.order_number ? qrSvgs[order.order_number] : "") ||
+              qrSvgs[storeConfig.website] ||
+              "";
 
             return (
               <div key={order.id} className="relative">
@@ -532,18 +540,17 @@ function PrintContent() {
                     </div>
                   </section>
 
-                  {/* Customer checkout instructions/note if present */}
-                  {order.customer_note && (
-                    <div className="p-1.5 my-1.5 bg-black/5 border border-dashed border-black text-[9px] rounded-xs">
-                      <span className="font-black uppercase text-[8px] flex items-center gap-1 font-mono">
-                        <MessageSquare className="h-2.5 w-2.5 shrink-0 inline text-black" />
-                        <span>NOTE FROM CUSTOMER (FOR SELLER):</span>
-                      </span>
-                      <p className="italic text-black font-medium leading-tight mt-0.5">
-                        &quot;{order.customer_note}&quot;
-                      </p>
-                    </div>
-                  )}
+                  {/* ============================================================= */}
+                  {/* ORDER NUMBER                                                  */}
+                  {/* ============================================================= */}
+                  <section className="border-t-2 border-black py-1 my-2 flex items-center justify-between gap-1 font-mono text-black">
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">
+                      ORDER NO:
+                    </span>
+                    <span className="font-black text-[13px] sm:text-[13.5px] tracking-tight select-all">
+                      #{order.order_number || order.id}
+                    </span>
+                  </section>
 
                   {/* Delivery Note for delivery man */}
                   {order.notes && order.notes.filter((n) => n.type === "delivery").length > 0 && (
@@ -556,24 +563,6 @@ function PrintContent() {
                         {order.notes.filter((n) => n.type === "delivery").map((n) => (
                           <p key={n.id} className="text-black font-bold leading-tight">
                             • {n.text}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Packaging Note for checking while packaging */}
-                  {order.notes && order.notes.filter((n) => n.type === "packaging").length > 0 && (
-                    <div className="p-1.5 my-1.5 bg-black/5 border border-black text-[9px] rounded-xs">
-                      <span className="font-black uppercase text-[8px] flex items-center gap-1 font-mono">
-                        <Package className="h-2.5 w-2.5 shrink-0 inline text-black" />
-                        <span>PACKAGING CHECKLIST & INSTRUCTIONS:</span>
-                      </span>
-                      <div className="space-y-0.5 mt-0.5">
-                        {order.notes.filter((n) => n.type === "packaging").map((n) => (
-                          <p key={n.id} className="text-black font-medium leading-tight flex items-start gap-1">
-                            <Square className="h-2.5 w-2.5 shrink-0 mt-0.5 text-black" />
-                            <span>{n.text}</span>
                           </p>
                         ))}
                       </div>
@@ -640,13 +629,45 @@ function PrintContent() {
                   </footer>
 
                   {/* Perforation / Tear Marker for Roll Printers */}
-                  <div className="thermal-tear-line text-[9px] font-mono tracking-widest text-center py-1 border-b border-dashed border-black/80 select-none flex items-center justify-center gap-1.5 text-black">
-                    <span>- -</span>
+                  <div className="thermal-tear-line text-[9px] font-mono tracking-widest text-center py-1 border-b-2 border-dotted border-black select-none flex items-center justify-center gap-1.5 text-black my-2">
+                    <span className="tracking-widest">• • •</span>
                     <Scissors className="h-2.5 w-2.5 inline rotate-90" />
-                    <span>TEAR HERE</span>
+                    <span className="font-bold">TEAR HERE</span>
                     <Scissors className="h-2.5 w-2.5 inline -rotate-90" />
-                    <span>- -</span>
+                    <span className="tracking-widest">• • •</span>
                   </div>
+
+                  {/* ============================================================= */}
+                  {/* PACKAGING NOTE (BELOW TEAR HERE AND DOTS)                     */}
+                  {/* ============================================================= */}
+                  {(() => {
+                    const packagingNotes = (order.notes || []).filter(
+                      (n) => n.type === "packaging" || n.type === "packaging_note"
+                    );
+                    if (packagingNotes.length === 0) return null;
+
+                    return (
+                      <div className="pt-2 pb-1 text-[9px] text-black">
+                        <div className="flex items-center justify-between font-black uppercase text-[8.5px] font-mono border-b border-black pb-0.5 mb-1">
+                          <span className="flex items-center gap-1">
+                            <Package className="h-2.5 w-2.5 shrink-0 inline text-black" />
+                            <span>PACKAGING NOTE</span>
+                          </span>
+                          <span className="text-[8px] font-mono">
+                            #{order.order_number || order.id}
+                          </span>
+                        </div>
+                        <div className="space-y-0.5">
+                          {packagingNotes.map((n) => (
+                            <p key={n.id} className="text-black font-medium leading-tight flex items-start gap-1">
+                              <Square className="h-2.5 w-2.5 shrink-0 mt-0.5 text-black" />
+                              <span>{n.text}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </article>
 
                 {/* On-screen quick copy / action bar underneath each sticker */}
@@ -654,10 +675,10 @@ function PrintContent() {
                   <span className="font-mono text-xs">Sticker #{orderIdx + 1} of {orders.length}</span>
                   <button
                     type="button"
-                    onClick={() => handleCopyId(order.id)}
+                    onClick={() => handleCopyId(order.order_number || order.id)}
                     className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-amber-700 cursor-pointer font-medium"
                   >
-                    {copiedId === order.id ? (
+                    {copiedId === (order.order_number || order.id) ? (
                       <>
                         <Check className="h-3 w-3 text-emerald-600" />
                         <span className="text-emerald-600 font-semibold">Copied!</span>
@@ -665,7 +686,7 @@ function PrintContent() {
                     ) : (
                       <>
                         <Copy className="h-3 w-3" />
-                        <span>Copy #{order.id}</span>
+                        <span>Copy #{order.order_number || order.id}</span>
                       </>
                     )}
                   </button>

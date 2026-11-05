@@ -87,6 +87,7 @@ export interface Order {
   courier_tracking_code?: string;
   courier_tracking_url?: string;
   courier_invoice?: string;
+  courier_delivery_charge?: number | null;
   courier_payload_snapshot?: Record<string, any> | null;
   printed_at?: string | null;
   printed_courier_snapshot?: Record<string, any> | null;

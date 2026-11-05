@@ -16,7 +16,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
-import { StoreFooter } from "@/components/storefront/store-footer";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
 
 export const instant = false;
@@ -272,9 +271,6 @@ export default async function PrivacyPolicyPage() {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <StoreFooter hotline={hotline} storeName={storeName} />
     </div>
   );
 }
