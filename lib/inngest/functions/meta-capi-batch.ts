@@ -9,10 +9,10 @@ export const metaCapiBatchDispatcherFunction = inngest.createFunction(
     retries: 3,
     triggers: [{ event: "meta.capi.event" }],
     batchEvents: {
-      maxSize: 50,
+      maxSize: 5,
       timeout: "5s",
     },
-    rateLimit: {
+    throttle: {
       limit: 10,
       period: "1s",
     },
