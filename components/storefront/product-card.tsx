@@ -41,6 +41,8 @@ export interface StorefrontVariant {
   netQuantity?: number;
   netUnit?: string;
   stockStatus?: string;
+  isDefault?: boolean;
+  sortOrder?: number;
 }
 
 export interface StorefrontProduct {
@@ -82,20 +84,49 @@ export function ProductCard({
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
 
-  // Sort variants by price ascending (low to high)
-  const sortedVariants = [...product.variants].sort((a, b) => Number(a.price) - Number(b.price));
-  const initialVariant = sortedVariants[0] || {
-    id: "var-default",
-    name: "1 Pack",
-    nameBn: "১ প্যাক",
-    price: 700,
-  };
+  const variants = product.variants || [];
+  const sortedVariants = [...variants].sort((a, b) => {
+    if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    }
+    return Number(a.price) - Number(b.price);
+  });
+  // Prefer the explicitly marked default variant; fallback to first available variant
+  const defaultVariant =
+    variants.find((v) => v.isDefault) ||
+    sortedVariants[0] || {
+      id: "var-default",
+      name: "1 Pack",
+      nameBn: "১ প্যাক",
+      price: 700,
+      isDefault: true,
+    };
+  const initialVariant = defaultVariant;
 
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
   const hasFiredViewContent = useAppSelector(selectHasViewedProduct(product.id));
   const cardRef = useRef<HTMLElement>(null);
   const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant>(initialVariant);
+  const prevProductIdRef = useRef(product.id);
+  const prevDefaultVariantIdRef = useRef(defaultVariant.id);
+  const userInteractedRef = useRef(false);
+
+  // Synchronize selected variant when product or default variant changes (unless user explicitly selected another)
+  useEffect(() => {
+    const productChanged = prevProductIdRef.current !== product.id;
+    const defaultChanged = prevDefaultVariantIdRef.current !== defaultVariant.id;
+    const currentVariantExists = variants.some((v) => v.id === selectedVariant.id);
+
+    if (productChanged || !currentVariantExists || (defaultChanged && !userInteractedRef.current)) {
+      setSelectedVariant(defaultVariant);
+      prevProductIdRef.current = product.id;
+      prevDefaultVariantIdRef.current = defaultVariant.id;
+      if (productChanged) {
+        userInteractedRef.current = false;
+      }
+    }
+  }, [product.id, variants, defaultVariant, selectedVariant.id]);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -525,7 +556,10 @@ export function ProductCard({
                     value={selectedVariant.id}
                     onChange={(e) => {
                       const found = sortedVariants.find((v) => v.id === e.target.value);
-                      if (found) setSelectedVariant(found);
+                      if (found) {
+                        userInteractedRef.current = true;
+                        setSelectedVariant(found);
+                      }
                     }}
                     className="w-full bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-3 pr-8 rounded-xl border border-amber-300 dark:border-stone-700 shadow-xs appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >

@@ -152,7 +152,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   // Variants State
   const [variants, setVariants] = React.useState<FormVariant[]>(() => {
     if (initialData?.variants && initialData.variants.length > 0) {
-      return initialData.variants.map((v) => ({
+      const hasDefault = initialData.variants.some((v) => Boolean(v.is_default));
+      return initialData.variants.map((v, idx) => ({
         id: v.id,
         sku: v.sku,
         name: v.name,
@@ -165,7 +166,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         stock_status: v.stock_status || "in_stock",
         track_inventory: v.track_inventory ?? true,
         low_stock_threshold: Number(v.low_stock_threshold) || 5,
-        is_default: v.is_default ?? false,
+        is_default: Boolean(v.is_default) || (!hasDefault && idx === 0),
         is_active: v.is_active ?? true,
       }));
     }

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 
@@ -216,13 +216,16 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     // 5. Upsert Variants
     // Clear existing is_default if updating, avoiding unique index `product_variants_one_default` collision
     if (params.productId) {
-      await client
+      const { error: clearDefaultErr } = await client
         .from("product_variants")
         .update({ is_default: false })
         .eq("product_id", productId);
+      if (clearDefaultErr) {
+        console.warn("Could not reset previous is_default variants:", clearDefaultErr.message);
+      }
     }
 
-    let defaultIdx = params.variants.findIndex((v) => v.is_default);
+    let defaultIdx = params.variants.findIndex((v) => Boolean(v.is_default));
     if (defaultIdx === -1) defaultIdx = 0;
 
     for (let i = 0; i < params.variants.length; i++) {
@@ -372,7 +375,7 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       }
     }
 
-    // 7. Next.js Path Revalidation
+    // 7. Next.js Path Revalidation & Cache Update
     try {
       revalidatePath("/admin/products");
       revalidatePath(`/admin/products/${productId}/edit`);
@@ -383,6 +386,12 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       if (savedProduct.slug) {
         revalidatePath(`/products/${savedProduct.slug}`);
         revalidatePath(`/product/${savedProduct.slug}`);
+      }
+      try {
+        updateTag("storefront-products");
+        revalidateTag("storefront-products", "max");
+      } catch (tagErr) {
+        // Tag revalidation may not be applicable outside request lifecycle
       }
     } catch (revalErr) {
       // revalidatePath throws when executed outside Next.js request lifecycle (e.g. standalone scripts)

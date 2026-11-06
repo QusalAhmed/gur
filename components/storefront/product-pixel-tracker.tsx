@@ -37,12 +37,11 @@ export function ProductPixelTracker({ product }: ProductPixelTrackerProps) {
     firedRef.current = productId;
     dispatch(recordProductView(productId));
 
-    // Get lowest or default variant price
+    // Get default variant price, falling back to lowest price
     const variants = product.variants || [];
-    const sortedVariants = [...variants].sort(
-      (a, b) => Number(a.price) - Number(b.price)
-    );
-    const defaultVariant = sortedVariants[0];
+    const defaultVariant =
+      variants.find((v) => v.isDefault) ||
+      [...variants].sort((a, b) => Number(a.price) - Number(b.price))[0];
     const price = Number(defaultVariant?.price) || 0;
 
     const eventId = trackViewContent({

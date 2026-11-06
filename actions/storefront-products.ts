@@ -56,7 +56,8 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         .order("created_at", { ascending: false }),
       client
         .from("product_variants")
-        .select("id, product_id, name, name_bn, price, net_quantity, net_unit, stock_status")
+        .select("id, product_id, name, name_bn, price, net_quantity, net_unit, stock_status, is_default, is_active, sort_order")
+        .order("sort_order", { ascending: true })
         .order("price", { ascending: true }),
       client
         .from("product_images")
@@ -68,6 +69,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const variantsByProduct = new Map<string, any[]>();
     if (varRes.data) {
       for (const v of varRes.data) {
+        if (v.is_active === false) continue;
         const list = variantsByProduct.get(v.product_id) || [];
         list.push({
           id: v.id,
@@ -77,6 +79,8 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
           netQuantity: v.net_quantity,
           netUnit: v.net_unit,
           stockStatus: v.stock_status,
+          isDefault: Boolean(v.is_default),
+          sortOrder: typeof v.sort_order === "number" ? v.sort_order : 0,
         });
         variantsByProduct.set(v.product_id, list);
       }
@@ -104,14 +108,33 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         const resolvedImgs =
           productImgs.length > 0 ? productImgs : [resolveProductImage()];
         const primaryImg = resolvedImgs[0];
-        const variants = (variantsByProduct.get(p.id) || [
-          {
-            id: `v-${p.id}`,
-            name: "1 Pack",
-            nameBn: "১ প্যাক",
-            price: 700,
-          },
-        ]).sort((a, b) => Number(a.price) - Number(b.price));
+        const rawVariants = variantsByProduct.get(p.id) || [];
+        const variants = (
+          rawVariants.length > 0
+            ? rawVariants
+            : [
+                {
+                  id: `v-${p.id}`,
+                  name: "1 Pack",
+                  nameBn: "১ প্যাক",
+                  price: 700,
+                  isDefault: true,
+                  sortOrder: 0,
+                },
+              ]
+        ).sort((a, b) => {
+          if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+            return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          }
+          return Number(a.price) - Number(b.price);
+        });
+
+        // Ensure exactly one variant has isDefault: true
+        const defaultIndex = variants.findIndex((v) => v.isDefault);
+        const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
+        variants.forEach((v, idx) => {
+          v.isDefault = idx === resolvedDefaultIndex;
+        });
 
         return {
           id: p.id,
@@ -140,4 +163,3 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     storeSubtitle,
   };
 }
-
