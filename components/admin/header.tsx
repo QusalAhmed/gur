@@ -4,6 +4,7 @@ import * as React from "react";
 import { Search, LogOut, ShieldCheck, UserCheck, User, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNotificationsPopover } from "@/components/admin/notifications-popover";
+import { AdminSmsBalance } from "@/components/admin/sms-balance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +123,9 @@ export function AdminHeader() {
             className="pl-8 h-9 bg-muted/50 border-0 focus-visible:ring-1 text-xs"
           />
         </div>
+
+        {/* Async SMS Gateway Balance Pill */}
+        <AdminSmsBalance />
 
         {/* Role Badge Indicator */}
         <div className="hidden sm:flex items-center gap-1.5">
