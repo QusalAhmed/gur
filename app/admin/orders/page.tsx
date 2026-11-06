@@ -1,4 +1,5 @@
 import * as React from "react";
+import { connection } from "next/server";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient } from "@/lib/query-client";
 import { getOrdersAction } from "@/actions/orders";
@@ -20,6 +21,7 @@ interface OrdersPageProps {
 }
 
 async function OrdersDataLoader({ searchParams }: OrdersPageProps) {
+  await connection();
   const resolvedSearchParams = await searchParams;
   const page = Math.max(1, Number(resolvedSearchParams?.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(resolvedSearchParams?.pageSize) || 10));

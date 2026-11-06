@@ -235,7 +235,38 @@ export async function sendCapiEvents(
     }
 
     if (event.customData) {
-      payloadEvent.custom_data = { ...event.customData };
+      const customData: Record<string, any> = { ...event.customData };
+
+      // Clean & sanitize content_ids: array of non-empty strings (no 'undefined' or 'null')
+      if (Array.isArray(customData.content_ids)) {
+        customData.content_ids = customData.content_ids
+          .map((id: any) => String(id || "").trim())
+          .filter((id: string) => id && id !== "undefined" && id !== "null");
+      } else if (customData.content_ids) {
+        const idStr = String(customData.content_ids).trim();
+        customData.content_ids = idStr && idStr !== "undefined" && idStr !== "null" ? [idStr] : [];
+      }
+
+      // Clean & sanitize contents array
+      if (Array.isArray(customData.contents)) {
+        customData.contents = customData.contents
+          .map((item: any) => ({
+            id: String(item.id || "").trim(),
+            quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+            item_price: Math.max(0, Number(item.item_price ?? item.unitPrice ?? item.unit_price) || 0),
+          }))
+          .filter((item: any) => item.id && item.id !== "undefined" && item.id !== "null");
+      }
+
+      if (!customData.content_type && customData.content_ids && customData.content_ids.length > 0) {
+        customData.content_type = "product";
+      }
+
+      if (customData.currency) {
+        customData.currency = String(customData.currency).trim().toUpperCase();
+      }
+
+      payloadEvent.custom_data = customData;
     }
 
     return payloadEvent;

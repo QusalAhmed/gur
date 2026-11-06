@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { enqueueAndDispatch } from "@/lib/outbox";
 
 interface WebhookResult {
   success: boolean;
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const notificationType: string = String(payload?.notification_type || "unknown").trim();
   const rawConsignmentId = payload?.consignment_id != null ? String(payload.consignment_id).trim() : null;
   const rawInvoice = payload?.invoice != null ? String(payload.invoice).trim() : null;
+  const rawTrackingCode = payload?.tracking_code != null ? String(payload.tracking_code).trim() : null;
 
   // 3. Idempotency Check: prevent duplicate processing if same event was already processed
   if (idempotencyKey) {
@@ -82,8 +84,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     amount_paid: number;
     courier_consignment_id?: string;
     courier_invoice?: string;
+    courier_tracking_code?: string;
+    courier_tracking_url?: string;
     shipping_address?: any;
     customer_name?: string;
+    customer_phone?: string;
+    customer_alternative_phone?: string;
+    shipping_phone?: string;
   } | null = null;
 
   if (rawConsignmentId || rawInvoice) {
@@ -91,7 +98,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       let query = supabaseAdmin
         .from("orders")
         .select(
-          "id, order_number, status, payment_status, fulfillment_status, grand_total, amount_paid, courier_consignment_id, courier_invoice, shipping_address, customer_name"
+          "id, order_number, status, payment_status, fulfillment_status, grand_total, amount_paid, courier_consignment_id, courier_invoice, courier_tracking_code, courier_tracking_url, shipping_address, customer_name, customer_phone, customer_alternative_phone, shipping_phone"
         );
 
       if (rawConsignmentId && rawInvoice) {
@@ -212,6 +219,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           result.message = "Order marked as delivered with COD collection synced.";
+
+          // Trigger automated customer SMS notification and Meta CAPI via Outbox
+          const customerPhone =
+            matchedOrder.customer_phone ||
+            matchedOrder.shipping_phone ||
+            matchedOrder.shipping_address?.phone ||
+            matchedOrder.customer_alternative_phone ||
+            "";
+
+          enqueueAndDispatch({
+            eventName: "order.status_updated",
+            aggregateType: "order",
+            aggregateId: matchedOrder.id,
+            idempotencyKey: `order.status:${matchedOrder.id}:delivered:webhook`,
+            payload: {
+              orderId: matchedOrder.id,
+              orderNumber: matchedOrder.order_number,
+              newStatus: "delivered",
+              customerPhone,
+              customerName: matchedOrder.customer_name || matchedOrder.shipping_address?.recipient_name,
+              grandTotal: matchedOrder.grand_total,
+              courierName: "Steadfast Courier",
+              trackingCode: rawTrackingCode || matchedOrder.courier_tracking_code || rawConsignmentId || matchedOrder.courier_consignment_id,
+              trackingUrl: matchedOrder.courier_tracking_url || (rawTrackingCode ? `https://steadfast.com.bd/t/${rawTrackingCode}` : undefined),
+              triggerMetaCapi: true,
+            },
+          }).catch((outboxErr) => {
+            console.warn("[Steadfast Webhook] Background Outbox enqueue error (delivered):", outboxErr);
+          });
         } else if (sfStatus === "partial_delivered") {
           // Rule: mark as delivered, payment as partially_paid + update amount_paid & delivery charge
           const updatePayload: Record<string, any> = {
@@ -257,6 +293,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           result.message = "Order marked as delivered (partially paid).";
+
+          // Trigger automated customer SMS notification and Meta CAPI via Outbox (partial delivery)
+          const customerPhone =
+            matchedOrder.customer_phone ||
+            matchedOrder.shipping_phone ||
+            matchedOrder.shipping_address?.phone ||
+            matchedOrder.customer_alternative_phone ||
+            "";
+
+          enqueueAndDispatch({
+            eventName: "order.status_updated",
+            aggregateType: "order",
+            aggregateId: matchedOrder.id,
+            idempotencyKey: `order.status:${matchedOrder.id}:partial_delivered:webhook`,
+            payload: {
+              orderId: matchedOrder.id,
+              orderNumber: matchedOrder.order_number,
+              newStatus: "delivered",
+              customerPhone,
+              customerName: matchedOrder.customer_name || matchedOrder.shipping_address?.recipient_name,
+              grandTotal: matchedOrder.grand_total,
+              courierName: "Steadfast Courier",
+              trackingCode: rawTrackingCode || matchedOrder.courier_tracking_code || rawConsignmentId || matchedOrder.courier_consignment_id,
+              trackingUrl: matchedOrder.courier_tracking_url || (rawTrackingCode ? `https://steadfast.com.bd/t/${rawTrackingCode}` : undefined),
+              triggerMetaCapi: true,
+            },
+          }).catch((outboxErr) => {
+            console.warn("[Steadfast Webhook] Background Outbox enqueue error (partial delivered):", outboxErr);
+          });
         } else if (sfStatus === "cancelled") {
           // Database Trigger Rule:
           // If order is currently 'shipped', transitioning to 'cancelled' is blocked by DB trigger;

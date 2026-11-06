@@ -88,6 +88,7 @@ import {
   computeNextSteadfastInvoice,
 } from "@/lib/steadfast";
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
+import { OrderSmsDialog } from "@/components/admin/order-sms-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { updateOrderInDb } from "@/lib/supabase/api";
 import { useOrder } from "@/hooks/use-order";
@@ -203,6 +204,7 @@ export function OrderDetailsSheet({
   const [isBookingSteadfast, setIsBookingSteadfast] = React.useState(false);
   const [isRecreatingSteadfast, setIsRecreatingSteadfast] = React.useState(false);
   const [isRecreateModalOpen, setIsRecreateModalOpen] = React.useState(false);
+  const [isSmsModalOpen, setIsSmsModalOpen] = React.useState(false);
   const [steadfastError, setSteadfastError] = React.useState<string | null>(null);
 
   // Check for other orders with the same customer phone
@@ -1731,10 +1733,20 @@ export function OrderDetailsSheet({
                     <div className="border-l-2 border-muted ml-3 space-y-4 pl-4 text-xs py-2">
                       {order.events.map((ev) => (
                         <div key={ev.id} className="relative">
-                          <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background" />
-                          <p className="font-medium text-foreground">{ev.message}</p>
+                          <div
+                            className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-background ${
+                              ev.event_type === "sms_sent" ? "bg-sky-500" : "bg-amber-500"
+                            }`}
+                          />
+                          <p className="font-medium text-foreground">
+                            {ev.event_type === "sms_sent" && (
+                              <MessageSquare className="h-3 w-3 text-sky-600 inline mr-1" />
+                            )}
+                            {ev.message}
+                          </p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {ev.actor} • {formatDateTime(ev.created_at)}
+                            {ev.actor || (ev.event_type === "sms_sent" ? "SMS Gateway" : "System")} •{" "}
+                            {formatDateTime(ev.created_at)}
                           </p>
                         </div>
                       ))}
@@ -1778,6 +1790,17 @@ export function OrderDetailsSheet({
 
           {/* Secondary Actions Group */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-8 text-sky-700 hover:text-sky-800 hover:bg-sky-50 dark:text-sky-400 border-sky-300 dark:border-sky-800 cursor-pointer flex-1 sm:flex-initial"
+              onClick={() => setIsSmsModalOpen(true)}
+              title="Send SMS to Customer via SMSBangladesh"
+            >
+              <MessageSquare className="h-3.5 w-3.5 sm:mr-1 text-sky-600" />
+              <span>SMS</span>
+            </Button>
+
             <Button
               size="sm"
               variant="outline"
@@ -1827,6 +1850,16 @@ export function OrderDetailsSheet({
           setIsRecreateModalOpen(false);
         }}
         isProcessing={isRecreatingSteadfast}
+      />
+      <OrderSmsDialog
+        open={isSmsModalOpen}
+        onOpenChange={setIsSmsModalOpen}
+        order={order}
+        onSmsSentSuccess={() => {
+          if (onUpdateOrder && order) {
+            onUpdateOrder(order);
+          }
+        }}
       />
     </Sheet>
   );

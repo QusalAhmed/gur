@@ -1,6 +1,6 @@
 import * as React from "react";
-import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
-import { getQueryClient } from "@/lib/query-client";
+import { HydrationBoundary } from "@tanstack/react-query";
+import { dehydrate } from "@/lib/hydrate";
 import {
   getStorefrontProductsAction,
   type StorefrontDataResult,
@@ -36,20 +36,27 @@ export async function Product({
   featuredIdentifier,
   autoScrollToProduct,
 }: ProductProps = {}) {
-  const queryClient = getQueryClient();
+  let storefrontData: StorefrontDataResult | undefined = undefined;
 
-  // Prefetch storefront products into TanStack Query cache on SSR
+  // Fetch storefront products directly and dehydrate with cached timestamp for SSR
   try {
-    await queryClient.prefetchQuery({
-      queryKey: STOREFRONT_PRODUCTS_QUERY_KEY,
-      queryFn: getStorefrontProductsAction,
-    });
+    storefrontData = await getStorefrontProductsAction();
   } catch (err) {
-    console.error("Failed to prefetch storefront products on SSR:", err);
+    console.error("Failed to fetch storefront products on SSR:", err);
   }
 
+  const state = await dehydrate(
+    [
+      {
+        queryKey: STOREFRONT_PRODUCTS_QUERY_KEY,
+        data: storefrontData,
+      },
+    ],
+    { tags: ["storefront-products"] }
+  );
+
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <HydrationBoundary state={state}>
       <StorefrontProductsClient
         featuredIdentifier={featuredIdentifier}
         autoScrollToProduct={autoScrollToProduct}

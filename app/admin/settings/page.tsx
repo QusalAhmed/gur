@@ -18,10 +18,14 @@ import {
   Send,
   Key,
   ExternalLink,
+  MessageSquare,
+  Wallet,
+  Info,
 } from "lucide-react";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -43,7 +47,9 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSiteSettingsAction, updateSiteSettingsAction } from "@/actions/settings";
 import { testBrevoConnectionAction } from "@/actions/brevo";
+import { checkSmsBalanceAction, sendTestSmsAction } from "@/actions/sms";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
+import { OutboxMonitor } from "@/components/admin/outbox-monitor";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -72,8 +78,31 @@ export default function SettingsPage() {
   const [dailyProductionKg, setDailyProductionKg] = React.useState(50);
 
   // SMS & Notifications State
-  const [smsGateway, setSmsGateway] = React.useState("greenweb");
+  const [smsEnabled, setSmsEnabled] = React.useState(true);
+  const [smsGateway, setSmsGateway] = React.useState("smsbangladesh");
+  const [smsUser, setSmsUser] = React.useState("");
+  const [smsPassword, setSmsPassword] = React.useState("");
   const [smsSenderId, setSmsSenderId] = React.useState("MOLASSES");
+  const [smsPlacedEnabled, setSmsPlacedEnabled] = React.useState(true);
+  const [smsConfirmedEnabled, setSmsConfirmedEnabled] = React.useState(true);
+  const [smsShippedEnabled, setSmsShippedEnabled] = React.useState(true);
+  const [smsDeliveredEnabled, setSmsDeliveredEnabled] = React.useState(true);
+  const [smsTemplatePlaced, setSmsTemplatePlaced] = React.useState(
+    "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। খুব শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন। ধন্যবাদ!"
+  );
+  const [smsTemplateConfirmed, setSmsTemplateConfirmed] = React.useState(
+    "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। আপনার পার্সেলটি প্যাকিং সম্পন্ন করে দ্রুত পাঠিয়ে দেওয়া হবে। ধন্যবাদ!"
+  );
+  const [smsTemplateShipped, setSmsTemplateShipped] = React.useState(
+    "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: {tracking_code}। পার্সেল ট্র্যাক করুন: {tracking_url}"
+  );
+  const [smsTemplateDelivered, setSmsTemplateDelivered] = React.useState(
+    "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!"
+  );
+  const [checkingBalance, setCheckingBalance] = React.useState(false);
+  const [smsBalance, setSmsBalance] = React.useState<number | null>(null);
+  const [testingSms, setTestingSms] = React.useState(false);
+  const [testSmsPhone, setTestSmsPhone] = React.useState("");
   const [whatsapp, setWhatsapp] = React.useState("+880 1711-234567");
   const [smtpServer, setSmtpServer] = React.useState("smtp.sendgrid.net (Port 587)");
 
@@ -134,11 +163,44 @@ export default function SettingsPage() {
         }
 
         // SMS & Notifications
-        if (data["notifications.sms_gateway"] !== undefined) {
-          setSmsGateway(String(data["notifications.sms_gateway"]));
+        if (typeof data["notifications.sms_enabled"] === "boolean") {
+          setSmsEnabled(data["notifications.sms_enabled"]);
         }
-        if (data["notifications.sms_sender_id"] !== undefined) {
-          setSmsSenderId(String(data["notifications.sms_sender_id"]));
+        if (data["notifications.sms_gateway"] !== undefined) {
+          setSmsGateway(String(data["notifications.sms_gateway"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.smsbangladesh_user"] !== undefined) {
+          setSmsUser(String(data["notifications.smsbangladesh_user"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.smsbangladesh_password"] !== undefined) {
+          setSmsPassword(String(data["notifications.smsbangladesh_password"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.smsbangladesh_from"] !== undefined) {
+          setSmsSenderId(String(data["notifications.smsbangladesh_from"]).replace(/^"|"$/g, ""));
+        }
+        if (typeof data["notifications.sms_placed_enabled"] === "boolean") {
+          setSmsPlacedEnabled(data["notifications.sms_placed_enabled"]);
+        }
+        if (typeof data["notifications.sms_confirmed_enabled"] === "boolean") {
+          setSmsConfirmedEnabled(data["notifications.sms_confirmed_enabled"]);
+        }
+        if (typeof data["notifications.sms_shipped_enabled"] === "boolean") {
+          setSmsShippedEnabled(data["notifications.sms_shipped_enabled"]);
+        }
+        if (typeof data["notifications.sms_delivered_enabled"] === "boolean") {
+          setSmsDeliveredEnabled(data["notifications.sms_delivered_enabled"]);
+        }
+        if (data["notifications.sms_template_placed"] !== undefined) {
+          setSmsTemplatePlaced(String(data["notifications.sms_template_placed"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.sms_template_confirmed"] !== undefined) {
+          setSmsTemplateConfirmed(String(data["notifications.sms_template_confirmed"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.sms_template_shipped"] !== undefined) {
+          setSmsTemplateShipped(String(data["notifications.sms_template_shipped"]).replace(/^"|"$/g, ""));
+        }
+        if (data["notifications.sms_template_delivered"] !== undefined) {
+          setSmsTemplateDelivered(String(data["notifications.sms_template_delivered"]).replace(/^"|"$/g, ""));
         }
         if (data["store.whatsapp"] !== undefined) {
           setWhatsapp(String(data["store.whatsapp"]));
@@ -204,8 +266,19 @@ export default function SettingsPage() {
         "inventory.low_stock_threshold_bulk": Number(lowStockBulk),
         "inventory.low_stock_threshold_retail": Number(lowStockRetail),
         "inventory.daily_production_kg": Number(dailyProductionKg) || 50,
+        "notifications.sms_enabled": smsEnabled,
         "notifications.sms_gateway": smsGateway,
-        "notifications.sms_sender_id": smsSenderId,
+        "notifications.smsbangladesh_user": smsUser.trim(),
+        "notifications.smsbangladesh_password": smsPassword.trim(),
+        "notifications.smsbangladesh_from": smsSenderId.trim(),
+        "notifications.sms_placed_enabled": smsPlacedEnabled,
+        "notifications.sms_confirmed_enabled": smsConfirmedEnabled,
+        "notifications.sms_shipped_enabled": smsShippedEnabled,
+        "notifications.sms_delivered_enabled": smsDeliveredEnabled,
+        "notifications.sms_template_placed": smsTemplatePlaced.trim(),
+        "notifications.sms_template_confirmed": smsTemplateConfirmed.trim(),
+        "notifications.sms_template_shipped": smsTemplateShipped.trim(),
+        "notifications.sms_template_delivered": smsTemplateDelivered.trim(),
         "store.whatsapp": whatsapp,
         "notifications.smtp_server": smtpServer,
         "notifications.brevo_enabled": brevoEnabled,
@@ -259,6 +332,53 @@ export default function SettingsPage() {
     } finally {
       setTestingBrevo(false);
     }
+  };
+
+  const handleCheckBalance = async () => {
+    setCheckingBalance(true);
+    try {
+      const res = await checkSmsBalanceAction();
+      if (res.success && res.balance !== undefined) {
+        setSmsBalance(res.balance);
+        toast.success(`SMSBangladesh Active Balance: ৳${res.balance.toFixed(2)}`);
+      } else {
+        toast.error(res.error || "Failed to check SMS balance. Please verify API credentials.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to query SMS gateway balance.");
+    } finally {
+      setCheckingBalance(false);
+    }
+  };
+
+  const handleSendTestSms = async () => {
+    const targetPhone = testSmsPhone.trim() || supportPhone.trim();
+    if (!targetPhone) {
+      toast.error("Please enter a valid mobile number for the test SMS.");
+      return;
+    }
+    setTestingSms(true);
+    try {
+      toast.info(`Sending test SMS via SMSBangladesh to ${targetPhone}...`);
+      const res = await sendTestSmsAction(targetPhone);
+      if (res.success) {
+        toast.success(`Test SMS delivered successfully to ${targetPhone}!`);
+      } else {
+        toast.error(`SMS send failed: ${res.error || res.skipReason || "Check credentials & balance"}`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to send test SMS");
+    } finally {
+      setTestingSms(false);
+    }
+  };
+
+  const getSmsSegments = (text: string) => {
+    const len = text.length;
+    if (len === 0) return { chars: 0, parts: 0 };
+    // Bengali unicode SMS: 70 chars for single segment, 67 chars per part for multipart
+    const parts = len <= 70 ? 1 : Math.ceil(len / 67);
+    return { chars: len, parts };
   };
 
   return (
@@ -818,45 +938,351 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            {/* SMSBangladesh Gateway & Credentials Card */}
+            <Card className="border-sky-200/70 bg-gradient-to-b from-white to-sky-50/20">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-amber-600" />
-                  SMS & Outbox Delivery Channels
-                </CardTitle>
-                <CardDescription>
-                  Configure SMS notification gateways, WhatsApp customer service contact, and transactional email server
-                </CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-sky-100 rounded-lg text-sky-800">
+                      <Smartphone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        SMSBangladesh Gateway & Customer Messaging
+                        <Badge variant="outline" className="text-[10px] bg-sky-100 text-sky-800 border-sky-300">
+                          REST API v1
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Direct HTTP GET integration via panel.smsbangladesh.com for automated Bangladeshi transactional SMS
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {smsBalance !== null && (
+                      <Badge variant="secondary" className="font-mono text-xs px-2.5 py-1 bg-sky-100 text-sky-900 border border-sky-300">
+                        <Wallet className="h-3 w-3 mr-1 inline" />
+                        Balance: ৳{smsBalance.toFixed(2)}
+                      </Badge>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCheckBalance}
+                      disabled={checkingBalance || saving}
+                      className="text-xs h-8 gap-1.5 border-sky-300 hover:bg-sky-100/50"
+                    >
+                      <Wallet className="h-3.5 w-3.5 text-sky-700" />
+                      {checkingBalance ? "Checking..." : "Check Balance"}
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                {/* Enable / Disable Master SMS toggle */}
+                <div
+                  className={`flex items-start gap-3 p-3.5 rounded-lg border transition-colors ${
+                    smsEnabled
+                      ? "bg-sky-50/50 border-sky-200 text-sky-950"
+                      : "bg-muted/40 border-border text-muted-foreground"
+                  }`}
+                >
+                  <Checkbox
+                    id="sms-enabled"
+                    checked={smsEnabled}
+                    onCheckedChange={(checked) => setSmsEnabled(Boolean(checked))}
+                    className="mt-0.5 data-[state=checked]:bg-sky-600 data-[state=checked]:border-sky-600"
+                  />
+                  <div className="space-y-0.5">
+                    <label
+                      htmlFor="sms-enabled"
+                      className="text-sm font-semibold cursor-pointer select-none"
+                    >
+                      Enable Customer SMS Notifications
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically dispatches transactional SMS updates to customer mobile numbers on order placed, confirmed, shipped, and delivered.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">SMS Gateway Provider</label>
                     <Select
                       value={smsGateway}
-                      onValueChange={(val) => setSmsGateway(val || "greenweb")}
+                      onValueChange={(val) => setSmsGateway(val || "smsbangladesh")}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="smsbangladesh">SMSBangladesh (panel.smsbangladesh.com)</SelectItem>
                         <SelectItem value="greenweb">Greenweb Bangladesh (Masking SMS)</SelectItem>
                         <SelectItem value="onnorokom">Onnorokom SMS</SelectItem>
-                        <SelectItem value="infobip">Infobip Global</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Masking Sender ID</label>
+                    <label className="text-xs font-semibold flex items-center justify-between">
+                      <span>Sender ID / Masking Name</span>
+                      <span className="text-[10px] text-muted-foreground">Approved ID</span>
+                    </label>
                     <Input
                       value={smsSenderId}
                       onChange={(e) => setSmsSenderId(e.target.value)}
-                      placeholder="e.g. MOLASSES"
-                      className="font-mono"
+                      placeholder="e.g. NAJJTECH or MOLASSES"
+                      className="font-mono text-xs"
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">SMSBangladesh Username</label>
+                    <Input
+                      value={smsUser}
+                      onChange={(e) => setSmsUser(e.target.value)}
+                      placeholder="Your SMSBangladesh username"
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Can also be set via <code>SMSBANGLADESH_USER</code> in <code>.env</code>.
+                    </p>
                   </div>
                 </div>
 
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">SMSBangladesh Password</label>
+                    <Input
+                      type="password"
+                      value={smsPassword}
+                      onChange={(e) => setSmsPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Can also be set via <code>SMSBANGLADESH_PASSWORD</code> in <code>.env</code>.
+                    </p>
+                  </div>
+
+                  {/* Send Test SMS Sandbox */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Send Test SMS</label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={testSmsPhone}
+                        onChange={(e) => setTestSmsPhone(e.target.value)}
+                        placeholder="017XXXXXXXX"
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleSendTestSms}
+                        disabled={testingSms || saving}
+                        className="text-xs shrink-0 gap-1 bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-300"
+                      >
+                        <Send className="h-3 w-3" />
+                        {testingSms ? "Sending..." : "Test SMS"}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Sends an instant verification message to the specified number to test credentials.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Order Lifecycle SMS Notification Templates Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-amber-600" />
+                  Order Lifecycle SMS Templates
+                </CardTitle>
+                <CardDescription>
+                  Configure automated Bengali (বাংলা) messages sent to customers at each milestone. Standard Bengali SMS is 70 characters per message segment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Available Variables Guide */}
+                <div className="p-3 bg-muted/40 rounded-lg border text-xs space-y-1.5">
+                  <div className="font-semibold flex items-center gap-1.5 text-foreground">
+                    <Info className="h-3.5 w-3.5 text-amber-600" />
+                    Available Dynamic Placeholders (Click to Copy / Reference):
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      "{customer_name}",
+                      "{order_number}",
+                      "{amount}",
+                      "{courier_name}",
+                      "{tracking_code}",
+                      "{tracking_url}",
+                      "{support_phone}",
+                      "{store_name}",
+                    ].map((pill) => (
+                      <Badge
+                        key={pill}
+                        variant="secondary"
+                        className="font-mono text-[11px] cursor-pointer hover:bg-amber-100 transition-colors"
+                        onClick={() => {
+                          navigator.clipboard.writeText(pill);
+                          toast.success(`Copied ${pill} to clipboard!`);
+                        }}
+                      >
+                        {pill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 1. Order Placed Template */}
+                <div className="space-y-2 p-3.5 border rounded-lg bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sms-placed-toggle"
+                        checked={smsPlacedEnabled}
+                        onCheckedChange={(checked) => setSmsPlacedEnabled(Boolean(checked))}
+                        className="data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                      />
+                      <label htmlFor="sms-placed-toggle" className="text-xs font-semibold cursor-pointer">
+                        1. Order Placed (Storefront Checkout Completion)
+                      </label>
+                    </div>
+                    {(() => {
+                      const { chars, parts } = getSmsSegments(smsTemplatePlaced);
+                      return (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          {chars} chars • {parts} {parts === 1 ? "SMS" : "SMS segments"}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <Textarea
+                    value={smsTemplatePlaced}
+                    onChange={(e) => setSmsTemplatePlaced(e.target.value)}
+                    rows={2}
+                    className="text-xs font-sans leading-relaxed"
+                    placeholder="প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে..."
+                  />
+                </div>
+
+                {/* 2. Order Confirmed Template */}
+                <div className="space-y-2 p-3.5 border rounded-lg bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sms-confirmed-toggle"
+                        checked={smsConfirmedEnabled}
+                        onCheckedChange={(checked) => setSmsConfirmedEnabled(Boolean(checked))}
+                        className="data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                      />
+                      <label htmlFor="sms-confirmed-toggle" className="text-xs font-semibold cursor-pointer">
+                        2. Order Confirmed (Admin Status Transition to Confirmed)
+                      </label>
+                    </div>
+                    {(() => {
+                      const { chars, parts } = getSmsSegments(smsTemplateConfirmed);
+                      return (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          {chars} chars • {parts} {parts === 1 ? "SMS" : "SMS segments"}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <Textarea
+                    value={smsTemplateConfirmed}
+                    onChange={(e) => setSmsTemplateConfirmed(e.target.value)}
+                    rows={2}
+                    className="text-xs font-sans leading-relaxed"
+                    placeholder="প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে..."
+                  />
+                </div>
+
+                {/* 3. Order Shipped Template */}
+                <div className="space-y-2 p-3.5 border rounded-lg bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sms-shipped-toggle"
+                        checked={smsShippedEnabled}
+                        onCheckedChange={(checked) => setSmsShippedEnabled(Boolean(checked))}
+                        className="data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                      />
+                      <label htmlFor="sms-shipped-toggle" className="text-xs font-semibold cursor-pointer">
+                        3. Order Shipped (Courier Dispatch & Consignment Booking)
+                      </label>
+                    </div>
+                    {(() => {
+                      const { chars, parts } = getSmsSegments(smsTemplateShipped);
+                      return (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          {chars} chars • {parts} {parts === 1 ? "SMS" : "SMS segments"}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <Textarea
+                    value={smsTemplateShipped}
+                    onChange={(e) => setSmsTemplateShipped(e.target.value)}
+                    rows={2}
+                    className="text-xs font-sans leading-relaxed"
+                    placeholder="প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে..."
+                  />
+                </div>
+
+                {/* 4. Order Delivered Template */}
+                <div className="space-y-2 p-3.5 border rounded-lg bg-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sms-delivered-toggle"
+                        checked={smsDeliveredEnabled}
+                        onCheckedChange={(checked) => setSmsDeliveredEnabled(Boolean(checked))}
+                        className="data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                      />
+                      <label htmlFor="sms-delivered-toggle" className="text-xs font-semibold cursor-pointer">
+                        4. Order Delivered (Delivery Completion & Steadfast Webhook)
+                      </label>
+                    </div>
+                    {(() => {
+                      const { chars, parts } = getSmsSegments(smsTemplateDelivered);
+                      return (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          {chars} chars • {parts} {parts === 1 ? "SMS" : "SMS segments"}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <Textarea
+                    value={smsTemplateDelivered}
+                    onChange={(e) => setSmsTemplateDelivered(e.target.value)}
+                    rows={2}
+                    className="text-xs font-sans leading-relaxed"
+                    placeholder="প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে..."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Other Channels */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-amber-600" />
+                  WhatsApp & Support Channels
+                </CardTitle>
+                <CardDescription>
+                  Customer service WhatsApp number and transactional fallback configuration
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">WhatsApp Business Phone</label>
@@ -864,10 +1290,10 @@ export default function SettingsPage() {
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(e.target.value)}
                       placeholder="+880 1711-000000"
-                      className="font-mono"
+                      className="font-mono text-xs"
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      Used for customer support chat links and instant WhatsApp dispatch notifications.
+                      Used for customer support chat links and direct WhatsApp inquiries.
                     </p>
                   </div>
                   <div className="space-y-1.5">
@@ -876,12 +1302,15 @@ export default function SettingsPage() {
                       value={smtpServer}
                       onChange={(e) => setSmtpServer(e.target.value)}
                       placeholder="e.g. smtp.sendgrid.net (Port 587)"
-                      className="font-mono"
+                      className="font-mono text-xs"
                     />
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Transactional Outbox & Inngest Background Jobs Monitor */}
+            <OutboxMonitor />
           </TabsContent>
         </Tabs>
       </motion.div>

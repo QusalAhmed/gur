@@ -57,7 +57,6 @@ import {
   fetchOrdersFromDb,
   createOrderInDb,
   updateOrderInDb,
-  updateOrderStatusInDb,
   addOrderNoteInDb,
   updateOrderNoteInDb,
   deleteOrderNoteInDb,
@@ -80,7 +79,6 @@ import {
   type BulkDeleteResult,
 } from "@/lib/supabase";
 import {
-  updateOrderStatusWithSteadfastAction,
   bookSteadfastBulkParcelsAction,
   recreateSteadfastParcelAction,
   type BulkBookSteadfastResult,
@@ -147,7 +145,7 @@ import {
 } from "@/components/ui/tanstack-form";
 import { cn, formatDate, formatDateTime, sortNotesNewestFirst } from "@/lib/utils";
 import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
-import { getOrdersAction, getOrderAction } from "@/actions/orders";
+import { getOrdersAction, getOrderAction, updateOrderStatusAction } from "@/actions/orders";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderFormDialog } from "@/components/admin/order-form-dialog";
@@ -717,53 +715,43 @@ export function OrdersClient() {
       courierName?: string;
       forceWithoutCourier?: boolean;
     }) => {
-      const isSteadfast = (courierName || currentOrder?.courier_name || "").toLowerCase().includes("steadfast");
+      // Call central server action: executes DB update, Steadfast auto-booking,
+      // CAPI tracking, and automated SMSBangladesh messaging on the server
+      const res = await updateOrderStatusAction({
+        orderId,
+        newStatus,
+        cancelReason,
+        eventMsg,
+        currentOrder,
+        courierName: courierName || currentOrder?.courier_name,
+        forceWithoutCourier,
+      });
 
-      // Auto-book parcel if order is moving to processing with Steadfast Courier
-      if (newStatus === "processing" && isSteadfast && !forceWithoutCourier) {
-        const steadfastRes = await updateOrderStatusWithSteadfastAction({
-          orderId,
-          newStatus,
-          courierName: courierName || currentOrder?.courier_name || "Steadfast Courier",
-          cancelReason,
-          eventMsg,
-          currentOrder,
-          forceWithoutCourier: false,
-        });
-
-        if (!steadfastRes.success) {
-          if (steadfastRes.requiresPrompt) {
-            setSteadfastFailureState({
-              isOpen: true,
-              order: steadfastRes.order || currentOrder || null,
-              errorMessage: steadfastRes.error || "Failed to book parcel with Steadfast Courier.",
-              fieldErrors: steadfastRes.fieldErrors,
-              pendingParams: {
-                orderId,
-                newStatus,
-                cancelReason,
-                eventMsg,
-                currentOrder,
-                courierName: courierName || currentOrder?.courier_name || "Steadfast Courier",
-              },
-            });
-            return null;
-          }
-          throw new Error(steadfastRes.error || "Failed to update order status");
+      if (!res.success) {
+        if (res.requiresPrompt) {
+          setSteadfastFailureState({
+            isOpen: true,
+            order: res.order || currentOrder || null,
+            errorMessage: res.error || "Failed to book parcel with Steadfast Courier.",
+            fieldErrors: res.fieldErrors,
+            pendingParams: {
+              orderId,
+              newStatus,
+              cancelReason,
+              eventMsg,
+              currentOrder,
+              courierName: courierName || currentOrder?.courier_name || "Steadfast Courier",
+            },
+          });
+          return null;
         }
-
-        return {
-          order: steadfastRes.order!,
-          bookedWithSteadfast: steadfastRes.bookedWithSteadfast,
-          consignment: steadfastRes.consignment,
-        };
+        throw new Error(res.error || "Failed to update order status");
       }
 
-      const updated = await updateOrderStatusInDb(orderId, newStatus, cancelReason, eventMsg, currentOrder, courierName);
       return {
-        order: updated,
-        bookedWithSteadfast: false,
-        consignment: undefined,
+        order: res.order!,
+        bookedWithSteadfast: Boolean(res.bookedWithSteadfast),
+        consignment: res.consignment,
       };
     },
     onSuccess: (result, variables) => {

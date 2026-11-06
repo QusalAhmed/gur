@@ -1421,15 +1421,41 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
 
       if (orderDbId && savedOrder.items && savedOrder.items.length > 0) {
         try {
+          const candidateVarIds = savedOrder.items
+            .map((it) => it.variant_id || (it as any).variantId)
+            .filter((id) => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+          const varToProdMap = new Map<string, string>();
+          if (candidateVarIds.length > 0) {
+            const { data: varsData } = await supabase
+              .from("product_variants")
+              .select("id, product_id")
+              .in("id", candidateVarIds);
+            (varsData || []).forEach((v: any) => {
+              if (v.id && v.product_id) varToProdMap.set(v.id, v.product_id);
+            });
+          }
+
           const itemRows = savedOrder.items.map((it) => {
-            const isUuid =
+            const isVarUuid =
               typeof it.variant_id === "string" &&
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                 it.variant_id
               );
+            const rawProdId = it.product_id || (it as any).productId;
+            const isProdUuid =
+              typeof rawProdId === "string" &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                rawProdId
+              );
+            const resolvedProdId = isProdUuid
+              ? rawProdId
+              : (isVarUuid && it.variant_id ? varToProdMap.get(it.variant_id) || null : null);
+
             return {
               order_id: orderDbId,
-              variant_id: isUuid ? it.variant_id : null,
+              product_id: resolvedProdId,
+              variant_id: isVarUuid ? it.variant_id : null,
               sku: it.sku || "SKU-ITEM",
               product_name: it.product_name || "Molasses Product",
               variant_name: it.variant_name || "Standard",
@@ -2065,17 +2091,42 @@ export async function updateOrderInDb(
 
       // 2. Insert updated items if any
       if (updatedOrder.items.length > 0) {
+        const candidateVarIds = updatedOrder.items
+          .map((it) => it.variant_id || (it as any).variantId)
+          .filter((id) => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+        const varToProdMap = new Map<string, string>();
+        if (candidateVarIds.length > 0) {
+          const { data: varsData } = await supabase
+            .from("product_variants")
+            .select("id, product_id")
+            .in("id", candidateVarIds);
+          (varsData || []).forEach((v: any) => {
+            if (v.id && v.product_id) varToProdMap.set(v.id, v.product_id);
+          });
+        }
+
         const itemRows = updatedOrder.items.map((it) => {
-          const isUuid =
+          const isVarUuid =
             typeof it.variant_id === "string" &&
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
               it.variant_id
             );
+          const rawProdId = it.product_id || (it as any).productId;
+          const isProdUuid =
+            typeof rawProdId === "string" &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              rawProdId
+            );
+          const resolvedProdId = isProdUuid
+            ? rawProdId
+            : (isVarUuid && it.variant_id ? varToProdMap.get(it.variant_id) || null : null);
           const qty = Math.max(1, Number(it.quantity) || 1);
           const price = Math.max(0, Number(it.unit_price) || 0);
           return {
             order_id: orderUuid,
-            variant_id: isUuid ? it.variant_id : null,
+            product_id: resolvedProdId,
+            variant_id: isVarUuid ? it.variant_id : null,
             sku: it.sku || "SKU-ITEM",
             product_name: it.product_name || "Molasses Product",
             variant_name: it.variant_name || "Standard",
@@ -2190,224 +2241,27 @@ export async function updateOrderStatusInDb(
   currentOrder?: Order,
   courierName?: string
 ): Promise<Order> {
-  const nowIso = new Date().toISOString();
-  const nowStr = nowIso.replace("T", " ").slice(0, 16);
-  const detailParts: string[] = [];
-  if (cancelReason) detailParts.push(`Reason: ${cancelReason}`);
-  if (courierName) detailParts.push(`Courier: ${courierName}`);
-  const detailsStr = detailParts.length > 0 ? ` (${detailParts.join(" | ")})` : "";
+  const { updateOrderStatusAction } = await import("@/actions/orders");
+  const res = await updateOrderStatusAction({
+    orderId,
+    newStatus,
+    cancelReason,
+    eventMsg: eventMessage,
+    currentOrder,
+    courierName,
+  });
 
-  const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
-
-  // Pre-validate transition if currentOrder is available
-  if (currentOrder) {
-    let val = validateOrderStatusTransition(
-      currentOrder.status,
-      newStatus,
-      currentOrder.customer,
-      currentOrder.phone,
-      currentOrder.address?.address_line,
-      currentOrder.items?.length,
-      courierName || currentOrder.courier_name,
-      cancelReason,
-      currentOrder.address?.division,
-      currentOrder.address?.district
-    );
-    if (!val.valid) {
-      // If currentOrder fails validation, it might be stale in client memory.
-      // Re-validate against authoritative DB state before rejecting.
-      const { data: dbOrder } = await supabase
-        .from("orders")
-        .select("status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
-        .eq("order_number", orderId)
-        .maybeSingle();
-
-      if (dbOrder) {
-        const liveVal = validateOrderStatusTransition(
-          dbOrder.status,
-          dbStatus,
-          dbOrder.customer_name || dbOrder.shipping_address?.recipient_name,
-          dbOrder.customer_phone || dbOrder.shipping_address?.phone,
-          dbOrder.shipping_address?.address_line,
-          Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
-          courierName || dbOrder.shipping_method_name,
-          cancelReason,
-          dbOrder.shipping_address?.division,
-          dbOrder.shipping_address?.district
-        );
-        if (liveVal.valid) {
-          val = liveVal;
-        }
-      }
-    }
-    if (!val.valid) {
-      throw new DatabaseOperationError(
-        parseDatabaseError({
-          code: val.code || "P0001",
-          message: `${val.reason} (${orderId})`,
-          details: `Order ${orderId}: ${val.reason}`,
-        })
-      );
-    }
-  } else {
-    // If currentOrder is omitted, enforce authoritative DB checks
-    const { data: dbOrder } = await supabase
-      .from("orders")
-      .select("status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id)")
-      .eq("order_number", orderId)
-      .maybeSingle();
-
-    if (dbOrder) {
-      const val = validateOrderStatusTransition(
-        dbOrder.status,
-        dbStatus,
-        dbOrder.customer_name || dbOrder.shipping_address?.recipient_name,
-        dbOrder.customer_phone || dbOrder.shipping_address?.phone,
-        dbOrder.shipping_address?.address_line,
-        Array.isArray(dbOrder.order_items) ? dbOrder.order_items.length : 0,
-        courierName || dbOrder.shipping_method_name,
-        cancelReason,
-        dbOrder.shipping_address?.division,
-        dbOrder.shipping_address?.district
-      );
-      if (!val.valid) {
-        throw new DatabaseOperationError(
-          parseDatabaseError({
-            code: val.code || "P0001",
-            message: `${val.reason} (${orderId})`,
-            details: `Order ${orderId}: ${val.reason}`,
-          })
-        );
-      }
-    }
-  }
-
-  // 1. Prepare surgical status update payload (never overwrite customer or items with null)
-  const statusPayload: Record<string, any> = {
-    status: dbStatus,
-    updated_at: nowIso,
-  };
-
-  if (courierName !== undefined) {
-    statusPayload.shipping_method_name = courierName || null;
-  }
-
-  if (newStatus === "cancelled") {
-    if (cancelReason) statusPayload.cancel_reason = cancelReason;
-    statusPayload.cancelled_at = nowIso;
-  } else if (newStatus === "confirmed") {
-    statusPayload.confirmed_at = nowIso;
-  } else if (newStatus === "shipped") {
-    statusPayload.shipped_at = nowIso;
-  } else if (newStatus === "delivered" || newStatus === "partially_delivered") {
-    statusPayload.delivered_at = nowIso;
-  }
-
-  // 2. Perform direct targeted UPDATE on orders table
-  const { data: updatedRows, error: updateErr } = await supabase
-    .from("orders")
-    .update(statusPayload)
-    .eq("order_number", orderId)
-    .select("id, order_number, status, customer_name, customer_phone, shipping_method_name, cancel_reason");
-
-  if (updateErr) {
-    console.error("Direct Supabase status update error:", updateErr);
-    const parsed = parseDatabaseError(updateErr);
-    throw new DatabaseOperationError(parsed);
-  }
-
-  // 3. Verify that the row was actually updated (detect silent RLS 0-row rejections)
-  if (!updatedRows || updatedRows.length === 0) {
-    const { data: existingRow } = await supabase
-      .from("orders")
-      .select("id, status")
-      .eq("order_number", orderId)
-      .maybeSingle();
-
-    if (existingRow) {
-      const rlsErr = parseDatabaseError({
-        code: "0-ROWS-RLS",
-        message: `Database Row-Level Security (RLS) policy prevented updating status for order ${orderId}.`,
-        details: `Order exists with current status '${existingRow.status}', but RLS UPDATE policy evaluated to FALSE for the current session.`,
-        hint: "Apply migration 20261028000001_fix_order_status_rls_and_workflow.sql in your Supabase SQL Editor.",
-      });
-      throw new DatabaseOperationError(rlsErr);
-    } else {
-      throw new DatabaseOperationError(
-        parseDatabaseError({
-          code: "404",
-          message: `Order ${orderId} was not found in the database.`,
-        })
-      );
-    }
-  }
-
-  const orderUuid = updatedRows[0].id;
-
-  // 4. Record order timeline event in public.order_events
-  const newEvent: OrderEvent = {
-    id: `ev-${Date.now()}`,
-    event_type: "status_changed",
-    to_value: newStatus,
-    message: eventMessage || `Order status updated to ${newStatus.toUpperCase()}${detailsStr}`,
-    actor: "Admin Staff",
-    created_at: formatDateTime(nowStr),
-  };
-
-  try {
-    await supabase.from("order_events").insert({
-      order_id: orderUuid,
-      event_type: "status_changed",
-      to_value: newStatus,
-      message: eventMessage || `Order status updated to ${newStatus.toUpperCase()}${detailsStr}`,
-    });
-  } catch (eventErr) {
-    console.warn("Could not insert order event into order_events:", eventErr);
-  }
-
-  // 5. Build and return the updated order object
-  let baseOrder = currentOrder;
-  if (!baseOrder || !baseOrder.customer) {
-    try {
-      const { data: fullData } = await supabase
-        .from("orders")
-        .select(`
-          *,
-          order_items (*),
-          order_events (*),
-          order_notes (*)
-        `)
-        .eq("order_number", orderId)
-        .maybeSingle();
-
-      if (fullData) {
-        baseOrder = formatDbOrderRecord(fullData);
-      }
-    } catch {
-      // Fallback to minimal order
-    }
-  }
-
-  const finalOrder: Order = {
-    ...(baseOrder || ({} as Order)),
-    id: orderId,
-    status: newStatus,
-    cancel_reason: newStatus === "cancelled" ? (cancelReason || baseOrder?.cancel_reason) : baseOrder?.cancel_reason,
-    courier_name: courierName !== undefined ? courierName : baseOrder?.courier_name,
-    events: [newEvent, ...(baseOrder?.events || [])],
-  };
-
-  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
-    import("@/actions/facebook-capi")
-      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
-        triggerCapiPurchaseOnOrderConfirmedAction(orderId).catch(() => {});
+  if (!res.success || !res.order) {
+    throw new DatabaseOperationError(
+      parseDatabaseError({
+        code: "STATUS_UPDATE_FAILED",
+        message: res.error || "Failed to update order status",
+        details: res.error,
       })
-      .catch((err) => {
-        console.warn("[Update Order Status] Failed to import facebook-capi action:", err);
-      });
+    );
   }
 
-  return finalOrder;
+  return res.order;
 }
 
 function parseDbNoteToDomain(n: any, defaultOrderNumber: string): OrderNote {
@@ -2972,230 +2826,8 @@ export async function bulkUpdateOrderStatusInDb(
   batchNote?: string,
   courierName?: string
 ): Promise<BulkStatusUpdateResult> {
-  if (!orderIds || orderIds.length === 0) {
-    return {
-      success: true,
-      totalRequested: 0,
-      updatedCount: 0,
-      skippedCount: 0,
-      updatedOrderNumbers: [],
-      skippedOrders: [],
-    };
-  }
-
-  const nowIso = new Date().toISOString();
-  const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
-
-  // 1. Fetch current orders from DB to validate workflow eligibility
-  // Select all required validation fields including courier and items
-  const { data: dbOrders, error: fetchErr } = await supabase
-    .from("orders")
-    .select("id, order_number, status, customer_name, customer_phone, shipping_address, shipping_method_name, order_items(id, sku, product_name, variant_name, quantity, unit_price, line_total, variant_id)")
-    .in("order_number", orderIds);
-
-  if (fetchErr) {
-    console.error("Failed to query orders for bulk update:", fetchErr);
-    throw new DatabaseOperationError(parseDatabaseError(fetchErr));
-  }
-
-  const ordersList = dbOrders || [];
-  const eligibleOrders: typeof ordersList = [];
-  const skippedOrders: { id: string; reason: string }[] = [];
-
-  // Account for any IDs not found in DB
-  const foundOrderNumbers = new Set(ordersList.map((o) => o.order_number));
-  for (const id of orderIds) {
-    if (!foundOrderNumbers.has(id)) {
-      skippedOrders.push({ id, reason: "Order not found in database" });
-    }
-  }
-
-  // Validate each order against the workflow transition rules
-  for (const o of ordersList) {
-    const itemCount = Array.isArray(o.order_items) ? o.order_items.length : 0;
-    const addressLine =
-      o.shipping_address?.address_line ||
-      (typeof o.shipping_address === "string" ? o.shipping_address : "") ||
-      o.shipping_address?.address ||
-      "";
-    const customerName = o.customer_name || o.shipping_address?.recipient_name || "";
-    const customerPhone = o.customer_phone || o.shipping_address?.phone || "";
-    const effectiveCourier = courierName?.trim() || o.shipping_method_name || "";
-
-    const val = validateOrderStatusTransition(
-      o.status,
-      dbStatus,
-      customerName,
-      customerPhone,
-      addressLine,
-      itemCount,
-      effectiveCourier,
-      batchNote,
-      o.shipping_address?.division,
-      o.shipping_address?.district
-    );
-
-    if (val.valid) {
-      eligibleOrders.push(o);
-    } else {
-      skippedOrders.push({
-        id: o.order_number,
-        reason: val.reason || "Ineligible for status transition",
-      });
-    }
-  }
-
-  // If none of the selected orders are eligible, throw a structured error with exact details
-  if (eligibleOrders.length === 0) {
-    const reasonSummary = skippedOrders.map((s) => `${s.id}: ${s.reason}`).join("; ");
-    const primaryReason = skippedOrders[0]?.reason || "Cannot advance orders";
-    const primaryCode = skippedOrders[0]?.reason?.includes("division") || skippedOrders[0]?.reason?.includes("district")
-      ? "GEO_LOCATION_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("product item")
-      ? "ORDER_ITEMS_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("Courier")
-      ? "COURIER_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("Cancellation reason")
-      ? "CANCEL_REASON_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("Return reason")
-      ? "RETURN_REASON_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("Customer name")
-      ? "CUSTOMER_NAME_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("phone")
-      ? "CUSTOMER_PHONE_REQUIRED"
-      : skippedOrders[0]?.reason?.includes("address")
-      ? "CUSTOMER_ADDRESS_REQUIRED"
-      : "INVALID_STATUS_TRANSITION";
-
-    throw new DatabaseOperationError(
-      parseDatabaseError({
-        code: primaryCode,
-        message: `${primaryReason} (Affecting: ${skippedOrders.map((s) => s.id).join(", ")})`,
-        details: reasonSummary,
-        hint: "Edit the affected orders to add required products, courier partner, customer details, or verify workflow progression.",
-      })
-    );
-  }
-
-  // 2. Perform targeted update ONLY on the eligible orders
-  const eligibleOrderNumbers = eligibleOrders.map((o) => o.order_number);
-  const updatePayload: Record<string, any> = {
-    status: dbStatus,
-    updated_at: nowIso,
-  };
-
-  if (courierName && courierName.trim()) {
-    updatePayload.shipping_method_name = courierName.trim();
-  }
-
-  if (dbStatus === "cancelled") {
-    updatePayload.cancel_reason = batchNote?.trim() || "Batch cancelled by Admin";
-    updatePayload.cancelled_at = nowIso;
-  } else if (dbStatus === "confirmed") {
-    updatePayload.confirmed_at = nowIso;
-  } else if (dbStatus === "shipped") {
-    updatePayload.shipped_at = nowIso;
-  } else if (dbStatus === "delivered") {
-    updatePayload.delivered_at = nowIso;
-  }
-
-  const { data: updatedOrders, error: updateErr } = await supabase
-    .from("orders")
-    .update(updatePayload)
-    .in("order_number", eligibleOrderNumbers)
-    .select("id, order_number");
-
-  if (updateErr) {
-    console.error("Failed to bulk update orders status in database:", updateErr);
-    throw new DatabaseOperationError(parseDatabaseError(updateErr));
-  }
-
-  if (!updatedOrders || updatedOrders.length === 0) {
-    const { count } = await supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .in("order_number", eligibleOrderNumbers);
-
-    if (count && count > 0) {
-      throw new DatabaseOperationError(
-        parseDatabaseError({
-          code: "0-ROWS-RLS",
-          message: `Database Row-Level Security (RLS) policy prevented bulk updating ${count} order(s).`,
-          hint: "Ensure the user role has UPDATE permissions or apply migration 20261028000001_fix_order_status_rls_and_workflow.sql.",
-        })
-      );
-    }
-  }
-
-  const actuallyUpdatedNumbers = (updatedOrders || []).map((o) => o.order_number);
-
-  // 3. Insert batch notes if provided
-  if (batchNote && batchNote.trim()) {
-    const cleanNote = batchNote.trim();
-    const noteRows = (updatedOrders || []).map((o) => ({
-      order_id: o.id,
-      order_number: o.order_number,
-      type: "internal",
-      author: "Admin Staff",
-      note: `[Batch Status Update → ${newStatus.toUpperCase()}]: ${cleanNote}`,
-      created_at: nowIso,
-    }));
-
-    if (noteRows.length > 0) {
-      try {
-        await supabase.from("order_notes").insert(noteRows);
-      } catch (noteErr) {
-        console.warn("Could not record batch note in order_notes:", noteErr);
-      }
-    }
-  }
-
-  // 4. Insert timeline events into public.order_events for each updated order
-  if (updatedOrders && updatedOrders.length > 0) {
-    try {
-      const eventRows = updatedOrders.map((o) => {
-        const matchingDbOrder = eligibleOrders.find((eo) => eo.order_number === o.order_number);
-        const itemDesc = matchingDbOrder?.order_items
-          ? formatSteadfastItemDescription(matchingDbOrder.order_items as any)
-          : "";
-        return {
-          order_id: o.id,
-          event_type: "status_changed",
-          to_value: newStatus,
-          message: `Order status updated to ${newStatus.toUpperCase()} (Bulk Action)${
-            itemDesc ? ` • Items: ${itemDesc}` : ""
-          }${dbStatus === "cancelled" && batchNote ? `: ${batchNote.trim()}` : ""}${
-            courierName ? ` (Courier: ${courierName.trim()})` : ""
-          }`,
-        };
-      });
-      await supabase.from("order_events").insert(eventRows);
-    } catch (eventErr) {
-      console.warn("Could not record timeline events for bulk orders:", eventErr);
-    }
-  }
-
-
-  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
-    import("@/actions/facebook-capi")
-      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
-        for (const num of actuallyUpdatedNumbers) {
-          triggerCapiPurchaseOnOrderConfirmedAction(num).catch(() => {});
-        }
-      })
-      .catch((err) => {
-        console.warn("[Bulk Update Order Status] Failed to import facebook-capi action:", err);
-      });
-  }
-
-  return {
-    success: true,
-    totalRequested: orderIds.length,
-    updatedCount: actuallyUpdatedNumbers.length,
-    skippedCount: skippedOrders.length,
-    updatedOrderNumbers: actuallyUpdatedNumbers,
-    skippedOrders,
-  };
+  const { bulkUpdateOrderStatusAction } = await import("@/actions/orders");
+  return await bulkUpdateOrderStatusAction(orderIds, newStatus, batchNote, courierName);
 }
 
 export async function bulkAssignCourierInDb(

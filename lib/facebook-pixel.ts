@@ -110,6 +110,13 @@ export const trackViewContent = ({
       content_name: productName,
       content_ids: [String(productId)],
       content_type: "product",
+      contents: [
+        {
+          id: String(productId),
+          quantity: 1,
+          item_price: safePrice,
+        },
+      ],
       value: safePrice,
       currency,
     },

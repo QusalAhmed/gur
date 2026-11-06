@@ -3,15 +3,204 @@
 import { cookies, headers } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
+import { inngest } from "@/lib/inngest/client";
 import {
   sendCapiEvents,
   formatPhoneForMeta,
   isServerPhoneAlreadyTracked,
   markServerPhoneAsTracked,
+  type CapiEventParams,
   type CapiUserData,
   type CapiCustomData,
   type CapiContentItem,
 } from "@/lib/facebook-capi";
+
+export interface CatalogIdLookupParams {
+  productId?: string | null;
+  variantId?: string | null;
+  productName?: string | null;
+  sku?: string | null;
+}
+
+interface CachedCatalogMapping {
+  productIds: Set<string>;
+  variantToProductMap: Map<string, string>;
+  productNameMap: Map<string, string>;
+  skuToProductMap: Map<string, string>;
+  defaultProductId: string;
+  fetchedAt: number;
+}
+
+let catalogCache: CachedCatalogMapping | null = null;
+const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000; // 5-minute memory cache
+
+/**
+ * Loads active products and variants from Supabase to guarantee 1:1 match
+ * with Meta Commerce Catalog item IDs.
+ */
+async function getOrFetchCatalogMappings(): Promise<CachedCatalogMapping> {
+  const now = Date.now();
+  if (catalogCache && now - catalogCache.fetchedAt < CATALOG_CACHE_TTL_MS) {
+    return catalogCache;
+  }
+
+  const client = supabaseAdmin || supabase;
+  try {
+    const [prodsRes, varsRes] = await Promise.all([
+      client.from("products").select("id, name, name_bn, slug, status").order("sort_order", { ascending: true }),
+      client.from("product_variants").select("id, product_id, name, sku"),
+    ]);
+
+    const productIds = new Set<string>();
+    const productNameMap = new Map<string, string>();
+    let defaultProductId = "";
+
+    const activeProds = (prodsRes.data || []).filter((p: any) => p.status === "active");
+    const allProds = prodsRes.data || [];
+
+    for (const p of allProds) {
+      const pid = String(p.id).trim();
+      productIds.add(pid);
+      if (p.name) productNameMap.set(p.name.trim().toLowerCase(), pid);
+      if (p.name_bn) productNameMap.set(p.name_bn.trim().toLowerCase(), pid);
+      if (p.slug) productNameMap.set(p.slug.trim().toLowerCase(), pid);
+    }
+
+    if (activeProds.length > 0) {
+      defaultProductId = String(activeProds[0].id).trim();
+    } else if (allProds.length > 0) {
+      defaultProductId = String(allProds[0].id).trim();
+    }
+
+    const variantToProductMap = new Map<string, string>();
+    const skuToProductMap = new Map<string, string>();
+
+    for (const v of varsRes.data || []) {
+      const vid = String(v.id).trim();
+      const pid = String(v.product_id).trim();
+      if (vid && pid) {
+        variantToProductMap.set(vid, pid);
+      }
+      if (v.sku && pid) {
+        skuToProductMap.set(v.sku.trim().toLowerCase(), pid);
+      }
+    }
+
+    catalogCache = {
+      productIds,
+      variantToProductMap,
+      productNameMap,
+      skuToProductMap,
+      defaultProductId,
+      fetchedAt: now,
+    };
+    return catalogCache;
+  } catch (err) {
+    console.warn("[Facebook CAPI] Failed to fetch catalog mappings:", err);
+    return (
+      catalogCache || {
+        productIds: new Set(),
+        variantToProductMap: new Map(),
+        productNameMap: new Map(),
+        skuToProductMap: new Map(),
+        defaultProductId: "",
+        fetchedAt: 0,
+      }
+    );
+  }
+}
+
+/**
+ * Resolves a reliable, canonical Meta Catalog product ID.
+ * Priority:
+ * 1. Explicit productId if it exists in the products catalog
+ * 2. If productId was mistakenly passed as a variantId, resolves parent product_id
+ * 3. variantId looked up in product_variants
+ * 4. productName against products name, name_bn, or slug
+ * 5. sku against product_variants sku
+ * 6. Fallback to active default catalog product ID
+ */
+export async function resolveCatalogProductId(
+  params: CatalogIdLookupParams
+): Promise<string> {
+  const { productIds, variantToProductMap, productNameMap, skuToProductMap, defaultProductId } =
+    await getOrFetchCatalogMappings();
+
+  const rawProdId = params.productId ? String(params.productId).trim() : null;
+  const rawVarId = params.variantId ? String(params.variantId).trim() : null;
+
+  // 1. Direct valid product UUID in catalog
+  if (rawProdId && productIds.has(rawProdId)) {
+    return rawProdId;
+  }
+
+  // 2. If productId was mistakenly passed as a variant ID
+  if (rawProdId && variantToProductMap.has(rawProdId)) {
+    return variantToProductMap.get(rawProdId)!;
+  }
+
+  // 3. Variant ID lookup
+  if (rawVarId && variantToProductMap.has(rawVarId)) {
+    return variantToProductMap.get(rawVarId)!;
+  }
+
+  // 4. Product Name lookup
+  if (params.productName) {
+    const cleanName = params.productName.trim().toLowerCase();
+    if (productNameMap.has(cleanName)) {
+      return productNameMap.get(cleanName)!;
+    }
+    // Substring match
+    for (const [key, pid] of productNameMap.entries()) {
+      if (cleanName.includes(key) || key.includes(cleanName)) {
+        return pid;
+      }
+    }
+  }
+
+  // 5. SKU lookup
+  if (params.sku) {
+    const cleanSku = params.sku.trim().toLowerCase();
+    if (skuToProductMap.has(cleanSku)) {
+      return skuToProductMap.get(cleanSku)!;
+    }
+  }
+
+  // 6. If rawProdId looks like a valid UUID, use it as fallback
+  if (rawProdId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawProdId)) {
+    return rawProdId;
+  }
+
+  // 7. Catalog default fallback
+  return defaultProductId;
+}
+
+/**
+ * Dispatches an event to the Inngest Meta CAPI batch queue with automatic
+ * fallback to direct synchronous dispatch if Inngest is unreachable.
+ */
+async function dispatchCapiEventWithQueue(
+  event: CapiEventParams,
+  options?: { testEventCode?: string }
+): Promise<{ success: boolean; eventId?: string; queued?: boolean; error?: string }> {
+  try {
+    await inngest.send({
+      name: "meta.capi.event",
+      data: {
+        event,
+        testEventCode: options?.testEventCode,
+      },
+      id: `capi-${event.eventName.toLowerCase()}-${event.eventId}`,
+    });
+    return { success: true, eventId: event.eventId, queued: true };
+  } catch (queueErr) {
+    console.warn(
+      "[Facebook CAPI] Inngest queue dispatch failed, falling back to direct send:",
+      queueErr
+    );
+    return await sendCapiEvents([event], options);
+  }
+}
 
 /**
  * Extracts incoming request headers and cookies for CAPI user data.
@@ -90,14 +279,12 @@ export async function sendCapiPageViewAction(params: {
       params.url
     );
 
-    return await sendCapiEvents([
-      {
-        eventName: "PageView",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-      },
-    ]);
+    return await dispatchCapiEventWithQueue({
+      eventName: "PageView",
+      eventId: params.eventId,
+      eventSourceUrl,
+      userData,
+    });
   } catch (err: any) {
     console.error("[CAPI Action] sendCapiPageViewAction error:", err);
     return { success: false, error: err?.message };
@@ -110,6 +297,7 @@ export async function sendCapiPageViewAction(params: {
 export async function sendCapiViewContentAction(params: {
   eventId: string;
   productId: string;
+  variantId?: string;
   productName: string;
   price?: number;
   currency?: string;
@@ -124,22 +312,32 @@ export async function sendCapiViewContentAction(params: {
     );
 
     const safePrice = Number(params.price) || 0;
+    const resolvedProductId = await resolveCatalogProductId({
+      productId: params.productId,
+      variantId: params.variantId,
+      productName: params.productName,
+    });
 
-    return await sendCapiEvents([
-      {
-        eventName: "ViewContent",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-        customData: {
-          content_name: params.productName,
-          content_ids: [String(params.productId)],
-          content_type: "product",
-          value: safePrice,
-          currency: params.currency || "BDT",
-        },
+    return await dispatchCapiEventWithQueue({
+      eventName: "ViewContent",
+      eventId: params.eventId,
+      eventSourceUrl,
+      userData,
+      customData: {
+        content_name: params.productName,
+        content_ids: [resolvedProductId],
+        content_type: "product",
+        contents: [
+          {
+            id: resolvedProductId,
+            quantity: 1,
+            item_price: safePrice,
+          },
+        ],
+        value: safePrice,
+        currency: (params.currency || "BDT").trim().toUpperCase(),
       },
-    ]);
+    });
   } catch (err: any) {
     console.error("[CAPI Action] sendCapiViewContentAction error:", err);
     return { success: false, error: err?.message };
@@ -152,6 +350,7 @@ export async function sendCapiViewContentAction(params: {
 export async function sendCapiAddToCartAction(params: {
   eventId: string;
   productId: string;
+  variantId?: string;
   productName: string;
   price: number;
   quantity: number;
@@ -167,32 +366,35 @@ export async function sendCapiAddToCartAction(params: {
     );
 
     const safePrice = Number(params.price) || 0;
-    const safeQuantity = Number(params.quantity) || 1;
+    const safeQuantity = Math.max(1, Math.floor(Number(params.quantity) || 1));
     const lineTotal = safePrice * safeQuantity;
+    const resolvedProductId = await resolveCatalogProductId({
+      productId: params.productId,
+      variantId: params.variantId,
+      productName: params.productName,
+    });
 
-    return await sendCapiEvents([
-      {
-        eventName: "AddToCart",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-        customData: {
-          content_name: params.productName,
-          content_ids: [String(params.productId)],
-          content_type: "product",
-          contents: [
-            {
-              id: String(params.productId),
-              quantity: safeQuantity,
-              item_price: safePrice,
-            },
-          ],
-          num_items: safeQuantity,
-          value: lineTotal,
-          currency: params.currency || "BDT",
-        },
+    return await dispatchCapiEventWithQueue({
+      eventName: "AddToCart",
+      eventId: params.eventId,
+      eventSourceUrl,
+      userData,
+      customData: {
+        content_name: params.productName,
+        content_ids: [resolvedProductId],
+        content_type: "product",
+        contents: [
+          {
+            id: resolvedProductId,
+            quantity: safeQuantity,
+            item_price: safePrice,
+          },
+        ],
+        num_items: safeQuantity,
+        value: lineTotal,
+        currency: (params.currency || "BDT").trim().toUpperCase(),
       },
-    ]);
+    });
   } catch (err: any) {
     console.error("[CAPI Action] sendCapiAddToCartAction error:", err);
     return { success: false, error: err?.message };
@@ -229,33 +431,41 @@ export async function sendCapiInitiateCheckoutAction(params: {
     );
 
     const safeItems = Array.isArray(params.items) ? params.items : [];
-    const contents: CapiContentItem[] = safeItems.map((item) => ({
-      id: String(item.productId),
-      quantity: Number(item.quantity) || 1,
-      item_price: Number(item.unitPrice) || 0,
-    }));
+    const contents: CapiContentItem[] = await Promise.all(
+      safeItems.map(async (item) => {
+        const resolvedId = await resolveCatalogProductId({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+        });
+        return {
+          id: resolvedId,
+          quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+          item_price: Math.max(0, Number(item.unitPrice) || 0),
+        };
+      })
+    );
 
-    const totalQuantity = safeItems.reduce(
+    const contentIds = Array.from(new Set(contents.map((item) => item.id)));
+    const totalQuantity = contents.reduce(
       (sum, item) => sum + (Number(item.quantity) || 0),
       0
     );
 
-    return await sendCapiEvents([
-      {
-        eventName: "InitiateCheckout",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-        customData: {
-          content_ids: safeItems.map((item) => String(item.productId)),
-          content_type: "product",
-          contents,
-          num_items: totalQuantity,
-          value: Number(params.value) || 0,
-          currency: params.currency || "BDT",
-        },
+    return await dispatchCapiEventWithQueue({
+      eventName: "InitiateCheckout",
+      eventId: params.eventId,
+      eventSourceUrl,
+      userData,
+      customData: {
+        content_ids: contentIds,
+        content_type: "product",
+        contents,
+        num_items: totalQuantity,
+        value: Number(params.value) || 0,
+        currency: (params.currency || "BDT").trim().toUpperCase(),
       },
-    ]);
+    });
   } catch (err: any) {
     console.error("[CAPI Action] sendCapiInitiateCheckoutAction error:", err);
     return { success: false, error: err?.message };
@@ -294,34 +504,42 @@ export async function sendCapiPurchaseAction(params: {
     );
 
     const safeItems = Array.isArray(params.items) ? params.items : [];
-    const contents: CapiContentItem[] = safeItems.map((item) => ({
-      id: String(item.productId),
-      quantity: Number(item.quantity) || 1,
-      item_price: Number(item.unitPrice) || 0,
-    }));
+    const contents: CapiContentItem[] = await Promise.all(
+      safeItems.map(async (item) => {
+        const resolvedId = await resolveCatalogProductId({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+        });
+        return {
+          id: resolvedId,
+          quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+          item_price: Math.max(0, Number(item.unitPrice) || 0),
+        };
+      })
+    );
 
-    const totalQuantity = safeItems.reduce(
+    const contentIds = Array.from(new Set(contents.map((item) => item.id)));
+    const totalQuantity = contents.reduce(
       (sum, item) => sum + (Number(item.quantity) || 0),
       0
     );
 
-    return await sendCapiEvents([
-      {
-        eventName: "Purchase",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-        customData: {
-          content_ids: safeItems.map((item) => String(item.productId)),
-          content_type: "product",
-          contents,
-          num_items: totalQuantity,
-          value: Number(params.value) || 0,
-          currency: params.currency || "BDT",
-          order_id: params.orderNumber || params.orderId,
-        },
+    return await dispatchCapiEventWithQueue({
+      eventName: "Purchase",
+      eventId: params.eventId,
+      eventSourceUrl,
+      userData,
+      customData: {
+        content_ids: contentIds,
+        content_type: "product",
+        contents,
+        num_items: totalQuantity,
+        value: Number(params.value) || 0,
+        currency: (params.currency || "BDT").trim().toUpperCase(),
+        order_id: params.orderNumber || params.orderId,
       },
-    ]);
+    });
   } catch (err: any) {
     console.error("[CAPI Action] sendCapiPurchaseAction error:", err);
     return { success: false, error: err?.message };
@@ -372,19 +590,17 @@ export async function sendCapiUserPropertiesAction(params: {
       params.url
     );
 
-    return await sendCapiEvents(
-      [
-        {
-          eventName: "UserProperties",
-          eventId: params.eventId,
-          eventSourceUrl,
-          userData,
-          customData: {
-            ...(params.customData || {}),
-            ...(params.phone ? { phone: params.phone } : {}),
-          },
+    return await dispatchCapiEventWithQueue(
+      {
+        eventName: "UserProperties",
+        eventId: params.eventId,
+        eventSourceUrl,
+        userData,
+        customData: {
+          ...(params.customData || {}),
+          ...(params.phone ? { phone: params.phone } : {}),
         },
-      ],
+      },
       params.testEventCode ? { testEventCode: params.testEventCode } : undefined
     );
   } catch (err: any) {
@@ -487,7 +703,7 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
     let query = client
       .from("orders")
       .select(
-        "id, order_number, status, grand_total, customer_name, customer_phone, shipping_phone, shipping_address, currency, attribution, order_items(id, product_id, sku, product_name, variant_name, quantity, unit_price, line_total)"
+        "id, order_number, status, grand_total, customer_name, customer_phone, shipping_phone, shipping_address, currency, attribution, order_items(id, product_id, variant_id, sku, product_name, variant_name, quantity, unit_price, line_total)"
       );
 
     if (UUID_REGEX.test(cleanId)) {
@@ -546,13 +762,55 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
     const phone = orderRow.customer_phone || orderRow.shipping_phone;
     const orderItems = Array.isArray(orderRow.order_items) ? orderRow.order_items : [];
 
-    const contents: CapiContentItem[] = orderItems.map((item: any) => ({
-      id: String(item.product_id || item.sku || item.id),
-      quantity: Number(item.quantity) || 1,
-      item_price: Number(item.unit_price) || 0,
-    }));
+    // Resolve accurate Meta Catalog product IDs for every line item
+    const contents: CapiContentItem[] = await Promise.all(
+      orderItems.map(async (item: any) => {
+        const resolvedId = await resolveCatalogProductId({
+          productId: item.product_id,
+          variantId: item.variant_id,
+          productName: item.product_name,
+          sku: item.sku,
+        });
 
-    const totalQuantity = orderItems.reduce(
+        // If product_id was not populated on this order item, persist the resolved ID to DB
+        if (!item.product_id && item.id && resolvedId) {
+          try {
+            await client
+              .from("order_items")
+              .update({ product_id: resolvedId })
+              .eq("id", item.id);
+          } catch {
+            // Non-critical background save fallback
+          }
+        }
+
+        const safeQty = Math.max(1, Math.floor(Number(item.quantity) || 1));
+        const safePrice = Math.max(0, Number(item.unit_price ?? item.unitPrice) || 0);
+
+        return {
+          id: resolvedId,
+          quantity: safeQty,
+          item_price: safePrice,
+        };
+      })
+    );
+
+    let contentIds = Array.from(new Set(contents.map((item) => item.id).filter(Boolean)));
+
+    // Fallback if no item resolved (e.g. phone-only order)
+    if (contentIds.length === 0) {
+      const defaultId = await resolveCatalogProductId({});
+      if (defaultId) {
+        contentIds = [defaultId];
+        contents.push({
+          id: defaultId,
+          quantity: 1,
+          item_price: Number(orderRow.grand_total) || 0,
+        });
+      }
+    }
+
+    const totalQuantity = contents.reduce(
       (sum: number, item: any) => sum + (Number(item.quantity) || 0),
       0
     );
@@ -598,9 +856,7 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
         eventSourceUrl: metaTracking.event_source_url || undefined,
         userData,
         customData: {
-          content_ids: orderItems.map((item: any) =>
-            String(item.product_id || item.sku || item.id)
-          ),
+          content_ids: contentIds,
           content_type: "product",
           contents,
           num_items: totalQuantity,

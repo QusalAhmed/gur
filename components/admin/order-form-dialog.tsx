@@ -850,6 +850,7 @@ export function OrderFormDialog({
         unit_price,
         line_total: quantity * unit_price,
         variant_id: prod.variant_id,
+        product_id: prod.product_id,
       };
     });
 

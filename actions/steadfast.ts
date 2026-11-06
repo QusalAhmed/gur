@@ -605,10 +605,9 @@ export async function bookSteadfastBulkParcelsAction(
             await client.from("order_notes").insert({
               order_id: matchingOrderUuid,
               order_number: orderId,
-              type: "delivery",
+              type: "internal",
               note: `Steadfast Consignment ID: ${consignmentId} | Tracking: ${trackingCode} | Link: ${trackingLink}${matchingValidItem?.itemDescription ? ` | Parcel Items: ${matchingValidItem.itemDescription}` : ""}`,
               author: "Steadfast Courier Bot",
-              is_internal: true,
             }).select().maybeSingle();
           }
 
@@ -672,6 +671,42 @@ export async function bookSteadfastBulkParcelsAction(
 }
 
 /**
+ * Server Action: Enqueues bulk parcel booking into Inngest with concurrency control (max 5 parallel).
+ * Falls back to synchronous execution if Inngest queue is unavailable.
+ */
+export async function queueSteadfastBulkBookingAction(orders: Order[]): Promise<{
+  success: boolean;
+  queued: boolean;
+  totalRequested: number;
+  error?: string;
+}> {
+  if (!orders || orders.length === 0) {
+    return { success: true, queued: false, totalRequested: 0 };
+  }
+
+  try {
+    const { inngest } = await import("@/lib/inngest/client");
+    await inngest.send({
+      name: "steadfast.bulk.book",
+      data: { orders },
+    });
+    return { success: true, queued: true, totalRequested: orders.length };
+  } catch (err: any) {
+    console.warn(
+      "[Steadfast] Failed to enqueue bulk booking, falling back to synchronous execution:",
+      err
+    );
+    const syncRes = await bookSteadfastBulkParcelsAction(orders);
+    return {
+      success: syncRes.success,
+      queued: false,
+      totalRequested: syncRes.totalRequested,
+      error: syncRes.error,
+    };
+  }
+}
+
+/**
  * Server Action: Fetch current Steadfast Courier merchant balance & remittance
  * Calls GET /get_balance
  */
@@ -716,209 +751,13 @@ export async function getSteadfastBalanceAction(): Promise<SteadfastBalanceResul
  * Server Action: High-level status updater with automatic Steadfast parcel creation.
  * Strict duplicate prevention: checks fresh database row for existing consignment
  * before attempting any courier API calls.
+ * Delegated to central updateOrderStatusAction in actions/orders.ts.
  */
 export async function updateOrderStatusWithSteadfastAction(
   params: UpdateOrderStatusWithSteadfastParams
 ): Promise<UpdateOrderStatusWithSteadfastResult> {
-  const {
-    orderId,
-    newStatus,
-    courierName = "",
-    cancelReason,
-    eventMsg,
-    currentOrder,
-    forceWithoutCourier = false,
-    customCodAmount,
-  } = params;
-
-  const client = supabaseAdmin || supabase;
-  const isSteadfast = courierName.toLowerCase().includes("steadfast");
-  const isEnteringProcessing = newStatus === "processing";
-
-  // 1. Always query latest fresh database record to ensure courier tracking fields are up to date
-  const { data: dbRow } = await client
-    .from("orders")
-    .select("*, order_items(*), order_events(*), order_notes(*)")
-    .eq("order_number", orderId)
-    .maybeSingle();
-
-  let resolvedOrder: Order | undefined = dbRow ? formatDbOrderRecord(dbRow) : currentOrder;
-
-  if (!resolvedOrder) {
-    return {
-      success: false,
-      error: `Order with number '${orderId}' not found in database.`,
-    };
-  }
-
-  // Enforce delivery division and district requirement before changing status
-  const orderDivision = (resolvedOrder.address?.division || dbRow?.shipping_address?.division || "").trim();
-  const orderDistrict = (resolvedOrder.address?.district || dbRow?.shipping_address?.district || "").trim();
-  if (!orderDivision || !orderDistrict) {
-    return {
-      success: false,
-      error: `Cannot change status for Order ${orderId}: Delivery division and district are required before changing order status.`,
-    };
-  }
-
-  // 2. Strict Check: If this order ALREADY has a courier booking in DB or memory, NEVER re-book!
-  const hasExistingBooking = Boolean(
-    dbRow?.courier_consignment_id ||
-    dbRow?.courier_tracking_code ||
-    resolvedOrder.courier_consignment_id ||
-    resolvedOrder.courier_tracking_code
-  );
-
-  let bookingResult: BookSteadfastResponse | null = null;
-
-  if (isSteadfast && isEnteringProcessing && !hasExistingBooking && !forceWithoutCourier) {
-    // Attempt automatic Steadfast consignment creation
-    bookingResult = await bookSteadfastParcelAction(resolvedOrder, customCodAmount);
-
-    if (!bookingResult.success) {
-      // Return requiresPrompt=true so the UI pops up the admin error dialog
-      return {
-        success: false,
-        requiresPrompt: true,
-        error: bookingResult.error,
-        fieldErrors: bookingResult.fieldErrors,
-        order: resolvedOrder,
-      };
-    }
-  }
-
-  // 3. Prepare order status update payload
-  const nowIso = new Date().toISOString();
-  const dbStatus = newStatus === "partially_delivered" ? "delivered" : newStatus;
-
-  const updatePayload: Record<string, any> = {
-    status: dbStatus,
-    updated_at: nowIso,
-  };
-
-  if (courierName) {
-    updatePayload.shipping_method_name = courierName;
-  }
-
-  // Only update consignment fields if a NEW booking was made
-  if (bookingResult?.success && bookingResult.consignment) {
-    updatePayload.courier_consignment_id = String(bookingResult.consignment.consignment_id);
-    updatePayload.courier_tracking_code = bookingResult.consignment.tracking_code;
-    updatePayload.courier_tracking_url = bookingResult.consignment.tracking_link;
-    updatePayload.courier_invoice = bookingResult.consignment.invoice;
-    updatePayload.courier_payload_snapshot = buildSteadfastPayloadSnapshot(
-      resolvedOrder,
-      customCodAmount,
-      bookingResult.consignment.invoice
-    );
-  }
-
-  if (newStatus === "cancelled") {
-    if (cancelReason) updatePayload.cancel_reason = cancelReason;
-    updatePayload.cancelled_at = nowIso;
-  } else if (newStatus === "confirmed") {
-    updatePayload.confirmed_at = nowIso;
-  } else if (newStatus === "shipped") {
-    updatePayload.shipped_at = nowIso;
-  } else if (newStatus === "delivered" || newStatus === "partially_delivered") {
-    updatePayload.delivered_at = nowIso;
-  }
-
-  // 4. Update orders table
-  const { data: updatedRows, error: updateErr } = await client
-    .from("orders")
-    .update(updatePayload)
-    .eq("order_number", orderId)
-    .select("*, order_items(*), order_events(*), order_notes(*)");
-
-  if (updateErr) {
-    console.error("Database update error:", updateErr);
-    return {
-      success: false,
-      error: updateErr.message || "Failed to persist order status in database.",
-    };
-  }
-
-  // Trigger Meta CAPI Purchase event if order reached confirmed/progressed status (one-time guard built-in)
-  if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
-    import("@/actions/facebook-capi")
-      .then(({ triggerCapiPurchaseOnOrderConfirmedAction }) => {
-        triggerCapiPurchaseOnOrderConfirmedAction(orderId).catch(() => {});
-      })
-      .catch((err) => {
-        console.warn("[Steadfast Action] Failed to import facebook-capi action:", err);
-      });
-  }
-
-  const updatedOrder = updatedRows && updatedRows[0]
-    ? formatDbOrderRecord(updatedRows[0])
-    : {
-        ...resolvedOrder,
-        status: newStatus,
-        courier_name: courierName || resolvedOrder.courier_name,
-        courier_consignment_id: bookingResult?.consignment
-          ? String(bookingResult.consignment.consignment_id)
-          : (dbRow?.courier_consignment_id || resolvedOrder.courier_consignment_id),
-        courier_tracking_code: bookingResult?.consignment
-          ? bookingResult.consignment.tracking_code
-          : (dbRow?.courier_tracking_code || resolvedOrder.courier_tracking_code),
-        courier_tracking_url: bookingResult?.consignment
-          ? bookingResult.consignment.tracking_link
-          : (dbRow?.courier_tracking_url || resolvedOrder.courier_tracking_url),
-      };
-
-  // 5. Record timeline events & notes
-  try {
-    const orderUuid = updatedRows?.[0]?.id || dbRow?.id;
-    if (bookingResult?.success && bookingResult.consignment) {
-      const c = bookingResult.consignment;
-      if (orderUuid) {
-        await client.from("order_events").insert({
-          order_id: orderUuid,
-          event_type: "courier_consignment_created",
-          message: `Steadfast Consignment #${c.consignment_id} created (Tracking: ${c.tracking_code})${c.item_description ? ` • Items: ${c.item_description}` : ""}`,
-          actor_id: null,
-        });
-
-        // Add delivery note with tracking link & items description
-        await client.from("order_notes").insert({
-          order_id: orderUuid,
-          order_number: orderId,
-          type: "delivery",
-          note: `Steadfast Consignment ID: ${c.consignment_id} | Tracking: ${c.tracking_code} | Link: ${c.tracking_link}${c.item_description ? ` | Parcel Items: ${c.item_description}` : ""}`,
-          author: "Steadfast Courier Bot",
-          is_internal: true,
-        });
-      }
-    } else if (forceWithoutCourier && isSteadfast && isEnteringProcessing) {
-      if (orderUuid) {
-        await client.from("order_events").insert({
-          order_id: orderUuid,
-          event_type: "status_changed",
-          message: `Order status moved to PROCESSING without Steadfast booking (Admin Forced)`,
-          actor_id: null,
-        });
-      }
-    } else {
-      if (orderUuid) {
-        await client.from("order_events").insert({
-          order_id: orderUuid,
-          event_type: "status_changed",
-          message: eventMsg || `Order status updated to ${newStatus.toUpperCase()}`,
-          actor_id: null,
-        });
-      }
-    }
-  } catch (logErr) {
-    console.warn("Could not insert order event log:", logErr);
-  }
-
-  return {
-    success: true,
-    order: updatedOrder,
-    bookedWithSteadfast: Boolean(bookingResult?.success),
-    consignment: bookingResult?.consignment,
-  };
+  const { updateOrderStatusAction } = await import("@/actions/orders");
+  return await updateOrderStatusAction(params);
 }
 
 /**
@@ -1044,10 +883,9 @@ export async function recreateSteadfastParcelAction(
         await client.from("order_notes").insert({
           order_id: orderUuid,
           order_number: orderId,
-          type: "delivery",
+          type: "internal",
           note: `[Previous Parcel Superseded] Consignment #${oldCid} | Tracking: ${oldTracking || "N/A"} | Invoice: ${oldInvoice}${cancellationResult.attempted ? ` | Return Request: ${cancellationResult.success ? "Submitted" : cancellationResult.message}` : ""}`,
           author: "Steadfast Courier Bot",
-          is_internal: true,
         });
       }
     } catch (noteErr) {
@@ -1097,10 +935,9 @@ export async function recreateSteadfastParcelAction(
       await client.from("order_notes").insert({
         order_id: orderUuid,
         order_number: orderId,
-        type: "delivery",
+        type: "internal",
         note: `Steadfast Consignment Recreated: #${c.consignment_id} | Tracking: ${c.tracking_code} | Invoice: ${nextInvoice} | Link: ${c.tracking_link}${c.item_description ? ` | Parcel Items: ${c.item_description}` : ""}`,
         author: "Steadfast Courier Bot",
-        is_internal: true,
       });
     }
   } catch (eventErr) {

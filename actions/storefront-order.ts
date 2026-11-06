@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase/client";
 import { normalizeBdPhone } from "@/lib/supabase/api";
 import { getOtherOrderInsight } from "@/types/order";
 import { captureStorefrontMetaTracking } from "@/actions/facebook-capi";
-import { sendAdminOrderNotification } from "@/lib/brevo";
+import { enqueueAndDispatch } from "@/lib/outbox";
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -64,50 +64,188 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // In-Memory Performance Caching & Synchronization
 // =============================================================================
 
-// 1. Catalog UUID in-memory cache: prevents repeated round-trips to products / variants
-let cachedValidProductIds: Set<string> | null = null;
-let cachedValidVariantIds: Set<string> | null = null;
+export interface CatalogPricingData {
+  validProdIds: Set<string>;
+  validVarIds: Set<string>;
+  varToProdMap: Map<string, string>;
+  variantPriceMap: Map<string, number>;
+  productDefaultPriceMap: Map<string, number>;
+  productNameMap: Map<string, { id: string; defaultPrice: number; defaultVariantId?: string }>;
+  priceTiersMap: Map<string, Array<{ minQty: number; unitPrice: number }>>;
+}
+
+let cachedCatalogPricing: CatalogPricingData | null = null;
 let catalogCacheExpiry = 0;
+
+async function getCatalogPricingData(client: any): Promise<CatalogPricingData> {
+  const now = Date.now();
+  if (cachedCatalogPricing && now < catalogCacheExpiry) {
+    return cachedCatalogPricing;
+  }
+
+  try {
+    const [prodsRes, varsRes, tiersRes] = await Promise.all([
+      client.from("products").select("id, name, name_bn, status, sort_order"),
+      client.from("product_variants").select("id, product_id, sku, name, name_bn, price, is_default, is_active, sort_order"),
+      client.from("price_tiers").select("variant_id, min_qty, unit_price"),
+    ]);
+
+    const validProdIds = new Set<string>();
+    const validVarIds = new Set<string>();
+    const varToProdMap = new Map<string, string>();
+    const variantPriceMap = new Map<string, number>();
+    const productDefaultPriceMap = new Map<string, number>();
+    const productNameMap = new Map<string, { id: string; defaultPrice: number; defaultVariantId?: string }>();
+    const priceTiersMap = new Map<string, Array<{ minQty: number; unitPrice: number }>>();
+
+    // 1. Process variants
+    const activeVariantsByProd = new Map<string, any[]>();
+    (varsRes.data || []).forEach((v: any) => {
+      if (!v.id) return;
+      validVarIds.add(v.id);
+      if (v.product_id) {
+        varToProdMap.set(v.id, v.product_id);
+        const list = activeVariantsByProd.get(v.product_id) || [];
+        if (v.is_active !== false) list.push(v);
+        activeVariantsByProd.set(v.product_id, list);
+      }
+      variantPriceMap.set(v.id, Math.max(0, Number(v.price) || 0));
+    });
+
+    // 2. Process volume price tiers
+    (tiersRes.data || []).forEach((t: any) => {
+      if (!t.variant_id) return;
+      const list = priceTiersMap.get(t.variant_id) || [];
+      list.push({
+        minQty: Number(t.min_qty) || 1,
+        unitPrice: Math.max(0, Number(t.unit_price) || 0),
+      });
+      priceTiersMap.set(t.variant_id, list);
+    });
+
+    // Sort price tiers descending by minQty so the highest matching tier is evaluated first
+    priceTiersMap.forEach((list) => {
+      list.sort((a, b) => b.minQty - a.minQty);
+    });
+
+    // 3. Process products & default prices
+    (prodsRes.data || []).forEach((p: any) => {
+      if (!p.id) return;
+      validProdIds.add(p.id);
+
+      const variants = activeVariantsByProd.get(p.id) || [];
+      variants.sort((a, b) => {
+        if (a.is_default && !b.is_default) return -1;
+        if (!a.is_default && b.is_default) return 1;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
+
+      const defaultVar = variants[0];
+      const defaultPrice = defaultVar ? Math.max(0, Number(defaultVar.price) || 0) : 0;
+      productDefaultPriceMap.set(p.id, defaultPrice);
+
+      const entry = { id: p.id, defaultPrice, defaultVariantId: defaultVar?.id };
+      if (p.name) productNameMap.set(p.name.trim().toLowerCase(), entry);
+      if (p.name_bn) productNameMap.set(p.name_bn.trim().toLowerCase(), entry);
+    });
+
+    cachedCatalogPricing = {
+      validProdIds,
+      validVarIds,
+      varToProdMap,
+      variantPriceMap,
+      productDefaultPriceMap,
+      productNameMap,
+      priceTiersMap,
+    };
+    catalogCacheExpiry = now + 5 * 60 * 1000; // 5-minute memory cache
+    return cachedCatalogPricing;
+  } catch (err) {
+    console.error("[Storefront Order] Error fetching catalog pricing data:", err);
+    return {
+      validProdIds: new Set(),
+      validVarIds: new Set(),
+      varToProdMap: new Map(),
+      variantPriceMap: new Map(),
+      productDefaultPriceMap: new Map(),
+      productNameMap: new Map(),
+      priceTiersMap: new Map(),
+    };
+  }
+}
 
 async function getValidCatalogIds(
   client: any,
   candidateProdIds: string[],
   candidateVarIds: string[]
-): Promise<{ validProdIds: Set<string>; validVarIds: Set<string> }> {
-  const now = Date.now();
-  if (
-    cachedValidProductIds &&
-    cachedValidVariantIds &&
-    now < catalogCacheExpiry &&
-    candidateProdIds.every((id) => cachedValidProductIds!.has(id)) &&
-    candidateVarIds.every((id) => cachedValidVariantIds!.has(id))
-  ) {
-    return {
-      validProdIds: cachedValidProductIds,
-      validVarIds: cachedValidVariantIds,
-    };
+): Promise<{ validProdIds: Set<string>; validVarIds: Set<string>; varToProdMap: Map<string, string> }> {
+  const data = await getCatalogPricingData(client);
+  return {
+    validProdIds: data.validProdIds,
+    validVarIds: data.validVarIds,
+    varToProdMap: data.varToProdMap,
+  };
+}
+
+function resolveAuthoritativeItemPrice(
+  catalog: CatalogPricingData,
+  params: {
+    variantId?: string;
+    productId?: string;
+    productName?: string;
+    quantity: number;
+    clientPrice?: number;
+  }
+): {
+  unitPrice: number;
+  resolvedVariantId?: string;
+  resolvedProductId?: string;
+} {
+  const qty = Math.max(1, Math.floor(params.quantity || 1));
+  const varId = params.variantId && UUID_REGEX.test(params.variantId) ? params.variantId : undefined;
+  const prodId = params.productId && UUID_REGEX.test(params.productId) ? params.productId : undefined;
+
+  // 1. Try finding by variant ID
+  if (varId && catalog.validVarIds.has(varId)) {
+    const parentProdId = catalog.varToProdMap.get(varId);
+    // Check volume price tiers
+    const tiers = catalog.priceTiersMap.get(varId);
+    if (tiers && tiers.length > 0) {
+      const matchedTier = tiers.find((t) => t.minQty <= qty);
+      if (matchedTier) {
+        return { unitPrice: matchedTier.unitPrice, resolvedVariantId: varId, resolvedProductId: parentProdId };
+      }
+    }
+    const varPrice = catalog.variantPriceMap.get(varId);
+    if (varPrice !== undefined) {
+      return { unitPrice: varPrice, resolvedVariantId: varId, resolvedProductId: parentProdId };
+    }
   }
 
-  try {
-    const [prodsRes, varsRes] = await Promise.all([
-      client.from("products").select("id"),
-      client.from("product_variants").select("id"),
-    ]);
-
-    const pSet = new Set<string>((prodsRes.data || []).map((p: any) => p.id));
-    const vSet = new Set<string>((varsRes.data || []).map((v: any) => v.id));
-
-    cachedValidProductIds = pSet;
-    cachedValidVariantIds = vSet;
-    catalogCacheExpiry = now + 5 * 60 * 1000; // 5-minute memory cache
-
-    return { validProdIds: pSet, validVarIds: vSet };
-  } catch {
-    return {
-      validProdIds: new Set(candidateProdIds),
-      validVarIds: new Set(candidateVarIds),
-    };
+  // 2. Try finding by product ID
+  if (prodId && catalog.validProdIds.has(prodId)) {
+    const defaultPrice = catalog.productDefaultPriceMap.get(prodId);
+    if (defaultPrice !== undefined) {
+      return { unitPrice: defaultPrice, resolvedProductId: prodId };
+    }
   }
+
+  // 3. Try finding by product name
+  if (params.productName) {
+    const lowerName = params.productName.trim().toLowerCase();
+    for (const [key, p] of catalog.productNameMap.entries()) {
+      if (lowerName.includes(key) || key.includes(lowerName)) {
+        return { unitPrice: p.defaultPrice, resolvedProductId: p.id, resolvedVariantId: p.defaultVariantId };
+      }
+    }
+  }
+
+  // 4. Safe fallback to client-supplied price
+  return {
+    unitPrice: Math.max(0, Number(params.clientPrice) || 0),
+    resolvedVariantId: varId,
+    resolvedProductId: prodId,
+  };
 }
 
 // 2. Per-phone concurrency lock: prevents simultaneous background sync & submit races
@@ -160,29 +298,49 @@ export async function placeStorefrontOrderAction(
     try {
       const targetStatus: "incomplete_order" | "pending" = payload.status || "pending";
 
-      // Normalize items: support both multi-item list and legacy single item
+      const client = supabaseAdmin || supabase;
+      const catalogPricing = await getCatalogPricingData(client);
+
+      // Normalize items: support both multi-item list and legacy single item with authoritative server pricing
       let resolvedItems: StorefrontOrderItem[] = [];
-      if (payload.items && payload.items.length > 0) {
-        resolvedItems = payload.items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName || "Pure Molasses",
-          variantId: i.variantId,
-          variantName: i.variantName || "1 Pack",
-          quantity: Math.max(1, Math.floor(Number(i.quantity) || 1)),
-          unitPrice: Math.max(0, Number(i.unitPrice) || 0),
-        }));
-      } else if (payload.productId) {
-        resolvedItems = [
+      const rawItemList =
+        payload.items && payload.items.length > 0
+          ? payload.items
+          : payload.productId
+          ? [
+              {
+                productId: payload.productId,
+                productName: payload.productName || "Pure Molasses",
+                variantId: payload.variantId || "default",
+                variantName: payload.variantName || "1 Pack",
+                quantity: payload.quantity || 1,
+                unitPrice: payload.unitPrice || 0,
+              },
+            ]
+          : [];
+
+      resolvedItems = rawItemList.map((i) => {
+        const safeQuantity = Math.max(1, Math.floor(Number(i.quantity) || 1));
+        const { unitPrice: verifiedUnitPrice, resolvedProductId, resolvedVariantId } = resolveAuthoritativeItemPrice(
+          catalogPricing,
           {
-            productId: payload.productId,
-            productName: payload.productName || "Pure Molasses",
-            variantId: payload.variantId || "default",
-            variantName: payload.variantName || "1 Pack",
-            quantity: Math.max(1, Math.floor(Number(payload.quantity) || 1)),
-            unitPrice: Math.max(0, Number(payload.unitPrice) || 0),
-          },
-        ];
-      }
+            variantId: i.variantId,
+            productId: i.productId,
+            productName: i.productName,
+            quantity: safeQuantity,
+            clientPrice: i.unitPrice,
+          }
+        );
+
+        return {
+          productId: resolvedProductId || i.productId,
+          productName: i.productName || "Pure Molasses",
+          variantId: resolvedVariantId || i.variantId,
+          variantName: i.variantName || "1 Pack",
+          quantity: safeQuantity,
+          unitPrice: verifiedUnitPrice,
+        };
+      });
 
       const hasItems = resolvedItems.length > 0;
       const rawSubtotal = hasItems
@@ -195,8 +353,6 @@ export async function placeStorefrontOrderAction(
       const shippingMethodName = payload.courierName
         ? payload.courierName.trim()
         : null;
-
-      const client = supabaseAdmin || supabase;
 
       const metaTracking = await captureStorefrontMetaTracking({
         eventId: payload.eventId,
@@ -267,54 +423,50 @@ export async function placeStorefrontOrderAction(
             console.warn("[Storefront Order] Failed to update attribution with meta_tracking:", attrErr);
           }
 
-          // Trigger Brevo transactional email notification to admin upon order placement
+          // Trigger Outbox Background Notification Job (Inngest event with transactional guarantee)
           if (rpcData.status === "pending" || rpcData.status === "confirmed") {
-            sendAdminOrderNotification({
-              orderId: rpcData.order_id,
-              orderNumber: rpcData.order_number,
-              customerName: rpcData.customer_name || payload.customerName || "Customer",
-              customerPhone: rpcData.phone || normalizedPhone,
-              deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
-              address: {
-                address_line: payload.addressLine,
-                district: payload.district,
-                division: payload.division,
+            enqueueAndDispatch({
+              eventName: "order.created",
+              aggregateType: "order",
+              aggregateId: rpcData.order_id,
+              idempotencyKey: `order.created:${rpcData.order_id}`,
+              payload: {
+                orderId: rpcData.order_id,
+                orderNumber: rpcData.order_number,
+                customerName: rpcData.customer_name || payload.customerName || "Customer",
+                customerPhone: rpcData.phone || normalizedPhone,
+                deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
+                address: {
+                  address_line: payload.addressLine,
+                  district: payload.district,
+                  division: payload.division,
+                },
+                courierName: payload.courierName,
+                items: resolvedItems.map((item) => ({
+                  productName: item.productName || "খেজুরের খাঁটি গুড়",
+                  variantName: item.variantName || "1 Pack",
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  lineTotal: item.quantity * item.unitPrice,
+                })),
+                subtotal: Number(rpcData.subtotal) || rawSubtotal,
+                shippingTotal: Number(rpcData.shipping_total) || baseShippingFee,
+                grandTotal: Number(rpcData.grand_total) || 0,
+                customerNote: payload.customerNote,
+                status: rpcData.status,
+                channel: "web",
               },
-              courierName: payload.courierName,
-              items: resolvedItems.map((item) => ({
-                productName: item.productName || "খেজুরের খাঁটি গুড়",
-                variantName: item.variantName || "1 Pack",
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                lineTotal: item.quantity * item.unitPrice,
-              })),
-              subtotal: Number(rpcData.subtotal) || rawSubtotal,
-              shippingTotal: Number(rpcData.shipping_total) || baseShippingFee,
-              grandTotal: Number(rpcData.grand_total) || 0,
-              customerNote: payload.customerNote,
-              status: rpcData.status,
-              channel: "web",
-            }).catch((brevoErr) => {
-              console.warn("[Storefront Order] Background Brevo admin notification error:", brevoErr);
+            }).catch((outboxErr) => {
+              console.warn("[Storefront Order] Background Outbox enqueue error (RPC):", outboxErr);
             });
           } else if (rpcData.status === "incomplete_order") {
-            // Trigger Brevo transactional email notification for incomplete draft order / abandoned lead (sent once per lead)
-            const alreadyNotifiedIncomplete = Boolean(currentAttr?.brevo_incomplete_notified_at);
-            if (!alreadyNotifiedIncomplete) {
-              const nowIso = new Date().toISOString();
-              Promise.resolve(
-                client
-                  .from("orders")
-                  .update({
-                    attribution: {
-                      ...currentAttr,
-                      brevo_incomplete_notified_at: nowIso,
-                    },
-                  })
-                  .eq("id", rpcData.order_id)
-              ).catch(() => {});
-
-              sendAdminOrderNotification({
+            // Transactional Outbox for incomplete draft order / abandoned lead (idempotent per order)
+            enqueueAndDispatch({
+              eventName: "order.incomplete",
+              aggregateType: "order",
+              aggregateId: rpcData.order_id,
+              idempotencyKey: `order.incomplete:${rpcData.order_id}`,
+              payload: {
                 orderId: rpcData.order_id,
                 orderNumber: rpcData.order_number,
                 customerName: rpcData.customer_name || payload.customerName || undefined,
@@ -339,10 +491,10 @@ export async function placeStorefrontOrderAction(
                 customerNote: payload.customerNote,
                 status: "incomplete_order",
                 channel: "web",
-              }).catch((brevoErr) => {
-                console.warn("[Storefront Order] Background Brevo incomplete order notification error:", brevoErr);
-              });
-            }
+              },
+            }).catch((outboxErr) => {
+              console.warn("[Storefront Order] Background Outbox enqueue error for incomplete order:", outboxErr);
+            });
           }
 
           return {
@@ -668,7 +820,7 @@ export async function placeStorefrontOrderAction(
         const candidateProdIds = resolvedItems.map((i) => i.productId).filter((id) => UUID_REGEX.test(id || ""));
         const candidateVarIds = resolvedItems.map((i) => i.variantId).filter((id) => UUID_REGEX.test(id || ""));
 
-        const { validProdIds, validVarIds } = await getValidCatalogIds(
+        const { validProdIds, validVarIds, varToProdMap } = await getValidCatalogIds(
           client,
           candidateProdIds,
           candidateVarIds
@@ -677,6 +829,9 @@ export async function placeStorefrontOrderAction(
         const itemRows = resolvedItems.map((item) => {
           const hasValidProd = validProdIds.has(item.productId);
           const hasValidVar = validVarIds.has(item.variantId);
+          const resolvedProdId = hasValidProd
+            ? item.productId
+            : (hasValidVar ? varToProdMap.get(item.variantId) || null : null);
 
           const cleanSku =
             (item.variantName || item.productName || "ITEM")
@@ -693,7 +848,7 @@ export async function placeStorefrontOrderAction(
             unit_price: Math.max(0, Number(item.unitPrice) || 0),
           };
 
-          if (hasValidProd) row.product_id = item.productId;
+          if (resolvedProdId) row.product_id = resolvedProdId;
           if (hasValidVar) row.variant_id = item.variantId;
           return row;
         });
@@ -797,57 +952,52 @@ export async function placeStorefrontOrderAction(
         Promise.resolve(client.from("order_notes").insert(noteInserts)).catch(() => {});
       }
 
-      // Trigger Brevo transactional email notification to admin upon order placement
+      // Trigger Outbox Background Notification Job (Tier 2 fallback path)
       if (finalStatus === "pending") {
-        sendAdminOrderNotification({
-          orderId: orderDbId,
-          orderNumber: orderNumber,
-          customerName: resolvedCustomerName || undefined,
-          customerPhone: normalizedPhone,
-          deliveryZone: payload.deliveryZone,
-          address: {
-            address_line: resolvedAddressLine || undefined,
-            district: resolvedDistrict || undefined,
-            division: resolvedDivision || undefined,
+        enqueueAndDispatch({
+          eventName: "order.created",
+          aggregateType: "order",
+          aggregateId: orderDbId,
+          idempotencyKey: `order.created:${orderDbId}`,
+          payload: {
+            orderId: orderDbId,
+            orderNumber: orderNumber,
+            customerName: resolvedCustomerName || undefined,
+            customerPhone: normalizedPhone,
+            deliveryZone: payload.deliveryZone,
+            address: {
+              address_line: resolvedAddressLine || undefined,
+              district: resolvedDistrict || undefined,
+              division: resolvedDivision || undefined,
+            },
+            courierName: resolvedShippingMethodName || undefined,
+            items: resolvedItems.map((item) => ({
+              productName: item.productName || "খেজুরের খাঁটি গুড়",
+              variantName: item.variantName || "1 Pack",
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.quantity * item.unitPrice,
+            })),
+            subtotal: cleanSubtotal,
+            shippingTotal: cleanShippingTotal,
+            grandTotal: cleanGrandTotal,
+            customerNote: resolvedCustomerNote || undefined,
+            status: finalStatus,
+            channel: "web",
+            hasOtherOrders,
+            otherOrderNumbers,
           },
-          courierName: resolvedShippingMethodName || undefined,
-          items: resolvedItems.map((item) => ({
-            productName: item.productName || "খেজুরের খাঁটি গুড়",
-            variantName: item.variantName || "1 Pack",
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            lineTotal: item.quantity * item.unitPrice,
-          })),
-          subtotal: cleanSubtotal,
-          shippingTotal: cleanShippingTotal,
-          grandTotal: cleanGrandTotal,
-          customerNote: resolvedCustomerNote || undefined,
-          status: finalStatus,
-          channel: "web",
-          hasOtherOrders,
-          otherOrderNumbers,
-        }).catch((brevoErr) => {
-          console.warn("[Storefront Order] Background Brevo admin notification error (Tier 2):", brevoErr);
+        }).catch((outboxErr) => {
+          console.warn("[Storefront Order] Background Outbox enqueue error (Tier 2):", outboxErr);
         });
       } else if (finalStatus === "incomplete_order") {
-        // Trigger Brevo transactional email notification for incomplete draft order / abandoned lead (sent once per lead)
-        const existingAttr = (existingOrder as any)?.attribution || {};
-        const alreadyNotifiedIncomplete = Boolean(existingAttr?.brevo_incomplete_notified_at);
-        if (!alreadyNotifiedIncomplete) {
-          const nowIso = new Date().toISOString();
-          Promise.resolve(
-            client
-              .from("orders")
-              .update({
-                attribution: {
-                  ...existingAttr,
-                  brevo_incomplete_notified_at: nowIso,
-                },
-              })
-              .eq("id", orderDbId)
-          ).catch(() => {});
-
-          sendAdminOrderNotification({
+        // Transactional Outbox for incomplete draft order (Tier 2)
+        enqueueAndDispatch({
+          eventName: "order.incomplete",
+          aggregateType: "order",
+          aggregateId: orderDbId,
+          idempotencyKey: `order.incomplete:${orderDbId}`,
+          payload: {
             orderId: orderDbId,
             orderNumber: orderNumber,
             customerName: resolvedCustomerName || undefined,
@@ -874,10 +1024,10 @@ export async function placeStorefrontOrderAction(
             channel: "web",
             hasOtherOrders,
             otherOrderNumbers,
-          }).catch((brevoErr) => {
-            console.warn("[Storefront Order] Background Brevo incomplete order notification error (Tier 2):", brevoErr);
-          });
-        }
+          },
+        }).catch((outboxErr) => {
+          console.warn("[Storefront Order] Background Outbox enqueue error for incomplete order (Tier 2):", outboxErr);
+        });
       }
 
       return {
@@ -905,14 +1055,39 @@ export async function placeStorefrontOrderAction(
 
 /**
  * Dedicated server action to silently record or update an incomplete draft order.
+ * Uses Inngest keyed debouncing (1.5s per phone) to absorb rapid typing and prevent DB thrashing.
  */
 export async function syncStorefrontIncompleteOrderAction(
   payload: Omit<StorefrontOrderPayload, "status">
 ): Promise<StorefrontOrderResult> {
-  return placeStorefrontOrderAction({
-    ...payload,
-    status: "incomplete_order",
-  });
+  try {
+    const { inngest } = await import("@/lib/inngest/client");
+    await inngest.send({
+      name: "order.draft.autosave",
+      data: {
+        orderId: payload.orderId,
+        customerPhone: payload.customerPhone,
+        customerName: payload.customerName,
+        addressLine: payload.addressLine,
+        deliveryZone: payload.deliveryZone,
+        customerNote: payload.customerNote,
+        items: payload.items,
+      },
+    });
+
+    return {
+      success: true,
+      orderId: payload.orderId,
+      status: "incomplete_order",
+    };
+  } catch (err) {
+    // Graceful fallback to direct synchronous execution if Inngest is offline
+    console.warn("[syncStorefrontIncompleteOrderAction] Inngest queue fallback to direct:", err);
+    return placeStorefrontOrderAction({
+      ...payload,
+      status: "incomplete_order",
+    });
+  }
 }
 
 export interface AssistedPhoneOrderPayload {
