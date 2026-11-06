@@ -40,6 +40,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -54,6 +61,7 @@ import {
   FormFieldItem,
   FormFieldLabel,
   FormFieldError,
+  createShallowSelector,
 } from "@/components/ui/tanstack-form";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
@@ -112,6 +120,180 @@ function detectItemPackageType(name?: string, packType?: string): string {
   return "Jar";
 }
 
+interface OrderEditNoteItemProps {
+  note: OrderNote;
+  onSave: (id: string, text: string, type: OrderNoteType) => Promise<void>;
+  onCancel: () => void;
+  isUpdating: boolean;
+}
+
+function OrderEditNoteItem({ note, onSave, onCancel, isUpdating }: OrderEditNoteItemProps) {
+  const initialType: OrderNoteType =
+    note.type === "delivery_note"
+      ? "delivery"
+      : note.type === "packaging_note"
+      ? "packaging"
+      : note.type === "internal_staff_note"
+      ? "internal"
+      : (note.type as OrderNoteType);
+
+  const [text, setText] = React.useState(note.text);
+  const [type, setType] = React.useState<OrderNoteType>(initialType);
+
+  return (
+    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5 text-xs">
+          <Edit className="h-3.5 w-3.5 text-amber-600" />
+          Editing Note ({note.author})
+        </span>
+        <Select
+          value={type}
+          onValueChange={(val) => {
+            if (val) setType(val as OrderNoteType);
+          }}
+        >
+          <SelectTrigger className="h-7 text-[11px] font-medium bg-background min-w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[70]">
+            <SelectItem value="internal">Internal Staff Note</SelectItem>
+            <SelectItem value="system">System Note</SelectItem>
+            <SelectItem value="packaging">Packaging Note</SelectItem>
+            <SelectItem value="delivery">Delivery Note</SelectItem>
+            <SelectItem value="customer">Customer Instruction</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={2}
+        className="text-xs bg-background"
+        placeholder="Edit note text..."
+        autoFocus
+      />
+
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          className="h-7 text-xs px-2.5 cursor-pointer"
+          disabled={isUpdating}
+        >
+          <X className="h-3 w-3 mr-1" />
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onSave(note.id, text, type)}
+          className="bg-amber-600 hover:bg-amber-700 text-white h-7 text-xs px-2.5 cursor-pointer"
+          disabled={isUpdating}
+        >
+          <Check className="h-3 w-3 mr-1" />
+          {isUpdating ? "Saving..." : "Save Note"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface OrderNewNoteComposerProps {
+  onAddNote: (text: string, type: OrderNoteType) => Promise<void>;
+  pendingNoteRef: React.MutableRefObject<{ text: string; type: OrderNoteType }>;
+}
+
+function OrderNewNoteComposer({ onAddNote, pendingNoteRef }: OrderNewNoteComposerProps) {
+  const [noteType, setNoteType] = React.useState<OrderNoteType>("internal");
+  const [noteText, setNoteText] = React.useState("");
+
+  React.useEffect(() => {
+    pendingNoteRef.current = { text: noteText, type: noteType };
+  }, [noteText, noteType, pendingNoteRef]);
+
+  const handleAdd = async () => {
+    const text = noteText.trim();
+    if (!text) return;
+    setNoteText("");
+    await onAddNote(text, noteType);
+  };
+
+  return (
+    <div className="space-y-2.5 pt-3 border-t">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+          Add New Note
+        </Label>
+        <Select
+          value={noteType}
+          onValueChange={(val) => {
+            if (val) setNoteType(val as OrderNoteType);
+          }}
+        >
+          <SelectTrigger id="order_form_new_note_type" className="h-7 text-[11px] font-medium bg-background min-w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[70]">
+            <SelectItem value="internal">Internal Staff Note</SelectItem>
+            <SelectItem value="system">System Note</SelectItem>
+            <SelectItem value="packaging">Packaging Note</SelectItem>
+            <SelectItem value="delivery">Delivery Note</SelectItem>
+            <SelectItem value="customer">Customer Instruction</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Textarea
+        id="order_form_new_note_text"
+        placeholder={
+          noteType === "packaging"
+            ? "e.g. Double bubble wrap glass jars, inspect seals, affix fragile label..."
+            : noteType === "delivery"
+              ? "e.g. Call before delivery, gate code, delivery after 4 PM..."
+              : noteType === "system"
+                ? "e.g. Automated system trigger, external synchronization notice..."
+                : noteType === "customer"
+                  ? "e.g. Special customer request or customization instructions..."
+                  : "e.g. Phone verification note, manager approved adjustment, staff remarks..."
+        }
+        value={noteText}
+        onChange={(e) => setNoteText(e.target.value)}
+        rows={2}
+        className="text-xs bg-background"
+      />
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <p className="text-[10px] text-muted-foreground">
+          {noteType === "internal"
+            ? "Internal notes visible to staff only."
+            : noteType === "packaging"
+              ? "Packaging notes appear on packing lists."
+              : noteType === "delivery"
+                ? "Delivery notes provide instructions to couriers."
+                : noteType === "system"
+                  ? "System notes record automated updates and system triggers."
+                  : "Customer requests recorded against this order."}
+        </p>
+        <Button
+          id="btn-add-order-note"
+          type="button"
+          size="sm"
+          onClick={handleAdd}
+          disabled={!noteText.trim()}
+          className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 px-2.5 cursor-pointer shadow-xs disabled:opacity-50"
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Add Note
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function OrderFormDialog({
   open,
   onOpenChange,
@@ -135,17 +317,17 @@ export function OrderFormDialog({
   >({});
   const [productSearchQuery, setProductSearchQuery] = React.useState("");
   const [packageTypeFilter, setPackageTypeFilter] = React.useState<string>("all");
-  const [newNoteType, setNewNoteType] = React.useState<OrderNoteType>("internal");
-  const [newNoteText, setNewNoteText] = React.useState("");
+  const pendingNoteRef = React.useRef<{ text: string; type: OrderNoteType }>({
+    text: "",
+    type: "internal",
+  });
   const [notesList, setNotesList] = React.useState<OrderNote[]>([]);
   const [editingNoteId, setEditingNoteId] = React.useState<string | null>(null);
-  const [editingNoteText, setEditingNoteText] = React.useState("");
-  const [editingNoteType, setEditingNoteType] = React.useState<OrderNoteType>("internal");
   const [isUpdatingNote, setIsUpdatingNote] = React.useState(false);
 
   // Helper: Add note to list and optionally sync if in edit mode
-  const handleAddNote = async () => {
-    const text = newNoteText.trim();
+  const handleAddNote = async (textToAdd: string, typeToAdd: OrderNoteType) => {
+    const text = textToAdd.trim();
     if (!text) {
       if (showToast) showToast("Please enter note text first.", "info");
       return;
@@ -155,16 +337,16 @@ export function OrderFormDialog({
     const newNoteId = `note-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newNote: OrderNote = {
       id: newNoteId,
-      author: newNoteType === "system" ? "System" : newNoteType === "customer" ? (order?.customer || "Customer") : "Admin Staff",
+      author: typeToAdd === "system" ? "System" : typeToAdd === "customer" ? (order?.customer || "Customer") : "Admin Staff",
       text,
-      type: newNoteType,
+      type: typeToAdd,
       created_at: nowStr,
     };
 
     setNotesList((prev) => [newNote, ...prev]);
-    setNewNoteText("");
+    pendingNoteRef.current = { text: "", type: "internal" };
 
-    if (newNoteType === "customer") {
+    if (typeToAdd === "customer") {
       form.setFieldValue("customer_note", text);
     }
 
@@ -184,27 +366,16 @@ export function OrderFormDialog({
   // Helper: Start editing a note
   const handleStartEditNote = (n: OrderNote) => {
     setEditingNoteId(n.id);
-    setEditingNoteText(n.text);
-    const mappedType =
-      n.type === "delivery_note"
-        ? "delivery"
-        : n.type === "packaging_note"
-        ? "packaging"
-        : n.type === "internal_staff_note"
-        ? "internal"
-        : (n.type as OrderNoteType);
-    setEditingNoteType(mappedType);
   };
 
   // Helper: Cancel editing
   const handleCancelEditNote = () => {
     setEditingNoteId(null);
-    setEditingNoteText("");
   };
 
   // Helper: Save edited note
-  const handleSaveEditNote = async (noteId: string) => {
-    const text = editingNoteText.trim();
+  const handleSaveEditNote = async (noteId: string, textToSave: string, typeToSave: OrderNoteType) => {
+    const text = textToSave.trim();
     if (!text) {
       if (showToast) showToast("Note content cannot be empty.", "destructive");
       return;
@@ -213,17 +384,17 @@ export function OrderFormDialog({
     setIsUpdatingNote(true);
     try {
       const updated = notesList.map((n) =>
-        n.id === noteId ? { ...n, text, type: editingNoteType } : n
+        n.id === noteId ? { ...n, text, type: typeToSave } : n
       );
       setNotesList(updated);
 
-      if (editingNoteType === "customer" || noteId === "customer_note") {
+      if (typeToSave === "customer" || noteId === "customer_note") {
         form.setFieldValue("customer_note", text);
       }
 
       if (mode === "edit" && order?.id) {
         try {
-          await updateOrderNoteInDb(order.id, noteId, text, editingNoteType, order);
+          await updateOrderNoteInDb(order.id, noteId, text, typeToSave, order);
           if (showToast) showToast("Note updated successfully.", "success");
         } catch (err: any) {
           console.warn("Could not immediately sync note update to DB:", err);
@@ -234,7 +405,6 @@ export function OrderFormDialog({
       }
 
       setEditingNoteId(null);
-      setEditingNoteText("");
     } catch (err: any) {
       console.error("Failed to update note:", err);
       if (showToast) showToast("Failed to update note.", "destructive");
@@ -257,7 +427,6 @@ export function OrderFormDialog({
 
     if (editingNoteId === noteId) {
       setEditingNoteId(null);
-      setEditingNoteText("");
     }
 
     if (mode === "edit" && order?.id) {
@@ -359,17 +528,18 @@ export function OrderFormDialog({
           finalAmountPaid = Math.min(grand_total, Math.max(0, finalAmountPaid));
         }
 
-        const newNoteClean = newNoteText.trim();
+        const newNoteClean = pendingNoteRef.current.text.trim();
+        const pendingType = pendingNoteRef.current.type;
         let extraStaffNote = valid.staff_note || "";
         let extraPackagingNote = valid.packaging_note || "";
         let extraCustomerNote = valid.customer_note || "";
 
         if (newNoteClean) {
-          if (newNoteType === "internal") {
+          if (pendingType === "internal") {
             extraStaffNote = extraStaffNote ? `${extraStaffNote}\n${newNoteClean}` : newNoteClean;
-          } else if (newNoteType === "packaging") {
+          } else if (pendingType === "packaging") {
             extraPackagingNote = extraPackagingNote ? `${extraPackagingNote}\n${newNoteClean}` : newNoteClean;
-          } else if (newNoteType === "customer") {
+          } else if (pendingType === "customer") {
             extraCustomerNote = extraCustomerNote ? `${extraCustomerNote}\n${newNoteClean}` : newNoteClean;
           }
         }
@@ -414,7 +584,7 @@ export function OrderFormDialog({
             customer_note: (() => {
               const custNoteInList = notesList.find((n) => n.type === "customer");
               if (custNoteInList) return custNoteInList.text.trim();
-              if (newNoteClean && newNoteType === "customer") return newNoteClean;
+              if (newNoteClean && pendingType === "customer") return newNoteClean;
               return extraCustomerNote || valid.customer_note || "";
             })(),
             courier_name: valid.courier_name || "",
@@ -422,12 +592,12 @@ export function OrderFormDialog({
             items: valid.items as OrderItem[],
             notes: (() => {
               const finalNotes: OrderNote[] = notesList.filter((n) => n.type !== "customer");
-              if (newNoteClean && newNoteType !== "customer") {
+              if (newNoteClean && pendingType !== "customer") {
                 finalNotes.unshift({
                   id: `note-${Date.now()}`,
                   author: "Admin Staff",
                   text: newNoteClean,
-                  type: newNoteType,
+                  type: pendingType,
                   created_at: nowStr,
                 });
               }
@@ -485,12 +655,12 @@ export function OrderFormDialog({
 
           // Filter out customer notes from notes table array (customer note lives in customer_note column)
           let updatedNotes: OrderNote[] = notesList.filter((n) => n.type !== "customer");
-          if (newNoteClean && newNoteType !== "customer") {
+          if (newNoteClean && pendingType !== "customer") {
             updatedNotes.unshift({
               id: `note-${Date.now()}`,
               author: "Admin Staff",
               text: newNoteClean,
-              type: newNoteType,
+              type: pendingType,
               created_at: nowStr,
             });
           }
@@ -512,7 +682,7 @@ export function OrderFormDialog({
           const custNoteInList = notesList.find((n) => n.type === "customer");
           const finalCustomerNote = custNoteInList
             ? custNoteInList.text.trim()
-            : newNoteClean && newNoteType === "customer"
+            : newNoteClean && pendingType === "customer"
             ? newNoteClean
             : valid.customer_note || "";
 
@@ -574,10 +744,8 @@ export function OrderFormDialog({
   // Sync form values whenever modal opens or active order changes
   React.useEffect(() => {
     if (open) {
-      setNewNoteText("");
-      setNewNoteType("internal");
+      pendingNoteRef.current = { text: "", type: "internal" };
       setEditingNoteId(null);
-      setEditingNoteText("");
 
       if (mode === "edit" && order) {
         const initialList: OrderNote[] = [];
@@ -746,6 +914,40 @@ export function OrderFormDialog({
   const filteredCatalogProducts = React.useMemo(() => {
     return filteredGroupedProducts.flatMap((g) => g.variants);
   }, [filteredGroupedProducts]);
+
+  // Memoized shallow selectors to prevent unnecessary re-rendering across the form tree
+  const partialPaymentSelector = React.useMemo(
+    () =>
+      createShallowSelector((state: any) => ({
+        payment: (state.values.payment || "unpaid") as Order["payment"],
+        items: (state.values.items || []) as OrderItem[],
+        shipping_total: (state.values.shipping_total ?? 0) as number,
+        discount_total: (state.values.discount_total ?? 0) as number,
+      })),
+    []
+  );
+
+  const orderSummarySelector = React.useMemo(
+    () =>
+      createShallowSelector((state: any) => ({
+        items: (state.values.items || []) as OrderItem[],
+        shipping_total: (state.values.shipping_total ?? 0) as number,
+        discount_total: (state.values.discount_total ?? 0) as number,
+        payment: (state.values.payment || "unpaid") as Order["payment"],
+        amount_paid: (state.values.amount_paid ?? 0) as number,
+      })),
+    []
+  );
+
+  const footerPayableSelector = React.useMemo(
+    () =>
+      createShallowSelector((state: any) => ({
+        items: (state.values.items || []) as OrderItem[],
+        shipping_total: (state.values.shipping_total ?? 0) as number,
+        discount_total: (state.values.discount_total ?? 0) as number,
+      })),
+    []
+  );
 
   // Open Product Selection Modal
   const handleOpenProductModal = () => {
@@ -1208,27 +1410,26 @@ export function OrderFormDialog({
                             </FormFieldLabel>
                           )}
                         </form.Subscribe>
-                        <select
-                          id="order_form_division"
-                          value={field.state.value}
-                          onChange={(e) => {
-                            const newDiv = e.target.value;
-                            field.handleChange(newDiv);
+                        <Select
+                          value={field.state.value || "none"}
+                          onValueChange={(newDiv) => {
+                            const val = !newDiv || newDiv === "none" ? "" : newDiv;
+                            field.handleChange(val);
                             form.setFieldValue("district", "");
                           }}
-                          className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                         >
-                          <option value="" className="bg-popover text-muted-foreground">Select Division</option>
-                          {geoDivisions.map((div) => (
-                            <option
-                              key={div.id}
-                              value={div.name}
-                              className="bg-popover text-popover-foreground"
-                            >
-                              {div.name} {div.name_bn ? `(${div.name_bn})` : ""}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger id="order_form_division" className="w-full h-9 text-xs bg-background">
+                            <SelectValue placeholder="Select Division" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            <SelectItem value="none">Select Division</SelectItem>
+                            {geoDivisions.map((div) => (
+                              <SelectItem key={div.id} value={div.name}>
+                                {div.name} {div.name_bn ? `(${div.name_bn})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormFieldError errors={field.state.meta.errors} />
                       </FormFieldItem>
                     )}
@@ -1468,11 +1669,11 @@ export function OrderFormDialog({
                     {(field) => (
                       <FormFieldItem>
                         <FormFieldLabel htmlFor="order_form_status">Order Status</FormFieldLabel>
-                        <select
-                          id="order_form_status"
+                        <Select
                           value={field.state.value}
-                          onChange={(e) => {
-                            const newStatus = e.target.value as Order["status"];
+                          onValueChange={(val) => {
+                            if (!val) return;
+                            const newStatus = val as Order["status"];
                             field.handleChange(newStatus);
                             setTimeout(() => {
                               const isDraft = newStatus === "incomplete_order" || newStatus === "pending";
@@ -1503,18 +1704,22 @@ export function OrderFormDialog({
                               form.validateField("shipping_total", "change");
                             }, 0);
                           }}
-                          className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                         >
-                          <option value="incomplete_order" className="bg-popover">Incomplete Order</option>
-                          <option value="pending" className="bg-popover">Pending</option>
-                          <option value="confirmed" className="bg-popover">Confirmed</option>
-                          <option value="processing" className="bg-popover">Processing</option>
-                          <option value="shipped" className="bg-popover">Shipped</option>
-                          <option value="delivered" className="bg-popover">Delivered</option>
-                          <option value="partially_delivered" className="bg-popover">Partially Delivered</option>
-                          <option value="cancelled" className="bg-popover">Cancelled</option>
-                          <option value="returned" className="bg-popover">Returned</option>
-                        </select>
+                          <SelectTrigger id="order_form_status" className="w-full h-9 text-xs bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            <SelectItem value="incomplete_order">Incomplete Order</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="confirmed">Confirmed</SelectItem>
+                            <SelectItem value="processing">Processing</SelectItem>
+                            <SelectItem value="shipped">Shipped</SelectItem>
+                            <SelectItem value="delivered">Delivered</SelectItem>
+                            <SelectItem value="partially_delivered">Partially Delivered</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                            <SelectItem value="returned">Returned</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormFieldItem>
                     )}
                   </form.Field>
@@ -1532,19 +1737,24 @@ export function OrderFormDialog({
                             </FormFieldLabel>
                           )}
                         </form.Subscribe>
-                        <select
-                          id="order_form_channel"
+                        <Select
                           value={field.state.value}
-                          onChange={(e) => field.handleChange(e.target.value as Order["channel"])}
-                          className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                          onValueChange={(val) => {
+                            if (val) field.handleChange(val as Order["channel"]);
+                          }}
                         >
-                          <option value="phone" className="bg-popover">Phone Call</option>
-                          <option value="whatsapp" className="bg-popover">WhatsApp</option>
-                          <option value="walk_in" className="bg-popover">Walk-in Depot</option>
-                          <option value="admin" className="bg-popover">Admin Desk</option>
-                          <option value="web" className="bg-popover">Web Storefront</option>
-                          <option value="facebook" className="bg-popover">Facebook Page</option>
-                        </select>
+                          <SelectTrigger id="order_form_channel" className="w-full h-9 text-xs bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            <SelectItem value="phone">Phone Call</SelectItem>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                            <SelectItem value="walk_in">Walk-in Depot</SelectItem>
+                            <SelectItem value="admin">Admin Desk</SelectItem>
+                            <SelectItem value="web">Web Storefront</SelectItem>
+                            <SelectItem value="facebook">Facebook Page</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormFieldItem>
                     )}
                   </form.Field>
@@ -1644,8 +1854,8 @@ export function OrderFormDialog({
 
               {/* 2. ORDER ITEMS SECTION (FULL WIDTH) */}
               <div className="p-4 sm:p-5 rounded-xl bg-card border shadow-xs space-y-4">
-                <form.Subscribe selector={(state) => ({ items: state.values.items })}>
-                  {({ items }) => {
+                <form.Subscribe selector={(state) => state.values.items}>
+                  {(items) => {
                     const itemsSubtotal = items.reduce((sum, it) => sum + it.line_total, 0);
 
                     return (
@@ -1780,19 +1990,27 @@ export function OrderFormDialog({
                                           </div>
                                         </td>
                                         <td className="py-2.5 px-3">
-                                          <select
-                                            id={`select-item-package-type-${item.id}`}
+                                          <Select
                                             value={item.package_type || detectItemPackageType(item.variant_name)}
-                                            onChange={(e) => handleUpdateItemPackageType(item.id, e.target.value)}
-                                            className="h-8 w-28 text-xs rounded-md border border-input bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
-                                            title="Package Type"
+                                            onValueChange={(val) => {
+                                              if (val) handleUpdateItemPackageType(item.id, val);
+                                            }}
                                           >
-                                            {PACKAGE_TYPES.map((pt) => (
-                                              <option key={pt} value={pt} className="bg-popover">
-                                                {pt}
-                                              </option>
-                                            ))}
-                                          </select>
+                                            <SelectTrigger
+                                              id={`select-item-package-type-${item.id}`}
+                                              className="h-8 w-28 text-xs bg-background font-medium"
+                                              title="Package Type"
+                                            >
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="z-[70]">
+                                              {PACKAGE_TYPES.map((pt) => (
+                                                <SelectItem key={pt} value={pt}>
+                                                  {pt}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
                                         </td>
                                         <td className="py-2.5 px-3">
                                           <div className="relative">
@@ -1974,25 +2192,29 @@ export function OrderFormDialog({
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                       {/* Dropdown Preset Selector */}
-                                      <select
-                                        id="order_form_courier_select"
-                                        value={isPreset ? currentValue : currentValue ? "other" : ""}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          if (val !== "other") {
+                                      <Select
+                                        value={isPreset ? currentValue : currentValue ? "other" : "none"}
+                                        onValueChange={(val) => {
+                                          if (!val || val === "none") {
+                                            field.handleChange("");
+                                          } else if (val !== "other") {
                                             field.handleChange(val);
                                           }
                                         }}
-                                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                                       >
-                                        <option value="">-- Choose Courier Service --</option>
-                                        {BANGLADESH_COURIERS.map((c) => (
-                                          <option key={c} value={c}>
-                                            {c}
-                                          </option>
-                                        ))}
-                                        <option value="other">Other / Custom Courier</option>
-                                      </select>
+                                        <SelectTrigger id="order_form_courier_select" className="w-full h-9 text-xs bg-background">
+                                          <SelectValue placeholder="-- Choose Courier Service --" />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[70]">
+                                          <SelectItem value="none">-- Choose Courier Service --</SelectItem>
+                                          {BANGLADESH_COURIERS.map((c) => (
+                                            <SelectItem key={c} value={c}>
+                                              {c}
+                                            </SelectItem>
+                                          ))}
+                                          <SelectItem value="other">Other / Custom Courier</SelectItem>
+                                        </SelectContent>
+                                      </Select>
 
                                       {/* Direct / Custom Input */}
                                       <Input
@@ -2038,16 +2260,21 @@ export function OrderFormDialog({
                         {(field) => (
                           <FormFieldItem>
                             <FormFieldLabel htmlFor="order_form_fulfillment">Fulfillment Status</FormFieldLabel>
-                            <select
-                              id="order_form_fulfillment"
+                            <Select
                               value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value as Order["fulfillment"])}
-                              className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                              onValueChange={(val) => {
+                                if (val) field.handleChange(val as Order["fulfillment"]);
+                              }}
                             >
-                              <option value="unfulfilled" className="bg-popover">Unfulfilled</option>
-                              <option value="partial" className="bg-popover">Partial Fulfillment</option>
-                              <option value="fulfilled" className="bg-popover">Fulfilled</option>
-                            </select>
+                              <SelectTrigger id="order_form_fulfillment" className="w-full h-9 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="z-[70]">
+                                <SelectItem value="unfulfilled">Unfulfilled</SelectItem>
+                                <SelectItem value="partial">Partial Fulfillment</SelectItem>
+                                <SelectItem value="fulfilled">Fulfilled</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </FormFieldItem>
                         )}
                       </form.Field>
@@ -2112,61 +2339,13 @@ export function OrderFormDialog({
 
                             if (isEditing) {
                               return (
-                                <div
+                                <OrderEditNoteItem
                                   key={n.id}
-                                  className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5 text-xs">
-                                      <Edit className="h-3.5 w-3.5 text-amber-600" />
-                                      Editing Note ({n.author})
-                                    </span>
-                                    <select
-                                      value={editingNoteType}
-                                      onChange={(e) => setEditingNoteType(e.target.value as OrderNoteType)}
-                                      className="h-7 rounded-md border border-input bg-background px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer font-medium"
-                                    >
-                                      <option value="internal" className="bg-popover">Internal Staff Note</option>
-                                      <option value="system" className="bg-popover">System Note</option>
-                                      <option value="packaging" className="bg-popover">Packaging Note</option>
-                                      <option value="delivery" className="bg-popover">Delivery Note</option>
-                                      <option value="customer" className="bg-popover">Customer Instruction</option>
-                                    </select>
-                                  </div>
-
-                                  <Textarea
-                                    value={editingNoteText}
-                                    onChange={(e) => setEditingNoteText(e.target.value)}
-                                    rows={2}
-                                    className="text-xs bg-background"
-                                    placeholder="Edit note text..."
-                                    autoFocus
-                                  />
-
-                                  <div className="flex items-center justify-end gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handleCancelEditNote}
-                                      className="h-7 text-xs px-2.5 cursor-pointer"
-                                      disabled={isUpdatingNote}
-                                    >
-                                      <X className="h-3 w-3 mr-1" />
-                                      Cancel
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      onClick={() => handleSaveEditNote(n.id)}
-                                      className="bg-amber-600 hover:bg-amber-700 text-white h-7 text-xs px-2.5 cursor-pointer"
-                                      disabled={isUpdatingNote}
-                                    >
-                                      <Check className="h-3 w-3 mr-1" />
-                                      {isUpdatingNote ? "Saving..." : "Save Note"}
-                                    </Button>
-                                  </div>
-                                </div>
+                                  note={n}
+                                  onSave={handleSaveEditNote}
+                                  onCancel={handleCancelEditNote}
+                                  isUpdating={isUpdatingNote}
+                                />
                               );
                             }
 
@@ -2238,70 +2417,11 @@ export function OrderFormDialog({
                       )}
                     </div>
 
-                    {/* Add New Note Option Composer */}
-                    <div className="space-y-2.5 pt-3 border-t">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                          <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
-                          Add New Note
-                        </Label>
-                        <select
-                          id="order_form_new_note_type"
-                          value={newNoteType}
-                          onChange={(e) => setNewNoteType(e.target.value as any)}
-                          className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer font-medium"
-                        >
-                          <option value="internal" className="bg-popover">Internal Staff Note</option>
-                          <option value="system" className="bg-popover">System Note</option>
-                          <option value="packaging" className="bg-popover">Packaging Note</option>
-                          <option value="delivery" className="bg-popover">Delivery Note</option>
-                          <option value="customer" className="bg-popover">Customer Instruction</option>
-                        </select>
-                      </div>
-
-                      <Textarea
-                        id="order_form_new_note_text"
-                        placeholder={
-                          newNoteType === "packaging"
-                            ? "e.g. Double bubble wrap glass jars, inspect seals, affix fragile label..."
-                            : newNoteType === "delivery"
-                              ? "e.g. Call before delivery, gate code, delivery after 4 PM..."
-                              : newNoteType === "system"
-                                ? "e.g. Automated system trigger, external synchronization notice..."
-                                : newNoteType === "customer"
-                                  ? "e.g. Special customer request or customization instructions..."
-                                  : "e.g. Phone verification note, manager approved adjustment, staff remarks..."
-                        }
-                        value={newNoteText}
-                        onChange={(e) => setNewNoteText(e.target.value)}
-                        rows={2}
-                        className="text-xs bg-background"
-                      />
-                      <div className="flex items-center justify-between gap-2 pt-0.5">
-                        <p className="text-[10px] text-muted-foreground">
-                          {newNoteType === "internal"
-                            ? "Internal notes visible to staff only."
-                            : newNoteType === "packaging"
-                              ? "Packaging notes appear on packing lists."
-                              : newNoteType === "delivery"
-                                ? "Delivery notes provide instructions to couriers."
-                                : newNoteType === "system"
-                                  ? "System notes record automated updates and system triggers."
-                                  : "Customer requests recorded against this order."}
-                        </p>
-                        <Button
-                          id="btn-add-order-note"
-                          type="button"
-                          size="sm"
-                          onClick={handleAddNote}
-                          disabled={!newNoteText.trim()}
-                          className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 px-2.5 shrink-0 cursor-pointer shadow-xs disabled:opacity-50"
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Add Note
-                        </Button>
-                      </div>
-                    </div>
+                    {/* Add New Note Option Composer (isolated state to prevent re-rendering the whole dialog on typing) */}
+                    <OrderNewNoteComposer
+                      onAddNote={handleAddNote}
+                      pendingNoteRef={pendingNoteRef}
+                    />
                   </div>
                 </div>
 
@@ -2335,21 +2455,26 @@ export function OrderFormDialog({
                                 </FormFieldLabel>
                               )}
                             </form.Subscribe>
-                            <select
-                              id="order_form_method"
+                            <Select
                               value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value as Order["method"])}
-                              className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                              onValueChange={(val) => {
+                                if (val) field.handleChange(val as Order["method"]);
+                              }}
                             >
-                              <option value="cod" className="bg-popover">Cash on Delivery (COD)</option>
-                              <option value="bkash" className="bg-popover">bKash</option>
-                              <option value="nagad" className="bg-popover">Nagad</option>
-                              <option value="rocket" className="bg-popover">Rocket</option>
-                              <option value="bank_transfer" className="bg-popover">Bank Transfer</option>
-                              <option value="cash" className="bg-popover">Cash</option>
-                              <option value="card" className="bg-popover">Credit / Debit Card</option>
-                              <option value="credit_terms" className="bg-popover">Credit Terms (Business)</option>
-                            </select>
+                              <SelectTrigger id="order_form_method" className="w-full h-9 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="z-[70]">
+                                <SelectItem value="cod">Cash on Delivery (COD)</SelectItem>
+                                <SelectItem value="bkash">bKash</SelectItem>
+                                <SelectItem value="nagad">Nagad</SelectItem>
+                                <SelectItem value="rocket">Rocket</SelectItem>
+                                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="cash">Cash</SelectItem>
+                                <SelectItem value="card">Credit / Debit Card</SelectItem>
+                                <SelectItem value="credit_terms">Credit Terms (Business)</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </FormFieldItem>
                         )}
                       </form.Field>
@@ -2358,11 +2483,11 @@ export function OrderFormDialog({
                         {(field) => (
                           <FormFieldItem>
                             <FormFieldLabel htmlFor="order_form_payment">Payment Status</FormFieldLabel>
-                            <select
-                              id="order_form_payment"
+                            <Select
                               value={field.state.value}
-                              onChange={(e) => {
-                                const newPayment = e.target.value as Order["payment"];
+                              onValueChange={(val) => {
+                                if (!val) return;
+                                const newPayment = val as Order["payment"];
                                 field.handleChange(newPayment);
 
                                 const items = form.state.values.items || [];
@@ -2383,13 +2508,17 @@ export function OrderFormDialog({
                                   }
                                 }
                               }}
-                              className="w-full h-9 rounded-lg border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                             >
-                              <option value="unpaid" className="bg-popover">Unpaid</option>
-                              <option value="partially_paid" className="bg-popover">Partially Paid</option>
-                              <option value="paid" className="bg-popover">Paid</option>
-                              <option value="refunded" className="bg-popover">Refunded</option>
-                            </select>
+                              <SelectTrigger id="order_form_payment" className="w-full h-9 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="z-[70]">
+                                <SelectItem value="unpaid">Unpaid</SelectItem>
+                                <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                                <SelectItem value="paid">Paid</SelectItem>
+                                <SelectItem value="refunded">Refunded</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </FormFieldItem>
                         )}
                       </form.Field>
@@ -2505,14 +2634,7 @@ export function OrderFormDialog({
                     </div>
 
                     {/* Partial Advance Payment (when partially_paid) */}
-                    <form.Subscribe
-                      selector={(state) => ({
-                        payment: state.values.payment,
-                        items: state.values.items,
-                        shipping_total: state.values.shipping_total,
-                        discount_total: state.values.discount_total,
-                      })}
-                    >
+                    <form.Subscribe selector={partialPaymentSelector}>
                       {({ payment, items, shipping_total, discount_total }) => {
                         if (payment !== "partially_paid") return null;
 
@@ -2645,15 +2767,7 @@ export function OrderFormDialog({
                       </div>
                     </div>
 
-                    <form.Subscribe
-                      selector={(state) => ({
-                        items: state.values.items,
-                        shipping_total: state.values.shipping_total,
-                        discount_total: state.values.discount_total,
-                        payment: state.values.payment,
-                        amount_paid: state.values.amount_paid,
-                      })}
-                    >
+                    <form.Subscribe selector={orderSummarySelector}>
                       {({ items, shipping_total, discount_total, payment, amount_paid }) => {
                         const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
                         const shipping = Number(shipping_total) || 0;
@@ -2720,13 +2834,7 @@ export function OrderFormDialog({
             </div>
 
             <DialogFooter className="pt-4 border-t sticky bottom-0 bg-popover/95 backdrop-blur-xs z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-5 mt-6 flex items-center justify-between sm:justify-between">
-              <form.Subscribe
-                selector={(state) => ({
-                  items: state.values.items,
-                  shipping_total: state.values.shipping_total,
-                  discount_total: state.values.discount_total,
-                })}
-              >
+              <form.Subscribe selector={footerPayableSelector}>
                 {({ items, shipping_total, discount_total }) => {
                   const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
                   const shipping = Number(shipping_total) || 0;
@@ -2821,19 +2929,23 @@ export function OrderFormDialog({
                       />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <select
-                        id="modal-package-type-filter"
+                      <Select
                         value={packageTypeFilter}
-                        onChange={(e) => setPackageTypeFilter(e.target.value)}
-                        className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
-                        title="Filter by package type"
+                        onValueChange={(val) => {
+                          if (val) setPackageTypeFilter(val);
+                        }}
                       >
-                        <option value="all" className="bg-popover">All Packaging</option>
-                        <option value="jar" className="bg-popover">Jar</option>
-                        <option value="foil" className="bg-popover">Foil</option>
-                        <option value="bottle" className="bg-popover">Bottle</option>
-                        <option value="box" className="bg-popover">Box</option>
-                      </select>
+                        <SelectTrigger id="modal-package-type-filter" className="h-9 text-xs font-medium w-32 bg-background">
+                          <SelectValue placeholder="All Packaging" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          <SelectItem value="all">All Packaging</SelectItem>
+                          <SelectItem value="jar">Jar</SelectItem>
+                          <SelectItem value="foil">Foil</SelectItem>
+                          <SelectItem value="bottle">Bottle</SelectItem>
+                          <SelectItem value="box">Box</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         id="btn-modal-select-all"
                         type="button"

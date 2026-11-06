@@ -49,6 +49,13 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -1482,17 +1489,23 @@ export function OrderDetailsSheet({
                             ) : (
                               <PackageCheck className="h-3.5 w-3.5 text-purple-600 shrink-0" />
                             )}
-                            <select
+                            <Select
                               value={field.state.value}
-                              onChange={(e) => field.handleChange(e.target.value as OrderNoteType)}
-                              className="h-7 rounded-md border border-input bg-background px-2 text-[11px] focus:outline-none cursor-pointer max-w-[190px]"
+                              onValueChange={(val) => {
+                                if (val) field.handleChange(val as OrderNoteType);
+                              }}
                             >
-                              <option value="internal">Staff Note (Internal)</option>
-                              <option value="customer">Customer Note (Buyer)</option>
-                              <option value="delivery">Delivery Note (Courier)</option>
-                              <option value="packaging">Packaging Note (Packer)</option>
-                              <option value="system">System Note (Automated)</option>
-                            </select>
+                              <SelectTrigger className="h-7 text-[11px] min-w-[170px] max-w-[200px] bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="internal">Staff Note (Internal)</SelectItem>
+                                <SelectItem value="customer">Customer Note (Buyer)</SelectItem>
+                                <SelectItem value="delivery">Delivery Note (Courier)</SelectItem>
+                                <SelectItem value="packaging">Packaging Note (Packer)</SelectItem>
+                                <SelectItem value="system">System Note (Automated)</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         )}
                       </noteForm.Field>

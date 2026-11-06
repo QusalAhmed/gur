@@ -69,6 +69,77 @@ import {
 } from "@/lib/facebook-pixel";
 import { sendCapiInitiateCheckoutAction } from "@/actions/facebook-capi";
 
+interface AutoSyncOrderWatcherProps {
+  form: any;
+  deliveryZone: "inside_dhaka" | "outside_dhaka";
+  cartItems: any[];
+  enabled: boolean;
+  isOrderProcessing: boolean;
+  draftOrderIdRef: React.MutableRefObject<string | null>;
+  clearDraftRef: React.MutableRefObject<() => void>;
+  cancelPendingSyncRef: React.MutableRefObject<() => void>;
+  triggerSyncNowRef: React.MutableRefObject<() => void>;
+}
+
+/**
+ * Isolated non-visual watcher that handles incomplete order draft auto-syncing.
+ * By subscribing to form values inside this null-returning sub-component,
+ * keystrokes in order form fields do not cause the entire CheckoutSection to re-render.
+ */
+function AutoSyncOrderWatcher({
+  form,
+  deliveryZone,
+  cartItems,
+  enabled,
+  isOrderProcessing,
+  draftOrderIdRef,
+  clearDraftRef,
+  cancelPendingSyncRef,
+  triggerSyncNowRef,
+}: AutoSyncOrderWatcherProps) {
+  const router = useRouter();
+  const formValues = useStore(form.store, (state: any) => state.values);
+
+  const formattedItems = useMemo(
+    () =>
+      cartItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        variantId: item.variantId,
+        variantName: item.variantName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    [cartItems]
+  );
+
+  const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoSyncIncompleteOrder({
+    customerPhone: formValues.customerPhone,
+    customerName: formValues.customerName,
+    addressLine: formValues.addressLine,
+    customerNote: formValues.customerNote,
+    deliveryZone,
+    items: formattedItems,
+    enabled,
+    isSubmitting: isOrderProcessing,
+  });
+
+  useEffect(() => {
+    draftOrderIdRef.current = draftOrderId;
+    if (draftOrderId) {
+      router.prefetch(`/order-confirmed/${draftOrderId}`);
+    }
+  }, [draftOrderId, router, draftOrderIdRef]);
+
+  useEffect(() => {
+    triggerSyncNowRef.current = triggerSyncNow;
+    cancelPendingSyncRef.current = cancelPendingSync;
+    clearDraftRef.current = clearDraft;
+  }, [triggerSyncNow, cancelPendingSync, clearDraft, triggerSyncNowRef, cancelPendingSyncRef, clearDraftRef]);
+
+  return null;
+}
+
 interface CheckoutSectionProps {
   lang: StorefrontLang;
   hotline: string;
@@ -110,6 +181,7 @@ export function CheckoutSection({
   const clearDraftRef = React.useRef<() => void>(() => { });
   const draftOrderIdRef = React.useRef<string | null>(null);
   const cancelPendingSyncRef = React.useRef<() => void>(() => { });
+  const triggerSyncNowRef = React.useRef<() => void>(() => { });
   const formResetRef = React.useRef<() => void>(() => { });
 
   const triggerInitiateCheckout = React.useCallback(
@@ -537,39 +609,7 @@ formResetRef.current = () => {
   form.reset();
 };
 
-const formValues = useStore(form.store, (state) => state.values);
-const isFormSubmitting = useStore(form.store, (state) => state.isSubmitting);
-const isOrderProcessing = createOrderMutation.isPending || isFormSubmitting || isRedirecting;
-
-// Auto-sync incomplete orders to Supabase as soon as a valid phone is entered and on changes
-const { draftOrderId, triggerSyncNow, cancelPendingSync, clearDraft } = useAutoSyncIncompleteOrder({
-  customerPhone: formValues.customerPhone,
-  customerName: formValues.customerName,
-  addressLine: formValues.addressLine,
-  customerNote: formValues.customerNote,
-  deliveryZone,
-  items: cartItems.map((item) => ({
-    productId: item.productId,
-    productName: item.productName,
-    variantId: item.variantId,
-    variantName: item.variantName,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-  })),
-  enabled: mounted && !isOrderProcessing,
-  isSubmitting: isOrderProcessing,
-});
-
-// Prefetch specific order route as soon as a draft order ID is created
-useEffect(() => {
-  if (draftOrderId) {
-    router.prefetch(`/order-confirmed/${draftOrderId}`);
-  }
-}, [draftOrderId, router]);
-
-draftOrderIdRef.current = draftOrderId;
-clearDraftRef.current = clearDraft;
-cancelPendingSyncRef.current = cancelPendingSync;
+const isOrderProcessing = createOrderMutation.isPending || isRedirecting;
 
 return (
   <section
@@ -577,6 +617,18 @@ return (
     data-section-index="checkout"
     className="h-[100dvh] max-h-[100dvh] min-h-[620px] w-full snap-start snap-always shrink-0 flex flex-col justify-between pt-3.5 sm:pt-16 pb-16 sm:pb-6 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none"
   >
+    {/* Background Watcher for Incomplete Order Syncing (zero UI re-renders on keystrokes) */}
+    <AutoSyncOrderWatcher
+      form={form}
+      deliveryZone={deliveryZone}
+      cartItems={cartItems}
+      enabled={mounted && !isOrderProcessing}
+      isOrderProcessing={isOrderProcessing}
+      draftOrderIdRef={draftOrderIdRef}
+      clearDraftRef={clearDraftRef}
+      cancelPendingSyncRef={cancelPendingSyncRef}
+      triggerSyncNowRef={triggerSyncNowRef}
+    />
     {/* Main Content Area */}
     <div className="relative z-10 w-full max-w-5xl mx-auto flex-1 my-2 sm:my-3">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
@@ -796,7 +848,7 @@ return (
                       }}
                       onBlur={() => {
                         field.handleBlur();
-                        if (!isOrderProcessing) triggerSyncNow();
+                        if (!isOrderProcessing) triggerSyncNowRef.current?.();
                       }}
                       placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
                       className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
@@ -847,7 +899,7 @@ return (
                               name: name?.trim() || undefined,
                             });
                           }
-                          if (!isOrderProcessing) triggerSyncNow();
+                          if (!isOrderProcessing) triggerSyncNowRef.current?.();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"
                         className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${hasError
@@ -931,7 +983,7 @@ return (
                     }}
                     onBlur={() => {
                       field.handleBlur();
-                      if (!isOrderProcessing) triggerSyncNow();
+                      if (!isOrderProcessing) triggerSyncNowRef.current?.();
                     }}
                     placeholder={
                       lang === "bn"
@@ -969,7 +1021,7 @@ return (
                     }}
                     onBlur={() => {
                       field.handleBlur();
-                      if (!isOrderProcessing) triggerSyncNow();
+                      if (!isOrderProcessing) triggerSyncNowRef.current?.();
                     }}
                     placeholder={
                       lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
@@ -992,9 +1044,9 @@ return (
 
             {/* Submit Action Button */}
             <form.Subscribe
-              selector={(state) => [state.isSubmitting]}
+              selector={(state) => state.isSubmitting}
             >
-              {([isSubmittingState]) => {
+              {(isSubmittingState) => {
                 const isProcessing = isSubmitting || isSubmittingState || isRedirecting;
                 return (
                   <motion.button

@@ -89,3 +89,32 @@ export function FormFieldError({
     </p>
   );
 }
+
+/**
+ * Creates a shallow-equality memoized selector for TanStack Form's form.Subscribe / useSelector.
+ * Prevents unnecessary sub-tree re-renders when returning multi-field object literals.
+ */
+export function createShallowSelector<T, R extends Record<string, any>>(fn: (state: T) => R) {
+  let prev: R | null = null;
+  return (state: T): R => {
+    const next = fn(state);
+    if (!prev) {
+      prev = next;
+      return next;
+    }
+    const prevKeys = Object.keys(prev);
+    const nextKeys = Object.keys(next);
+    if (prevKeys.length !== nextKeys.length) {
+      prev = next;
+      return next;
+    }
+    for (const key of prevKeys) {
+      if (prev[key] !== next[key]) {
+        prev = next;
+        return next;
+      }
+    }
+    return prev;
+  };
+}
+

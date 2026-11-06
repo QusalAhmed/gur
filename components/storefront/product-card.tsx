@@ -32,6 +32,13 @@ import {
 } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import { SlidingNumber } from "@/components/ui/sliding-number";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface StorefrontVariant {
   id: string;
@@ -542,35 +549,55 @@ export function ProductCard({
           <div className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5">
             {/* Variation Dropdown */}
             {sortedVariants.length > 1 && (
-              <div className="space-y-1 px-1">
+              <div className="space-y-1.5 px-1">
                 <label
                   htmlFor={`variant-select-${product.id}`}
                   className="block text-[11px] sm:text-xs font-bold text-amber-900/80 dark:text-amber-300"
                 >
                   {t.packSizeLabel}
                 </label>
-                <div className="relative">
-                  <select
+                <Select
+                  value={selectedVariant.id}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    const found = sortedVariants.find((v) => v.id === val);
+                    if (found) {
+                      userInteractedRef.current = true;
+                      setSelectedVariant(found);
+                    }
+                  }}
+                >
+                  <SelectTrigger
                     id={`variant-select-${product.id}`}
                     aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
-                    value={selectedVariant.id}
-                    onChange={(e) => {
-                      const found = sortedVariants.find((v) => v.id === e.target.value);
-                      if (found) {
-                        userInteractedRef.current = true;
-                        setSelectedVariant(found);
-                      }
-                    }}
-                    className="w-full bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-3 pr-8 rounded-xl border border-amber-300 dark:border-stone-700 shadow-xs appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm px-3.5 rounded-xl border border-amber-300/80 dark:border-stone-700 shadow-xs hover:border-amber-400 dark:hover:border-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500/50"
                   >
+                    <SelectValue>
+                      <span className="flex items-center justify-between w-full pr-1.5">
+                        <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
+                        <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-xs ml-2 shrink-0">
+                          {formatStorePrice(selectedVariant.price, lang)}
+                        </span>
+                      </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border border-amber-200 dark:border-stone-800 rounded-xl shadow-xl z-50 p-1">
                     {sortedVariants.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {lang === "bn" ? v.nameBn || v.name : v.name} ({formatStorePrice(v.price, lang)})
-                      </option>
+                      <SelectItem
+                        key={v.id}
+                        value={v.id}
+                        className="text-xs sm:text-sm font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
+                      >
+                        <span className="flex items-center justify-between w-full gap-3">
+                          <span>{lang === "bn" ? v.nameBn || v.name : v.name}</span>
+                          <span className="font-mono text-amber-700 dark:text-amber-400 font-bold text-xs">
+                            {formatStorePrice(v.price, lang)}
+                          </span>
+                        </span>
+                      </SelectItem>
                     ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-amber-800 dark:text-amber-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
-                </div>
+                  </SelectContent>
+                </Select>
               </div>
             )}
 

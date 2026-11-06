@@ -104,6 +104,13 @@ import { DistrictCombobox } from "@/components/admin/district-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -3501,40 +3508,48 @@ export function OrdersClient() {
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                   {/* Channel filter */}
-                  <select
+                  <Select
                     value={channelFilter}
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onValueChange={(val) => {
+                      if (!val) return;
                       setChannelFilter(val);
                       setPage(1);
                       updateUrl({ channel: val, page: 1 });
                     }}
-                    className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                   >
-                    <option value="all">All Channels</option>
-                    <option value="web">Web Store</option>
-                    <option value="phone">Phone Call</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="admin">Admin Manual</option>
-                  </select>
+                    <SelectTrigger className="h-9 px-3 text-xs w-[130px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Channels</SelectItem>
+                      <SelectItem value="web">Web Store</SelectItem>
+                      <SelectItem value="phone">Phone Call</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="admin">Admin Manual</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                   {/* Payment filter */}
-                  <select
+                  <Select
                     value={paymentFilter}
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onValueChange={(val) => {
+                      if (!val) return;
                       setPaymentFilter(val);
                       setPage(1);
                       updateUrl({ payment: val, page: 1 });
                     }}
-                    className="h-9 px-3 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                   >
-                    <option value="all">All Payments</option>
-                    <option value="unpaid">Unpaid</option>
-                    <option value="partially_paid">Partially Paid</option>
-                    <option value="paid">Paid</option>
-                    <option value="refunded">Refunded</option>
-                  </select>
+                    <SelectTrigger className="h-9 px-3 text-xs w-[135px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Payments</SelectItem>
+                      <SelectItem value="unpaid">Unpaid</SelectItem>
+                      <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="refunded">Refunded</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                   {(searchQuery || channelFilter !== "all" || paymentFilter !== "all" || selectedTab !== "all") && (
                     <Button
@@ -4074,31 +4089,35 @@ export function OrdersClient() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-2">
-                  <select
-                    id="status_courier_select"
+                  <Select
                     value={
                       (BANGLADESH_COURIERS as readonly string[]).includes(selectedCourier)
                         ? selectedCourier
                         : selectedCourier
                         ? "other"
-                        : ""
+                        : "none"
                     }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val !== "other") {
+                    onValueChange={(val) => {
+                      if (!val || val === "none") {
+                        setSelectedCourier("");
+                      } else if (val !== "other") {
                         setSelectedCourier(val);
                       }
                     }}
-                    className="w-full h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                   >
-                    <option value="">-- Choose Courier Service --</option>
-                    {BANGLADESH_COURIERS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                    <option value="other">Other / Custom Courier</option>
-                  </select>
+                    <SelectTrigger id="status_courier_select" className="w-full h-8 text-xs bg-background">
+                      <SelectValue placeholder="-- Choose Courier Service --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-- Choose Courier Service --</SelectItem>
+                      {BANGLADESH_COURIERS.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="other">Other / Custom Courier</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                   <Input
                     id="status_courier_name"
@@ -4221,11 +4240,11 @@ export function OrdersClient() {
                   {(field) => (
                     <FormFieldItem>
                       <FormFieldLabel htmlFor="pay_modal_status">Payment Status</FormFieldLabel>
-                      <select
-                        id="pay_modal_status"
+                      <Select
                         value={field.state.value}
-                        onChange={(e) => {
-                          const newStatus = e.target.value as Order["payment"];
+                        onValueChange={(val) => {
+                          if (!val) return;
+                          const newStatus = val as Order["payment"];
                           field.handleChange(newStatus);
                           if (newStatus === "paid") {
                             recordPaymentForm.setFieldValue("amount_paid", paymentOrder.grand_total);
@@ -4239,13 +4258,17 @@ export function OrdersClient() {
                             }
                           }
                         }}
-                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
                       >
-                        <option value="unpaid">Unpaid</option>
-                        <option value="partially_paid">Partially Paid</option>
-                        <option value="paid">Paid in Full</option>
-                        <option value="refunded">Refunded</option>
-                      </select>
+                        <SelectTrigger id="pay_modal_status" className="w-full h-9 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unpaid">Unpaid</SelectItem>
+                          <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                          <SelectItem value="paid">Paid in Full</SelectItem>
+                          <SelectItem value="refunded">Refunded</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormFieldItem>
                   )}
                 </recordPaymentForm.Field>
@@ -4254,21 +4277,26 @@ export function OrdersClient() {
                   {(field) => (
                     <FormFieldItem>
                       <FormFieldLabel htmlFor="pay_modal_method">Payment Method</FormFieldLabel>
-                      <select
-                        id="pay_modal_method"
+                      <Select
                         value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value as Order["method"])}
-                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                        onValueChange={(val) => {
+                          if (val) field.handleChange(val as Order["method"]);
+                        }}
                       >
-                        <option value="bkash">bKash</option>
-                        <option value="nagad">Nagad</option>
-                        <option value="rocket">Rocket</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="card">Credit / Debit Card</option>
-                        <option value="cash">Cash</option>
-                        <option value="cod">Cash on Delivery (COD)</option>
-                        <option value="credit_terms">Credit Terms</option>
-                      </select>
+                        <SelectTrigger id="pay_modal_method" className="w-full h-9 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bkash">bKash</SelectItem>
+                          <SelectItem value="nagad">Nagad</SelectItem>
+                          <SelectItem value="rocket">Rocket</SelectItem>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="card">Credit / Debit Card</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cod">Cash on Delivery (COD)</SelectItem>
+                          <SelectItem value="credit_terms">Credit Terms</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormFieldItem>
                   )}
                 </recordPaymentForm.Field>
@@ -5155,24 +5183,30 @@ export function OrdersClient() {
                   <Truck className="h-3.5 w-3.5 text-blue-600" />
                   Courier Partner for Dispatched Orders:
                 </label>
-                <select
+                <Select
                   value={bulkTargetCourierForStatus}
-                  onChange={(e) => setBulkTargetCourierForStatus(e.target.value)}
-                  className="w-full h-8 px-2.5 rounded-md border border-input bg-background text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onValueChange={(val) => {
+                    if (val) setBulkTargetCourierForStatus(val);
+                  }}
                 >
-                  {[
-                    "Steadfast Courier",
-                    "Pathao Courier",
-                    "RedX Delivery",
-                    "Paperfly",
-                    "Sundarban Courier",
-                    "SA Paribahan",
-                  ].map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full h-8 text-xs bg-background font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      "Steadfast Courier",
+                      "Pathao Courier",
+                      "RedX Delivery",
+                      "Paperfly",
+                      "Sundarban Courier",
+                      "SA Paribahan",
+                    ].map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-[11px] text-muted-foreground">
                   Applied to all orders being moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()} if unassigned.
                 </p>
