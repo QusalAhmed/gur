@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence, useInView } from "motion/react";
 import {
   Sparkles,
@@ -427,6 +427,22 @@ function TimelineDayCard({
   isInView,
 }: TimelineDayCardProps) {
   const isAvailable = proj.availableKg > 0;
+  const prevBookedRef = useRef<number>(proj.bookedKg);
+  const [hasRecentBooking, setHasRecentBooking] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (prevBookedRef.current !== proj.bookedKg) {
+      if (proj.bookedKg > prevBookedRef.current && prevBookedRef.current > 0) {
+        setHasRecentBooking(true);
+        const timer = setTimeout(() => {
+          setHasRecentBooking(false);
+        }, 3500);
+        prevBookedRef.current = proj.bookedKg;
+        return () => clearTimeout(timer);
+      }
+      prevBookedRef.current = proj.bookedKg;
+    }
+  }, [proj.bookedKg]);
 
   return (
     <motion.div
@@ -438,7 +454,11 @@ function TimelineDayCard({
       }
       exit={{ opacity: 0, y: -10, scale: 0.97 }}
       transition={{ duration: 0.32, delay: Math.min(0.35, 0.05 + idx * 0.03), ease: "easeOut" }}
-      className={`rounded-xl p-3 sm:p-3.5 border transition-all ${
+      className={`rounded-xl p-3 sm:p-3.5 border transition-all duration-500 relative ${
+        hasRecentBooking
+          ? "ring-4 ring-amber-400/70 dark:ring-amber-500/70 shadow-lg shadow-amber-500/25 scale-[1.01]"
+          : ""
+      } ${
         proj.isToday
           ? "bg-stone-100/90 dark:bg-stone-800/60 border-stone-300/80 dark:border-stone-700"
           : isAvailable
@@ -478,7 +498,18 @@ function TimelineDayCard({
         </div>
 
         {/* Status Badge */}
-        <div>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {hasRecentBooking && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500 text-white shadow-xs animate-pulse"
+            >
+              <Sparkles className="w-3 h-3" />
+              {isBn ? "লাইভ বুকিং" : "Live booking"}
+            </motion.span>
+          )}
           {proj.isToday ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
               <PackageX className="w-3 h-3 text-rose-500" />

@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Wallet,
   Info,
+  Sparkles,
 } from "lucide-react";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { getSiteSettingsAction, updateSiteSettingsAction } from "@/actions/settings";
+import {
+  getSiteSettingsAction,
+  updateSiteSettingsAction,
+  resetSimulatedStockAction,
+} from "@/actions/settings";
 import { testBrevoConnectionAction } from "@/actions/brevo";
 import { checkSmsBalanceAction, sendTestSmsAction } from "@/actions/sms";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
@@ -76,6 +81,15 @@ export default function SettingsPage() {
   const [lowStockBulk, setLowStockBulk] = React.useState(10);
   const [lowStockRetail, setLowStockRetail] = React.useState(20);
   const [dailyProductionKg, setDailyProductionKg] = React.useState(50);
+
+  // Simulated Stock & Pre-Order Urgency State (Inngest)
+  const [simulatedDemandEnabled, setSimulatedDemandEnabled] = React.useState(true);
+  const [simulatedDemandKg, setSimulatedDemandKg] = React.useState(0);
+  const [simulatedDemandMinKg, setSimulatedDemandMinKg] = React.useState(1.0);
+  const [simulatedDemandMaxKg, setSimulatedDemandMaxKg] = React.useState(3.0);
+  const [simulatedDemandMaxCapKg, setSimulatedDemandMaxCapKg] = React.useState(80);
+  const [simulatedDemandIntervalMins, setSimulatedDemandIntervalMins] = React.useState(10);
+  const [isResettingSimulatedStock, setIsResettingSimulatedStock] = React.useState(false);
 
   // SMS & Notifications State
   const [smsEnabled, setSmsEnabled] = React.useState(true);
@@ -160,6 +174,24 @@ export default function SettingsPage() {
         }
         if (data["inventory.daily_production_kg"] !== undefined) {
           setDailyProductionKg(Number(data["inventory.daily_production_kg"]) || 50);
+        }
+        if (data["inventory.simulated_demand_enabled"] !== undefined) {
+          setSimulatedDemandEnabled(data["inventory.simulated_demand_enabled"] === true);
+        }
+        if (data["inventory.simulated_demand_kg"] !== undefined) {
+          setSimulatedDemandKg(Number(data["inventory.simulated_demand_kg"]) || 0);
+        }
+        if (data["inventory.simulated_demand_min_kg"] !== undefined) {
+          setSimulatedDemandMinKg(Number(data["inventory.simulated_demand_min_kg"]) || 1.0);
+        }
+        if (data["inventory.simulated_demand_max_kg"] !== undefined) {
+          setSimulatedDemandMaxKg(Number(data["inventory.simulated_demand_max_kg"]) || 3.0);
+        }
+        if (data["inventory.simulated_demand_max_cap_kg"] !== undefined) {
+          setSimulatedDemandMaxCapKg(Number(data["inventory.simulated_demand_max_cap_kg"]) || 80);
+        }
+        if (data["inventory.simulated_demand_interval_mins"] !== undefined) {
+          setSimulatedDemandIntervalMins(Number(data["inventory.simulated_demand_interval_mins"]) || 10);
         }
 
         // SMS & Notifications
@@ -266,6 +298,11 @@ export default function SettingsPage() {
         "inventory.low_stock_threshold_bulk": Number(lowStockBulk),
         "inventory.low_stock_threshold_retail": Number(lowStockRetail),
         "inventory.daily_production_kg": Number(dailyProductionKg) || 50,
+        "inventory.simulated_demand_enabled": simulatedDemandEnabled,
+        "inventory.simulated_demand_min_kg": Number(simulatedDemandMinKg),
+        "inventory.simulated_demand_max_kg": Number(simulatedDemandMaxKg),
+        "inventory.simulated_demand_max_cap_kg": Number(simulatedDemandMaxCapKg),
+        "inventory.simulated_demand_interval_mins": Number(simulatedDemandIntervalMins),
         "notifications.sms_enabled": smsEnabled,
         "notifications.sms_gateway": smsGateway,
         "notifications.smsbangladesh_user": smsUser.trim(),
@@ -307,6 +344,24 @@ export default function SettingsPage() {
       setTimeout(() => setSaveMessage(null), 3500);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetSimulatedStock = async () => {
+    setIsResettingSimulatedStock(true);
+    try {
+      const res = await resetSimulatedStockAction();
+      if (res.success) {
+        setSimulatedDemandKg(0);
+        queryClient.invalidateQueries({ queryKey: SITE_SETTINGS_QUERY_KEY });
+        toast.success(res.message || "Simulated stock backlog reset to 0 KG");
+      } else {
+        toast.error(res.error || "Failed to reset simulated stock");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "An error occurred while resetting simulated stock");
+    } finally {
+      setIsResettingSimulatedStock(false);
     }
   };
 
@@ -794,6 +849,135 @@ export default function SettingsPage() {
                     />
                     <p className="text-[11px] text-muted-foreground">
                       Expected daily molasses (গুড়) yield. Active orders are subtracted from future days sequentially.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Simulated Live Stock & Pre-Order Urgency (Inngest Automation) */}
+            <Card className="border-amber-200/80 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/20 to-transparent">
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-amber-100 dark:bg-amber-950/80 rounded-lg text-amber-800 dark:text-amber-300">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Simulated Stock & Urgency Automation
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300"
+                        >
+                          Inngest Cron
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Randomly adds simulated pre-order demand to the live stock section to create natural urgency. Operates strictly between 8:00 AM – 11:30 PM (Dhaka Time) and auto-resets at midnight.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold cursor-pointer select-none">
+                      {simulatedDemandEnabled ? "Automation Active" : "Automation Paused"}
+                    </label>
+                    <Checkbox
+                      checked={simulatedDemandEnabled}
+                      onCheckedChange={(c) => setSimulatedDemandEnabled(!!c)}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Current Simulated Status & Quick Reset */}
+                <div className="p-3 rounded-xl bg-amber-100/50 dark:bg-stone-800/60 border border-amber-200 dark:border-stone-700 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-medium text-muted-foreground">Current Simulated Backlog:</span>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-xl font-bold font-mono text-amber-900 dark:text-amber-200">
+                        {simulatedDemandKg}
+                      </span>
+                      <span className="text-xs font-semibold text-muted-foreground">KG booked</span>
+                      <span className="text-xs text-muted-foreground">
+                        (Capped at {simulatedDemandMaxCapKg} KG)
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isResettingSimulatedStock || simulatedDemandKg === 0}
+                    onClick={handleResetSimulatedStock}
+                    className="border-amber-300 hover:bg-amber-100 text-amber-900 dark:text-amber-200"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 mr-1.5 ${
+                        isResettingSimulatedStock ? "animate-spin" : ""
+                      }`}
+                    />
+                    Reset to 0 KG Now
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Min Decrement (KG)</label>
+                    <Input
+                      type="number"
+                      step="1"
+                      min={1}
+                      value={simulatedDemandMinKg}
+                      onChange={(e) => setSimulatedDemandMinKg(Math.max(1, Math.round(Number(e.target.value))))}
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Smallest simulated order step (whole KG).
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Max Decrement (KG)</label>
+                    <Input
+                      type="number"
+                      step="1"
+                      min={1}
+                      value={simulatedDemandMaxKg}
+                      onChange={(e) => setSimulatedDemandMaxKg(Math.max(1, Math.round(Number(e.target.value))))}
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Largest simulated order step (whole KG).
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Interval (Minutes)</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={simulatedDemandIntervalMins}
+                      onChange={(e) => setSimulatedDemandIntervalMins(Math.max(1, Number(e.target.value)))}
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      How frequently stock drops.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Max Backlog Cap (KG)</label>
+                    <Input
+                      type="number"
+                      min={10}
+                      value={simulatedDemandMaxCapKg}
+                      onChange={(e) => setSimulatedDemandMaxCapKg(Math.max(10, Number(e.target.value)))}
+                      className="font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Maximum fake demand limit.
                     </p>
                   </div>
                 </div>

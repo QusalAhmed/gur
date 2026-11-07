@@ -32,6 +32,15 @@ export interface SiteSettingsMap {
   "inventory.low_stock_threshold_retail"?: number;
   "inventory.daily_production_kg"?: number;
 
+  // Simulated Stock & Pre-Order Demand (Inngest)
+  "inventory.simulated_demand_enabled"?: boolean;
+  "inventory.simulated_demand_kg"?: number;
+  "inventory.simulated_demand_min_kg"?: number;
+  "inventory.simulated_demand_max_kg"?: number;
+  "inventory.simulated_demand_max_cap_kg"?: number;
+  "inventory.simulated_demand_interval_mins"?: number;
+  "inventory.simulated_demand_last_reset_date"?: string;
+
   // SMS & Notifications
   "notifications.sms_gateway"?: string;
   "notifications.sms_sender_id"?: string;
@@ -172,6 +181,8 @@ export async function updateSiteSettingsAction(
       "checkout.cod_enabled",
       "checkout.guest_checkout_enabled",
       "inventory.daily_production_kg",
+      "inventory.simulated_demand_enabled",
+      "inventory.simulated_demand_kg",
     ]);
 
     // Perform upserts for each setting key
@@ -236,5 +247,49 @@ export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>>
     return {};
   }
 }
+
+/**
+ * Resets simulated stock pre-order backlog to 0 KG immediately.
+ */
+export async function resetSimulatedStockAction(): Promise<SaveSettingsResult> {
+  const auth = await verifyAdminAuth();
+  if (!auth.authorized) {
+    return {
+      success: false,
+      error: auth.reason || "Unauthorized to reset simulated stock",
+    };
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from("site_settings")
+      .update({
+        value: 0,
+        updated_at: now,
+      })
+      .eq("key", "inventory.simulated_demand_kg");
+
+    if (error) {
+      console.error("Failed to reset simulated stock:", error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/admin/settings");
+    revalidatePath("/");
+
+    return {
+      success: true,
+      message: "Simulated stock backlog reset to 0 KG successfully",
+    };
+  } catch (err: any) {
+    console.error("Error resetting simulated stock:", err);
+    return {
+      success: false,
+      error: err?.message || "Failed to reset simulated stock",
+    };
+  }
+}
+
 
 

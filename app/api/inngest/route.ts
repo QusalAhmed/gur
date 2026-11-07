@@ -16,6 +16,7 @@ import { demoPackagingFunction } from "@/lib/inngest/functions/demo-packaging";
 import { metaCapiBatchDispatcherFunction } from "@/lib/inngest/functions/meta-capi-batch";
 import { draftOrderDebouncedAutoSaveFunction } from "@/lib/inngest/functions/draft-order";
 import { steadfastBulkBookingFunction } from "@/lib/inngest/functions/steadfast-bulk";
+import { simulatedStockDecrementorFunction } from "@/lib/inngest/functions/simulated-stock";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -32,5 +33,6 @@ export const { GET, POST, PUT } = serve({
     metaCapiBatchDispatcherFunction,
     draftOrderDebouncedAutoSaveFunction,
     steadfastBulkBookingFunction,
+    simulatedStockDecrementorFunction,
   ],
 });

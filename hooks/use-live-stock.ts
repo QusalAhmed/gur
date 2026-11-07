@@ -26,6 +26,9 @@ export interface LiveStockState {
   dailyProductionKg: number;
   totalActiveOrdersKg: number;
   activeOrderCount: number;
+  simulatedDemandKg: number;
+  isSimulatedDemandEnabled: boolean;
+  lastStockChangeTimestamp: number;
   projections: StockDayProjection[];
   nextAvailableDay: StockDayProjection | null;
   isLoading: boolean;
@@ -153,6 +156,9 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
   const [dailyProductionKg, setDailyProductionKg] = useState<number>(initialDailyCapacity);
   const [totalActiveOrdersKg, setTotalActiveOrdersKg] = useState<number>(0);
   const [activeOrderCount, setActiveOrderCount] = useState<number>(0);
+  const [simulatedDemandKg, setSimulatedDemandKg] = useState<number>(0);
+  const [isSimulatedDemandEnabled, setIsSimulatedDemandEnabled] = useState<boolean>(true);
+  const [lastStockChangeTimestamp, setLastStockChangeTimestamp] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefetching, setIsRefetching] = useState<boolean>(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
@@ -176,17 +182,37 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
 
     try {
-      // 1. Fetch daily production setting
+      // 1. Fetch live production quota and simulated demand settings
       const { data: settingsData } = await supabase
         .from("site_settings")
         .select("key, value")
-        .eq("key", "inventory.daily_production_kg")
-        .maybeSingle();
+        .in("key", [
+          "inventory.daily_production_kg",
+          "inventory.simulated_demand_enabled",
+          "inventory.simulated_demand_kg",
+        ]);
 
-      if (settingsData && settingsData.value) {
-        const prod = Number(settingsData.value);
-        if (prod > 0 && isMountedRef.current) {
-          setDailyProductionKg(prod);
+      if (settingsData && isMountedRef.current) {
+        for (const row of settingsData) {
+          if (row.key === "inventory.daily_production_kg") {
+            const prod = Number(row.value);
+            if (prod > 0) setDailyProductionKg(prod);
+          } else if (row.key === "inventory.simulated_demand_enabled") {
+            setIsSimulatedDemandEnabled(
+              row.value === true ||
+              row.value === "true" ||
+              row.value === 1 ||
+              row.value === "1"
+            );
+          } else if (row.key === "inventory.simulated_demand_kg") {
+            const kg = Math.round(Number(row.value) || 0);
+            setSimulatedDemandKg((prev) => {
+              if (prev !== kg) {
+                setLastStockChangeTimestamp(Date.now());
+              }
+              return kg;
+            });
+          }
         }
       }
 
@@ -238,7 +264,7 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     isMountedRef.current = true;
     fetchData(false);
 
-    // Subscribe to real-time changes on orders table
+    // Subscribe to real-time changes on both orders and site_settings tables
     const channel = supabase
       .channel("storefront-live-stock")
       .on(
@@ -249,8 +275,23 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
           table: "orders",
         },
         () => {
-          // Re-calculate instantaneously when orders are inserted/updated/deleted
+          // Re-calculate instantaneously when real orders are inserted/updated/deleted
           fetchData(true);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "site_settings",
+        },
+        (payload) => {
+          // Re-calculate instantaneously when production quota or simulated stock changes
+          const key = (payload.new as any)?.key || (payload.old as any)?.key;
+          if (!key || String(key).startsWith("inventory.")) {
+            fetchData(true);
+          }
         }
       )
       .subscribe((status) => {
@@ -273,7 +314,8 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
 
     const list: StockDayProjection[] = [];
     const capacity = Math.max(1, dailyProductionKg);
-    let remainingBacklog = totalActiveOrdersKg;
+    const effectiveSimulatedDemand = isSimulatedDemandEnabled ? simulatedDemandKg : 0;
+    let remainingBacklog = Math.round((totalActiveOrdersKg + effectiveSimulatedDemand) * 10) / 10;
 
     const now = currentDate;
 
@@ -375,13 +417,16 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     const nextAvailable = list.find((d) => !d.isToday && d.availableKg > 0) || null;
 
     return { projections: list, nextAvailableDay: nextAvailable };
-  }, [dailyProductionKg, totalActiveOrdersKg]);
+  }, [dailyProductionKg, totalActiveOrdersKg, simulatedDemandKg, isSimulatedDemandEnabled, currentDate]);
 
   return {
     todayStockKg: 0, // Current stock is ALWAYS 0
     dailyProductionKg,
     totalActiveOrdersKg,
     activeOrderCount,
+    simulatedDemandKg,
+    isSimulatedDemandEnabled,
+    lastStockChangeTimestamp,
     projections,
     nextAvailableDay,
     isLoading,
