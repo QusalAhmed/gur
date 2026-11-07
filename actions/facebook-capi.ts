@@ -24,9 +24,12 @@ export interface CatalogIdLookupParams {
 
 interface CachedCatalogMapping {
   productIds: Set<string>;
+  variantIds: Set<string>;
   variantToProductMap: Map<string, string>;
+  productToDefaultVariantMap: Map<string, string>;
   productNameMap: Map<string, string>;
-  skuToProductMap: Map<string, string>;
+  skuToVariantMap: Map<string, string>;
+  defaultVariantId: string;
   defaultProductId: string;
   fetchedAt: number;
 }
@@ -48,10 +51,11 @@ async function getOrFetchCatalogMappings(): Promise<CachedCatalogMapping> {
   try {
     const [prodsRes, varsRes] = await Promise.all([
       client.from("products").select("id, name, name_bn, slug, status").order("sort_order", { ascending: true }),
-      client.from("product_variants").select("id, product_id, name, sku"),
+      client.from("product_variants").select("id, product_id, name, sku, is_default"),
     ]);
 
     const productIds = new Set<string>();
+    const variantIds = new Set<string>();
     const productNameMap = new Map<string, string>();
     let defaultProductId = "";
 
@@ -73,24 +77,42 @@ async function getOrFetchCatalogMappings(): Promise<CachedCatalogMapping> {
     }
 
     const variantToProductMap = new Map<string, string>();
-    const skuToProductMap = new Map<string, string>();
+    const productToDefaultVariantMap = new Map<string, string>();
+    const skuToVariantMap = new Map<string, string>();
+    let defaultVariantId = "";
 
-    for (const v of varsRes.data || []) {
+    const allVars = varsRes.data || [];
+    for (const v of allVars) {
       const vid = String(v.id).trim();
       const pid = String(v.product_id).trim();
+      if (vid) {
+        variantIds.add(vid);
+      }
       if (vid && pid) {
         variantToProductMap.set(vid, pid);
+        if (v.is_default || !productToDefaultVariantMap.has(pid)) {
+          productToDefaultVariantMap.set(pid, vid);
+        }
       }
-      if (v.sku && pid) {
-        skuToProductMap.set(v.sku.trim().toLowerCase(), pid);
+      if (v.sku && vid) {
+        skuToVariantMap.set(v.sku.trim().toLowerCase(), vid);
       }
+    }
+
+    if (defaultProductId && productToDefaultVariantMap.has(defaultProductId)) {
+      defaultVariantId = productToDefaultVariantMap.get(defaultProductId)!;
+    } else if (allVars.length > 0) {
+      defaultVariantId = String(allVars[0].id).trim();
     }
 
     catalogCache = {
       productIds,
+      variantIds,
       variantToProductMap,
+      productToDefaultVariantMap,
       productNameMap,
-      skuToProductMap,
+      skuToVariantMap,
+      defaultVariantId,
       defaultProductId,
       fetchedAt: now,
     };
@@ -100,9 +122,12 @@ async function getOrFetchCatalogMappings(): Promise<CachedCatalogMapping> {
     return (
       catalogCache || {
         productIds: new Set(),
+        variantIds: new Set(),
         variantToProductMap: new Map(),
+        productToDefaultVariantMap: new Map(),
         productNameMap: new Map(),
-        skuToProductMap: new Map(),
+        skuToVariantMap: new Map(),
+        defaultVariantId: "",
         defaultProductId: "",
         fetchedAt: 0,
       }
@@ -111,69 +136,91 @@ async function getOrFetchCatalogMappings(): Promise<CachedCatalogMapping> {
 }
 
 /**
- * Resolves a reliable, canonical Meta Catalog product ID.
+ * Resolves a reliable, canonical Meta Catalog Item ID (Variation ID).
  * Priority:
- * 1. Explicit productId if it exists in the products catalog
- * 2. If productId was mistakenly passed as a variantId, resolves parent product_id
- * 3. variantId looked up in product_variants
- * 4. productName against products name, name_bn, or slug
- * 5. sku against product_variants sku
- * 6. Fallback to active default catalog product ID
+ * 1. Explicit variantId if it exists in catalog
+ * 2. If productId was passed directly as variantId
+ * 3. Default variant ID of the provided productId
+ * 4. SKU lookup in product_variants -> returns variantId
+ * 5. Product name lookup -> default variant ID
+ * 6. Fallback to productId (e.g. products with no variants)
+ * 7. Active default catalog variant ID
  */
-export async function resolveCatalogProductId(
+export async function resolveCatalogItemId(
   params: CatalogIdLookupParams
 ): Promise<string> {
-  const { productIds, variantToProductMap, productNameMap, skuToProductMap, defaultProductId } =
-    await getOrFetchCatalogMappings();
+  const {
+    productIds,
+    variantIds,
+    productToDefaultVariantMap,
+    productNameMap,
+    skuToVariantMap,
+    defaultVariantId,
+    defaultProductId,
+  } = await getOrFetchCatalogMappings();
 
   const rawProdId = params.productId ? String(params.productId).trim() : null;
   const rawVarId = params.variantId ? String(params.variantId).trim() : null;
 
-  // 1. Direct valid product UUID in catalog
-  if (rawProdId && productIds.has(rawProdId)) {
+  // 1. Direct valid variant UUID in catalog
+  if (rawVarId && variantIds.has(rawVarId)) {
+    return rawVarId;
+  }
+
+  // 2. If productId was passed as a variant ID directly
+  if (rawProdId && variantIds.has(rawProdId)) {
     return rawProdId;
   }
 
-  // 2. If productId was mistakenly passed as a variant ID
-  if (rawProdId && variantToProductMap.has(rawProdId)) {
-    return variantToProductMap.get(rawProdId)!;
+  // 3. If productId is provided, resolve its default variant
+  if (rawProdId && productToDefaultVariantMap.has(rawProdId)) {
+    return productToDefaultVariantMap.get(rawProdId)!;
   }
 
-  // 3. Variant ID lookup
-  if (rawVarId && variantToProductMap.has(rawVarId)) {
-    return variantToProductMap.get(rawVarId)!;
-  }
-
-  // 4. Product Name lookup
-  if (params.productName) {
-    const cleanName = params.productName.trim().toLowerCase();
-    if (productNameMap.has(cleanName)) {
-      return productNameMap.get(cleanName)!;
-    }
-    // Substring match
-    for (const [key, pid] of productNameMap.entries()) {
-      if (cleanName.includes(key) || key.includes(cleanName)) {
-        return pid;
-      }
-    }
-  }
-
-  // 5. SKU lookup
+  // 4. SKU lookup
   if (params.sku) {
     const cleanSku = params.sku.trim().toLowerCase();
-    if (skuToProductMap.has(cleanSku)) {
-      return skuToProductMap.get(cleanSku)!;
+    if (skuToVariantMap.has(cleanSku)) {
+      return skuToVariantMap.get(cleanSku)!;
     }
   }
 
-  // 6. If rawProdId looks like a valid UUID, use it as fallback
+  // 5. Product Name lookup -> default variant
+  if (params.productName) {
+    const cleanName = params.productName.trim().toLowerCase();
+    let matchedProdId = productNameMap.get(cleanName);
+    if (!matchedProdId) {
+      for (const [key, pid] of productNameMap.entries()) {
+        if (cleanName.includes(key) || key.includes(cleanName)) {
+          matchedProdId = pid;
+          break;
+        }
+      }
+    }
+    if (matchedProdId && productToDefaultVariantMap.has(matchedProdId)) {
+      return productToDefaultVariantMap.get(matchedProdId)!;
+    }
+    if (matchedProdId && productIds.has(matchedProdId)) {
+      return matchedProdId;
+    }
+  }
+
+  // 6. If rawVarId looks like a valid UUID, use it as fallback
+  if (rawVarId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawVarId)) {
+    return rawVarId;
+  }
+
+  // 7. If rawProdId looks like a valid UUID, use it as fallback (for zero-variant products)
   if (rawProdId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawProdId)) {
     return rawProdId;
   }
 
-  // 7. Catalog default fallback
-  return defaultProductId;
+  // 8. Catalog default fallback
+  return defaultVariantId || defaultProductId;
 }
+
+// Backwards-compatible alias
+export const resolveCatalogProductId = resolveCatalogItemId;
 
 /**
  * Dispatches an event to the Inngest Meta CAPI batch queue with automatic

@@ -82,6 +82,7 @@ export const trackPageView = (customEventId?: string): string | null => {
 
 export interface ViewContentParams {
   productId: string;
+  variantId?: string;
   productName: string;
   price?: number;
   currency?: string;
@@ -90,11 +91,13 @@ export interface ViewContentParams {
 
 /**
  * Standard ViewContent event.
- * Fired when a customer views / dwells on a product card.
+ * Fired when a customer views / dwells on a product card or lands on product page.
+ * Uses variantId as primary identifier when available.
  * Returns the eventId for CAPI deduplication.
  */
 export const trackViewContent = ({
   productId,
+  variantId,
   productName,
   price,
   currency = "BDT",
@@ -102,17 +105,18 @@ export const trackViewContent = ({
 }: ViewContentParams): string => {
   const safePrice = Number(price) || 0;
   const eventId = customEventId || generateEventId();
+  const targetId = String(variantId || productId);
 
   fbq(
     "track",
     "ViewContent",
     {
       content_name: productName,
-      content_ids: [String(productId)],
+      content_ids: [targetId],
       content_type: "product",
       contents: [
         {
-          id: String(productId),
+          id: targetId,
           quantity: 1,
           item_price: safePrice,
         },
@@ -140,6 +144,7 @@ export interface AddToCartParams {
 /**
  * Standard AddToCart event.
  * Fired when a customer adds a product/variant or increases quantity in cart.
+ * Uses variantId as primary identifier when available.
  * Accurately sends current item quantity, num_items, line total value, and contents array.
  * Returns the eventId for CAPI deduplication.
  */
@@ -157,17 +162,18 @@ export const trackAddToCart = ({
   const safeQuantity = Number(quantity) || 1;
   const lineTotal = safePrice * safeQuantity;
   const eventId = customEventId || generateEventId();
+  const targetId = String(variantId || productId);
 
   fbq(
     "track",
     "AddToCart",
     {
       content_name: productName,
-      content_ids: [String(productId)],
+      content_ids: [targetId],
       content_type: "product",
       contents: [
         {
-          id: String(productId),
+          id: targetId,
           quantity: safeQuantity,
           item_price: safePrice,
         },
@@ -493,10 +499,10 @@ export const trackInitiateCheckout = ({
   );
 
   const params: Record<string, any> = {
-    content_ids: safeItems.map((item) => String(item.productId)),
+    content_ids: safeItems.map((item) => String(item.variantId || item.productId)),
     content_type: "product",
     contents: safeItems.map((item) => ({
-      id: String(item.productId),
+      id: String(item.variantId || item.productId),
       quantity: Number(item.quantity) || 1,
       item_price: Number(item.unitPrice) || 0,
     })),

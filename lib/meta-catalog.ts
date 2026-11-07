@@ -177,12 +177,16 @@ export function formatPriceForMeta(price: number | string, currency = "BDT"): st
  * Resolves storage paths or relative paths into absolute HTTPS URLs for Meta Catalog.
  */
 export function resolvePublicImageUrl(storagePath?: string | null, siteUrl?: string): string {
+  const base = (siteUrl || getMetaSdkConfig().siteUrl).replace(/\/$/, "");
   if (!storagePath) {
-    const base = siteUrl || getMetaSdkConfig().siteUrl;
-    return `${base.replace(/\/$/, "")}/images/products/blackstrap-drum.jpg`;
+    return `${base}/images/products/blackstrap-drum.jpg`;
   }
 
-  return resolveCdnImageUrl(storagePath);
+  const resolved = resolveCdnImageUrl(storagePath);
+  if (resolved.startsWith("/")) {
+    return `${base}${resolved}`;
+  }
+  return resolved;
 }
 
 /**
@@ -557,8 +561,8 @@ export async function syncProductsToMetaCatalog(options?: {
   const client = supabaseAdmin || supabase;
 
   // 1. Fetch store settings for Brand Name & Storefront URL
-  let brandName = "খেজুরের খাটি গুড়";
-  let siteUrl = config.siteUrl;
+  let brandName = "গ্রামায়ন";
+  const siteUrl = config.siteUrl;
 
   try {
     const { data: settings } = await client
@@ -566,12 +570,12 @@ export async function syncProductsToMetaCatalog(options?: {
       .select("key, value")
       .in("key", ["store.name", "store.name_bn"]);
 
-    if (settings) {
-      for (const s of settings) {
-        if (s.value) {
-          const val = String(s.value).replace(/^["']|["']$/g, "").trim();
-          if (val) brandName = val;
-        }
+    if (settings && settings.length > 0) {
+      const bn = settings.find((s) => s.key === "store.name_bn")?.value;
+      const en = settings.find((s) => s.key === "store.name")?.value;
+      const val = bn || en;
+      if (val) {
+        brandName = String(val).replace(/^["']|["']$/g, "").trim();
       }
     }
   } catch {
@@ -732,130 +736,90 @@ export async function syncProductsToMetaCatalog(options?: {
       continue;
     }
 
-    // Always register the primary product with id: prod.id so Meta Pixel content_ids match 1:1
-    const defaultVariant = activeVariants.find((v) => v.is_default) || activeVariants[0];
-    const defaultPrice = Number(defaultVariant.price) || 0;
-    const defaultComparePrice = Number(defaultVariant.compare_at_price) || 0;
-    const defaultAvailability =
-      defaultVariant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
+    // Export each active variant as its own catalog entry with item_group_id = prod.id
+    for (const variant of activeVariants) {
+      const variantRetailerId = variant.id;
+      const rawVarName = (variant.name_bn || variant.name || "").trim();
+      const hasDistinctVariantName =
+        rawVarName &&
+        rawVarName.toLowerCase() !== productTitle.toLowerCase() &&
+        rawVarName.toLowerCase() !== (prod.name || "").toLowerCase() &&
+        rawVarName.toLowerCase() !== (prod.name_bn || "").toLowerCase();
 
-    const primaryMethod: "create" | "update" =
-      mode === "create"
-        ? "create"
-        : mode === "update"
-        ? "update"
-        : existingItemIds.has(prod.id)
-        ? "update"
-        : "create";
+      // If variation is more than 1, don't add variation name in group name
+      const variantTitle = activeVariants.length > 1
+        ? productTitle
+        : hasDistinctVariantName
+        ? `${productTitle} (${rawVarName})`
+        : productTitle;
 
-    const primaryPriceString = formatPriceForMeta(defaultPrice, "BDT");
+      const variantPrice = Number(variant.price) || 0;
+      const variantComparePrice = Number(variant.compare_at_price) || 0;
+      const variantAvailability =
+        variant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
 
-    requests.push({
-      method: primaryMethod,
-      data: {
-        id: prod.id,
-        title: productTitle,
-        description: productDesc,
-        brand: brandName,
-        price: primaryPriceString,
-        ...(defaultComparePrice > defaultPrice
-          ? { sale_price: primaryPriceString, price: formatPriceForMeta(defaultComparePrice, "BDT") }
-          : {}),
-        image_link: primaryImageUrl,
-        ...(extraImageUrls.length > 0
-          ? {
-              additional_image_link: extraImageUrls,
-              additional_image_urls: extraImageUrls,
-            }
-          : {}),
-        availability: defaultAvailability,
-        link: productLink,
-        condition: "new",
-        category: categoryName,
-        custom_label_0: categoryName,
-        google_product_category: taxonomy.googleProductCategory,
-        product_type: taxonomy.productType,
-        fb_product_category: taxonomy.fbProductCategory,
-      },
-    });
+      const variantMethod: "create" | "update" =
+        mode === "create"
+          ? "create"
+          : mode === "update"
+          ? "update"
+          : existingItemIds.has(variantRetailerId)
+          ? "update"
+          : "create";
 
-    syncedItemsSummary.push({
-      id: prod.id,
-      title: productTitle,
-      price: primaryPriceString,
-      method: primaryMethod,
-      googleProductCategory: taxonomy.googleProductCategory,
-      productType: taxonomy.productType,
-    });
+      const vPriceString = formatPriceForMeta(
+        variantComparePrice > variantPrice ? variantComparePrice : variantPrice,
+        "BDT"
+      );
+      const vSalePriceString = formatPriceForMeta(variantPrice, "BDT");
 
-    // If there are multiple variants, also register individual variants grouped by item_group_id
-    if (activeVariants.length > 1) {
-      for (const variant of activeVariants) {
-        // Skip default variant if its id is already covered or register variant item
-        const variantRetailerId = variant.id;
-        const variantTitle = `${productTitle} (${variant.name_bn || variant.name})`;
-        const variantPrice = Number(variant.price) || defaultPrice;
-        const variantComparePrice = Number(variant.compare_at_price) || 0;
-        const variantAvailability =
-          variant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
+      // Variant-specific image selection:
+      const variantImages = rawImages.filter((img) => img.variant_id === variant.id);
+      const variantPrimary = variantImages[0]
+        ? resolvePublicImageUrl(variantImages[0].storage_path, siteUrl)
+        : primaryImageUrl;
+      const variantExtras = allProductImageUrls.filter((url) => url !== variantPrimary);
 
-        const variantMethod: "create" | "update" =
-          mode === "create"
-            ? "create"
-            : mode === "update"
-            ? "update"
-            : existingItemIds.has(variantRetailerId)
-            ? "update"
-            : "create";
+      const variantLink = prod.slug
+        ? `${siteUrl.replace(/\/$/, "")}/products/${prod.slug}?variant=${variant.id}`
+        : `${siteUrl.replace(/\/$/, "")}/products/${prod.id}?variant=${variant.id}`;
 
-        const vPriceString = formatPriceForMeta(variantPrice, "BDT");
-
-        // Variant-specific image selection:
-        const variantImages = rawImages.filter((img) => img.variant_id === variant.id);
-        const variantPrimary = variantImages[0]
-          ? resolvePublicImageUrl(variantImages[0].storage_path, siteUrl)
-          : primaryImageUrl;
-        const variantExtras = allProductImageUrls.filter((url) => url !== variantPrimary);
-
-        requests.push({
-          method: variantMethod,
-          data: {
-            id: variantRetailerId,
-            item_group_id: prod.id,
-            title: variantTitle,
-            description: productDesc,
-            brand: brandName,
-            price: vPriceString,
-            ...(variantComparePrice > variantPrice
-              ? { sale_price: vPriceString, price: formatPriceForMeta(variantComparePrice, "BDT") }
-              : {}),
-            image_link: variantPrimary,
-            ...(variantExtras.length > 0
-              ? {
-                  additional_image_link: variantExtras,
-                  additional_image_urls: variantExtras,
-                }
-              : {}),
-            availability: variantAvailability,
-            link: productLink,
-            condition: "new",
-            category: categoryName,
-            custom_label_0: categoryName,
-            google_product_category: taxonomy.googleProductCategory,
-            product_type: taxonomy.productType,
-            fb_product_category: taxonomy.fbProductCategory,
-          },
-        });
-
-        syncedItemsSummary.push({
+      requests.push({
+        method: variantMethod,
+        data: {
           id: variantRetailerId,
+          item_group_id: prod.id,
           title: variantTitle,
+          description: productDesc,
+          brand: brandName,
           price: vPriceString,
-          method: variantMethod,
-          googleProductCategory: taxonomy.googleProductCategory,
-          productType: taxonomy.productType,
-        });
-      }
+          ...(variantComparePrice > variantPrice ? { sale_price: vSalePriceString } : {}),
+          image_link: variantPrimary,
+          ...(variantExtras.length > 0
+            ? {
+                additional_image_link: variantExtras,
+                additional_image_urls: variantExtras,
+              }
+            : {}),
+          availability: variantAvailability,
+          link: variantLink,
+          condition: "new",
+          category: categoryName,
+          custom_label_0: categoryName,
+          google_product_category: taxonomy.googleProductCategory,
+          product_type: taxonomy.productType,
+          fb_product_category: taxonomy.fbProductCategory,
+        },
+      });
+
+      syncedItemsSummary.push({
+        id: variantRetailerId,
+        title: variantTitle,
+        price: variantComparePrice > variantPrice ? vSalePriceString : vPriceString,
+        method: variantMethod,
+        googleProductCategory: taxonomy.googleProductCategory,
+        productType: taxonomy.productType,
+      });
     }
   }
 

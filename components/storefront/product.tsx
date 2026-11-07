@@ -29,11 +29,13 @@ export function ProductLoading() {
 
 interface ProductProps {
   featuredIdentifier?: string;
+  initialVariantId?: string;
   autoScrollToProduct?: boolean;
 }
 
 export async function Product({
   featuredIdentifier,
+  initialVariantId,
   autoScrollToProduct,
 }: ProductProps = {}) {
   let storefrontData: StorefrontDataResult | undefined = undefined;
@@ -59,6 +61,7 @@ export async function Product({
     <HydrationBoundary state={state}>
       <StorefrontProductsClient
         featuredIdentifier={featuredIdentifier}
+        initialVariantId={initialVariantId}
         autoScrollToProduct={autoScrollToProduct}
       />
     </HydrationBoundary>

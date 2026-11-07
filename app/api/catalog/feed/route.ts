@@ -8,8 +8,9 @@ import {
   resolveProductCatalogTaxonomy,
 } from "@/lib/meta-catalog";
 
-function escapeXml(unsafe: string): string {
-  return unsafe
+function escapeXml(unsafe: unknown): string {
+  if (unsafe === null || unsafe === undefined) return "";
+  return String(unsafe)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -26,19 +27,19 @@ export async function GET() {
   const client = supabaseAdmin || supabase;
   const siteUrl = config.siteUrl;
 
-  let storeName = "খেজুরের খাটি গুড়";
+  let storeName = "গ্রামায়ন";
   try {
     const { data: settings } = await client
       .from("site_settings")
       .select("key, value")
       .in("key", ["store.name", "store.name_bn"]);
 
-    if (settings) {
-      for (const s of settings) {
-        if (s.value) {
-          const val = String(s.value).replace(/^["']|["']$/g, "").trim();
-          if (val) storeName = val;
-        }
+    if (settings && settings.length > 0) {
+      const bn = settings.find((s) => s.key === "store.name_bn")?.value;
+      const en = settings.find((s) => s.key === "store.name")?.value;
+      const val = bn || en;
+      if (val) {
+        storeName = String(val).replace(/^["']|["']$/g, "").trim();
       }
     }
   } catch {
@@ -116,52 +117,44 @@ export async function GET() {
       continue;
     }
 
-    // Default variant / Primary product
-    const defaultVariant = activeVariants.find((v) => v.is_default) || activeVariants[0];
-    const defaultPrice = Number(defaultVariant.price) || 0;
-    const defaultComparePrice = Number(defaultVariant.compare_at_price) || 0;
-    const defaultAvailability =
-      defaultVariant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
+    // Export each active variant as its own catalog item with g:item_group_id = prod.id
+    for (const variant of activeVariants) {
+      const rawVarName = (variant.name_bn || variant.name || "").trim();
+      const hasDistinctVariantName =
+        rawVarName &&
+        rawVarName.toLowerCase() !== productTitle.toLowerCase() &&
+        rawVarName.toLowerCase() !== (prod.name || "").toLowerCase() &&
+        rawVarName.toLowerCase() !== (prod.name_bn || "").toLowerCase();
 
-    itemsXml.push(`
-    <item>
-      <g:id>${escapeXml(prod.id)}</g:id>
-      <g:title>${escapeXml(productTitle)}</g:title>
-      <g:description>${escapeXml(productDesc)}</g:description>
-      <g:link>${escapeXml(productLink)}</g:link>
-      <g:image_link>${escapeXml(primaryImageUrl)}</g:image_link>
-      ${extraImageUrls.map((u) => `<g:additional_image_link>${escapeXml(u)}</g:additional_image_link>`).join("\n      ")}
-      <g:brand>${escapeXml(storeName)}</g:brand>
-      <g:condition>new</g:condition>
-      <g:availability>${defaultAvailability}</g:availability>
-      <g:price>${escapeXml(formatPriceForMeta(defaultComparePrice > defaultPrice ? defaultComparePrice : defaultPrice, "BDT"))}</g:price>
-      ${defaultComparePrice > defaultPrice ? `<g:sale_price>${escapeXml(formatPriceForMeta(defaultPrice, "BDT"))}</g:sale_price>` : ""}
-      <g:google_product_category>${escapeXml(taxonomy.googleProductCategory)}</g:google_product_category>
-      <g:product_type>${escapeXml(taxonomy.productType)}</g:product_type>
-    </item>`);
+      // If variation is more than 1, don't add variation name in group name
+      const variantTitle = activeVariants.length > 1
+        ? productTitle
+        : hasDistinctVariantName
+        ? `${productTitle} (${rawVarName})`
+        : productTitle;
 
-    // Additional variants if multiple exist
-    if (activeVariants.length > 1) {
-      for (const variant of activeVariants) {
-        const variantTitle = `${productTitle} (${variant.name_bn || variant.name})`;
-        const variantPrice = Number(variant.price) || defaultPrice;
-        const variantComparePrice = Number(variant.compare_at_price) || 0;
-        const variantAvailability =
-          variant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
+      const variantPrice = Number(variant.price) || 0;
+      const variantComparePrice = Number(variant.compare_at_price) || 0;
+      const variantAvailability =
+        variant.stock_status === "out_of_stock" ? "out of stock" : "in stock";
 
-        const variantImages = rawImages.filter((img) => img.variant_id === variant.id);
-        const variantPrimary = variantImages[0]
-          ? resolvePublicImageUrl(variantImages[0].storage_path, siteUrl)
-          : primaryImageUrl;
-        const variantExtras = allProductImageUrls.filter((url) => url !== variantPrimary);
+      const variantLink = prod.slug
+        ? `${siteUrl.replace(/\/$/, "")}/products/${prod.slug}?variant=${variant.id}`
+        : `${siteUrl.replace(/\/$/, "")}/products/${prod.id}?variant=${variant.id}`;
 
-        itemsXml.push(`
+      const variantImages = rawImages.filter((img) => img.variant_id === variant.id);
+      const variantPrimary = variantImages[0]
+        ? resolvePublicImageUrl(variantImages[0].storage_path, siteUrl)
+        : primaryImageUrl;
+      const variantExtras = allProductImageUrls.filter((url) => url !== variantPrimary);
+
+      itemsXml.push(`
     <item>
       <g:id>${escapeXml(variant.id)}</g:id>
       <g:item_group_id>${escapeXml(prod.id)}</g:item_group_id>
       <g:title>${escapeXml(variantTitle)}</g:title>
       <g:description>${escapeXml(productDesc)}</g:description>
-      <g:link>${escapeXml(productLink)}</g:link>
+      <g:link>${escapeXml(variantLink)}</g:link>
       <g:image_link>${escapeXml(variantPrimary)}</g:image_link>
       ${variantExtras.map((u) => `<g:additional_image_link>${escapeXml(u)}</g:additional_image_link>`).join("\n      ")}
       <g:brand>${escapeXml(storeName)}</g:brand>
@@ -172,7 +165,6 @@ export async function GET() {
       <g:google_product_category>${escapeXml(taxonomy.googleProductCategory)}</g:google_product_category>
       <g:product_type>${escapeXml(taxonomy.productType)}</g:product_type>
     </item>`);
-      }
     }
   }
 

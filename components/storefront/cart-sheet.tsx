@@ -220,6 +220,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                   sendCapiAddToCartAction({
                                     eventId,
                                     productId: item.productId,
+                                    variantId: item.variantId,
                                     productName: item.productName,
                                     price: item.unitPrice,
                                     quantity: newQuantity,

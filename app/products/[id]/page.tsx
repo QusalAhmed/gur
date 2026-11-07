@@ -7,10 +7,15 @@ export const instant = false;
 
 interface ProductPageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: ProductPageProps): Promise<Metadata> {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : undefined;
+  const rawVariantId =
+    typeof sp?.variant === "string" ? sp.variant : typeof sp?.v === "string" ? sp.v : undefined;
+
   try {
     const storefrontData = await getStorefrontProductsAction();
     const product = storefrontData.products.find(
@@ -26,7 +31,29 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       };
     }
 
-    const title = `${product.nameBn || product.name} | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`;
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    const hasMultipleVariants = variants.length > 1;
+
+    const matchedVariant = rawVariantId && variants.length > 0
+      ? variants.find((v) => v.id === rawVariantId)
+      : undefined;
+
+    const baseName = product.nameBn || product.name;
+    const variantName = matchedVariant?.nameBn || matchedVariant?.name;
+    const hasDistinctVariantName =
+      variantName &&
+      variantName.toLowerCase() !== baseName.toLowerCase() &&
+      variantName.toLowerCase() !== (product.name || "").toLowerCase();
+
+    // If variation is more than 1, don't add variation name in group name
+    const title = (hasMultipleVariants || !hasDistinctVariantName)
+      ? `${baseName} | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`
+      : `${baseName} (${variantName}) | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`;
+
+    const socialAlt = (hasMultipleVariants || !hasDistinctVariantName)
+      ? baseName
+      : `${baseName} (${variantName})`;
+
     const description =
       product.summaryBn ||
       product.summary ||
@@ -47,7 +74,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
                 url: image,
                 width: 1000,
                 height: 750,
-                alt: product.nameBn || product.name,
+                alt: socialAlt,
               },
             ]
           : [],
@@ -67,12 +94,19 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   }
 }
 
-export default async function ProductPage({ params }: ProductPageProps) {
+export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : undefined;
+  const initialVariantId =
+    typeof sp?.variant === "string" ? sp.variant : typeof sp?.v === "string" ? sp.v : undefined;
 
   return (
     <Suspense fallback={<ProductLoading />}>
-      <Product featuredIdentifier={id} autoScrollToProduct={true} />
+      <Product
+        featuredIdentifier={id}
+        initialVariantId={initialVariantId}
+        autoScrollToProduct={true}
+      />
     </Suspense>
   );
 }

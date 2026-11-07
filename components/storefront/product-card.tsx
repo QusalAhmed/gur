@@ -15,7 +15,9 @@ import {
 } from "@/lib/redux/slices/cart-slice";
 import {
   recordProductView,
+  recordVariantView,
   selectHasViewedProduct,
+  selectHasViewedVariant,
 } from "@/lib/redux/slices/pixel-slice";
 import { trackViewContent, trackAddToCart, getClientFbpAndFbc } from "@/lib/facebook-pixel";
 import {
@@ -77,6 +79,7 @@ interface ProductCardProps {
   lang: StorefrontLang;
   isActive?: boolean;
   priority?: boolean;
+  initialVariantId?: string;
   onOrderClick?: (selectedData: SelectedProductData, quantity: number) => void;
 }
 
@@ -87,6 +90,7 @@ export function ProductCard({
   lang,
   isActive,
   priority = false,
+  initialVariantId,
   onOrderClick,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
@@ -98,8 +102,12 @@ export function ProductCard({
     }
     return Number(a.price) - Number(b.price);
   });
-  // Prefer the explicitly marked default variant; fallback to first available variant
+  // Prefer initialVariantId from URL, fallback to default variant, then first variant
+  const explicitVariant = initialVariantId
+    ? variants.find((v) => v.id === initialVariantId)
+    : undefined;
   const defaultVariant =
+    explicitVariant ||
     variants.find((v) => v.isDefault) ||
     sortedVariants[0] || {
       id: "var-default",
@@ -112,12 +120,15 @@ export function ProductCard({
 
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
-  const hasFiredViewContent = useAppSelector(selectHasViewedProduct(product.id));
   const cardRef = useRef<HTMLElement>(null);
   const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant>(initialVariant);
   const prevProductIdRef = useRef(product.id);
   const prevDefaultVariantIdRef = useRef(defaultVariant.id);
   const userInteractedRef = useRef(false);
+
+  const hasFiredVariantView = useAppSelector(
+    selectedVariant.id ? selectHasViewedVariant(selectedVariant.id) : () => false
+  );
 
   // Synchronize selected variant when product or default variant changes (unless user explicitly selected another)
   useEffect(() => {
@@ -138,10 +149,9 @@ export function ProductCard({
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Facebook Pixel ViewContent: fire when user dwells on a product card for > 5 seconds
-  // Deduplicated per product in Redux so it does not fire repeatedly in the same session,
-  // but re-triggers on page refresh/revisit when Redux store resets.
+  // Deduplicated per variant in Redux so it does not fire repeatedly in the same session.
   useEffect(() => {
-    if (hasFiredViewContent) return;
+    if (hasFiredVariantView) return;
 
     let timer: NodeJS.Timeout | null = null;
 
@@ -150,8 +160,10 @@ export function ProductCard({
       if (isActive) {
         timer = setTimeout(() => {
           dispatch(recordProductView(product.id));
+          dispatch(recordVariantView(selectedVariant.id));
           const eventId = trackViewContent({
             productId: product.id,
+            variantId: selectedVariant.id,
             productName: product.name,
             price: Number(selectedVariant.price) || 0,
             currency: "BDT",
@@ -160,6 +172,7 @@ export function ProductCard({
           sendCapiViewContentAction({
             eventId,
             productId: product.id,
+            variantId: selectedVariant.id,
             productName: product.name,
             price: Number(selectedVariant.price) || 0,
             currency: "BDT",
@@ -185,8 +198,10 @@ export function ProductCard({
           if (!timer) {
             timer = setTimeout(() => {
               dispatch(recordProductView(product.id));
+              dispatch(recordVariantView(selectedVariant.id));
               const eventId = trackViewContent({
                 productId: product.id,
+                variantId: selectedVariant.id,
                 productName: product.name,
                 price: Number(selectedVariant.price) || 0,
                 currency: "BDT",
@@ -195,6 +210,7 @@ export function ProductCard({
               sendCapiViewContentAction({
                 eventId,
                 productId: product.id,
+                variantId: selectedVariant.id,
                 productName: product.name,
                 price: Number(selectedVariant.price) || 0,
                 currency: "BDT",
@@ -224,7 +240,7 @@ export function ProductCard({
         timer = null;
       }
     };
-  }, [isActive, hasFiredViewContent, product.id, product.name, selectedVariant.price, dispatch]);
+  }, [isActive, hasFiredVariantView, product.id, product.name, selectedVariant.id, selectedVariant.price, dispatch]);
 
   // Check how many units of this variant are in the Redux cart (defaults to 0)
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -278,6 +294,42 @@ export function ProductCard({
 
   const unitPrice = Number(selectedVariant.price) || 0;
 
+  const handleSelectVariant = (found: StorefrontVariant) => {
+    setSelectedVariant(found);
+
+    // Shallowly update URL to include ?variant= without page reload
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("variant", found.id);
+      window.history.replaceState(null, "", url.toString());
+    }
+
+    // Fire ViewContent for newly selected variant if not already viewed in this session
+    dispatch(recordProductView(product.id));
+    dispatch(recordVariantView(found.id));
+
+    const eventId = trackViewContent({
+      productId: product.id,
+      variantId: found.id,
+      productName: product.name,
+      price: Number(found.price) || 0,
+      currency: "BDT",
+    });
+
+    const { fbp, fbc } = getClientFbpAndFbc();
+    sendCapiViewContentAction({
+      eventId,
+      productId: product.id,
+      variantId: found.id,
+      productName: product.name,
+      price: Number(found.price) || 0,
+      currency: "BDT",
+      url: typeof window !== "undefined" ? window.location.href : undefined,
+      fbp,
+      fbc,
+    }).catch(() => {});
+  };
+
   // Update or set unit quantity directly in Redux cart (0 removes, >0 updates/adds)
   const handleSetUnit = (newUnit: number) => {
     const currentActiveImage = imagesList[currentSlide] || product.image;
@@ -299,6 +351,7 @@ export function ProductCard({
         sendCapiAddToCartAction({
           eventId,
           productId: product.id,
+          variantId: selectedVariant.id,
           productName: product.name,
           price: unitPrice,
           quantity: newUnit,
@@ -568,8 +621,7 @@ export function ProductCard({
                     if (!val) return;
                     const found = sortedVariants.find((v) => v.id === val);
                     if (found) {
-                      userInteractedRef.current = true;
-                      setSelectedVariant(found);
+                      handleSelectVariant(found);
                     }
                   }}
                 >

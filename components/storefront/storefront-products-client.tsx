@@ -8,16 +8,20 @@ import { ProductPixelTracker } from "./product-pixel-tracker";
 
 interface StorefrontProductsClientProps {
   featuredIdentifier?: string;
+  initialVariantId?: string;
   autoScrollToProduct?: boolean;
 }
 
 export function StorefrontProductsClient({
   featuredIdentifier,
+  initialVariantId,
   autoScrollToProduct = false,
 }: StorefrontProductsClientProps) {
   const searchParams = useSearchParams();
   const urlProduct = searchParams?.get("product") || searchParams?.get("p") || undefined;
+  const urlVariant = searchParams?.get("variant") || searchParams?.get("v") || undefined;
   const effectiveFeaturedId = featuredIdentifier || urlProduct;
+  const effectiveVariantId = initialVariantId || urlVariant;
   const effectiveAutoScroll = autoScrollToProduct || Boolean(effectiveFeaturedId);
 
   // TanStack Query to get storefront products, variants, and store settings
@@ -55,7 +59,7 @@ export function StorefrontProductsClient({
 
   return (
     <>
-      <ProductPixelTracker product={featuredProduct} />
+      <ProductPixelTracker product={featuredProduct} variantId={effectiveVariantId} />
       <ProductShowcase
         products={orderedProducts}
         defaultHotline={data?.hotline ?? "01843557389"}
@@ -63,6 +67,7 @@ export function StorefrontProductsClient({
         storeSubtitle={data?.storeSubtitle}
         isLoading={isLoading}
         featuredIdentifier={effectiveFeaturedId}
+        initialVariantId={effectiveVariantId}
         autoScrollToProduct={effectiveAutoScroll}
       />
     </>

@@ -46,6 +46,7 @@ interface ProductShowcaseProps {
   messengerUrl?: string;
   isLoading?: boolean;
   featuredIdentifier?: string;
+  initialVariantId?: string;
   autoScrollToProduct?: boolean;
 }
 
@@ -57,6 +58,7 @@ export function ProductShowcase({
   messengerUrl,
   isLoading = false,
   featuredIdentifier,
+  initialVariantId,
   autoScrollToProduct = false,
 }: ProductShowcaseProps) {
   const dispatch = useAppDispatch();
@@ -616,6 +618,7 @@ export function ProductShowcase({
               lang={lang}
               isActive={activeSectionIndex === productsStartIndex + idx}
               priority={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
+              initialVariantId={idx === 0 ? initialVariantId : undefined}
               onOrderClick={handleOpenOrder}
             />
           ))

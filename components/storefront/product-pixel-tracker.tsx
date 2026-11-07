@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   recordProductView,
-  selectHasViewedProduct,
+  recordVariantView,
+  selectHasViewedVariant,
 } from "@/lib/redux/slices/pixel-slice";
 import {
   trackViewContent,
@@ -15,37 +16,47 @@ import type { StorefrontProduct } from "./product-card";
 
 interface ProductPixelTrackerProps {
   product: StorefrontProduct | null;
+  variantId?: string;
 }
 
 /**
  * Fires Facebook Pixel and Conversions API (CAPI) ViewContent event
  * as soon as a visitor lands on a dedicated product page.
- * Deduplicated per product in Redux so it does not fire repeatedly in the same session.
+ * Uses the specific variation ID (or default variant) and deduplicates per variant.
  */
-export function ProductPixelTracker({ product }: ProductPixelTrackerProps) {
+export function ProductPixelTracker({ product, variantId }: ProductPixelTrackerProps) {
   const dispatch = useAppDispatch();
   const productId = product?.id;
+
+  // Resolve target variant based on variantId or default variant
+  const variants = product?.variants || [];
+  const matchedVariant = variantId ? variants.find((v) => v.id === variantId) : undefined;
+  const targetVariant =
+    matchedVariant ||
+    variants.find((v) => v.isDefault) ||
+    [...variants].sort((a, b) => Number(a.price) - Number(b.price))[0];
+
+  const targetVariantId = targetVariant?.id || productId;
   const hasFired = useAppSelector(
-    productId ? selectHasViewedProduct(productId) : () => false
+    targetVariantId ? selectHasViewedVariant(targetVariantId) : () => false
   );
   const firedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!product || !productId) return;
-    if (hasFired || firedRef.current === productId) return;
+    if (!product || !productId || !targetVariantId) return;
+    if (hasFired || firedRef.current === targetVariantId) return;
 
-    firedRef.current = productId;
+    firedRef.current = targetVariantId;
     dispatch(recordProductView(productId));
+    if (targetVariant?.id) {
+      dispatch(recordVariantView(targetVariant.id));
+    }
 
-    // Get default variant price, falling back to lowest price
-    const variants = product.variants || [];
-    const defaultVariant =
-      variants.find((v) => v.isDefault) ||
-      [...variants].sort((a, b) => Number(a.price) - Number(b.price))[0];
-    const price = Number(defaultVariant?.price) || 0;
+    const price = Number(targetVariant?.price) || 0;
 
     const eventId = trackViewContent({
       productId: product.id,
+      variantId: targetVariant?.id,
       productName: product.name,
       price,
       currency: "BDT",
@@ -55,6 +66,7 @@ export function ProductPixelTracker({ product }: ProductPixelTrackerProps) {
     sendCapiViewContentAction({
       eventId,
       productId: product.id,
+      variantId: targetVariant?.id,
       productName: product.name,
       price,
       currency: "BDT",
@@ -62,7 +74,7 @@ export function ProductPixelTracker({ product }: ProductPixelTrackerProps) {
       fbp,
       fbc,
     }).catch(() => {});
-  }, [product, productId, hasFired, dispatch]);
+  }, [product, productId, targetVariantId, targetVariant, hasFired, dispatch]);
 
   return null;
 }
