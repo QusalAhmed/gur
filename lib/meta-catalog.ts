@@ -745,11 +745,7 @@ export async function syncProductsToMetaCatalog(options?: {
         rawVarName.toLowerCase() !== productTitle.toLowerCase() &&
         rawVarName.toLowerCase() !== (prod.name || "").toLowerCase() &&
         rawVarName.toLowerCase() !== (prod.name_bn || "").toLowerCase();
-
-      // If variation is more than 1, don't add variation name in group name
-      const variantTitle = activeVariants.length > 1
-        ? productTitle
-        : hasDistinctVariantName
+      const variantTitle = hasDistinctVariantName
         ? `${productTitle} (${rawVarName})`
         : productTitle;
 

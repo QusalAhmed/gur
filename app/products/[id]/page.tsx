@@ -31,11 +31,8 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
       };
     }
 
-    const variants = Array.isArray(product.variants) ? product.variants : [];
-    const hasMultipleVariants = variants.length > 1;
-
-    const matchedVariant = rawVariantId && variants.length > 0
-      ? variants.find((v) => v.id === rawVariantId)
+    const matchedVariant = rawVariantId && Array.isArray(product.variants)
+      ? product.variants.find((v) => v.id === rawVariantId)
       : undefined;
 
     const baseName = product.nameBn || product.name;
@@ -45,14 +42,9 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
       variantName.toLowerCase() !== baseName.toLowerCase() &&
       variantName.toLowerCase() !== (product.name || "").toLowerCase();
 
-    // If variation is more than 1, don't add variation name in group name
-    const title = (hasMultipleVariants || !hasDistinctVariantName)
-      ? `${baseName} | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`
-      : `${baseName} (${variantName}) | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`;
-
-    const socialAlt = (hasMultipleVariants || !hasDistinctVariantName)
-      ? baseName
-      : `${baseName} (${variantName})`;
+    const title = hasDistinctVariantName
+      ? `${baseName} (${variantName}) | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`
+      : `${baseName} | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`;
 
     const description =
       product.summaryBn ||
@@ -74,7 +66,7 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
                 url: image,
                 width: 1000,
                 height: 750,
-                alt: socialAlt,
+                alt: hasDistinctVariantName ? `${baseName} (${variantName})` : baseName,
               },
             ]
           : [],
