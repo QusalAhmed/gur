@@ -129,22 +129,6 @@ export function IntroSection({
           <p className="text-xs sm:text-sm md:text-base text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
             {displaySubtitle}
           </p>
-
-          {/* Quick Trust Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-            <span className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-900 border border-amber-200 dark:border-stone-800 py-0.5 px-2.5 rounded-full text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 shadow-2xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              {t.introPurityBadge}
-            </span>
-            <span className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-900 border border-amber-200 dark:border-stone-800 py-0.5 px-2.5 rounded-full text-[11px] font-semibold text-amber-900 dark:text-amber-300 shadow-2xs">
-              <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              {t.locationText}
-            </span>
-            <span className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-900 border border-amber-200 dark:border-stone-800 py-0.5 px-2.5 rounded-full text-[11px] font-semibold text-teal-800 dark:text-teal-300 shadow-2xs">
-              <Truck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-              {t.introCodBadge}
-            </span>
-          </div>
         </div>
 
         {/* Business Key Stats Grid */}
@@ -176,41 +160,6 @@ export function IntroSection({
           </div>
         </div>
 
-        {/* 4 Core Pillars of the Business */}
-        <div className="space-y-2 px-1">
-          <div className="text-center sm:text-left mb-1.5">
-            <h2 className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
-              {t.introMissionTitle}
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-            {pillars.map((p, idx) => {
-              const Icon = p.icon;
-              return (
-                <div
-                  key={idx}
-                  className="relative overflow-hidden bg-white/90 dark:bg-stone-900/90 border border-stone-200/90 dark:border-stone-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-xs flex items-start gap-3"
-                >
-                  <div
-                    className={`w-10 h-10 rounded-xl ${p.iconBg} ${p.iconColor} border flex items-center justify-center shrink-0 shadow-inner`}
-                  >
-                    <Icon className="w-5 h-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 leading-snug">
-                      {p.title}
-                    </h3>
-                    <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
-                      {p.desc}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Business Story & Heritage Statement */}
         <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
           <div className="flex items-center gap-2">
@@ -233,16 +182,6 @@ export function IntroSection({
                   className="text-amber-800 dark:text-amber-300 hover:underline font-bold shrink-0 cursor-pointer"
                 >
                   {lang === "bn" ? "কেন আমাদের গুড় সেরা? ❯" : "Why Choose Us? ❯"}
-                </button>
-              )}
-              {onScrollToContact && (
-                <button
-                  type="button"
-                  onClick={onScrollToContact}
-                  aria-label={lang === "bn" ? "যোগাযোগ সেকশনে যান" : "Scroll to Contact"}
-                  className="text-stone-700 dark:text-stone-300 hover:underline font-semibold shrink-0 cursor-pointer"
-                >
-                  {lang === "bn" ? "যোগাযোগ ❯" : "Contact ❯"}
                 </button>
               )}
             </div>

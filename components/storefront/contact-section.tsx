@@ -322,61 +322,6 @@ export function ContactSection({
               </span>
             </a>
           </div>
-
-          {/* Reassurance Trust Pill Row */}
-          <div className="pt-1 flex flex-wrap items-center justify-center gap-2 text-xs text-stone-600 dark:text-stone-300">
-            <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <MapPin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
-              <span>{address}</span>
-            </div>
-            <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden="true" />
-              <span>{lang === "bn" ? "ক্যাশ অন ডেলিভারি" : "Cash on Delivery"}</span>
-            </div>
-            <div className="inline-flex items-center gap-1 bg-stone-100/90 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
-              <span>{t.guaranteeBadge}</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleScrollToWhyBuy}
-              aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Buy From Us"}
-              className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/80 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-emerald-950 dark:text-emerald-200 transition-colors cursor-pointer"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
-              <span>
-                {lang === "bn"
-                  ? "কেন আমাদের গুড় সেরা? ❯"
-                  : "Why Buy From Us? ❯"}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={handleScrollToStock}
-              aria-label={lang === "bn" ? "লাইভ স্টক আপডেট সেকশনে যান" : "Scroll to Live Stock Update"}
-              className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
-            >
-              <Factory className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
-              <span>
-                {lang === "bn"
-                  ? "লাইভ স্টক আপডেট ❯"
-                  : "Live Stock Update ❯"}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={handleScrollToHelp}
-              aria-label={lang === "bn" ? "সহায়তা ফর্ম সেকশনে যান" : "Scroll to Assisted Order Form"}
-              className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-stone-800 hover:bg-amber-200/90 dark:hover:bg-stone-750 border border-amber-300 dark:border-amber-700 py-1 px-2.5 rounded-full text-[11px] sm:text-xs font-bold text-amber-950 dark:text-amber-200 transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
-              <span>
-                {lang === "bn"
-                  ? "সিস্টেম না বুঝলে শুধু নম্বর দিন ❯"
-                  : "Need Help? Just Leave Phone ❯"}
-              </span>
-            </button>
-          </div>
         </div>
 
         {/* Soft Decorative Separator for Normal Scrolling */}
@@ -412,22 +357,6 @@ export function ContactSection({
             <span>{t.viewProductsBtn}</span>
             <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
           </button>
-        </div>
-
-        <div className="flex items-center justify-center gap-3 text-xs text-stone-500 dark:text-stone-400">
-          <Link
-            href="/contact"
-            className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors"
-          >
-            {lang === "bn" ? "যোগাযোগ পেইজ" : "Contact Page"}
-          </Link>
-          <span>•</span>
-          <Link
-            href="/privacy-policy"
-            className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors"
-          >
-            {lang === "bn" ? "গোপনীয়তা নীতি" : "Privacy Policy"}
-          </Link>
         </div>
       </div>
     </section>

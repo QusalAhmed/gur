@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
 import { fetchOrdersByIdsFromDb } from "@/lib/supabase/api";
 import { markOrdersAsPrintedAction } from "@/actions/orders";
+import { assignInvoiceNumberAction } from "@/actions/invoice-ops";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 
 type PaperFormat = "2inch" | "58mm" | "a4";
@@ -64,8 +65,9 @@ function PrintContent() {
     logoUrl,
   }), [storeName, storeNameBn, address, supportPhone, siteUrl, logoUrl]);
 
-  const idsParam = searchParams.get("ids") || "";
-  const initialFormat = (searchParams.get("format") as PaperFormat) || "58mm";
+  const idsParam = searchParams.get("ids") || searchParams.get("orderId") || "";
+  const isInvoiceType = searchParams.get("type") === "invoice";
+  const initialFormat = (searchParams.get("format") as PaperFormat) || (isInvoiceType ? "a4" : "58mm");
 
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -105,8 +107,18 @@ function PrintContent() {
         const data = await fetchOrdersByIdsFromDb(idList);
         setOrders(data);
 
-        // Record print timestamp and snapshot to track courier field modifications
+        // Assign invoice numbers idempotently if printing invoices
         if (data.length > 0) {
+          data.forEach(async (ord: any) => {
+            if (!ord.invoice_number) {
+              const res = await assignInvoiceNumberAction(ord.id);
+              if (res.ok && res.invoiceNumber) {
+                ord.invoice_number = res.invoiceNumber;
+                setOrders((prev) => [...prev]);
+              }
+            }
+          });
+
           const numbers = data.map((o) => o.id);
           markOrdersAsPrintedAction(numbers).catch((err) => {
             console.warn("Could not record print snapshot:", err);
@@ -541,15 +553,35 @@ function PrintContent() {
                   </section>
 
                   {/* ============================================================= */}
-                  {/* ORDER NUMBER                                                  */}
+                  {/* ORDER NUMBER & INVOICE NUMBER                                 */}
                   {/* ============================================================= */}
-                  <section className="border-t-2 border-black py-1 my-2 flex items-center justify-between gap-1 font-mono text-black">
-                    <span className="text-[9.5px] font-black uppercase tracking-wider">
-                      ORDER NO:
-                    </span>
-                    <span className="font-black text-[13px] sm:text-[13.5px] tracking-tight select-all">
-                      #{order.order_number || order.id}
-                    </span>
+                  <section className="border-t-2 border-black py-1 my-2 space-y-1 font-mono text-black">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[9.5px] font-black uppercase tracking-wider">
+                        ORDER NO:
+                      </span>
+                      <span className="font-black text-[13px] sm:text-[13.5px] tracking-tight select-all">
+                        #{order.order_number || order.id}
+                      </span>
+                    </div>
+
+                    {(order as any).invoice_number && (
+                      <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-black/40">
+                        <span className="text-[9px] font-bold uppercase tracking-wider">
+                          INVOICE NO:
+                        </span>
+                        <span className="font-bold text-[12px] select-all">
+                          {(order as any).invoice_number}
+                        </span>
+                      </div>
+                    )}
+
+                    {(order as any).payment_method === "credit_terms" && (order as any).payment_due_date && (
+                      <div className="flex items-center justify-between gap-1 text-[9px] font-bold p-1 bg-black/5 border border-black rounded-xs">
+                        <span>CREDIT DUE DATE:</span>
+                        <span>{String((order as any).payment_due_date)}</span>
+                      </div>
+                    )}
                   </section>
 
                   {/* Delivery Note for delivery man */}

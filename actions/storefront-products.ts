@@ -24,7 +24,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
 
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
-  let storeSubtitle = "গ্রামের গাছিদের তৈরি খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  let storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
 
   try {
     const { data: settings } = await client
@@ -113,15 +113,15 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
           rawVariants.length > 0
             ? rawVariants
             : [
-                {
-                  id: `v-${p.id}`,
-                  name: "1 Pack",
-                  nameBn: "১ প্যাক",
-                  price: 700,
-                  isDefault: true,
-                  sortOrder: 0,
-                },
-              ]
+              {
+                id: `v-${p.id}`,
+                name: "1 Pack",
+                nameBn: "১ প্যাক",
+                price: 700,
+                isDefault: true,
+                sortOrder: 0,
+              },
+            ]
         ).sort((a, b) => {
           if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
             return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);

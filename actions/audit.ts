@@ -1,15 +1,19 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface AuditLogItem {
   id: string;
   staff: string;
-  action: "INSERT" | "UPDATE" | "DELETE";
+  action: "INSERT" | "UPDATE" | "DELETE" | string;
   table: string;
   recordId: string;
   description: string;
   ip: string;
+  oldData: any | null;
+  newData: any | null;
   date: string;
 }
 
@@ -19,7 +23,10 @@ export async function getAdminAuditLogsAction(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: rawLogs, error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { data: rawLogs, error } = await supabase
       .from("audit_log")
       .select("id, table_name, row_id, action, old_data, new_data, actor_id, created_at")
       .order("created_at", { ascending: false })
@@ -30,7 +37,7 @@ export async function getAdminAuditLogsAction(): Promise<{
     const logs: AuditLogItem[] = (rawLogs || []).map((l: any) => {
       let desc = `${l.action} operation on ${l.table_name}`;
       if (l.action === "UPDATE" && l.new_data) {
-        const keys = Object.keys(l.new_data).slice(0, 3).join(", ");
+        const keys = Object.keys(l.new_data).slice(0, 4).join(", ");
         desc = `Updated fields: ${keys}`;
       } else if (l.action === "INSERT") {
         desc = `Created new record in ${l.table_name}`;
@@ -40,20 +47,21 @@ export async function getAdminAuditLogsAction(): Promise<{
 
       return {
         id: `AUD-${l.id}`,
-        staff: l.actor_id ? `Admin (${String(l.actor_id).slice(0, 6)})` : "System / Trigger",
+        staff: l.actor_id ? `Staff (${String(l.actor_id).slice(0, 8)})` : "System Trigger",
         action: l.action,
         table: l.table_name,
         recordId: l.row_id || "N/A",
         description: desc,
         ip: "Internal Network",
+        oldData: l.old_data,
+        newData: l.new_data,
         date: l.created_at,
       };
     });
 
     return { success: true, data: logs };
   } catch (error: any) {
-    console.error("getAdminAuditLogsAction error:", error);
-    return { success: false, error: error.message || "Failed to load audit logs", data: [] };
+    const friendly = mapDatabaseError(error);
+    return { success: false, error: friendly.message, data: [] };
   }
 }
-

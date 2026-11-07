@@ -1,6 +1,9 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface CustomerItem {
   id: string;
@@ -44,19 +47,22 @@ export async function getAdminCustomersAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const supabase = await createClient();
+
     const [profilesRes, ordersRes, businessesRes, membersRes] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from("profiles")
         .select("id, full_name, phone, account_type, created_at")
         .order("created_at", { ascending: false })
         .limit(200),
 
-      supabaseAdmin
+      supabase
         .from("orders")
         .select("id, user_id, customer_phone, grand_total, status, placed_at")
         .order("placed_at", { ascending: false }),
 
-      supabaseAdmin
+      supabase
         .from("business_accounts")
         .select(
           `
@@ -78,9 +84,7 @@ export async function getAdminCustomersAction(): Promise<{
         .order("created_at", { ascending: false })
         .limit(200),
 
-      supabaseAdmin
-        .from("business_members")
-        .select("business_id, user_id"),
+      supabase.from("business_members").select("business_id, user_id"),
     ]);
 
     const rawProfiles = profilesRes.data || [];
@@ -159,10 +163,10 @@ export async function getAdminCustomersAction(): Promise<{
       },
     };
   } catch (error: any) {
-    console.error("getAdminCustomersAction error:", error);
+    const friendly = mapDatabaseError(error);
     return {
       success: false,
-      error: error.message || "Failed to load customers",
+      error: friendly.message,
       data: {
         customers: [],
         businesses: [],
@@ -184,7 +188,10 @@ export async function createBusinessAccountAction(payload: {
   paymentTermsDays?: number;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin.from("business_accounts").insert({
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("business_accounts").insert({
       name: payload.name.trim(),
       industry: payload.industry?.trim() || null,
       trade_license_no: payload.tradeLicenseNo?.trim() || null,
@@ -201,6 +208,8 @@ export async function createBusinessAccountAction(payload: {
     if (error) {
       return { success: false, error: error.message };
     }
+
+    revalidatePath("/admin/businesses");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to create business account" };
@@ -214,6 +223,9 @@ export async function updateBusinessStatusAction(payload: {
   paymentTermsDays?: number;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabase = await createClient();
+
     const updateData: any = {
       status: payload.status,
       updated_at: new Date().toISOString(),
@@ -228,7 +240,7 @@ export async function updateBusinessStatusAction(payload: {
       updateData.payment_terms_days = payload.paymentTermsDays;
     }
 
-    const { error } = await supabaseAdmin
+    const { error } = await supabase
       .from("business_accounts")
       .update(updateData)
       .eq("id", payload.id);
@@ -236,6 +248,8 @@ export async function updateBusinessStatusAction(payload: {
     if (error) {
       return { success: false, error: error.message };
     }
+
+    revalidatePath("/admin/businesses");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to update business status" };
@@ -244,8 +258,13 @@ export async function updateBusinessStatusAction(payload: {
 
 export async function deleteBusinessAccountAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin.from("business_accounts").delete().eq("id", id);
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("business_accounts").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
+
+    revalidatePath("/admin/businesses");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to delete business account" };
@@ -254,11 +273,15 @@ export async function deleteBusinessAccountAction(id: string): Promise<{ success
 
 export async function deleteCustomerAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin.from("profiles").delete().eq("id", id);
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
+
+    revalidatePath("/admin/customers");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to delete customer" };
   }
 }
-

@@ -1,6 +1,9 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface ReviewItem {
   id: string;
@@ -32,7 +35,10 @@ export async function getAdminReviewsAction(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: rawReviews, error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    const { data: rawReviews, error } = await supabase
       .from("product_reviews")
       .select(
         `
@@ -100,10 +106,10 @@ export async function getAdminReviewsAction(): Promise<{
       },
     };
   } catch (error: any) {
-    console.error("getAdminReviewsAction error:", error);
+    const friendly = mapDatabaseError(error);
     return {
       success: false,
-      error: error.message || "Failed to load reviews",
+      error: friendly.message,
       data: {
         reviews: [],
         kpis: {
@@ -123,7 +129,10 @@ export async function updateReviewStatusAction(payload: {
   status: "approved" | "pending" | "rejected";
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase
       .from("product_reviews")
       .update({
         status: payload.status,
@@ -131,20 +140,34 @@ export async function updateReviewStatusAction(payload: {
       })
       .eq("id", payload.id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
+    }
+
+    revalidatePath("/admin/reviews");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to update review status" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
 
 export async function deleteReviewAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin.from("product_reviews").delete().eq("id", id);
-    if (error) return { success: false, error: error.message };
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("product_reviews").delete().eq("id", id);
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
+    }
+
+    revalidatePath("/admin/reviews");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to delete review" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
-

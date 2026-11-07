@@ -5,16 +5,21 @@ import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/admin-auth";
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
-  // 1. Allow Admin Login page without authentication
+  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  const user = token ? await verifySessionToken(token) : null;
+  const hasSbCookie = request.cookies.getAll().some(
+    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
+  );
+  const isAuthenticated = !!user || hasSbCookie;
+
+  // 1. If visiting /admin/login while authenticated, redirect to destination
   if (pathname === "/admin/login") {
-    const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    if (token) {
-      const user = await verifySessionToken(token);
-      if (user) {
-        // User already has an authenticated session -> redirect to target or admin root
-        const next = request.nextUrl.searchParams.get("next") || "/admin";
-        return NextResponse.redirect(new URL(next, request.url));
+    if (isAuthenticated) {
+      let next = request.nextUrl.searchParams.get("next") || "/admin";
+      if (next.startsWith("/admin/login")) {
+        next = "/admin";
       }
+      return NextResponse.redirect(new URL(next, request.url));
     }
     return NextResponse.next();
   }
@@ -26,9 +31,7 @@ export async function proxy(request: NextRequest) {
 
   // 3. Protect Admin API routes (/api/admin/*)
   if (pathname.startsWith("/api/admin")) {
-    const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    const user = token ? await verifySessionToken(token) : null;
-    if (!user) {
+    if (!isAuthenticated) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Admin session required." },
         { status: 401 }
@@ -39,9 +42,7 @@ export async function proxy(request: NextRequest) {
 
   // 4. Protect all other Admin routes (/admin, /admin/orders, etc.)
   if (pathname.startsWith("/admin")) {
-    const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    const user = token ? await verifySessionToken(token) : null;
-    if (!user) {
+    if (!isAuthenticated) {
       const loginUrl = new URL("/admin/login", request.url);
       const target = pathname + (search || "");
       loginUrl.searchParams.set("next", target);

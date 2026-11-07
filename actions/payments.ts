@@ -1,6 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
+import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface TransactionItem {
   id: string;
@@ -56,46 +60,60 @@ export async function getAdminPaymentsAction(): Promise<{
   error?: string;
 }> {
   try {
-    const [paymentsRes, logsRes] = await Promise.all([
-      supabaseAdmin
-        .from("payments")
-        .select(
-          `
-          id,
-          order_id,
-          kind,
-          method,
-          provider,
-          status,
-          amount,
-          currency,
-          provider_payment_id,
-          provider_txn_id,
-          paid_at,
-          created_at,
-          orders:order_id (
-            order_number,
-            customer_name
-          )
-        `
-        )
-        .order("created_at", { ascending: false })
-        .limit(100),
+    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
 
-      supabaseAdmin
+    // Query payments using staff session (RLS applies)
+    const { data: rawPayments, error: payError } = await supabase
+      .from("payments")
+      .select(
+        `
+        id,
+        order_id,
+        kind,
+        method,
+        provider,
+        status,
+        amount,
+        currency,
+        provider_payment_id,
+        provider_txn_id,
+        paid_at,
+        created_at,
+        orders:order_id (
+          order_number,
+          customer_name
+        )
+      `
+      )
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (payError) throw payError;
+
+    // payment_logs: secret key allowed ONLY for admin and owner after explicit role check
+    let logs: PaymentLogItem[] = [];
+    if (session.role === "owner" || session.role === "admin") {
+      const { data: rawLogs } = await supabaseAdmin
         .from("payment_logs")
         .select("id, payment_id, provider, event, created_at")
         .order("created_at", { ascending: false })
-        .limit(100),
-    ]);
+        .limit(100);
 
-    const rawPayments = paymentsRes.data || [];
-    const rawLogs = logsRes.data || [];
+      logs = (rawLogs || []).map((l: any) => ({
+        id: `LOG-${l.id}`,
+        txnId: l.payment_id ? `TXN-${String(l.payment_id).slice(0, 8)}` : "SYSTEM",
+        gateway: l.provider || "gateway",
+        event: l.event || "webhook.received",
+        status: "completed",
+        time: l.created_at,
+      }));
+    }
 
-    const transactions: TransactionItem[] = rawPayments.map((p: any) => {
+    const transactions: TransactionItem[] = (rawPayments || []).map((p: any) => {
       const orderInfo = Array.isArray(p.orders) ? p.orders[0] : p.orders;
       const orderNumber = orderInfo?.order_number || p.order_id || "N/A";
-      const customer = orderInfo?.customer_name || "Guest Customer";
+      const customer = orderInfo?.customer_name || "Customer";
       const numAmount = Number(p.amount || 0);
 
       let statusVal: TransactionItem["status"] = "pending";
@@ -117,15 +135,6 @@ export async function getAdminPaymentsAction(): Promise<{
       };
     });
 
-    const logs: PaymentLogItem[] = rawLogs.map((l: any) => ({
-      id: `LOG-${l.id}`,
-      txnId: l.payment_id ? `TXN-${String(l.payment_id).slice(0, 8)}` : "SYSTEM",
-      gateway: l.provider || "gateway",
-      event: l.event || "webhook.received",
-      status: "completed",
-      time: l.created_at,
-    }));
-
     // Volume by day for current week
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const now = new Date();
@@ -145,7 +154,7 @@ export async function getAdminPaymentsAction(): Promise<{
       ["Sun", 0],
     ]);
 
-    rawPayments.forEach((p: any) => {
+    (rawPayments || []).forEach((p: any) => {
       const pDate = new Date(p.created_at);
       if (pDate >= startOfWeek) {
         const dName = dayNames[pDate.getDay()];
@@ -162,7 +171,7 @@ export async function getAdminPaymentsAction(): Promise<{
 
     // Method share
     const methodCountMap: Record<string, number> = {};
-    rawPayments.forEach((p: any) => {
+    (rawPayments || []).forEach((p: any) => {
       const m = p.method || "cod";
       methodCountMap[m] = (methodCountMap[m] || 0) + 1;
     });
@@ -193,10 +202,10 @@ export async function getAdminPaymentsAction(): Promise<{
       },
     };
   } catch (error: any) {
-    console.error("getAdminPaymentsAction error:", error);
+    const friendly = mapDatabaseError(error);
     return {
       success: false,
-      error: error.message || "Failed to load payments",
+      error: friendly.message,
       data: {
         transactions: [],
         logs: [],
@@ -215,27 +224,26 @@ export async function recordManualPaymentAction(payload: {
   notes?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    // Find order by order_number
-    const { data: order, error: orderErr } = await supabaseAdmin
+    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    // Find order
+    const { data: order, error: orderErr } = await supabase
       .from("orders")
       .select("id, grand_total, amount_paid, payment_status")
-      .eq("order_number", payload.orderNumber)
+      .or(`order_number.eq.${payload.orderNumber},id.eq.${payload.orderNumber}`)
       .single();
 
     if (orderErr || !order) {
       return { success: false, error: "Order not found" };
     }
 
-    const newAmountPaid = Number(order.amount_paid || 0) + payload.amount;
-    const isFullyPaid = newAmountPaid >= Number(order.grand_total || 0);
-    const newStatus = isFullyPaid ? "paid" : "partially_paid";
-
-    // Insert payment record
-    const { error: payErr } = await supabaseAdmin.from("payments").insert({
+    // Insert payment record (Trigger trg_payments_sync automatically updates orders.amount_paid & payment_status)
+    const { error: payErr } = await supabase.from("payments").insert({
       order_id: order.id,
       kind: "charge",
       method: payload.method,
-      provider: payload.gatewayRef || "manual",
+      provider: "manual",
       amount: payload.amount,
       status: "succeeded",
       paid_at: new Date().toISOString(),
@@ -243,22 +251,26 @@ export async function recordManualPaymentAction(payload: {
     });
 
     if (payErr) {
-      return { success: false, error: payErr.message };
+      const friendly = mapDatabaseError(payErr);
+      return { success: false, error: friendly.message };
     }
 
-    // Update order payment status
-    await supabaseAdmin
-      .from("orders")
-      .update({
-        amount_paid: newAmountPaid,
-        payment_status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id);
+    if (payload.notes?.trim()) {
+      await supabase.from("staff_notes").insert({
+        entity_type: "order",
+        entity_id: order.id,
+        author_id: session.user.id,
+        body: `[Payment Recorded] ৳${payload.amount} via ${payload.method}: ${payload.notes.trim()}`,
+      });
+    }
 
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/orders");
+    revalidatePath(`/admin/orders/${order.id}`);
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to record payment" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
 
@@ -268,8 +280,10 @@ export async function refundPaymentAction(payload: {
   reason?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    // Locate original transaction
-    const { data: orig, error: origErr } = await supabaseAdmin
+    const session = await assertStaffRole(["owner", "admin", "manager"]);
+    const supabase = await createClient();
+
+    const { data: orig, error: origErr } = await supabase
       .from("payments")
       .select("id, order_id, method, provider")
       .or(`id.eq.${payload.transactionId},provider_txn_id.eq.${payload.transactionId}`)
@@ -279,8 +293,7 @@ export async function refundPaymentAction(payload: {
       return { success: false, error: "Original transaction not found" };
     }
 
-    // Insert refund entry
-    const { error: refErr } = await supabaseAdmin.from("payments").insert({
+    const { error: refErr } = await supabase.from("payments").insert({
       order_id: orig.order_id,
       kind: "refund",
       method: orig.method,
@@ -289,16 +302,29 @@ export async function refundPaymentAction(payload: {
       status: "succeeded",
       paid_at: new Date().toISOString(),
       provider_txn_id: `REFUND-${Date.now()}`,
-      failure_reason: payload.reason || "Staff initiated refund",
     });
 
     if (refErr) {
-      return { success: false, error: refErr.message };
+      const friendly = mapDatabaseError(refErr);
+      return { success: false, error: friendly.message };
     }
 
+    if (payload.reason?.trim()) {
+      await supabase.from("staff_notes").insert({
+        entity_type: "order",
+        entity_id: orig.order_id,
+        author_id: session.user.id,
+        body: `[Refund Processed] ৳${payload.amount}: ${payload.reason.trim()}`,
+      });
+    }
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/orders");
+    revalidatePath(`/admin/orders/${orig.order_id}`);
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to process refund" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
 
@@ -307,21 +333,26 @@ export async function updatePaymentStatusAction(payload: {
   status: "succeeded" | "failed" | "cancelled" | "pending";
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const dbStatus = payload.status === "succeeded" ? "succeeded" : payload.status;
-    const { error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase
       .from("payments")
       .update({
-        status: dbStatus,
+        status: payload.status,
         updated_at: new Date().toISOString(),
       })
       .or(`id.eq.${payload.transactionId},provider_txn_id.eq.${payload.transactionId}`);
 
     if (error) {
-      return { success: false, error: error.message };
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
     }
+
+    revalidatePath("/admin/payments");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to update payment status" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
-

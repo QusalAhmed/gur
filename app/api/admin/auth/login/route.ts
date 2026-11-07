@@ -5,9 +5,9 @@ import {
   AdminUser,
   AdminRole,
 } from "@/lib/admin-auth";
-import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,10 +67,31 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // 2. Authenticate through Supabase Auth
+    // 2. Authenticate through Supabase Auth using @supabase/ssr so session cookies persist
     if (!authenticatedUser) {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const cookieStore = await cookies();
+      const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        "https://hcfuqyidcxsqyjzmwxiw.supabase.co";
+      const supabaseAnonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        "";
+
+      const ssrSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          },
+        },
+      });
+
+      const { data, error } = await ssrSupabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
       });
@@ -90,42 +111,22 @@ export async function POST(req: NextRequest) {
       const userMeta = data.user.user_metadata || {};
       const appMeta = data.user.app_metadata || {};
 
-      // Check staff_members table using authenticated session token
-      const supabaseUrl =
-        process.env.NEXT_PUBLIC_SUPABASE_URL ||
-        "https://hcfuqyidcxsqyjzmwxiw.supabase.co";
-      const supabaseAnonKey =
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-        "";
+      try {
+        const { data: staffRecord } = await ssrSupabase
+          .from("staff_members")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
 
-      if (data.session?.access_token && supabaseUrl && supabaseAnonKey) {
-        try {
-          const authUserClient = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: {
-              headers: {
-                Authorization: `Bearer ${data.session.access_token}`,
-              },
-            },
-          });
-
-          const { data: staffRecord } = await authUserClient
-            .from("staff_members")
-            .select("role")
-            .eq("user_id", data.user.id)
-            .maybeSingle();
-
-          if (staffRecord?.role) {
-            userRole = staffRecord.role as AdminRole;
-          } else if (appMeta.role || userMeta.role) {
-            userRole = (appMeta.role || userMeta.role) as AdminRole;
-          }
-        } catch (dbErr) {
-          console.warn("Could not query staff_members table:", dbErr);
-          if (appMeta.role || userMeta.role) {
-            userRole = (appMeta.role || userMeta.role) as AdminRole;
-          }
+        if (staffRecord?.role) {
+          userRole = staffRecord.role as AdminRole;
+        } else if (appMeta.role || userMeta.role) {
+          userRole = (appMeta.role || userMeta.role) as AdminRole;
+        }
+      } catch (dbErr) {
+        console.warn("Could not query staff_members table:", dbErr);
+        if (appMeta.role || userMeta.role) {
+          userRole = (appMeta.role || userMeta.role) as AdminRole;
         }
       }
 

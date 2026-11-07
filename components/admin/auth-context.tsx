@@ -33,12 +33,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
 
   // Load session from server and synchronize with client state
   const refreshSession = useCallback(async () => {
     try {
-      // 1. Instant check from localStorage for fast client paint
+      // 1. Instant check from localStorage for fast initial client paint
       if (typeof window !== "undefined") {
         const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (cached) {
@@ -60,80 +59,102 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.user) {
-          setUser(data.user);
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
+          setUser((prev) => {
+            if (
+              prev &&
+              prev.id === data.user.id &&
+              prev.role === data.user.role &&
+              prev.name === data.user.name &&
+              prev.avatarUrl === data.user.avatarUrl
+            ) {
+              return prev;
+            }
+            return data.user;
+          });
+          if (typeof window !== "undefined") {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
+          }
         } else {
           setUser(null);
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-          if (pathname !== "/admin/login") {
-            const currentSearch = typeof window !== "undefined" ? window.location.search : "";
-            const target = pathname + currentSearch;
-            router.push(`/admin/login?next=${encodeURIComponent(target)}`);
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
           }
         }
       } else {
         setUser(null);
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+        }
       }
     } catch (e) {
       console.warn("Session check error:", e);
     } finally {
       setIsLoading(false);
     }
-  }, [pathname, router]);
+  }, []);
 
+  // Run initial session check once on mount
   useEffect(() => {
     refreshSession();
   }, [refreshSession]);
 
-  const login = async (params: {
-    email: string;
-    password: string;
-    rememberMe?: boolean;
-    redirectTo?: string;
-  }) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/admin/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: params.email,
-          password: params.password,
-          rememberMe: params.rememberMe,
-        }),
-      });
+  const login = useCallback(
+    async (params: {
+      email: string;
+      password: string;
+      rememberMe?: boolean;
+      redirectTo?: string;
+    }) => {
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/admin/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: params.email,
+            password: params.password,
+            rememberMe: params.rememberMe,
+          }),
+        });
 
-      const data = await res.json();
-      if (res.ok && data.success && data.user) {
-        setUser(data.user);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
+        const data = await res.json();
+        if (res.ok && data.success && data.user) {
+          setUser(data.user);
+          if (typeof window !== "undefined") {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
+          }
 
-        // Determine destination redirect from params or window query string
-        const nextUrl =
-          params.redirectTo ||
-          (typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("next")
-            : null) ||
-          "/admin";
+          // Determine destination redirect from params or window query string
+          let nextUrl =
+            params.redirectTo ||
+            (typeof window !== "undefined"
+              ? new URLSearchParams(window.location.search).get("next")
+              : null) ||
+            "/admin";
 
-        router.push(nextUrl);
-        return { success: true, user: data.user };
-      } else {
+          if (nextUrl.startsWith("/admin/login")) {
+            nextUrl = "/admin";
+          }
+
+          router.push(nextUrl);
+          return { success: true, user: data.user };
+        } else {
+          return {
+            success: false,
+            error: data.error || "Failed to log in with provided credentials",
+          };
+        }
+      } catch (err: any) {
         return {
           success: false,
-          error: data.error || "Failed to log in with provided credentials",
+          error: err?.message || "Network error during authentication",
         };
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err: any) {
-      return {
-        success: false,
-        error: err?.message || "Network error during authentication",
-      };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [router]
+  );
 
   const updateUser = useCallback((updatedFields: Partial<AdminUser>) => {
     setUser((prev) => {
@@ -165,7 +186,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setIsLoading(true);
     try {
       await fetch("/api/admin/auth/logout", { method: "POST" });
@@ -173,25 +194,30 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       console.warn("Logout error:", e);
     } finally {
       setUser(null);
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
       setIsLoading(false);
       router.push("/admin/login");
     }
-  };
+  }, [router]);
+
+  const contextValue = React.useMemo<AdminAuthContextType>(
+    () => ({
+      user,
+      role: user?.role || null,
+      isLoading,
+      isAuthenticated: !!user,
+      login,
+      logout,
+      updateUser,
+      saveProfile,
+    }),
+    [user, isLoading, login, logout, updateUser, saveProfile]
+  );
 
   return (
-    <AdminAuthContext.Provider
-      value={{
-        user,
-        role: user?.role || null,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        updateUser,
-        saveProfile,
-      }}
-    >
+    <AdminAuthContext.Provider value={contextValue}>
       {children}
     </AdminAuthContext.Provider>
   );

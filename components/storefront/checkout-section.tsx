@@ -1106,8 +1106,8 @@ return (
       <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
       <span>
         {lang === "bn"
-          ? "সরাসরি গাছিদের প্রস্তুত করা খাঁটি খেজুরের গুড় • কোনো কৃত্রিম চিনি বা কেমিক্যাল নেই"
-          : "Pure Artisanal Date Jaggery Directly From Village Artisans • No Added Sugar or Chemicals"}
+          ? "নিজেদের প্রস্তুত করা খাঁটি খেজুরের গুড় • কোনো কৃত্রিম চিনি বা কেমিক্যাল নেই"
+          : "Pure Date Jaggery Made by Us • No Added Sugar or Chemicals"}
       </span>
     </div>
   </section>

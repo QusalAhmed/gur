@@ -1,15 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/admin-auth";
+import { ADMIN_COOKIE_NAME, verifySessionToken, AdminUser } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getStaffSession } from "@/lib/admin-guard";
 
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    if (!token) {
-      return NextResponse.json({ success: true, user: null });
+    let user: AdminUser | null = null;
+
+    if (token) {
+      user = await verifySessionToken(token);
     }
 
-    const user = await verifySessionToken(token);
+    if (!user) {
+      // Check Supabase Auth session via SSR cookies
+      const staffSession = await getStaffSession();
+      if (staffSession) {
+        const initials = staffSession.user.name
+          .split(" ")
+          .filter(Boolean)
+          .map((n: string) => n[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase() || "ST";
+
+        user = {
+          id: staffSession.user.id,
+          name: staffSession.user.name,
+          email: staffSession.user.email,
+          role: staffSession.role,
+          initials,
+          avatarUrl: staffSession.user.avatarUrl,
+        };
+      }
+    }
+
     if (!user) {
       return NextResponse.json({ success: true, user: null });
     }

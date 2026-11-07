@@ -63,11 +63,16 @@ export interface SaveSettingsResult {
  */
 async function verifyAdminAuth(): Promise<{ authorized: boolean; reason?: string }> {
   try {
+    const { getStaffSession } = await import("@/lib/admin-guard");
+    const session = await getStaffSession();
+    if (session && (session.role === "owner" || session.role === "admin")) {
+      return { authorized: true };
+    }
+
     const cookieStore = await cookies();
     const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
 
     if (!token) {
-      // In development environments without cookies active, allow access if service role is healthy
       if (process.env.NODE_ENV === "development") {
         return { authorized: true };
       }

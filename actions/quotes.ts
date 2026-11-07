@@ -1,6 +1,9 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface QuoteRequestItem {
   id: string;
@@ -27,7 +30,10 @@ export async function getAdminQuotesAction(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: rawQuotes, error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    const { data: rawQuotes, error } = await supabase
       .from("quote_requests")
       .select(
         `
@@ -54,12 +60,11 @@ export async function getAdminQuotesAction(): Promise<{
     }
 
     const quotes: QuoteRequestItem[] = (rawQuotes || []).map((q) => {
-      // Parse items array to get product and quantity
       let productName = "General Molasses Bulk";
       let quantityStr = "Custom Volume";
 
       if (Array.isArray(q.items) && q.items.length > 0) {
-        const first = q.items[0];
+        const first = q.items[0] as any;
         if (first.product_name) productName = first.product_name;
         if (first.quantity) quantityStr = `${first.quantity} ${first.unit || "Tons"}`;
       } else if (q.message) {
@@ -93,10 +98,10 @@ export async function getAdminQuotesAction(): Promise<{
       data: quotes,
     };
   } catch (error: any) {
-    console.error("getAdminQuotesAction error:", error);
+    const friendly = mapDatabaseError(error);
     return {
       success: false,
-      error: error.message || "Failed to load quote requests",
+      error: friendly.message,
       data: [],
     };
   }
@@ -108,7 +113,10 @@ export async function submitQuoteReplyAction(payload: {
   replyMessage: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase
       .from("quote_requests")
       .update({
         quoted_total: payload.quotedTotal,
@@ -119,9 +127,11 @@ export async function submitQuoteReplyAction(payload: {
       .eq("id", payload.id);
 
     if (error) return { success: false, error: error.message };
+    revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to submit quote reply" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
 
@@ -130,7 +140,10 @@ export async function updateQuoteStatusAction(payload: {
   status: "new" | "quoted" | "converted" | "declined";
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase
       .from("quote_requests")
       .update({
         status: payload.status,
@@ -139,19 +152,25 @@ export async function updateQuoteStatusAction(payload: {
       .eq("id", payload.id);
 
     if (error) return { success: false, error: error.message };
+    revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to update quote status" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
 
 export async function deleteQuoteRequestAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseAdmin.from("quote_requests").delete().eq("id", id);
+    await assertStaffRole(["owner", "admin"]);
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("quote_requests").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
+    revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "Failed to delete quote request" };
+    const friendly = mapDatabaseError(err);
+    return { success: false, error: friendly.message };
   }
 }
-

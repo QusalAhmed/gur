@@ -30,7 +30,7 @@ export default async function PrivacyPolicyPage() {
   const storefrontData = await getStorefrontProductsAction().catch(() => ({
     hotline: "01843557389",
     storeName: "খেজুরের খাঁটি গুড়",
-    storeSubtitle: "গ্রামের গাছিদের তৈরি খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+    storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
     products: [],
   }));
 

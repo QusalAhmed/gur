@@ -228,18 +228,17 @@ export function LiveStockSection({
       >
         {isBn ? (
           <>
-            আমাদের প্রতিটি ড্রপ গুড় গাছিদের থেকে তাজা সংগৃহীত।{" "}
             <strong className="text-amber-900 dark:text-amber-200">
-              আজকের মজুদ ০ কেজি (সম্পূর্ণ বুকড)
+              আজকের বিক্রির মজুদ ০ কেজি (সম্পূর্ণ বুকড)
             </strong>
-            । নিচের লাইভ টাইমলাইনে বর্তমান অর্ডার অনুযায়ী পরবর্তী প্রস্তুত ব্যাচ ও
+            । 
+            নিচের লাইভ টাইমলাইনে বর্তমান অর্ডার অনুযায়ী পরবর্তী প্রস্তুত ব্যাচ ও
             উপলব্ধ স্টক দেখুন:
           </>
         ) : (
           <>
-            Fresh molasses is tapped and processed daily.{" "}
             <strong className="text-amber-900 dark:text-amber-200">
-              Current stock is 0 KG (Fully Booked)
+              Current selling stock is 0 KG (Fully Booked)
             </strong>
             . Below is the live batch availability calculated from existing customer orders:
           </>
@@ -257,7 +256,7 @@ export function LiveStockSection({
         >
           <div className="flex items-center gap-1 text-[11px] font-semibold text-stone-500 dark:text-stone-400 mb-1">
             <PackageX className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-            <span>{isBn ? "আজকের স্টক" : "Today's Stock"}</span>
+            <span>{isBn ? "স্টকে আছে" : "In Stock"}</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
@@ -278,7 +277,7 @@ export function LiveStockSection({
         >
           <div className="flex items-center gap-1 text-[11px] font-semibold text-stone-500 dark:text-stone-400 mb-1">
             <Factory className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>{isBn ? "দৈনিক উৎপাদন" : "Daily Yield"}</span>
+            <span>{isBn ? "দৈনিক গড় উৎপাদন" : "Daily average Yield"}</span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-lg sm:text-xl font-black text-amber-900 dark:text-amber-100 font-mono">
@@ -395,8 +394,8 @@ export function LiveStockSection({
         >
           <p className="text-[11px] text-stone-600 dark:text-stone-400">
             {isBn
-              ? "সিরিয়াল অনুযায়ী প্রি-অর্ডার নিশ্চিত করতে প্রোডাক্ট নির্বাচন করুন:"
-              : "Select a package to secure your spot in upcoming batch:"}
+              ? "স্টক শেষ হওয়ার আগেই দ্রুত অর্ডার করুন"
+              : "Order before stock runs out"}
           </p>
           <button
             type="button"
@@ -554,7 +553,7 @@ function TimelineDayCard({
       <p className="mt-1.5 text-[11px] text-stone-600 dark:text-stone-400 leading-normal">
         {proj.isToday ? (
           isBn ? (
-            "আজকের সংগৃহীত ও প্রস্তুত গুড়ের প্রতিটি কেজি পূর্ববর্তী গ্রাহকদের ঠিকানায় পাঠানোর জন্য বুকড।"
+            "আজকের সব গুড় বিক্রি হয়ে গেছে।"
           ) : (
             "Today's harvested molasses is entirely booked and packing for shipment."
           )
