@@ -25,7 +25,6 @@ import {
   ScrollText,
   Clock,
   ShieldCheck,
-  ChevronDown,
   LogOut,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
@@ -42,9 +41,17 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface NavItem {
   title: string;
@@ -250,18 +257,25 @@ export function AdminSidebar() {
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
 
   return (
-    <Sidebar className="border-r border-border/80 bg-zinc-50/50 dark:bg-zinc-950/50 backdrop-blur-sm">
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-border/80 bg-zinc-50/50 dark:bg-zinc-950/50 backdrop-blur-sm transition-[width] duration-200"
+    >
       {/* Brand Header */}
-      <SidebarHeader className="border-b border-border/60 px-4 py-3">
-        <Link href="/admin" className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-600 text-white font-bold shadow-sm ring-1 ring-amber-700/20">
+      <SidebarHeader className="border-b border-border/60 px-4 py-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2.5">
+        <Link
+          href="/admin"
+          className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
+          title="খাঁটি গুড় অ্যাডমিন"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white font-bold shadow-sm ring-1 ring-amber-700/20">
             গূ
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold tracking-tight text-foreground">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden min-w-0">
+            <span className="text-sm font-semibold tracking-tight text-foreground truncate">
               খাঁটি গুড় অ্যাডমিন
             </span>
-            <span className="text-[11px] text-muted-foreground font-medium">
+            <span className="text-[11px] text-muted-foreground font-medium truncate">
               Molasses Operations
             </span>
           </div>
@@ -269,7 +283,7 @@ export function AdminSidebar() {
       </SidebarHeader>
 
       {/* Navigation Groups */}
-      <SidebarContent className="px-2 py-2">
+      <SidebarContent className="px-2 py-2 group-data-[collapsible=icon]:px-1.5">
         {navGroups.map((group) => {
           // Filter items by role capability
           const visibleItems = group.items.filter((item) =>
@@ -279,11 +293,14 @@ export function AdminSidebar() {
           if (visibleItems.length === 0) return null;
 
           return (
-            <SidebarGroup key={group.label} className="py-1">
-              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 px-2">
+            <SidebarGroup
+              key={group.label}
+              className="py-1 group-data-[collapsible=icon]:py-0.5"
+            >
+              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 px-2 group-data-[collapsible=icon]:hidden">
                 {group.label}
               </SidebarGroupLabel>
-              <SidebarMenu>
+              <SidebarMenu className="gap-0.5">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const isActive =
@@ -298,27 +315,58 @@ export function AdminSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
+                        tooltip={{
+                          children: (
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5 font-medium">
+                                <span>{item.title}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  ({item.titleBn})
+                                </span>
+                              </div>
+                              {badgeCount > 0 && (
+                                <span className="text-[10px] text-amber-500 font-semibold">
+                                  {badgeCount} pending
+                                </span>
+                              )}
+                            </div>
+                          ),
+                        }}
                         className={cn(
-                          "h-8.5 rounded-lg px-2 text-xs font-medium transition-colors",
+                          "h-8.5 rounded-lg px-2 text-xs font-medium transition-colors group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mx-auto",
                           isActive
                             ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
                             : "text-muted-foreground hover:bg-zinc-200/50 hover:text-foreground dark:hover:bg-zinc-900"
                         )}
                       >
-                        <Link href={item.href} className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-2.5">
-                            <Icon
-                              className={cn(
-                                "h-4 w-4 shrink-0",
-                                isActive ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                        <Link
+                          href={item.href}
+                          className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center"
+                        >
+                          <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:gap-0 min-w-0">
+                            <div className="relative flex items-center justify-center shrink-0">
+                              <Icon
+                                className={cn(
+                                  "h-4 w-4 shrink-0",
+                                  isActive
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-muted-foreground"
+                                )}
+                              />
+                              {badgeCount > 0 && (
+                                <span className="absolute -top-1 -right-1.5 hidden group-data-[collapsible=icon]:flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-600 px-0.5 text-[8px] font-bold text-white shadow-xs">
+                                  {badgeCount > 9 ? "•" : badgeCount}
+                                </span>
                               )}
-                            />
-                            <span>{item.title}</span>
+                            </div>
+                            <span className="truncate group-data-[collapsible=icon]:hidden">
+                              {item.title}
+                            </span>
                           </div>
                           {badgeCount > 0 && (
                             <Badge
                               variant="secondary"
-                              className="h-4.5 px-1.5 text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                              className="h-4.5 px-1.5 text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 group-data-[collapsible=icon]:hidden shrink-0"
                             >
                               {badgeCount > 99 ? "99+" : badgeCount}
                             </Badge>
@@ -335,10 +383,11 @@ export function AdminSidebar() {
       </SidebarContent>
 
       {/* Footer: User profile & role badge */}
-      <SidebarFooter className="border-t border-border/60 p-3">
-        <div className="flex items-center justify-between gap-2">
+      <SidebarFooter className="border-t border-border/60 p-2.5 group-data-[collapsible=icon]:p-1.5">
+        {/* Expanded View */}
+        <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-2.5 min-w-0">
-            <Avatar className="h-8 w-8 rounded-lg border border-border">
+            <Avatar className="h-8 w-8 rounded-lg border border-border shrink-0">
               {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
               <AvatarFallback className="rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-xs font-semibold">
                 {user?.initials || "ST"}
@@ -363,12 +412,71 @@ export function AdminSidebar() {
           <button
             onClick={() => logout()}
             title="Sign out / লগ আউট"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-zinc-200 hover:text-foreground dark:hover:bg-zinc-800 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-zinc-200 hover:text-foreground dark:hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Collapsed View: Avatar Dropdown Menu */}
+        <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center w-full">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex items-center justify-center rounded-lg p-0.5 outline-hidden ring-sidebar-ring focus-visible:ring-2 hover:bg-sidebar-accent cursor-pointer"
+              title={`${user?.name || "Staff Member"} (${roleConfig.label})`}
+            >
+              <Avatar className="h-8 w-8 rounded-lg border border-border">
+                {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                <AvatarFallback className="rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-xs font-semibold">
+                  {user?.initials || "ST"}
+                </AvatarFallback>
+              </Avatar>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="right"
+              align="end"
+              sideOffset={8}
+              className="w-56 p-1.5 shadow-lg"
+            >
+              <div className="flex items-center gap-2.5 p-2">
+                <Avatar className="h-8 w-8 rounded-lg border border-border">
+                  {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                  <AvatarFallback className="rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 text-xs font-semibold">
+                    {user?.initials || "ST"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-foreground truncate">
+                    {user?.name || "Staff Member"}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground truncate">
+                    {user?.email}
+                  </span>
+                  <div className="mt-1">
+                    <span
+                      className={cn(
+                        "text-[9px] font-semibold uppercase px-1.5 py-0.2 rounded border",
+                        roleConfig.colorClasses
+                      )}
+                    >
+                      {roleConfig.label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => logout()}
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer gap-2 py-1.5"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign Out / লগ আউট</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

@@ -29,7 +29,7 @@ export function AdminLayoutClient({
             <AdminSidebar />
             <SidebarInset className="min-w-0 max-w-full">
               <AdminHeader />
-              <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4">
+              <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4 pt-2 sm:pt-3 pb-14 sm:pb-16 lg:pb-20">
                 {children}
               </div>
             </SidebarInset>

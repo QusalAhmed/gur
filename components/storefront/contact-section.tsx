@@ -9,7 +9,6 @@ import {
   MapPin,
   Copy,
   Check,
-  ChevronDown,
   Sparkles,
   ExternalLink,
   ShieldCheck,
@@ -343,21 +342,6 @@ export function ContactSection({
           lang={lang}
           onScrollToProducts={handleScrollDown}
         />
-      </div>
-
-      {/* Bottom Action: "View Products & Order" */}
-      <div className="relative z-10 w-full text-center pt-4 pb-4 space-y-2.5">
-        <div>
-          <button
-            type="button"
-            onClick={handleScrollDown}
-            aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
-          >
-            <span>{t.viewProductsBtn}</span>
-            <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
-          </button>
-        </div>
       </div>
     </section>
   );

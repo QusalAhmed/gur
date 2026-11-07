@@ -510,6 +510,7 @@ export function ProductShowcase({
           storeName={displayStoreName}
           storeSubtitle={storeSubtitle}
           isActive={activeSectionIndex === introSectionIndex}
+          onScrollToProducts={() => scrollToSection(productsStartIndex)}
           onScrollToWhyBuy={() => scrollToSection(whyBuySectionIndex)}
           onScrollToContact={() => scrollToSection(contactSectionIndex)}
         />
