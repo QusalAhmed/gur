@@ -8,14 +8,11 @@ import {
   User,
   Save,
   Loader2,
-  Calendar,
-  Command as CommandIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNotificationsPopover } from "@/components/admin/notifications-popover";
 import { AdminSmsBalance } from "@/components/admin/sms-balance";
 import { CommandPalette } from "@/components/admin/command-palette";
-import { DateRangePicker } from "@/components/admin/date-range-picker";
 import { ThemeToggle } from "@/components/admin/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +42,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { ROLE_CONFIG } from "@/lib/admin-permissions";
-import Link from "next/link";
+
+const emptySubscribe = () => () => {};
+function useMounted() {
+  return React.useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
 
 function getBreadcrumb(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
@@ -68,11 +73,9 @@ export function AdminHeader() {
   const [profileName, setProfileName] = React.useState(user?.name || "Admin Staff");
   const [profileAvatarUrl, setProfileAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [isSaving, setIsSaving] = React.useState(false);
-  const [mounted, setMounted] = React.useState(false);
+  const mounted = useMounted();
 
   React.useEffect(() => {
-    setMounted(true);
-
     const down = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -83,13 +86,6 @@ export function AdminHeader() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
-
-  React.useEffect(() => {
-    if (user) {
-      setProfileName(user.name);
-      setProfileAvatarUrl(user.avatarUrl || "");
-    }
-  }, [user]);
 
   const handleSaveProfile = async () => {
     try {
@@ -105,8 +101,9 @@ export function AdminHeader() {
       } else {
         toast.error(res.error || "Failed to save profile");
       }
-    } catch (err: any) {
-      toast.error(err?.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -146,11 +143,6 @@ export function AdminHeader() {
               <span className="text-xs">⌘</span>K
             </kbd>
           </Button>
-
-          {/* Date-Range Picker (Asia/Dhaka) */}
-          <div className="hidden lg:block">
-            <DateRangePicker />
-          </div>
 
           {/* SMS Gateway Balance Pill */}
           <div className="hidden xl:block">
@@ -209,7 +201,11 @@ export function AdminHeader() {
               <DropdownMenuSeparator />
 
               <DropdownMenuItem
-                onClick={() => setIsProfileOpen(true)}
+                onClick={() => {
+                  setProfileName(user?.name || "Admin Staff");
+                  setProfileAvatarUrl(user?.avatarUrl || "");
+                  setIsProfileOpen(true);
+                }}
                 className="cursor-pointer text-xs flex items-center justify-between"
               >
                 <span>My Profile / প্রোফাইল</span>
