@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion } from "motion/react";
 import {
   Sparkles,
   ShieldCheck,
@@ -22,6 +23,7 @@ interface IntroSectionProps {
   storeName?: string;
   storeSubtitle?: string;
   isActive?: boolean;
+  isStandaloneSection?: boolean;
   onScrollToProducts?: () => void;
   onScrollToWhyBuy?: () => void;
   onScrollToContact?: () => void;
@@ -32,6 +34,7 @@ export function IntroSection({
   storeName,
   storeSubtitle,
   isActive = true,
+  isStandaloneSection = true,
   onScrollToProducts,
   onScrollToWhyBuy,
   onScrollToContact,
@@ -113,6 +116,143 @@ export function IntroSection({
     },
   ];
 
+  const sectionContent = (
+    <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
+      {/* Top Heritage Pill & Badges */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, amount: "some" }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="text-center space-y-2 px-2"
+      >
+        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
+          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+          <span>{t.introBadge}</span>
+          <span className="opacity-40">•</span>
+          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+            {t.introOriginBadge}
+          </span>
+        </div>
+
+        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-amber-950 dark:text-amber-50 tracking-tight leading-tight pt-1">
+          {displayName}
+        </h1>
+
+        <p className="text-xs sm:text-sm md:text-base text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
+          {displaySubtitle}
+        </p>
+      </motion.div>
+
+      {/* Business Key Stats Grid */}
+      <div className="px-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+          {stats.map((s, idx) => {
+            const Icon = s.icon;
+            return (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: false, amount: "some" }}
+                transition={{ duration: 0.4, delay: idx * 0.08, ease: "easeOut" }}
+                className="bg-white/90 dark:bg-stone-900/90 border border-amber-200/90 dark:border-stone-800/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-center shadow-xs"
+              >
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Icon className={`w-4 h-4 ${s.color}`} />
+                  <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
+                    <RollingNumber
+                      value={s.number}
+                      isActive={isActive}
+                      delay={0.12 + idx * 0.08}
+                    />
+                  </span>
+                </div>
+                <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">
+                  {s.label}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Business Story & Heritage Statement */}
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, amount: "some" }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200"
+      >
+        <div className="flex items-center gap-2">
+          <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
+          <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
+            {t.introHeritageHeading}
+          </h2>
+        </div>
+        <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
+          {t.introHeritageText}
+        </p>
+        <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs font-semibold text-emerald-800 dark:text-emerald-400 border-t border-amber-200/80 dark:border-stone-800">
+          <span>{t.introCustomerPromise}</span>
+          <div className="flex items-center gap-2">
+            {onScrollToWhyBuy && (
+              <button
+                type="button"
+                onClick={onScrollToWhyBuy}
+                aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Choose Us"}
+                className="text-amber-800 dark:text-amber-300 hover:underline font-bold shrink-0 cursor-pointer"
+              >
+                {lang === "bn" ? "কেন আমাদের গুড় সেরা? ❯" : "Why Choose Us? ❯"}
+              </button>
+            )}
+            {onScrollToContact && (
+              <button
+                type="button"
+                onClick={onScrollToContact}
+                aria-label={lang === "bn" ? "যোগাযোগ ও অর্ডার সেকশনে যান" : "Scroll to Contact & Order"}
+                className="text-emerald-800 dark:text-emerald-400 hover:underline font-bold shrink-0 cursor-pointer"
+              >
+                {lang === "bn" ? "যোগাযোগ ও সহায়তা ❯" : "Contact & Support ❯"}
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Bottom Action: "View Products & Order" */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, amount: "some" }}
+        transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
+        className="text-center pt-1 pb-1"
+      >
+        <button
+          type="button"
+          onClick={handleScrollToProducts}
+          aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
+        >
+          <span>{t.viewProductsBtn}</span>
+          <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
+        </button>
+      </motion.div>
+    </div>
+  );
+
+  if (!isStandaloneSection) {
+    return (
+      <div
+        id="intro"
+        className="w-full pt-2 sm:pt-4 pb-2 sm:pb-4 px-3 sm:px-6 md:px-12 relative text-stone-900 dark:text-stone-100 select-none"
+      >
+        {sectionContent}
+      </div>
+    );
+  }
+
   return (
     <section
       id="intro"
@@ -121,99 +261,7 @@ export function IntroSection({
     >
       {/* Soft Ambient Warm Glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-gradient-to-b from-amber-300/35 via-amber-200/15 to-transparent dark:from-amber-950/30 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
-
-      {/* Main Content Container - completely static without render-blocking animation delays */}
-      <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
-        {/* Top Heritage Pill & Badges */}
-        <div className="text-center space-y-2 px-2">
-          <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-            <span>{t.introBadge}</span>
-            <span className="opacity-40">•</span>
-            <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-              {t.introOriginBadge}
-            </span>
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-amber-950 dark:text-amber-50 tracking-tight leading-tight pt-1">
-            {displayName}
-          </h1>
-
-          <p className="text-xs sm:text-sm md:text-base text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
-            {displaySubtitle}
-          </p>
-        </div>
-
-        {/* Business Key Stats Grid */}
-        <div className="px-1">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
-            {stats.map((s, idx) => {
-              const Icon = s.icon;
-              return (
-                <div
-                  key={idx}
-                  className="bg-white/90 dark:bg-stone-900/90 border border-amber-200/90 dark:border-stone-800/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-center shadow-xs"
-                >
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <Icon className={`w-4 h-4 ${s.color}`} />
-                    <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
-                      <RollingNumber
-                        value={s.number}
-                        isActive={isActive}
-                        delay={0.18 + idx * 0.1}
-                      />
-                    </span>
-                  </div>
-                  <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">
-                    {s.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Business Story & Heritage Statement */}
-        <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
-          <div className="flex items-center gap-2">
-            <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
-            <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
-              {t.introHeritageHeading}
-            </h2>
-          </div>
-          <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
-            {t.introHeritageText}
-          </p>
-          <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs font-semibold text-emerald-800 dark:text-emerald-400 border-t border-amber-200/80 dark:border-stone-800">
-            <span>{t.introCustomerPromise}</span>
-            <div className="flex items-center gap-2">
-              {onScrollToWhyBuy && (
-                <button
-                  type="button"
-                  onClick={onScrollToWhyBuy}
-                  aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Choose Us"}
-                  className="text-amber-800 dark:text-amber-300 hover:underline font-bold shrink-0 cursor-pointer"
-                >
-                  {lang === "bn" ? "কেন আমাদের গুড় সেরা? ❯" : "Why Choose Us? ❯"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Action: "View Products & Order" */}
-        <div className="text-center pt-1 pb-1">
-          <button
-            type="button"
-            onClick={handleScrollToProducts}
-            aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
-          >
-            <span>{t.viewProductsBtn}</span>
-            <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+      {sectionContent}
     </section>
   );
 }

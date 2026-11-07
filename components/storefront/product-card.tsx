@@ -423,7 +423,7 @@ export function ProductCard({
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             whileInView={{ opacity: 1, scale: 1, y: 0 }}
-            viewport={{ once: false, amount: 0.3 }}
+            viewport={{ once: false, amount: "some" }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-md md:max-w-none aspect-[4/3] sm:aspect-square md:aspect-[4/3] lg:aspect-square max-h-[280px] xs:max-h-[320px] sm:max-h-[360px] md:max-h-[380px] lg:max-h-[460px] mx-auto"
           >
@@ -515,7 +515,13 @@ export function ProductCard({
         </div>
 
         {/* ================= RIGHT COLUMN: Info & Controls ================= */}
-        <div className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5 md:space-y-4">
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: false, amount: "some" }}
+          transition={{ duration: 0.5, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5 md:space-y-4"
+        >
           {/* Top Meta Header on Desktop & Tab (>= md) */}
           <div className="hidden md:flex items-center justify-between text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-300">
             <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-xs sm:text-sm">
@@ -833,7 +839,7 @@ export function ProductCard({
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

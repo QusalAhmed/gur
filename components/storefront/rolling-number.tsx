@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
-import { motion, animate } from "motion/react";
+import { motion, animate, useInView } from "motion/react";
 
 interface RollingNumberProps {
   /** The value string to animate, e.g. "২০+", "৫,০০০+", "১০০%", "৬৪", "20+", "5,000+" */
@@ -77,7 +77,7 @@ export function RollingNumber({
   );
 
   const containerRef = useRef<HTMLSpanElement>(null);
-  const [isInView, setIsInView] = useState(() => typeof IntersectionObserver === "undefined");
+  const isInView = useInView(containerRef, { amount: "some", once: false });
   const [currentValue, setCurrentValue] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
 
@@ -91,37 +91,14 @@ export function RollingNumber({
   const resolvedDuration =
     duration ?? (target >= 1000 ? 1.6 : target >= 100 ? 1.4 : target >= 50 ? 1.2 : 1.0);
 
-  // IntersectionObserver fallback for standalone / non-snap environments
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setIsInView(true);
-          } else if (isActive === undefined) {
-            setIsInView(false);
-          }
-        }
-      },
-      { threshold: 0.15 }
-    );
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [isActive]);
-
-  const shouldAnimate = isActive !== undefined ? isActive : isInView;
+  // Only animate when the number ACTUALLY enters view (and active if specified)
+  const shouldAnimate = isHydrated && isInView && (isActive !== false);
 
   // Active Count-up Animation Loop powered by Framer Motion: starts strictly at 0 then counts to target
   useEffect(() => {
     if (!shouldAnimate || target <= 0) {
+      setCurrentValue(0);
+      setIsComplete(false);
       return;
     }
 
