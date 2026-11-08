@@ -41,95 +41,10 @@ export const getClientFbpAndFbc = (): { fbp: string | null; fbc: string | null }
 };
 
 /**
- * Safe patch to enable BDT (Bangladeshi Taka) in Meta Pixel's client-side currency whitelist.
- * fbevents.js has an internal whitelist of ~47 billing currencies (SignalsEventValidation.VALID_CURRENCY_CODES)
- * which lacks BDT by default, causing a client-side warning even though Meta CAPI & Ads Manager support BDT.
- */
-export const patchFbCurrencySupport = () => {
-  if (typeof window === "undefined") return;
-  try {
-    const win = window as any;
-    const fbqObj = win.fbq;
-
-    // Suppress known false-positive BDT warning in console
-    if (!win._fbPixelConsoleHooked && typeof console !== "undefined") {
-      const origWarn = console.warn;
-      const origError = console.error;
-      console.warn = (...args: any[]) => {
-        if (
-          typeof args[0] === "string" &&
-          args[0].includes("[Meta Pixel]") &&
-          args[0].includes("currency") &&
-          args[0].includes("invalid")
-        ) {
-          return;
-        }
-        origWarn.apply(console, args);
-      };
-      console.error = (...args: any[]) => {
-        if (
-          typeof args[0] === "string" &&
-          args[0].includes("[Meta Pixel]") &&
-          args[0].includes("currency") &&
-          args[0].includes("invalid")
-        ) {
-          return;
-        }
-        origError.apply(console, args);
-      };
-      win._fbPixelConsoleHooked = true;
-    }
-
-    if (!fbqObj) return;
-
-    // 1. Post-load patch if module is already registered in fbevents.js
-    if (typeof fbqObj.getFbeventsModules === "function") {
-      const valMod = fbqObj.getFbeventsModules("SignalsEventValidation");
-      if (valMod && valMod.VALID_CURRENCY_CODES) {
-        valMod.VALID_CURRENCY_CODES["BDT"] = 1;
-      }
-    }
-    if (fbqObj.__fbeventsResolvedModules?.SignalsEventValidation?.VALID_CURRENCY_CODES) {
-      fbqObj.__fbeventsResolvedModules.SignalsEventValidation.VALID_CURRENCY_CODES["BDT"] = 1;
-    }
-
-    // 2. Pre-load setter proxy to patch SignalsEventValidation upon module registration
-    if (!fbqObj._bdtPatched) {
-      let currentEnsure = fbqObj.ensureModuleRegistered;
-      Object.defineProperty(fbqObj, "ensureModuleRegistered", {
-        configurable: true,
-        enumerable: true,
-        get: () => currentEnsure,
-        set: (fn) => {
-          currentEnsure = function (this: any, name: string, factory: any) {
-            if (name === "SignalsEventValidation" && typeof factory === "function") {
-              const origFactory = factory;
-              factory = function () {
-                const res = origFactory();
-                if (res && res.VALID_CURRENCY_CODES) {
-                  res.VALID_CURRENCY_CODES["BDT"] = 1;
-                }
-                return res;
-              };
-            }
-            return fn.call(this, name, factory);
-          };
-        },
-      });
-      fbqObj._bdtPatched = true;
-    }
-  } catch {
-    // Safe fallback
-  }
-};
-
-/**
  * Safe invocation of window.fbq if running in the browser
  */
 export const fbq = (...args: any[]) => {
   if (typeof window === "undefined") return;
-
-  patchFbCurrencySupport();
 
   if (process.env.NODE_ENV !== "production") {
     console.log(
@@ -597,7 +512,6 @@ export const trackInitiateCheckout = ({
     currency,
   };
 
-  console.log("[Pixel payload]", JSON.stringify(params));
   fbq("track", "InitiateCheckout", params, { eventID: eventId });
 
   return { eventId, fired: true };
@@ -747,34 +661,26 @@ export const trackPurchase = ({
     setPixelUserPhone(phone);
   }
 
-  // Ensure Meta Pixel client-side currency dictionary allows BDT
-  patchFbCurrencySupport();
-
   const safeItems = Array.isArray(items) ? items : [];
-  const numVal = Number(value);
-  const safeValue = !isNaN(numVal) && numVal > 0 ? Number(numVal.toFixed(2)) : 1.0;
-  const rawCurrency = (currency || "BDT").toString().trim().toUpperCase();
-  const validCurrency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "BDT";
-
+  const safeValue = Number(value) || 0;
   const totalQuantity = safeItems.reduce(
     (sum, item) => sum + (Number(item.quantity) || 1),
     0
   );
 
-  const params: Record<string, any> = {
+  const payload: Record<string, any> = {
     content_ids: safeItems.map((item) => String(item.variantId || item.productId || "")).filter(Boolean),
     content_type: "product",
     contents: safeItems.map((item) => ({
       id: String(item.variantId || item.productId || ""),
-      quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
-      item_price: Math.max(0, Number(Number(item.unitPrice || 0).toFixed(2))),
+      quantity: Number(item.quantity) || 1,
+      item_price: Number(item.unitPrice) || 0,
     })),
-    num_items: Math.max(1, totalQuantity),
+    num_items: totalQuantity || 1,
     value: safeValue,
-    currency: validCurrency,
+    currency: (currency || "BDT").trim().toUpperCase(),
     order_id: orderNumber || orderId,
   };
-  const payload = params;
 
   console.log(
     `%c[Facebook Pixel] Firing Purchase event for order #${orderNumber || orderId}:`,
@@ -783,9 +689,7 @@ export const trackPurchase = ({
     { eventID: effectiveEventId }
   );
 
-  console.log("[Pixel payload]", JSON.stringify(params));
-
-  fbq("track", "Purchase", params, { eventID: effectiveEventId });
+  fbq("track", "Purchase", payload, { eventID: effectiveEventId });
 
   return { eventId: effectiveEventId, fired: true };
 };

@@ -64,32 +64,6 @@ export default function RootLayout({
               t.src=v;s=b.getElementsByTagName(e)[0];
               s.parentNode.insertBefore(t,s)}(window, document,'script',
               'https://connect.facebook.net/en_US/fbevents.js');
-
-              // Enable BDT (Bangladeshi Taka) in Meta Pixel's client-side currency whitelist
-              try {
-                var currentEnsure;
-                Object.defineProperty(window.fbq, 'ensureModuleRegistered', {
-                  configurable: true,
-                  enumerable: true,
-                  get: function() { return currentEnsure; },
-                  set: function(fn) {
-                    currentEnsure = function(name, factory) {
-                      if (name === 'SignalsEventValidation' && typeof factory === 'function') {
-                        var origFactory = factory;
-                        factory = function() {
-                          var res = origFactory();
-                          if (res && res.VALID_CURRENCY_CODES) {
-                            res.VALID_CURRENCY_CODES['BDT'] = 1;
-                          }
-                          return res;
-                        };
-                      }
-                      return fn.call(this, name, factory);
-                    };
-                  }
-                });
-              } catch(e) {}
-
               fbq('init', '${FB_PIXEL_ID}');
               if (window._fbqQueue && window._fbqQueue.length) {
                 while (window._fbqQueue.length) {
