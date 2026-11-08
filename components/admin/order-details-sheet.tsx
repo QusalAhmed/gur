@@ -14,6 +14,7 @@ import {
   MapPin,
   Truck,
   MessageSquare,
+  MessageCircle,
   ShieldCheck,
   PackageCheck,
   Bot,
@@ -392,7 +393,7 @@ export function OrderDetailsSheet({
     }
   };
 
-  // WhatsApp launcher generator
+  // WhatsApp launcher generator with order confirmation link
   const getWhatsAppUrl = (targetPhone?: string) => {
     const raw = targetPhone || order?.phone;
     if (!raw) return "#";
@@ -402,8 +403,13 @@ export function OrderDetailsSheet({
     } else if (clean.startsWith("+88")) {
       clean = clean.replace("+", "");
     }
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://gur-phi.vercel.app";
+    const orderNum = order?.order_number || order?.id || "";
+    const tokenParam = order?.public_token ? `?token=${order.public_token}` : "";
+    const confirmationLink = `${origin}/order-confirmed/${orderNum}${tokenParam}`;
+
     const text = encodeURIComponent(
-      `Hello ${order?.customer || "Valued Customer"}, greetings from ${storeName} regarding your Order #${order?.id}.`
+      `আসসালামু আলাইকুম ${order?.customer || "সম্মানিত গ্রাহক"}, ${storeName}-এ আপনার অর্ডার #${orderNum} গ্রহণ করা হয়েছে।\n\nআপনার অর্ডার ও ডেলিভারি বিবরণ দেখতে এই লিংকে প্রবেশ করুন:\n${confirmationLink}`
     );
     return `https://wa.me/${clean}?text=${text}`;
   };
@@ -664,26 +670,39 @@ export function OrderDetailsSheet({
           </div>
 
           {order.public_token && (
-            <button
-              type="button"
-              onClick={() => {
-                const trackingUrl = `${window.location.origin}/orders/${order.public_token}`;
-                handleCopy(trackingUrl, "tracking-url");
-              }}
-              className="inline-flex items-center gap-1 text-primary hover:underline font-medium cursor-pointer"
-            >
-              {copiedKey === "tracking-url" ? (
-                <>
-                  <Check className="h-3 w-3 text-emerald-600" />
-                  <span>Tracking URL Copied!</span>
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="h-3 w-3" />
-                  <span>Copy Tracking Link</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const trackingUrl = `${window.location.origin}/order-confirmed/${order.order_number || order.id}?token=${order.public_token}`;
+                  handleCopy(trackingUrl, "tracking-url");
+                }}
+                className="inline-flex items-center gap-1 text-primary hover:underline font-medium cursor-pointer text-xs"
+              >
+                {copiedKey === "tracking-url" ? (
+                  <>
+                    <Check className="h-3 w-3 text-emerald-600" />
+                    <span>Confirmation Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-3 w-3" />
+                    <span>Copy Confirmation Link</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                href={getWhatsAppUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline font-medium text-xs"
+                title="Send Confirmation Link via WhatsApp"
+              >
+                <MessageCircle className="h-3 w-3" />
+                <span>Send WhatsApp Link</span>
+              </a>
+            </div>
           )}
         </div>
 

@@ -39,6 +39,7 @@ export interface CreateManualOrderParams {
   userId?: string | null;
   businessId?: string | null;
   quoteRequestId?: string | null;
+  refCode?: string | null;
   shippingAddress: {
     recipientName: string;
     phone: string;
@@ -56,6 +57,75 @@ export interface CreateManualOrderParams {
     quantity: number;
     priceOverride?: number | null;
   }[];
+}
+
+export interface InquiryLookupResult {
+  refCode: string;
+  channel: string;
+  customerPhone?: string | null;
+  hasMetaTracking: boolean;
+  fbp?: string | null;
+  fbc?: string | null;
+  clientIp?: string | null;
+  createdAt: string;
+  metaTracking?: Record<string, any>;
+}
+
+/**
+ * Searches storefront inquiry / lead touchpoint by reference code (e.g. #W-7391 or W-7391).
+ */
+export async function searchInquiryByRefCodeAction(
+  rawRef: string
+): Promise<{ ok: boolean; data?: InquiryLookupResult | null; message?: string }> {
+  try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const cleanRef = rawRef.replace(/^#/, "").trim();
+    if (!cleanRef) {
+      return { ok: false, message: "Please provide a reference code." };
+    }
+
+    const supabase = await createClient();
+    const { data: inquiry, error } = await supabase
+      .from("storefront_inquiries")
+      .select("ref_code, channel, customer_phone, fbp, fbc, client_ip, meta_tracking, created_at")
+      .ilike("ref_code", cleanRef)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { ok: false, message: friendly.message };
+    }
+
+    if (!inquiry) {
+      return { ok: true, data: null };
+    }
+
+    const meta = (inquiry.meta_tracking && typeof inquiry.meta_tracking === "object" && !Array.isArray(inquiry.meta_tracking))
+      ? (inquiry.meta_tracking as Record<string, any>)
+      : {};
+    const fbp = inquiry.fbp || meta.fbp || null;
+    const fbc = inquiry.fbc || meta.fbc || null;
+    const clientIp = inquiry.client_ip || meta.client_ip_address || null;
+
+    return {
+      ok: true,
+      data: {
+        refCode: inquiry.ref_code,
+        channel: inquiry.channel,
+        customerPhone: inquiry.customer_phone,
+        hasMetaTracking: Boolean(fbp || fbc || clientIp),
+        fbp,
+        fbc,
+        clientIp,
+        createdAt: inquiry.created_at,
+        metaTracking: meta,
+      },
+    };
+  } catch (err: any) {
+    const friendly = mapDatabaseError(err);
+    return { ok: false, message: friendly.message };
+  }
 }
 
 /**
@@ -191,6 +261,130 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
       postal_code: params.shippingAddress.postalCode?.trim() || null,
     };
 
+    // Query recent storefront order or draft for this phone to auto-inherit web meta_tracking
+    let inheritedAttribution: Record<string, any> | undefined = undefined;
+    let matchedInquiryId: string | null = null;
+
+    if (customerPayload.phone) {
+      try {
+        const { data: previousOrder } = await supabase
+          .from("orders")
+          .select("id, attribution, status")
+          .eq("customer_phone", customerPayload.phone)
+          .not("attribution", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (previousOrder?.attribution && typeof previousOrder.attribution === "object") {
+          const prevAttr = previousOrder.attribution as Record<string, any>;
+          const prevMeta = prevAttr.meta_tracking || {};
+          inheritedAttribution = {
+            ...prevAttr,
+            fbp: prevMeta.fbp || prevAttr.fbp || null,
+            fbc: prevMeta.fbc || prevAttr.fbc || null,
+            meta_tracking: {
+              ...prevMeta,
+              inherited_from_order_id: previousOrder.id,
+              inherited_at: new Date().toISOString(),
+            },
+          };
+        }
+      } catch (prevErr) {
+        console.warn("[createManualOrderAction] Could not lookup previous order attribution:", prevErr);
+      }
+    }
+
+    // Lookup touchpoint inquiry by Reference Code (e.g. #W-7391) or customer phone
+    if (params.refCode) {
+      const cleanRef = params.refCode.replace(/^#/, "").trim();
+      if (cleanRef) {
+        try {
+          const { data: inquiry } = await supabase
+            .from("storefront_inquiries")
+            .select("id, ref_code, channel, customer_phone, fbp, fbc, client_ip, user_agent, event_source_url, meta_tracking")
+            .ilike("ref_code", cleanRef)
+            .limit(1)
+            .maybeSingle();
+
+          if (inquiry) {
+            matchedInquiryId = inquiry.id;
+            const meta = (inquiry.meta_tracking && typeof inquiry.meta_tracking === "object" && !Array.isArray(inquiry.meta_tracking))
+              ? (inquiry.meta_tracking as Record<string, any>)
+              : {};
+            inheritedAttribution = {
+              ...(inheritedAttribution || {}),
+              channel_source: params.channel,
+              inquiry_ref_code: inquiry.ref_code,
+              fbp: inquiry.fbp || meta.fbp || inheritedAttribution?.fbp || null,
+              fbc: inquiry.fbc || meta.fbc || inheritedAttribution?.fbc || null,
+              client_ip: inquiry.client_ip || meta.client_ip_address || inheritedAttribution?.client_ip || null,
+              user_agent: inquiry.user_agent || meta.client_user_agent || inheritedAttribution?.user_agent || null,
+              event_source_url: inquiry.event_source_url || meta.event_source_url || null,
+              meta_tracking: {
+                ...meta,
+                ...(inheritedAttribution?.meta_tracking || {}),
+                fbp: inquiry.fbp || meta.fbp || inheritedAttribution?.fbp || null,
+                fbc: inquiry.fbc || meta.fbc || inheritedAttribution?.fbc || null,
+                client_ip_address: inquiry.client_ip || meta.client_ip_address || null,
+                client_user_agent: inquiry.user_agent || meta.client_user_agent || null,
+                event_source_url: inquiry.event_source_url || meta.event_source_url || null,
+                matched_inquiry_id: inquiry.id,
+                matched_ref_code: inquiry.ref_code,
+                matched_at: new Date().toISOString(),
+              },
+            };
+          }
+        } catch (inqErr) {
+          console.warn("[createManualOrderAction] Could not lookup inquiry by refCode:", inqErr);
+        }
+      }
+    }
+
+    // Secondary fallback: Match recent storefront inquiry by phone if no refCode provided
+    if (!matchedInquiryId && customerPayload.phone) {
+      try {
+        const { data: phoneInquiry } = await supabase
+          .from("storefront_inquiries")
+          .select("id, ref_code, channel, customer_phone, fbp, fbc, client_ip, user_agent, event_source_url, meta_tracking")
+          .eq("customer_phone", customerPayload.phone)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (phoneInquiry) {
+          matchedInquiryId = phoneInquiry.id;
+          const meta = (phoneInquiry.meta_tracking && typeof phoneInquiry.meta_tracking === "object" && !Array.isArray(phoneInquiry.meta_tracking))
+            ? (phoneInquiry.meta_tracking as Record<string, any>)
+            : {};
+          inheritedAttribution = {
+            ...(inheritedAttribution || {}),
+            channel_source: params.channel,
+            inquiry_ref_code: phoneInquiry.ref_code,
+            fbp: phoneInquiry.fbp || meta.fbp || inheritedAttribution?.fbp || null,
+            fbc: phoneInquiry.fbc || meta.fbc || inheritedAttribution?.fbc || null,
+            client_ip: phoneInquiry.client_ip || meta.client_ip_address || inheritedAttribution?.client_ip || null,
+            user_agent: phoneInquiry.user_agent || meta.client_user_agent || inheritedAttribution?.user_agent || null,
+            event_source_url: phoneInquiry.event_source_url || meta.event_source_url || null,
+            meta_tracking: {
+              ...meta,
+              ...(inheritedAttribution?.meta_tracking || {}),
+              fbp: phoneInquiry.fbp || meta.fbp || inheritedAttribution?.fbp || null,
+              fbc: phoneInquiry.fbc || meta.fbc || inheritedAttribution?.fbc || null,
+              client_ip_address: phoneInquiry.client_ip || meta.client_ip_address || null,
+              client_user_agent: phoneInquiry.user_agent || meta.client_user_agent || null,
+              event_source_url: phoneInquiry.event_source_url || meta.event_source_url || null,
+              matched_inquiry_id: phoneInquiry.id,
+              matched_ref_code: phoneInquiry.ref_code,
+              matched_at: new Date().toISOString(),
+            },
+          };
+        }
+      } catch (phoneInqErr) {
+        console.warn("[createManualOrderAction] Could not lookup inquiry by phone:", phoneInqErr);
+      }
+    }
+
     // Execute place_order RPC with staff permissions
     const { data, error } = await supabase.rpc("place_order", {
       p_items: itemsPayload as any,
@@ -202,7 +396,7 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
       p_customer_note: params.customerNote?.trim() || undefined,
       p_business_id: params.businessId || undefined,
       p_billing_address: undefined,
-      p_attribution: undefined,
+      p_attribution: inheritedAttribution ? (inheritedAttribution as any) : undefined,
       p_channel: params.channel,
       p_for_user: params.userId || undefined,
       p_quote_request_id: params.quoteRequestId || undefined,
@@ -216,6 +410,40 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
 
     const orderId = (data as any)?.order_id || (data as any)?.id;
     const orderNumber = (data as any)?.order_number;
+
+    // Persist full meta_tracking into order's attribution column if inherited
+    if (orderId && inheritedAttribution?.meta_tracking) {
+      try {
+        await supabase
+          .from("orders")
+          .update({
+            attribution: {
+              ...inheritedAttribution,
+              channel_source: params.channel,
+            },
+          })
+          .eq("id", orderId);
+      } catch (attrSaveErr) {
+        console.warn("[createManualOrderAction] Failed to persist full inherited meta_tracking:", attrSaveErr);
+      }
+    }
+
+    // Mark matched storefront inquiry as converted
+    if (orderId && matchedInquiryId) {
+      try {
+        await supabase
+          .from("storefront_inquiries")
+          .update({
+            status: "converted",
+            converted_order_id: orderId,
+            customer_phone: customerPayload.phone || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", matchedInquiryId);
+      } catch (inqUpdateErr) {
+        console.warn("[createManualOrderAction] Failed to mark inquiry as converted:", inqUpdateErr);
+      }
+    }
 
     revalidatePath("/admin/orders");
     revalidatePath("/admin/overview");

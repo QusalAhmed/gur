@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      storefront_inquiries: {
+        Row: {
+          id: string
+          ref_code: string
+          channel: string
+          customer_phone: string | null
+          fbp: string | null
+          fbc: string | null
+          client_ip: string | null
+          user_agent: string | null
+          event_source_url: string | null
+          meta_tracking: Json | null
+          status: string
+          converted_order_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          ref_code: string
+          channel?: string
+          customer_phone?: string | null
+          fbp?: string | null
+          fbc?: string | null
+          client_ip?: string | null
+          user_agent?: string | null
+          event_source_url?: string | null
+          meta_tracking?: Json | null
+          status?: string
+          converted_order_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          ref_code?: string
+          channel?: string
+          customer_phone?: string | null
+          fbp?: string | null
+          fbc?: string | null
+          client_ip?: string | null
+          user_agent?: string | null
+          event_source_url?: string | null
+          meta_tracking?: Json | null
+          status?: string
+          converted_order_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storefront_inquiries_converted_order_id_fkey"
+            columns: ["converted_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       addresses: {
         Row: {
           address_line: string

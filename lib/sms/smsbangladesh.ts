@@ -66,8 +66,8 @@ export interface DispatchOrderStatusSmsParams {
 }
 
 const DEFAULT_TEMPLATES = {
-  placed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। খুব শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন। ধন্যবাদ!",
-  confirmed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। আপনার পার্সেলটি প্যাকিং সম্পন্ন করে দ্রুত পাঠিয়ে দেওয়া হবে। ধন্যবাদ!",
+  placed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। বিস্তারিত দেখুন: {order_link}",
+  confirmed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। বিস্তারিত দেখুন: {order_link}",
   shipped: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: {tracking_code}। পার্সেল ট্র্যাক করুন: {tracking_url}",
   delivered: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!",
 };
@@ -462,7 +462,7 @@ export async function dispatchOrderStatusSms(
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
       let query = supabaseAdmin
         .from("orders")
-        .select("id, order_number, attribution");
+        .select("id, order_number, public_token, attribution");
 
       if (isUuid) {
         query = query.or(`id.eq.${orderId},order_number.eq.${orderNumber || orderId}`);
@@ -487,12 +487,22 @@ export async function dispatchOrderStatusSms(
   }
 
   // 4. Render Message from Template
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://gur-phi.vercel.app"
+  ).replace(/\/$/, "");
+  const tokenParam = orderRow?.public_token ? `?token=${orderRow.public_token}` : "";
+  const confirmationUrl = `${baseUrl}/order-confirmed/${orderNumber || orderId}${tokenParam}`;
+
   const template = config.templates[status] || DEFAULT_TEMPLATES[status];
   const renderedMessage = renderSmsTemplate(template, {
     customer_name: customerName || "সম্মানিত গ্রাহক",
     order_number: orderNumber,
     order_id: orderNumber,
     amount: grandTotal != null ? Math.round(Number(grandTotal)) : "",
+    order_link: confirmationUrl,
+    confirmation_link: confirmationUrl,
     courier_name: courierName || "Steadfast Courier",
     tracking_code: trackingCode || "N/A",
     tracking_url: trackingUrl || "https://steadfast.com.bd/t/" + (trackingCode || ""),

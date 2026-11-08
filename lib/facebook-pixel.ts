@@ -41,10 +41,95 @@ export const getClientFbpAndFbc = (): { fbp: string | null; fbc: string | null }
 };
 
 /**
+ * Safe patch to enable BDT (Bangladeshi Taka) in Meta Pixel's client-side currency whitelist.
+ * fbevents.js has an internal whitelist of ~47 billing currencies (SignalsEventValidation.VALID_CURRENCY_CODES)
+ * which lacks BDT by default, causing a client-side warning even though Meta CAPI & Ads Manager support BDT.
+ */
+export const patchFbCurrencySupport = () => {
+  if (typeof window === "undefined") return;
+  try {
+    const win = window as any;
+    const fbqObj = win.fbq;
+
+    // Suppress known false-positive BDT warning in console
+    if (!win._fbPixelConsoleHooked && typeof console !== "undefined") {
+      const origWarn = console.warn;
+      const origError = console.error;
+      console.warn = (...args: any[]) => {
+        if (
+          typeof args[0] === "string" &&
+          args[0].includes("[Meta Pixel]") &&
+          args[0].includes("currency") &&
+          args[0].includes("invalid")
+        ) {
+          return;
+        }
+        origWarn.apply(console, args);
+      };
+      console.error = (...args: any[]) => {
+        if (
+          typeof args[0] === "string" &&
+          args[0].includes("[Meta Pixel]") &&
+          args[0].includes("currency") &&
+          args[0].includes("invalid")
+        ) {
+          return;
+        }
+        origError.apply(console, args);
+      };
+      win._fbPixelConsoleHooked = true;
+    }
+
+    if (!fbqObj) return;
+
+    // 1. Post-load patch if module is already registered in fbevents.js
+    if (typeof fbqObj.getFbeventsModules === "function") {
+      const valMod = fbqObj.getFbeventsModules("SignalsEventValidation");
+      if (valMod && valMod.VALID_CURRENCY_CODES) {
+        valMod.VALID_CURRENCY_CODES["BDT"] = 1;
+      }
+    }
+    if (fbqObj.__fbeventsResolvedModules?.SignalsEventValidation?.VALID_CURRENCY_CODES) {
+      fbqObj.__fbeventsResolvedModules.SignalsEventValidation.VALID_CURRENCY_CODES["BDT"] = 1;
+    }
+
+    // 2. Pre-load setter proxy to patch SignalsEventValidation upon module registration
+    if (!fbqObj._bdtPatched) {
+      let currentEnsure = fbqObj.ensureModuleRegistered;
+      Object.defineProperty(fbqObj, "ensureModuleRegistered", {
+        configurable: true,
+        enumerable: true,
+        get: () => currentEnsure,
+        set: (fn) => {
+          currentEnsure = function (this: any, name: string, factory: any) {
+            if (name === "SignalsEventValidation" && typeof factory === "function") {
+              const origFactory = factory;
+              factory = function () {
+                const res = origFactory();
+                if (res && res.VALID_CURRENCY_CODES) {
+                  res.VALID_CURRENCY_CODES["BDT"] = 1;
+                }
+                return res;
+              };
+            }
+            return fn.call(this, name, factory);
+          };
+        },
+      });
+      fbqObj._bdtPatched = true;
+    }
+  } catch {
+    // Safe fallback
+  }
+};
+
+/**
  * Safe invocation of window.fbq if running in the browser
  */
 export const fbq = (...args: any[]) => {
   if (typeof window === "undefined") return;
+
+  patchFbCurrencySupport();
 
   if (process.env.NODE_ENV !== "production") {
     console.log(
@@ -515,4 +600,188 @@ export const trackInitiateCheckout = ({
   fbq("track", "InitiateCheckout", params, { eventID: eventId });
 
   return { eventId, fired: true };
+};
+
+export interface TrackContactParams {
+  channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms";
+  refCode?: string;
+  phone?: string | null;
+  customData?: Record<string, any>;
+  eventId?: string;
+}
+
+/**
+ * Generates or retrieves a short, memorable inquiry reference code for WhatsApp/call leads.
+ * Persists in sessionStorage so the visitor gets the same reference during their session.
+ */
+export const getOrGenerateInquiryRefCode = (prefix = "W"): string => {
+  if (typeof window === "undefined") {
+    return `#${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+  try {
+    const key = `gur_inquiry_ref_${prefix}`;
+    let stored = sessionStorage.getItem(key);
+    if (!stored) {
+      const randomDigits = Math.floor(1000 + Math.random() * 9000);
+      stored = `#${prefix}-${randomDigits}`;
+      sessionStorage.setItem(key, stored);
+    }
+    return stored;
+  } catch {
+    return `#${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+};
+
+/**
+ * Tracks Contact / Lead touchpoint when visitor clicks Call, WhatsApp, or Messenger.
+ * - Fires browser fbq("track", "Contact", ...)
+ * - Asynchronously dispatches server CAPI Contact event with cookies & IP
+ */
+export const trackContact = ({
+  channel,
+  refCode,
+  phone,
+  customData,
+  eventId: customEventId,
+}: TrackContactParams): string => {
+  const eventId = customEventId || generateEventId();
+
+  if (phone) {
+    setPixelUserPhone(phone);
+  }
+
+  const payload: Record<string, any> = {
+    channel,
+    content_name: `Contact via ${channel.toUpperCase()}`,
+    content_category: "Direct Outreach",
+    ...(refCode ? { ref_code: refCode } : {}),
+    ...(customData || {}),
+  };
+
+  fbq("track", "Contact", payload, { eventID: eventId });
+
+  if (typeof window !== "undefined") {
+    const { fbp, fbc } = getClientFbpAndFbc();
+    const currentUrl = window.location.href;
+
+    import("@/actions/facebook-capi")
+      .then(({ sendCapiContactAction }) => {
+        sendCapiContactAction({
+          eventId,
+          channel,
+          refCode,
+          phone: phone || null,
+          url: currentUrl,
+          fbp,
+          fbc,
+          customData: payload,
+        }).catch((err) => {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[Facebook Pixel/CAPI] sendCapiContactAction error:", err);
+          }
+        });
+      })
+      .catch((importErr) => {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[Facebook Pixel/CAPI] Failed to import sendCapiContactAction:", importErr);
+        }
+      });
+  }
+
+  return eventId;
+};
+
+export interface TrackPurchaseParams {
+  orderNumber: string;
+  orderId?: string;
+  value: number;
+  currency?: string;
+  items?: Array<{
+    productId?: string;
+    variantId?: string;
+    productName?: string;
+    quantity?: number;
+    unitPrice?: number;
+  }>;
+  phone?: string | null;
+  eventId?: string;
+  force?: boolean;
+}
+
+/**
+ * Deduplicated client-side browser Purchase event.
+ * Fires fbq("track", "Purchase", ...) using orderNumber as the eventID.
+ * Meta deduplicates this with the server CAPI Purchase event having the same eventID.
+ * Strictly checks sessionStorage to avoid double-firing on page reloads.
+ */
+export const trackPurchase = ({
+  orderNumber,
+  orderId,
+  value,
+  currency = "BDT",
+  items = [],
+  phone,
+  eventId: customEventId,
+  force = false,
+}: TrackPurchaseParams): { eventId: string; fired: boolean } => {
+  const effectiveEventId = customEventId || orderNumber || orderId || generateEventId();
+
+  if (typeof window !== "undefined") {
+    try {
+      const storageKey = `fb_pixel_purchase_${orderNumber || orderId}`;
+      if (sessionStorage.getItem(storageKey) && !force) {
+        console.log(
+          `%c[Facebook Pixel] Purchase event skipped: Already recorded in this session for order #${orderNumber || orderId} (deduplicated to prevent duplicate conversion reporting). Pass ?test=1 in URL or clear sessionStorage to re-test.`,
+          "color: #f59e0b; font-weight: bold; background: #fffbeb; padding: 2px 6px; border-radius: 4px;"
+        );
+        return { eventId: effectiveEventId, fired: false };
+      }
+      sessionStorage.setItem(storageKey, new Date().toISOString());
+    } catch {
+      // Safe fallback
+    }
+  }
+
+  if (phone) {
+    setPixelUserPhone(phone);
+  }
+
+  // Ensure Meta Pixel client-side currency dictionary allows BDT
+  patchFbCurrencySupport();
+
+  const safeItems = Array.isArray(items) ? items : [];
+  const numVal = Number(value);
+  const safeValue = !isNaN(numVal) && numVal > 0 ? Number(numVal.toFixed(2)) : 1.0;
+  const rawCurrency = (currency || "BDT").toString().trim().toUpperCase();
+  const validCurrency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : "BDT";
+
+  const totalQuantity = safeItems.reduce(
+    (sum, item) => sum + (Number(item.quantity) || 1),
+    0
+  );
+
+  const payload: Record<string, any> = {
+    content_ids: safeItems.map((item) => String(item.variantId || item.productId || "")).filter(Boolean),
+    content_type: "product",
+    contents: safeItems.map((item) => ({
+      id: String(item.variantId || item.productId || ""),
+      quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+      item_price: Math.max(0, Number(Number(item.unitPrice || 0).toFixed(2))),
+    })),
+    num_items: Math.max(1, totalQuantity),
+    value: safeValue,
+    currency: validCurrency,
+    order_id: orderNumber || orderId,
+  };
+
+  console.log(
+    `%c[Facebook Pixel] Firing Purchase event for order #${orderNumber || orderId}:`,
+    "background: #1877F2; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;",
+    payload,
+    { eventID: effectiveEventId }
+  );
+
+  fbq("track", "Purchase", payload, { eventID: effectiveEventId });
+
+  return { eventId: effectiveEventId, fired: true };
 };

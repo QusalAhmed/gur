@@ -10,6 +10,7 @@ import {
 } from "@/lib/redux/slices/cart-slice";
 import { toBnNumber } from "@/lib/storefront-i18n";
 import { CartSheet } from "./cart-sheet";
+import { trackContact } from "@/lib/facebook-pixel";
 
 interface StoreHeaderProps {
   storeName?: string;
@@ -98,6 +99,7 @@ export function StoreHeader({
           {/* Hotline Button */}
           <a
             href={`tel:${rawHotlineDigits}`}
+            onClick={() => trackContact({ channel: "phone", customData: { source: "header_hotline" } })}
             className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-3 sm:px-4 rounded-full shadow-md transition-all touch-manipulation"
           >
             <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import {
@@ -19,6 +19,7 @@ import {
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
 import { LiveStockSection } from "./live-stock-section";
+import { getOrGenerateInquiryRefCode, trackContact } from "@/lib/facebook-pixel";
 
 interface ContactSectionProps {
   lang?: StorefrontLang;
@@ -44,7 +45,12 @@ export function ContactSection({
   onScrollToHelp,
 }: ContactSectionProps) {
   const [copied, setCopied] = useState(false);
+  const [inquiryRef, setInquiryRef] = useState<string>("");
   const t = STOREFRONT_TEXT[lang];
+
+  useEffect(() => {
+    setInquiryRef(getOrGenerateInquiryRefCode("W"));
+  }, []);
 
   const finalMessengerUrl =
     messengerUrl ||
@@ -109,18 +115,29 @@ export function ContactSection({
     }
   };
 
-  // Pre-filled greetings
+  // Pre-filled greetings with optional visitor inquiry tracking token
   const whatsappMsg = encodeURIComponent(
     lang === "bn"
-      ? "আসসালামু আলাইকুম, আমি খাঁটি গুড় কিনতে চাই এবং বিস্তারিত জানতে চাই।"
-      : "Hello, I would like to order pure artisanal jaggery / know more."
+      ? `আসসালামু আলাইকুম, আমি খাঁটি গুড় কিনতে চাই এবং বিস্তারিত জানতে চাই। ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
+      : `Hello, I would like to order pure artisanal jaggery / know more. ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
   );
 
   const smsMsg = encodeURIComponent(
     lang === "bn"
-      ? "আসসালামু আলাইকুম, আমি গুড় অর্ডার করতে চাই।"
-      : "Hello, I would like to order molasses."
+      ? `আসসালামু আলাইকুম, আমি গুড় অর্ডার করতে চাই। ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
+      : `Hello, I would like to order molasses. ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
   );
+
+  const handleContactClick = (channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms") => {
+    trackContact({
+      channel,
+      refCode: inquiryRef || undefined,
+      customData: {
+        hotline,
+        storeName: displayName,
+      },
+    });
+  };
 
   const sectionContent = (
     <div className="relative z-10 w-full max-w-2xl sm:max-w-3xl mx-auto my-auto py-2">
@@ -185,6 +202,7 @@ export function ContactSection({
           <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <a
               href={`tel:${rawPhone}`}
+              onClick={() => handleContactClick("phone")}
               aria-label={`${t.phoneCallTitle}: ${hotline} - ${t.callNowBtn}`}
               className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm py-2.5 sm:py-3 px-5 sm:px-6 rounded-xl sm:rounded-2xl shadow-md transition-all touch-manipulation cursor-pointer"
             >
@@ -228,6 +246,7 @@ export function ContactSection({
           {/* WhatsApp */}
           <a
             href={`https://wa.me/${intlPhone}?text=${whatsappMsg}`}
+            onClick={() => handleContactClick("whatsapp")}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${t.whatsappTitle} - ${t.whatsappChatBtn}`}
@@ -255,6 +274,7 @@ export function ContactSection({
           {/* Facebook Messenger */}
           <a
             href={finalMessengerUrl}
+            onClick={() => handleContactClick("messenger")}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${t.messengerTitle} - ${t.messengerChatBtn}`}
@@ -302,6 +322,7 @@ export function ContactSection({
             </div>
             <a
               href={`imo://call?phone=${intlPhone}`}
+              onClick={() => handleContactClick("imo")}
               aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
               className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
             >
@@ -312,6 +333,7 @@ export function ContactSection({
           {/* SMS */}
           <a
             href={`sms:${rawPhone}?body=${smsMsg}`}
+            onClick={() => handleContactClick("sms")}
             aria-label={`${t.smsTitle} - ${t.smsSendBtn}`}
             className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
           >

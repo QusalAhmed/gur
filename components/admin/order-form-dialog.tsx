@@ -25,7 +25,13 @@ import {
   Clock,
   Calendar,
   X,
+  Link2,
+  Loader2,
 } from "lucide-react";
+import {
+  searchInquiryByRefCodeAction,
+  type InquiryLookupResult,
+} from "@/actions/new-order-ops";
 import {
   DbGeoDivision,
   DbGeoDistrict,
@@ -442,6 +448,66 @@ export function OrderFormDialog({
     }
   };
 
+  // Reference Code & Web Touchpoint
+  const [refCodeInput, setRefCodeInput] = React.useState(
+    order?.attribution?.inquiry_ref_code ? `#${order.attribution.inquiry_ref_code}` : ""
+  );
+  const [isSearchingRefCode, setIsSearchingRefCode] = React.useState(false);
+  const [matchedInquiry, setMatchedInquiry] = React.useState<InquiryLookupResult | null>(null);
+
+  React.useEffect(() => {
+    if (open) {
+      const existingRef = order?.attribution?.inquiry_ref_code;
+      setRefCodeInput(existingRef ? `#${existingRef}` : "");
+      setMatchedInquiry(null);
+    }
+  }, [open, order]);
+
+  // Extract reference token if user pasted whole WhatsApp message or raw ref
+  const extractRefToken = (input: string) => {
+    const match = input.match(/[#]?[WwPp]-\d+/);
+    return match ? match[0].toUpperCase() : input.trim();
+  };
+
+  // Handle ref code lookup
+  const handleRefCodeLookup = async () => {
+    const raw = extractRefToken(refCodeInput);
+    if (!raw) return;
+    setIsSearchingRefCode(true);
+    try {
+      const res = await searchInquiryByRefCodeAction(raw);
+      if (res.ok && res.data) {
+        setMatchedInquiry(res.data);
+        setRefCodeInput(`#${res.data.refCode}`);
+        if (showToast) {
+          showToast(`Matched web session: #${res.data.refCode}`, "success");
+        }
+        // Auto fill phone if empty
+        const curPhone = form.getFieldValue("phone");
+        if (res.data.customerPhone && !curPhone) {
+          form.setFieldValue("phone", res.data.customerPhone);
+        }
+        // Auto match channel
+        if (res.data.channel === "whatsapp") {
+          form.setFieldValue("channel", "whatsapp");
+        } else if (res.data.channel === "phone") {
+          form.setFieldValue("channel", "phone");
+        }
+      } else {
+        setMatchedInquiry(null);
+        if (showToast) {
+          showToast("No active web session found for this reference code.", "info");
+        }
+      }
+    } catch (err: any) {
+      if (showToast) {
+        showToast(err.message || "Failed to search reference code", "destructive");
+      }
+    } finally {
+      setIsSearchingRefCode(false);
+    }
+  };
+
   // TanStack Form instance
   const form = useForm({
     canSubmitWhenInvalid: true,
@@ -554,6 +620,44 @@ export function OrderFormDialog({
             ? (valid.shipping_phone?.trim() || valid.phone.trim())
             : valid.phone.trim();
 
+          const baseAttr = order?.attribution || {};
+          let orderAttribution: Record<string, any> | undefined = undefined;
+          if (matchedInquiry) {
+            const meta = matchedInquiry.metaTracking || {};
+            orderAttribution = {
+              ...baseAttr,
+              channel_source: valid.channel,
+              inquiry_ref_code: matchedInquiry.refCode,
+              fbp: matchedInquiry.fbp || meta.fbp || baseAttr.fbp || null,
+              fbc: matchedInquiry.fbc || meta.fbc || baseAttr.fbc || null,
+              client_ip: matchedInquiry.clientIp || meta.client_ip_address || baseAttr.client_ip || null,
+              user_agent: meta.client_user_agent || baseAttr.user_agent || null,
+              event_source_url: meta.event_source_url || null,
+              meta_tracking: {
+                ...meta,
+                ...(baseAttr.meta_tracking || {}),
+                fbp: matchedInquiry.fbp || meta.fbp || baseAttr.fbp || null,
+                fbc: matchedInquiry.fbc || meta.fbc || baseAttr.fbc || null,
+                client_ip_address: matchedInquiry.clientIp || meta.client_ip_address || null,
+                matched_ref_code: matchedInquiry.refCode,
+                matched_at: new Date().toISOString(),
+              },
+            };
+          } else if (refCodeInput.trim()) {
+            const cleanRef = extractRefToken(refCodeInput).replace(/^#/, "");
+            orderAttribution = {
+              ...baseAttr,
+              channel_source: valid.channel,
+              inquiry_ref_code: cleanRef,
+              meta_tracking: {
+                ...(baseAttr.meta_tracking || {}),
+                matched_ref_code: cleanRef,
+              },
+            };
+          } else {
+            orderAttribution = Object.keys(baseAttr).length > 0 ? baseAttr : undefined;
+          }
+
           const createdOrder: Order = {
             id: newId,
             customer: valid.customer.trim(),
@@ -639,6 +743,7 @@ export function OrderFormDialog({
                 created_at: nowStr,
               },
             ],
+            attribution: orderAttribution,
           };
 
           await onSave(createdOrder, "create");
@@ -725,6 +830,38 @@ export function OrderFormDialog({
             items: valid.items as OrderItem[],
             notes: updatedNotes,
             events: [editEvent, ...(order.events || [])],
+            attribution: (() => {
+              const baseAttr = order.attribution || {};
+              if (matchedInquiry) {
+                const meta = matchedInquiry.metaTracking || {};
+                return {
+                  ...baseAttr,
+                  channel_source: valid.channel,
+                  inquiry_ref_code: matchedInquiry.refCode,
+                  fbp: matchedInquiry.fbp || meta.fbp || baseAttr.fbp || null,
+                  fbc: matchedInquiry.fbc || meta.fbc || baseAttr.fbc || null,
+                  client_ip: matchedInquiry.clientIp || meta.client_ip_address || baseAttr.client_ip || null,
+                  user_agent: meta.client_user_agent || baseAttr.user_agent || null,
+                  event_source_url: meta.event_source_url || null,
+                  meta_tracking: {
+                    ...meta,
+                    ...(baseAttr.meta_tracking || {}),
+                    fbp: matchedInquiry.fbp || meta.fbp || baseAttr.fbp || null,
+                    fbc: matchedInquiry.fbc || meta.fbc || baseAttr.fbc || null,
+                    client_ip_address: matchedInquiry.clientIp || meta.client_ip_address || null,
+                    matched_ref_code: matchedInquiry.refCode,
+                    matched_at: new Date().toISOString(),
+                  },
+                };
+              } else if (refCodeInput.trim()) {
+                const cleanRef = extractRefToken(refCodeInput).replace(/^#/, "");
+                return {
+                  ...baseAttr,
+                  inquiry_ref_code: cleanRef,
+                };
+              }
+              return baseAttr;
+            })(),
           };
 
           await onSave(updatedOrder, "edit");
@@ -1210,6 +1347,84 @@ export function OrderFormDialog({
                     <Database className="h-3 w-3 text-emerald-600" />
                     {geoDivisions.length} Divisions • {geoDistricts.length} Districts (DB)
                   </span>
+                </div>
+
+                {/* Web / WhatsApp Reference Code Banner */}
+                <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="order_form_reference_id" className="text-xs font-medium flex items-center gap-1.5 text-foreground">
+                      <Link2 className="h-3.5 w-3.5 text-amber-600" />
+                      Web / WhatsApp Reference ID (ওয়েব সেশন রেফারেন্স)
+                    </Label>
+                    {matchedInquiry ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-600 border border-emerald-300">
+                        <Check className="h-2.5 w-2.5" />
+                        Linked: #{matchedInquiry.refCode}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">
+                        Links customer&apos;s website visit, ad click &amp; Meta ad cookies (_fbp/_fbc)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Input
+                      id="order_form_reference_id"
+                      placeholder="e.g. #W-7391 or paste customer WhatsApp message"
+                      value={refCodeInput}
+                      onChange={(e) => setRefCodeInput(e.target.value)}
+                      className="h-8 text-xs font-mono bg-background"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleRefCodeLookup();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={matchedInquiry ? "secondary" : "outline"}
+                      onClick={handleRefCodeLookup}
+                      disabled={isSearchingRefCode || !refCodeInput.trim()}
+                      className="h-8 px-3 text-xs gap-1.5 shrink-0"
+                    >
+                      {isSearchingRefCode ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Link2 className="h-3 w-3" />
+                      )}
+                      {matchedInquiry ? "Linked" : "Link Ref"}
+                    </Button>
+                    {matchedInquiry && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setMatchedInquiry(null);
+                          setRefCodeInput("");
+                        }}
+                        className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        title="Clear linked session"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {matchedInquiry && (
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 p-2 rounded border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        ✓ Origin: <strong>{matchedInquiry.channel.toUpperCase()}</strong> | 
+                        Meta Tracking: <strong>{matchedInquiry.hasMetaTracking ? "Ad Click / Cookies Attached" : "Direct Web Traffic"}</strong>
+                      </span>
+                      <span className="text-muted-foreground font-mono text-[10px]">
+                        Session: {new Date(matchedInquiry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Row 1: Customer Name & Contact Phone Numbers */}

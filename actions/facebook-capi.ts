@@ -657,6 +657,172 @@ export async function sendCapiUserPropertiesAction(params: {
 }
 
 /**
+ * Server action to send Contact / Lead touchpoint event to Meta CAPI.
+ * Dispatched when visitor clicks Call, WhatsApp, Messenger, or submits call request.
+ * Non-blocking, fire-and-forget safe.
+ */
+export async function sendCapiContactAction(params: {
+  eventId: string;
+  channel: string;
+  refCode?: string;
+  phone?: string | null;
+  url?: string;
+  fbp?: string | null;
+  fbc?: string | null;
+  customData?: Record<string, any>;
+}) {
+  try {
+    const { userData, eventSourceUrl } = await getRequestContext(
+      {
+        ph: params.phone,
+        fbp: params.fbp,
+        fbc: params.fbc,
+      },
+      params.url
+    );
+
+    if (params.refCode) {
+      try {
+        const cleanRef = params.refCode.replace(/^#/, "").trim();
+        const client = supabaseAdmin || supabase;
+        await client.from("storefront_inquiries").upsert(
+          {
+            ref_code: cleanRef,
+            channel: params.channel || "whatsapp",
+            customer_phone: params.phone || null,
+            fbp: userData.fbp || null,
+            fbc: userData.fbc || null,
+            client_ip: userData.client_ip_address || null,
+            user_agent: userData.client_user_agent || null,
+            event_source_url: eventSourceUrl || null,
+            meta_tracking: {
+              fbp: userData.fbp || null,
+              fbc: userData.fbc || null,
+              client_ip_address: userData.client_ip_address || null,
+              client_user_agent: userData.client_user_agent || null,
+              event_source_url: eventSourceUrl || null,
+              ref_code: cleanRef,
+              channel: params.channel,
+              created_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "ref_code" }
+        );
+      } catch (inqErr) {
+        console.warn("[CAPI Action] Failed to persist storefront inquiry:", inqErr);
+      }
+    }
+
+    return await dispatchCapiEventWithQueue({
+      eventName: "Contact",
+      eventId: params.eventId,
+      eventSourceUrl,
+      actionSource: "website",
+      userData,
+      customData: {
+        channel: params.channel,
+        content_name: `Contact via ${params.channel.toUpperCase()}`,
+        content_category: "Direct Outreach",
+        ...(params.refCode ? { ref_code: params.refCode } : {}),
+        ...(params.customData || {}),
+      },
+    });
+  } catch (err: any) {
+    console.error("[CAPI Action] sendCapiContactAction error:", err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Enriches an existing order's meta_tracking attribution when the customer
+ * opens their confirmation link (/order-confirmed/[id]).
+ * Extracts real client IP, user agent, _fbp, and _fbc from their browser and persists
+ * them into orders.attribution.meta_tracking.
+ */
+export async function enrichOrderMetaTrackingAction(params: {
+  orderIdentifier: string;
+  publicToken?: string;
+  fbp?: string | null;
+  fbc?: string | null;
+  url?: string;
+}): Promise<{
+  success: boolean;
+  orderNumber?: string;
+  enriched?: boolean;
+  error?: string;
+}> {
+  try {
+    const cleanId = (params.orderIdentifier || "").trim();
+    if (!cleanId) return { success: false, error: "Missing orderIdentifier" };
+
+    const client = supabaseAdmin || supabase;
+    let query = client
+      .from("orders")
+      .select("id, order_number, public_token, status, attribution");
+
+    if (UUID_REGEX.test(cleanId)) {
+      query = query.eq("id", cleanId);
+    } else {
+      query = query.eq("order_number", cleanId);
+    }
+
+    const { data: orderRow, error: fetchErr } = await query.maybeSingle();
+    if (fetchErr || !orderRow) {
+      return { success: false, error: "Order not found" };
+    }
+
+    // Verify token if provided
+    if (params.publicToken && orderRow.public_token && orderRow.public_token !== params.publicToken) {
+      return { success: false, error: "Invalid public token" };
+    }
+
+    const { userData, eventSourceUrl } = await getRequestContext(
+      { fbp: params.fbp, fbc: params.fbc },
+      params.url
+    );
+
+    const attr =
+      orderRow.attribution && typeof orderRow.attribution === "object"
+        ? (orderRow.attribution as Record<string, any>)
+        : {};
+    const existingMeta =
+      attr.meta_tracking && typeof attr.meta_tracking === "object"
+        ? (attr.meta_tracking as Record<string, any>)
+        : {};
+
+    const enrichedMeta = {
+      ...existingMeta,
+      fbp: userData.fbp || existingMeta.fbp || null,
+      fbc: userData.fbc || existingMeta.fbc || null,
+      client_ip_address: userData.client_ip_address || existingMeta.client_ip_address || null,
+      client_user_agent: userData.client_user_agent || existingMeta.client_user_agent || null,
+      event_source_url: eventSourceUrl || existingMeta.event_source_url || null,
+      last_link_opened_at: new Date().toISOString(),
+    };
+
+    await client
+      .from("orders")
+      .update({
+        attribution: {
+          ...attr,
+          meta_tracking: enrichedMeta,
+        },
+      })
+      .eq("id", orderRow.id);
+
+    return {
+      success: true,
+      orderNumber: orderRow.order_number,
+      enriched: true,
+    };
+  } catch (err: any) {
+    console.error("[CAPI Action] enrichOrderMetaTrackingAction error:", err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
  * Captures request context (cookies, headers, IP, user agent, URL) to store
  * inside order attribution metadata at checkout time for delayed CAPI purchase.
  */
@@ -750,7 +916,7 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
     let query = client
       .from("orders")
       .select(
-        "id, order_number, status, grand_total, customer_name, customer_phone, shipping_phone, shipping_address, currency, attribution, order_items(id, product_id, variant_id, sku, product_name, variant_name, quantity, unit_price, line_total)"
+        "id, order_number, public_token, channel, status, grand_total, customer_name, customer_phone, shipping_phone, shipping_address, currency, attribution, order_items(id, product_id, variant_id, sku, product_name, variant_name, quantity, unit_price, line_total)"
       );
 
     if (UUID_REGEX.test(cleanId)) {
@@ -883,6 +1049,11 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
         ? (orderRow.shipping_address as Record<string, any>)
         : {};
 
+    const fbp = metaTracking.fbp || attr.fbp || null;
+    const fbc = metaTracking.fbc || attr.fbc || null;
+    const clientIp = metaTracking.client_ip_address || null;
+    const clientUa = metaTracking.client_user_agent || null;
+
     const userData: CapiUserData = {
       ph: phone || null,
       fn: firstName || null,
@@ -890,17 +1061,34 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
       ct: address.district ? String(address.district).trim().toLowerCase() : null,
       st: address.division ? String(address.division).trim().toLowerCase() : null,
       country: "bd",
-      fbp: metaTracking.fbp || null,
-      fbc: metaTracking.fbc || null,
-      client_ip_address: metaTracking.client_ip_address || null,
-      client_user_agent: metaTracking.client_user_agent || null,
+      fbp,
+      fbc,
+      client_ip_address: clientIp,
+      client_user_agent: clientUa,
     };
+
+    // Determine Meta CAPI action_source dynamically:
+    // If we have browser cookies or IP from a website session, use "website"
+    // If order was taken over Phone without web cookies, use "phone_call"
+    // If order was taken over WhatsApp without web cookies, use "chat"
+    const channel = (orderRow.channel || "").toLowerCase();
+    let actionSource: "website" | "phone_call" | "chat" = "website";
+    if (fbp || clientIp || metaTracking.event_source_url) {
+      actionSource = "website";
+    } else if (channel === "phone") {
+      actionSource = "phone_call";
+    } else if (channel === "whatsapp") {
+      actionSource = "chat";
+    } else {
+      actionSource = "phone_call";
+    }
 
     const capiResult = await sendCapiEvents([
       {
         eventName: "Purchase",
         eventId,
         eventSourceUrl: metaTracking.event_source_url || undefined,
+        actionSource,
         userData,
         customData: {
           content_ids: contentIds,

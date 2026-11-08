@@ -30,6 +30,8 @@ import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { useOrder } from "@/hooks/use-order";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
 import type { OrderItem } from "@/types/order";
+import { getClientFbpAndFbc, trackPurchase } from "@/lib/facebook-pixel";
+import { enrichOrderMetaTrackingAction } from "@/actions/facebook-capi";
 
 const HOTLINE_NUMBER = "01843557389";
 const RAW_HOTLINE = HOTLINE_NUMBER.replace(/[^0-9]/g, "");
@@ -310,6 +312,57 @@ function OrderConfirmedContent() {
   useEffect(() => {
     setDeliveryDetails(getProbableDeliveryDetails(order?.date));
   }, [order?.date]);
+
+  // Automatic Silent Tracking Enrichment & Deduplicated Pixel Purchase Event
+  useEffect(() => {
+    const orderNum = order?.order_number || order?.id;
+    if (!order || !orderNum) return;
+
+    let isForceTest = false;
+    let publicToken: string | undefined;
+    if (typeof window !== "undefined") {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        publicToken = searchParams.get("token") || undefined;
+        isForceTest = searchParams.get("test") === "1" || searchParams.get("force") === "1";
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    // 1. Fire browser Pixel Purchase event (with deduplication key = order_number)
+    trackPurchase({
+      orderNumber: orderNum,
+      orderId: order.id,
+      value: order.grand_total,
+      currency: order.currency || "BDT",
+      items: (order.items || []).map((item) => ({
+        productId: item.product_id || undefined,
+        variantId: item.variant_id || undefined,
+        productName: item.product_name,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+      })),
+      phone: order.phone || order.shipping_phone,
+      force: isForceTest,
+    });
+
+    // 2. Silently enrich server meta_tracking with genuine customer IP, User-Agent, _fbp, _fbc
+    const { fbp, fbc } = getClientFbpAndFbc();
+    const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
+
+    enrichOrderMetaTrackingAction({
+      orderIdentifier: orderNum,
+      publicToken,
+      fbp,
+      fbc,
+      url: currentUrl,
+    }).catch((enrichErr) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[Order Confirmed] Failed to enrich meta tracking:", enrichErr);
+      }
+    });
+  }, [order?.order_number, order?.id, order?.grand_total, order?.phone, order?.shipping_phone]);
 
   const whatsappMessage = encodeURIComponent(
     order?.order_number

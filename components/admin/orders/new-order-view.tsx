@@ -20,6 +20,7 @@ import {
   Truck,
   ArrowLeft,
   Building,
+  Link2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,8 +37,10 @@ import {
 } from "@/components/ui/select";
 import {
   searchCustomerByPhoneAction,
+  searchInquiryByRefCodeAction,
   createManualOrderAction,
   CustomerLookupResult,
+  InquiryLookupResult,
 } from "@/actions/new-order-ops";
 import { formatBDT, normalizeBDPhone } from "@/lib/admin-format";
 
@@ -96,6 +99,58 @@ export function NewOrderView({
   const [foundCustomer, setFoundCustomer] = useState<CustomerLookupResult | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+
+  // Reference Code & Web Touchpoint
+  const [refCodeInput, setRefCodeInput] = useState("");
+  const [isSearchingRefCode, setIsSearchingRefCode] = useState(false);
+  const [matchedInquiry, setMatchedInquiry] = useState<InquiryLookupResult | null>(null);
+
+  // Extract reference token if user pasted whole WhatsApp message or raw ref
+  const extractRefToken = (input: string) => {
+    const match = input.match(/[#]?[WwPp]-\d+/);
+    return match ? match[0].toUpperCase() : input.trim();
+  };
+
+  // Handle ref code lookup
+  const handleRefCodeLookup = async () => {
+    const raw = extractRefToken(refCodeInput);
+    if (!raw) return;
+    setIsSearchingRefCode(true);
+    try {
+      const res = await searchInquiryByRefCodeAction(raw);
+      if (res.ok && res.data) {
+        setMatchedInquiry(res.data);
+        setRefCodeInput(`#${res.data.refCode}`);
+        toast.success(`Matched web session: #${res.data.refCode}`);
+        if (res.data.channel === "whatsapp" && channel !== "whatsapp") {
+          setChannel("whatsapp");
+        } else if (res.data.channel === "phone" && channel !== "phone") {
+          setChannel("phone");
+        }
+        if (res.data.customerPhone && !phoneInput) {
+          setPhoneInput(res.data.customerPhone);
+          const cRes = await searchCustomerByPhoneAction(res.data.customerPhone);
+          if (cRes.ok && cRes.data) {
+            setFoundCustomer(cRes.data);
+            setCustomerName(cRes.data.name);
+            if (cRes.data.email) setCustomerEmail(cRes.data.email);
+            setRecipientName(cRes.data.name);
+            setRecipientPhone(cRes.data.phone);
+            if (cRes.data.address) {
+              if (cRes.data.address.districtId) setDistrictId(cRes.data.address.districtId);
+              if (cRes.data.address.upazila) setUpazila(cRes.data.address.upazila);
+              if (cRes.data.address.addressLine) setAddressLine(cRes.data.address.addressLine);
+            }
+          }
+        }
+      } else {
+        setMatchedInquiry(null);
+        toast.info("No active web session found for this reference code.");
+      }
+    } finally {
+      setIsSearchingRefCode(false);
+    }
+  };
 
   // Shipping
   const [recipientName, setRecipientName] = useState("");
@@ -224,6 +279,7 @@ export function NewOrderView({
         customerEmail: customerEmail.trim() || null,
         userId: foundCustomer?.id || null,
         businessId: foundCustomer?.businessId || null,
+        refCode: matchedInquiry?.refCode || extractRefToken(refCodeInput) || undefined,
         shippingAddress: {
           recipientName: recipientName.trim() || customerName.trim(),
           phone: recipientPhone.trim() || phoneInput.trim(),
@@ -333,6 +389,83 @@ export function NewOrderView({
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4 text-xs">
+              {/* Optional Web / WhatsApp Inquiry Reference Code */}
+              <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium flex items-center gap-1.5 text-foreground">
+                    <Link2 className="size-3.5 text-primary" />
+                    Web / WhatsApp Reference ID (ওয়েব সেশন রেফারেন্স)
+                  </Label>
+                  {matchedInquiry ? (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-300 text-[10px] gap-1 font-mono">
+                      <Check className="size-2.5" />
+                      Linked: #{matchedInquiry.refCode}
+                    </Badge>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">
+                      Links Meta ad cookies & web session
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-1.5">
+                  <Input
+                    placeholder="e.g. #W-7391 or paste WhatsApp message"
+                    value={refCodeInput}
+                    onChange={(e) => setRefCodeInput(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleRefCodeLookup();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={matchedInquiry ? "secondary" : "outline"}
+                    onClick={handleRefCodeLookup}
+                    disabled={isSearchingRefCode || !refCodeInput.trim()}
+                    className="h-8 px-2.5 text-xs gap-1 shrink-0"
+                  >
+                    {isSearchingRefCode ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Link2 className="size-3" />
+                    )}
+                    {matchedInquiry ? "Linked" : "Link Ref"}
+                  </Button>
+                  {matchedInquiry && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setMatchedInquiry(null);
+                        setRefCodeInput("");
+                      }}
+                      className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      title="Clear linked session"
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  )}
+                </div>
+
+                {matchedInquiry && (
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 p-2 rounded border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      ✓ Origin: <strong>{matchedInquiry.channel.toUpperCase()}</strong> | 
+                      Meta Ad Cookies: <strong>{matchedInquiry.hasMetaTracking ? "Available (_fbp/_fbc attached)" : "Direct Web Traffic"}</strong>
+                    </span>
+                    <span className="text-muted-foreground font-mono text-[10px]">
+                      {new Date(matchedInquiry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Phone Number / ফোন নম্বর *</Label>

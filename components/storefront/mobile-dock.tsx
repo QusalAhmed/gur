@@ -9,6 +9,7 @@ import {
   selectCartTotalQuantity,
   openCart,
 } from "@/lib/redux/slices/cart-slice";
+import { trackContact } from "@/lib/facebook-pixel";
 
 interface MobileDockProps {
   lang: StorefrontLang;
@@ -84,6 +85,7 @@ export function MobileDock({
         <motion.a
           whileTap={{ scale: 0.92 }}
           href={`tel:${rawHotlineDigits}`}
+          onClick={() => trackContact({ channel: "phone", customData: { source: "mobile_dock" } })}
           aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
           className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3 rounded-full shadow-md transition-all touch-manipulation shrink-0"
           title={t.hotlineLabel}

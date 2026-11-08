@@ -444,7 +444,7 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col justify-center pt-3.5 sm:pt-16 pb-16 sm:pb-6 px-3 sm:px-6 md:px-10 lg:px-16 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col justify-center pt-3.5 sm:pt-16 pb-16 sm:pb-6 px-3 sm:px-6 md:px-10 lg:px-16 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-500"
     >
       {/* Subtle Rustic Texture Backdrop Lines */}
       <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />

@@ -1,5 +1,6 @@
 "use server";
 
+import { cacheLife, cacheTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
@@ -20,6 +21,14 @@ function resolveProductImage(storageUrl?: string): string {
  * Server Action: Fetches active products, variants, images, and store settings for the storefront.
  */
 export async function getStorefrontProductsAction(): Promise<StorefrontDataResult> {
+  "use cache";
+  cacheTag("storefront-products");
+  cacheLife({
+    stale: 300,
+    revalidate: 300,
+    expire: 1800,
+  });
+
   const client = supabaseAdmin || supabase;
 
   let hotline = "01843557389";

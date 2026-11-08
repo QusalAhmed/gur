@@ -16,13 +16,18 @@ export function resolveProductImage(storageUrl?: string): string {
   return "/images/products/blackstrap-drum.jpg";
 }
 
-export function ProductLoading() {
+export function ProductLoading({
+  autoScrollToProduct = false,
+}: {
+  autoScrollToProduct?: boolean;
+} = {}) {
   return (
     <ProductShowcase
       products={[]}
       defaultHotline="01843557389"
       storeName="খেজুরের খাঁটি গুড়"
       isLoading={true}
+      autoScrollToProduct={autoScrollToProduct}
     />
   );
 }

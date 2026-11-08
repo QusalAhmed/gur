@@ -46,9 +46,12 @@ export interface CapiEventParams {
     | "InitiateCheckout"
     | "Purchase"
     | "UserProperties"
+    | "Contact"
+    | "Lead"
     | (string & {});
   eventId: string;
   eventSourceUrl?: string;
+  actionSource?: "website" | "phone_call" | "chat" | "email" | "other" | "system_generated";
   userData: CapiUserData;
   customData?: CapiCustomData;
 }
@@ -226,7 +229,7 @@ export async function sendCapiEvents(
       event_name: event.eventName,
       event_time: nowSeconds,
       event_id: event.eventId,
-      action_source: "website",
+      action_source: event.actionSource || "website",
       user_data: formattedUserData,
     };
 

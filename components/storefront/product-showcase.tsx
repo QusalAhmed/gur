@@ -11,6 +11,7 @@ import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
 import type { SelectedProductData } from "./quick-order-sheet";
 import { MobileDock } from "./mobile-dock";
+import { trackContact } from "@/lib/facebook-pixel";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
@@ -417,6 +418,7 @@ export function ProductShowcase({
           {/* Direct Call Button (Specially optimized for aged shoppers on mobile) */}
           <a
             href={`tel:${rawHotlineDigits}`}
+            onClick={() => trackContact({ channel: "phone", customData: { source: "showcase_header" } })}
             aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
             className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full shadow-md transition-all touch-manipulation"
             title={t.hotlineLabel}
@@ -602,6 +604,7 @@ export function ProductShowcase({
             </p>
             <a
               href={`tel:${rawHotlineDigits}`}
+              onClick={() => trackContact({ channel: "phone", customData: { source: "showcase_preorder" } })}
               className="mt-6 inline-flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-3.5 px-6 rounded-full shadow-lg transition-all text-base sm:text-lg touch-manipulation"
             >
               <Phone className="w-5 h-5 animate-pulse" />

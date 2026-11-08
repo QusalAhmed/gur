@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { motion } from "motion/react";
 import {
   Sparkles,
   ShieldCheck,
@@ -119,13 +118,7 @@ export function IntroSection({
   const sectionContent = (
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
       {/* Top Heritage Pill & Badges */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: false, amount: "some" }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="text-center space-y-2 px-2"
-      >
+      <div className="text-center space-y-2 px-2">
         <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
           <span>{t.introBadge}</span>
@@ -142,7 +135,7 @@ export function IntroSection({
         <p className="text-xs sm:text-sm md:text-base text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
           {displaySubtitle}
         </p>
-      </motion.div>
+      </div>
 
       {/* Business Key Stats Grid */}
       <div className="px-1">
@@ -150,12 +143,8 @@ export function IntroSection({
           {stats.map((s, idx) => {
             const Icon = s.icon;
             return (
-              <motion.div
+              <div
                 key={idx}
-                initial={{ opacity: 0, y: 12, scale: 0.95 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: false, amount: "some" }}
-                transition={{ duration: 0.4, delay: idx * 0.08, ease: "easeOut" }}
                 className="bg-white/90 dark:bg-stone-900/90 border border-amber-200/90 dark:border-stone-800/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-center shadow-xs"
               >
                 <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -171,20 +160,14 @@ export function IntroSection({
                 <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">
                   {s.label}
                 </span>
-              </motion.div>
+              </div>
             );
           })}
         </div>
       </div>
 
       {/* Business Story & Heritage Statement */}
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: false, amount: "some" }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200"
-      >
+      <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
         <div className="flex items-center gap-2">
           <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
           <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
@@ -219,16 +202,10 @@ export function IntroSection({
             )}
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Bottom Action: "View Products & Order" */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: false, amount: "some" }}
-        transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
-        className="text-center pt-1 pb-1"
-      >
+      <div className="text-center pt-1 pb-1">
         <button
           type="button"
           onClick={handleScrollToProducts}
@@ -238,7 +215,7 @@ export function IntroSection({
           <span>{t.viewProductsBtn}</span>
           <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
         </button>
-      </motion.div>
+      </div>
     </div>
   );
 

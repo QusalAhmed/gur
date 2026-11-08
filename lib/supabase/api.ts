@@ -1381,7 +1381,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         grand_total: grandTotal,
         amount_paid: Number(savedOrder.amount_paid) || 0,
         customer_note: savedOrder.customer_note || null,
-        attribution: {},
+        attribution: savedOrder.attribution || {},
         cancel_reason: savedOrder.cancel_reason || null,
         shipping_method_name: savedOrder.courier_name || null,
       };
@@ -1503,6 +1503,25 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
           console.warn("Notice inserting notes into order_notes:", noteInsErr);
         }
       }
+
+      if (savedOrder.attribution?.inquiry_ref_code) {
+        try {
+          const cleanRef = String(savedOrder.attribution.inquiry_ref_code).replace(/^#/, "").trim();
+          if (cleanRef) {
+            await supabase
+              .from("storefront_inquiries")
+              .update({
+                status: "converted",
+                converted_order_id: orderDbId || undefined,
+                customer_phone: normalizedPhone || null,
+                updated_at: new Date().toISOString(),
+              })
+              .ilike("ref_code", cleanRef);
+          }
+        } catch (inqErr) {
+          console.warn("Could not mark inquiry converted in direct insert flow:", inqErr);
+        }
+      }
     } catch (insertErr: any) {
       console.error("Error attempting order insert:", insertErr);
       throw new Error(insertErr?.message || "Failed to save order in database");
@@ -1604,6 +1623,8 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     p_shipping_method_id: shippingMethodId,
     p_payment_method: paymentMethod,
     p_customer_note: savedOrder.customer_note?.trim() || undefined,
+    p_attribution: savedOrder.attribution ? (savedOrder.attribution as any) : undefined,
+    p_channel: savedOrder.channel || "phone",
   });
 
   if (placeError) {
@@ -1711,6 +1732,12 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
   if (normalizedShippingPhone) {
     postRpcUpdate.shipping_phone = normalizedShippingPhone;
   }
+  if (savedOrder.attribution && Object.keys(savedOrder.attribution).length > 0) {
+    postRpcUpdate.attribution = savedOrder.attribution;
+  }
+  if (savedOrder.channel) {
+    postRpcUpdate.channel = savedOrder.channel;
+  }
   if (Object.keys(postRpcUpdate).length > 0 && orderNumber) {
     try {
       await supabase
@@ -1718,7 +1745,25 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         .update(postRpcUpdate)
         .eq("order_number", orderNumber);
     } catch (e) {
-      console.warn("Could not set phone fields on newly created RPC order:", e);
+      console.warn("Could not set phone/attribution fields on newly created RPC order:", e);
+    }
+  }
+
+  if (savedOrder.attribution?.inquiry_ref_code) {
+    try {
+      const cleanRef = String(savedOrder.attribution.inquiry_ref_code).replace(/^#/, "").trim();
+      if (cleanRef) {
+        await supabase
+          .from("storefront_inquiries")
+          .update({
+            status: "converted",
+            customer_phone: normalizedPhone || null,
+            updated_at: new Date().toISOString(),
+          })
+          .ilike("ref_code", cleanRef);
+      }
+    } catch (inqErr) {
+      console.warn("Could not mark inquiry converted in place_order flow:", inqErr);
     }
   }
 
