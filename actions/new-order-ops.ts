@@ -83,12 +83,16 @@ export async function searchInquiryByRefCodeAction(
     if (!cleanRef) {
       return { ok: false, message: "Please provide a reference code." };
     }
+    if (cleanRef.includes("*") || !/^[A-Za-z0-9_-]+$/.test(cleanRef)) {
+      return { ok: false, message: "Invalid reference code format." };
+    }
+    const escapedRef = cleanRef.replace(/[%_*?\\]/g, "\\$&");
 
     const supabase = await createClient();
     const { data: inquiry, error } = await supabase
       .from("storefront_inquiries")
       .select("ref_code, channel, customer_phone, fbp, fbc, client_ip, meta_tracking, created_at")
-      .ilike("ref_code", cleanRef)
+      .ilike("ref_code", escapedRef)
       .limit(1)
       .maybeSingle();
 
@@ -279,12 +283,22 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
         if (previousOrder?.attribution && typeof previousOrder.attribution === "object") {
           const prevAttr = previousOrder.attribution as Record<string, any>;
           const prevMeta = prevAttr.meta_tracking || {};
+          const {
+            purchase_event_sent_at,
+            purchase_event_id,
+            purchase_event_error,
+            purchase_dispatched_at,
+            event_id,
+            last_link_opened_at,
+            ...inheritedMeta
+          } = prevMeta;
+          const { sms_sent, ...restAttr } = prevAttr;
           inheritedAttribution = {
-            ...prevAttr,
+            ...restAttr,
             fbp: prevMeta.fbp || prevAttr.fbp || null,
             fbc: prevMeta.fbc || prevAttr.fbc || null,
             meta_tracking: {
-              ...prevMeta,
+              ...inheritedMeta,
               inherited_from_order_id: previousOrder.id,
               inherited_at: new Date().toISOString(),
             },
@@ -298,12 +312,13 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
     // Lookup touchpoint inquiry by Reference Code (e.g. #W-7391) or customer phone
     if (params.refCode) {
       const cleanRef = params.refCode.replace(/^#/, "").trim();
-      if (cleanRef) {
+      if (cleanRef && !cleanRef.includes("*") && /^[A-Za-z0-9_-]+$/.test(cleanRef)) {
         try {
+          const escapedRef = cleanRef.replace(/[%_*?\\]/g, "\\$&");
           const { data: inquiry } = await supabase
             .from("storefront_inquiries")
             .select("id, ref_code, channel, customer_phone, fbp, fbc, client_ip, user_agent, event_source_url, meta_tracking")
-            .ilike("ref_code", cleanRef)
+            .ilike("ref_code", escapedRef)
             .limit(1)
             .maybeSingle();
 

@@ -1516,7 +1516,7 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
                 customer_phone: normalizedPhone || null,
                 updated_at: new Date().toISOString(),
               })
-              .ilike("ref_code", cleanRef);
+              .eq("ref_code", cleanRef.toUpperCase());
           }
         } catch (inqErr) {
           console.warn("Could not mark inquiry converted in direct insert flow:", inqErr);
@@ -1757,10 +1757,11 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
           .from("storefront_inquiries")
           .update({
             status: "converted",
+            converted_order_id: placeData?.order_id || undefined,
             customer_phone: normalizedPhone || null,
             updated_at: new Date().toISOString(),
           })
-          .ilike("ref_code", cleanRef);
+          .eq("ref_code", cleanRef.toUpperCase());
       }
     } catch (inqErr) {
       console.warn("Could not mark inquiry converted in place_order flow:", inqErr);
@@ -1794,6 +1795,8 @@ export function formatDbOrderRecord(data: any): Order {
     variant_id: it.variant_id,
     product_id: it.product_id || null,
     image: it.image || null,
+    product_name_bn: it.product_name_bn || it.products?.name_bn || null,
+    variant_name_bn: it.variant_name_bn || it.product_variants?.name_bn || null,
   }));
 
   const rawEvents = data.order_events || data.timeline || [];
@@ -1944,7 +1947,11 @@ export async function fetchOrdersFromDb(): Promise<Order[]> {
     .from("orders")
     .select(`
       *,
-      order_items (*),
+      order_items (
+        *,
+        products (id, name, name_bn),
+        product_variants (id, name, name_bn)
+      ),
       order_events (*),
       order_notes (*)
     `)
@@ -1956,7 +1963,11 @@ export async function fetchOrdersFromDb(): Promise<Order[]> {
       .from("orders")
       .select(`
         *,
-        order_items (*),
+        order_items (
+          *,
+          products (id, name, name_bn),
+          product_variants (id, name, name_bn)
+        ),
         order_events (*)
       `)
       .order("placed_at", { ascending: false });
@@ -3123,7 +3134,11 @@ export async function fetchOrdersByIdsFromDb(orderNumbers: string[]): Promise<Or
     .from("orders")
     .select(`
       *,
-      order_items (*),
+      order_items (
+        *,
+        products (id, name, name_bn),
+        product_variants (id, name, name_bn)
+      ),
       order_events (*),
       order_notes (*)
     `)

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useAdminBadgeCounts } from "@/hooks/use-admin-badge-counts";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import { canRoleAccessPath, ROLE_CONFIG } from "@/lib/admin-permissions";
 
 import {
@@ -253,8 +254,19 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { user, role, logout } = useAdminAuth();
   const { data: counts } = useAdminBadgeCounts();
+  const { storeName, storeNameBn, logoUrl } = useSiteSettings();
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
+
+  const brandName = storeNameBn || storeName || "খাঁটি গুড়";
+  const brandSubtitle =
+    storeName && storeNameBn && storeName !== storeNameBn
+      ? storeName
+      : "Molasses Operations";
+  const brandInitial =
+    brandName.length >= 2 && brandName.charCodeAt(1) >= 0x0980 && brandName.charCodeAt(1) <= 0x09ff
+      ? brandName.slice(0, 2)
+      : brandName.slice(0, 1).toUpperCase();
 
   return (
     <Sidebar
@@ -266,17 +278,28 @@ export function AdminSidebar() {
         <Link
           href="/admin"
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
-          title="খাঁটি গুড় অ্যাডমিন"
+          title={brandName}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white font-bold shadow-sm ring-1 ring-amber-700/20">
-            গূ
-          </div>
+          {logoUrl ? (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white dark:bg-zinc-900 border border-border/80 shadow-xs">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt={brandName}
+                className="h-full w-full object-contain p-0.5"
+              />
+            </div>
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white font-bold shadow-sm ring-1 ring-amber-700/20 text-sm">
+              {brandInitial}
+            </div>
+          )}
           <div className="flex flex-col group-data-[collapsible=icon]:hidden min-w-0">
             <span className="text-sm font-semibold tracking-tight text-foreground truncate">
-              খাঁটি গুড় অ্যাডমিন
+              {brandName}
             </span>
             <span className="text-[11px] text-muted-foreground font-medium truncate">
-              Molasses Operations
+              {brandSubtitle}
             </span>
           </div>
         </Link>

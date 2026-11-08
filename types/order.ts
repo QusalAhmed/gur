@@ -10,6 +10,8 @@ export interface OrderItem {
   product_id?: string | null;
   image?: string | null;
   package_type?: string | null;
+  product_name_bn?: string | null;
+  variant_name_bn?: string | null;
 }
 
 export type OrderNoteType =

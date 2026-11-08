@@ -388,9 +388,9 @@ export const trackUserProperties = ({
     ...(customData || {}),
   };
   if (formattedPhone) properties.ph = formattedPhone;
-  if (email) properties.em = email.trim().toLowerCase();
-  if (name) properties.fn = name.trim();
-  if (externalId) properties.external_id = externalId.trim();
+  if (email) properties.em = String(email).trim().toLowerCase();
+  if (name) properties.fn = String(name).trim();
+  if (externalId) properties.external_id = String(externalId).trim();
 
   // Fire single browser custom UserProperties event with matching eventID for CAPI deduplication.
   // (Do NOT call fbq("setUserProperties") here as that internally dispatches an extra UserProperties event, causing pixel to fire twice)
@@ -525,25 +525,39 @@ export interface TrackContactParams {
   eventId?: string;
 }
 
+const INQUIRY_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+function generateInquiryRefSuffix(length = 6): string {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(length));
+    return Array.from(bytes, (b) => INQUIRY_ALPHABET[b % INQUIRY_ALPHABET.length]).join("");
+  }
+  let res = "";
+  for (let i = 0; i < length; i++) {
+    res += INQUIRY_ALPHABET[Math.floor(Math.random() * INQUIRY_ALPHABET.length)];
+  }
+  return res;
+}
+
 /**
  * Generates or retrieves a short, memorable inquiry reference code for WhatsApp/call leads.
  * Persists in sessionStorage so the visitor gets the same reference during their session.
+ * Uses an expanded 6-character alphanumeric space to avoid visitor collisions.
  */
 export const getOrGenerateInquiryRefCode = (prefix = "W"): string => {
   if (typeof window === "undefined") {
-    return `#${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+    return `#${prefix}-${generateInquiryRefSuffix(6)}`;
   }
   try {
     const key = `gur_inquiry_ref_${prefix}`;
     let stored = sessionStorage.getItem(key);
     if (!stored) {
-      const randomDigits = Math.floor(1000 + Math.random() * 9000);
-      stored = `#${prefix}-${randomDigits}`;
+      stored = `#${prefix}-${generateInquiryRefSuffix(6)}`;
       sessionStorage.setItem(key, stored);
     }
     return stored;
   } catch {
-    return `#${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+    return `#${prefix}-${generateInquiryRefSuffix(6)}`;
   }
 };
 
@@ -639,7 +653,11 @@ export const trackPurchase = ({
   eventId: customEventId,
   force = false,
 }: TrackPurchaseParams): { eventId: string; fired: boolean } => {
-  const effectiveEventId = customEventId || orderNumber || orderId || generateEventId();
+  const effectiveEventId =
+    customEventId ||
+    (orderNumber ? String(orderNumber).trim() : undefined) ||
+    (orderId ? String(orderId).trim() : undefined) ||
+    generateEventId();
 
   if (typeof window !== "undefined") {
     try {
@@ -678,7 +696,7 @@ export const trackPurchase = ({
     })),
     num_items: totalQuantity || 1,
     value: safeValue,
-    currency: (currency || "BDT").trim().toUpperCase(),
+    currency: String(currency || "BDT").trim().toUpperCase(),
     order_id: orderNumber || orderId,
   };
 

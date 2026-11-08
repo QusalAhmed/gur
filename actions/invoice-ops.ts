@@ -1,5 +1,6 @@
 "use server";
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { assertStaffRole } from "@/lib/admin-guard";
 
@@ -10,9 +11,9 @@ import { assertStaffRole } from "@/lib/admin-guard";
 export async function assignInvoiceNumberAction(orderId: string) {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
-    const { data, error } = await supabase.rpc("assign_invoice_number", {
+    const { data, error } = await client.rpc("assign_invoice_number", {
       p_order_id: orderId,
     });
 

@@ -382,7 +382,7 @@ export async function sendCapiViewContentAction(params: {
           },
         ],
         value: safePrice,
-        currency: (params.currency || "BDT").trim().toUpperCase(),
+        currency: String(params.currency || "BDT").trim().toUpperCase(),
       },
     });
   } catch (err: any) {
@@ -439,7 +439,7 @@ export async function sendCapiAddToCartAction(params: {
         ],
         num_items: safeQuantity,
         value: lineTotal,
-        currency: (params.currency || "BDT").trim().toUpperCase(),
+        currency: String(params.currency || "BDT").trim().toUpperCase(),
       },
     });
   } catch (err: any) {
@@ -510,7 +510,7 @@ export async function sendCapiInitiateCheckoutAction(params: {
         contents,
         num_items: totalQuantity,
         value: Number(params.value) || 0,
-        currency: (params.currency || "BDT").trim().toUpperCase(),
+        currency: String(params.currency || "BDT").trim().toUpperCase(),
       },
     });
   } catch (err: any) {
@@ -523,7 +523,7 @@ export async function sendCapiInitiateCheckoutAction(params: {
  * Server action to send Purchase event to Meta CAPI.
  */
 export async function sendCapiPurchaseAction(params: {
-  eventId: string;
+  eventId?: string;
   orderId?: string;
   orderNumber?: string;
   items: {
@@ -572,9 +572,15 @@ export async function sendCapiPurchaseAction(params: {
       0
     );
 
+    const effectiveEventId =
+      params.eventId ||
+      (params.orderNumber ? String(params.orderNumber).trim() : undefined) ||
+      (params.orderId ? String(params.orderId).trim() : undefined) ||
+      ("evt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11));
+
     return await dispatchCapiEventWithQueue({
       eventName: "Purchase",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       userData,
       customData: {
@@ -583,7 +589,7 @@ export async function sendCapiPurchaseAction(params: {
         contents,
         num_items: totalQuantity,
         value: Number(params.value) || 0,
-        currency: (params.currency || "BDT").trim().toUpperCase(),
+        currency: String(params.currency || "BDT").trim().toUpperCase(),
         order_id: params.orderNumber || params.orderId,
       },
     });
@@ -683,7 +689,7 @@ export async function sendCapiContactAction(params: {
 
     if (params.refCode) {
       try {
-        const cleanRef = params.refCode.replace(/^#/, "").trim();
+        const cleanRef = params.refCode.replace(/^#/, "").trim().toUpperCase();
         const client = supabaseAdmin || supabase;
         await client.from("storefront_inquiries").upsert(
           {
@@ -707,7 +713,7 @@ export async function sendCapiContactAction(params: {
             },
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "ref_code" }
+          { onConflict: "ref_code", ignoreDuplicates: true }
         );
       } catch (inqErr) {
         console.warn("[CAPI Action] Failed to persist storefront inquiry:", inqErr);
@@ -746,6 +752,7 @@ export async function enrichOrderMetaTrackingAction(params: {
   fbp?: string | null;
   fbc?: string | null;
   url?: string;
+  eventId?: string;
 }): Promise<{
   success: boolean;
   orderNumber?: string;
@@ -772,8 +779,8 @@ export async function enrichOrderMetaTrackingAction(params: {
       return { success: false, error: "Order not found" };
     }
 
-    // Verify token if provided
-    if (params.publicToken && orderRow.public_token && orderRow.public_token !== params.publicToken) {
+    // Strictly require and verify public token to prevent IDOR / unauthorized attribution modification
+    if (!params.publicToken || !orderRow.public_token || orderRow.public_token !== params.publicToken) {
       return { success: false, error: "Invalid public token" };
     }
 
@@ -793,6 +800,11 @@ export async function enrichOrderMetaTrackingAction(params: {
 
     const enrichedMeta = {
       ...existingMeta,
+      event_id:
+        params.eventId ||
+        existingMeta.event_id ||
+        (orderRow.order_number ? String(orderRow.order_number).trim() : undefined) ||
+        orderRow.id,
       fbp: userData.fbp || existingMeta.fbp || null,
       fbc: userData.fbc || existingMeta.fbc || null,
       client_ip_address: userData.client_ip_address || existingMeta.client_ip_address || null,
@@ -968,8 +980,13 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
     }
 
     // 3. Prepare payload using up-to-date order details
+    // Standardize eventId for Purchase deduplication: use the shared event_id from client Pixel enrichment
+    // when it exists; retain fallback to order_number / order ID when it does not.
     const eventId =
       metaTracking.event_id ||
+      metaTracking.purchase_event_id ||
+      (orderRow.order_number ? String(orderRow.order_number).trim() : undefined) ||
+      (orderRow.id ? String(orderRow.id).trim() : undefined) ||
       ("evt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11));
 
     const phone = orderRow.customer_phone || orderRow.shipping_phone;
@@ -1029,7 +1046,7 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
     );
 
     const safeValue = Number(orderRow.grand_total) || 0;
-    const currency = (orderRow.currency || "BDT").trim().toUpperCase();
+    const currency = String(orderRow.currency || "BDT").trim().toUpperCase();
 
     // Parse customer name into first name and last name
     let firstName: string | undefined;

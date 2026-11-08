@@ -1,5 +1,6 @@
 "use server";
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
@@ -16,9 +17,9 @@ export type ActionResult<T = any> =
 export async function confirmOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("orders")
       .update({ status: "confirmed" })
       .eq("id", orderId)
@@ -31,7 +32,7 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
     }
 
     // Insert timeline event
-    await supabase.from("order_events").insert({
+    await client.from("order_events").insert({
       order_id: orderId,
       event_type: "status_changed",
       from_value: "pending",
@@ -56,9 +57,9 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
 export async function processOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("orders")
       .update({ status: "processing" })
       .eq("id", orderId)
@@ -70,7 +71,7 @@ export async function processOrderAction(orderId: string): Promise<ActionResult>
       return { ok: false, code: friendly.code, message: friendly.message };
     }
 
-    await supabase.from("order_events").insert({
+    await client.from("order_events").insert({
       order_id: orderId,
       event_type: "status_changed",
       from_value: "confirmed",
@@ -106,10 +107,10 @@ export async function cancelOrderWithReasonAction(
 
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
     // Call cancel_order RPC
-    const { error: rpcErr } = await supabase.rpc("cancel_order", {
+    const { error: rpcErr } = await client.rpc("cancel_order", {
       p_order_id: orderId,
       p_reason: reason.trim(),
     });
@@ -120,7 +121,7 @@ export async function cancelOrderWithReasonAction(
     }
 
     // Insert staff note recording the reason
-    await supabase.from("staff_notes").insert({
+    await client.from("staff_notes").insert({
       entity_type: "order",
       entity_id: orderId,
       body: `Order cancelled. Reason: ${reason.trim()}`,
@@ -150,10 +151,10 @@ export async function addStaffNoteAction(
 
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
     // 1. Insert into staff_notes table
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("staff_notes")
       .insert({
         entity_type: "order",
@@ -171,14 +172,14 @@ export async function addStaffNoteAction(
 
     // 2. Also insert into order_notes if order exists
     try {
-      const { data: ord } = await supabase
+      const { data: ord } = await client
         .from("orders")
         .select("order_number")
         .eq("id", orderId)
         .maybeSingle();
 
       if (ord) {
-        await supabase.from("order_notes").insert({
+        await client.from("order_notes").insert({
           order_id: orderId,
           order_number: ord.order_number,
           type: noteType as any,
@@ -209,9 +210,9 @@ export async function setOrderItemsAction(
 ): Promise<ActionResult> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const client = supabaseAdmin || (await createClient());
 
-    const { data, error } = await supabase.rpc("set_order_items", {
+    const { data, error } = await client.rpc("set_order_items", {
       p_order_id: orderId,
       p_items: items as any,
       p_price_overrides: priceOverrides ? (priceOverrides as any) : null,

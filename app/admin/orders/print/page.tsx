@@ -42,19 +42,80 @@ interface StoreConfig {
   logoUrl?: string;
 }
 
+const DEFAULT_SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  "https://gur.com.bd"
+).replace(/\/+$/, "");
+
 const DEFAULT_STORE: StoreConfig = {
   name: "খেজুরের খাটি গুড়",
   tagline: "Heritage Artisanal Molasses & Natural Sweeteners",
   address: "Bagha, Rajshahi",
   phone: "0184-355389",
-  website: "https://gur.com.bd",
+  website: DEFAULT_SITE_URL,
 };
+
+const PRODUCT_NAME_BN_MAP: Record<string, string> = {
+  "patali gur": "পাটালি গুড়",
+  "liquid gur": "পাতলা ঝোলা গুড়",
+  "grainy liquid gur": "দানাদার ঝোলা গুড়",
+  "first cut patali": "প্রথম কাটের পাটালি",
+  "nut jaggery": "বাদাম গুড়",
+  "coconut jaggery": "নারিকেল গুড়",
+  "chocolate gur": "সন্দেশ গুড় / চকলেট গুড়",
+  "sandesh gur": "সন্দেশ গুড় / চকলেট গুড়",
+  "jhola gur": "ঝোলা গুড়",
+  "date palm molasses": "খেজুরের খাঁটি গুড়",
+  "date palm liquid": "পাতলা ঝোলা গুড়",
+  "date palm patali": "পাটালি গুড়",
+  "organic sugarcane": "আখের গুড়",
+  "sugarcane": "আখের গুড়",
+};
+
+function resolveItemBanglaName(it: any): string {
+  if (it.product_name_bn && String(it.product_name_bn).trim()) {
+    return String(it.product_name_bn).trim();
+  }
+  const name = it.product_name || "";
+  if (/[\u0980-\u09FF]/.test(name)) {
+    return name;
+  }
+  const lower = name.toLowerCase().trim();
+  for (const [en, bn] of Object.entries(PRODUCT_NAME_BN_MAP)) {
+    if (lower === en || lower.includes(en) || en.includes(lower)) {
+      return bn;
+    }
+  }
+  return name;
+}
+
+function resolveItemBanglaVariant(it: any): string {
+  if (it.variant_name_bn && String(it.variant_name_bn).trim()) {
+    return String(it.variant_name_bn).trim();
+  }
+  const vname = it.variant_name || "";
+  if (!vname) return "";
+  if (/[\u0980-\u09FF]/.test(vname)) {
+    return vname;
+  }
+  const lower = vname.toLowerCase().trim();
+  if (lower.includes("1kg") || lower.includes("1 kg")) {
+    return "স্ট্যান্ডার্ড প্যাক (১ কেজি)";
+  }
+  if (lower.includes("0.5kg") || lower.includes("0.5 kg") || lower.includes("500g")) {
+    return "স্ট্যান্ডার্ড প্যাক (০.৫ কেজি)";
+  }
+  if (lower.includes("1 pack")) return "১ প্যাক";
+  if (lower.includes("2 pack")) return "২ প্যাক";
+  if (lower.includes("3 pack")) return "৩ প্যাক";
+  return vname;
+}
 
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { storeName, storeNameBn, address, supportPhone, currencySymbol, logoUrl } = useSiteSettings();
-  const siteUrl = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, "");
 
   const storeConfig: StoreConfig = React.useMemo(() => ({
     name: storeNameBn || storeName || DEFAULT_STORE.name,
@@ -135,19 +196,16 @@ function PrintContent() {
     loadOrders();
   }, [idsParam]);
 
-  // 2. Pre-generate SVG QR Codes for website & tracking links
+  // 2. Pre-generate SVG QR Code for fixed store website
   React.useEffect(() => {
-    if (orders.length === 0) return;
-
     async function generateQrs() {
       const cache: Record<string, string> = {};
 
-      // General website QR
       try {
         const generalSvg = await QRCode.toString(storeConfig.website, {
           type: "svg",
           margin: 1,
-          width: 90,
+          width: 72,
           color: {
             dark: "#000000",
             light: "#ffffff",
@@ -158,34 +216,11 @@ function PrintContent() {
         console.error("Failed to generate store QR code:", e);
       }
 
-      // Order specific tracking QR codes
-      for (const ord of orders) {
-        const trackOrderNum = ord.order_number || ord.id;
-        const trackUrl = `${storeConfig.website}/track?order=${encodeURIComponent(trackOrderNum)}`;
-        try {
-          const svg = await QRCode.toString(trackUrl, {
-            type: "svg",
-            margin: 1,
-            width: 90,
-            color: {
-              dark: "#000000",
-              light: "#ffffff",
-            },
-          });
-          cache[ord.id] = svg;
-          if (ord.order_number) {
-            cache[ord.order_number] = svg;
-          }
-        } catch (e) {
-          console.error(`Failed to generate QR for order ${trackOrderNum}:`, e);
-        }
-      }
-
       setQrSvgs(cache);
     }
 
     generateQrs();
-  }, [orders, storeConfig.website]);
+  }, [storeConfig.website]);
 
   const handlePrint = React.useCallback(() => {
     if (orders.length > 0) {
@@ -307,7 +342,7 @@ function PrintContent() {
               ? "48mm"
               : "100%"} !important;
             margin: 0 auto !important;
-            padding: 2.5mm 1mm 4mm 1mm !important;
+            padding: 1.5mm 0.8mm 2mm 0.8mm !important;
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
@@ -320,11 +355,11 @@ function PrintContent() {
 
           .thermal-tear-line {
             display: block !important;
-            border-bottom: 2px dotted #000000 !important;
-            margin: 3mm 0 2mm 0 !important;
-            padding-bottom: 1.5mm !important;
+            border-bottom: 1.5px dotted #000000 !important;
+            margin: 1.5mm 0 1mm 0 !important;
+            padding-bottom: 0.8mm !important;
             text-align: center !important;
-            font-size: 8px !important;
+            font-size: 7.5px !important;
             font-family: monospace !important;
             color: #000000 !important;
           }
@@ -494,11 +529,18 @@ function PrintContent() {
         >
           {orders.map((order, orderIdx) => {
             const orderKey = order.order_number || order.id;
-            const qrSvgString =
-              qrSvgs[order.id] ||
-              (order.order_number ? qrSvgs[order.order_number] : "") ||
-              qrSvgs[storeConfig.website] ||
-              "";
+            const courierConsignmentId =
+              order.courier_consignment_id ||
+              order.printed_courier_snapshot?.consignment_id ||
+              order.courier_payload_snapshot?.consignment_id;
+            const formattedConsignmentId = courierConsignmentId
+              ? String(courierConsignmentId)
+                  .replace(/^#+/, "")
+                  .replace(/\s+/g, "")
+                  .match(/.{1,3}/g)
+                  ?.join(" ") || String(courierConsignmentId).replace(/^#+/, "")
+              : null;
+            const qrSvgString = qrSvgs[storeConfig.website] || "";
 
             return (
               <div key={order.id} className="relative">
@@ -506,7 +548,7 @@ function PrintContent() {
                     2-INCH / 58MM THERMAL STICKER TICKET
                 ───────────────────────────────────────────────────────────────── */}
                 <article
-                  className="thermal-sticker-page bg-white text-black font-sans shadow-lg rounded-sm border border-slate-300 p-2 sm:p-2.5 print:p-0 print:border-none print:shadow-none print:rounded-none select-text"
+                  className="thermal-sticker-page bg-white text-black font-sans shadow-lg rounded-sm border border-slate-300 p-1.5 sm:p-2 print:p-0 print:border-none print:shadow-none print:rounded-none select-text"
                   style={{
                     width: paperFormat === "58mm" ? "54mm" : paperFormat === "2inch" ? "48mm" : "100%",
                     minWidth: paperFormat === "a4" ? "auto" : undefined,
@@ -515,39 +557,41 @@ function PrintContent() {
                   {/* ============================================================= */}
                   {/* 1. BUSINESS NAME AND ADDRESS */}
                   {/* ============================================================= */}
-                  <header className="text-center">
+                  <header className={storeConfig.logoUrl ? "flex items-center justify-center gap-2 text-left" : "text-center"}>
                     {storeConfig.logoUrl && (
-                      <div className="flex justify-center mb-1">
+                      <div className="shrink-0 flex items-center justify-center">
                         <img
                           src={storeConfig.logoUrl}
                           alt={storeConfig.name}
-                          className="h-7 w-auto max-w-[120px] object-contain"
+                          className="h-9 sm:h-10 w-auto max-w-[70px] object-contain"
                         />
                       </div>
                     )}
-                    {/* Brand Crown / Emblem */}
-                    <div className="inline-flex items-center justify-center gap-1 font-black text-[13px] tracking-wider uppercase text-black">
-                      {storeConfig.name}
-                    </div>
+                    <div className="min-w-0">
+                      {/* Brand Crown / Emblem */}
+                      <div className="font-black text-[12px] sm:text-[12.5px] tracking-tight uppercase text-black leading-tight">
+                        {storeConfig.name}
+                      </div>
 
-                    {/* Physical Address */}
-                    <p className="text-[9.5px] font-light text-black leading-tight pt-0.5">
-                      {storeConfig.address}
-                    </p>
+                      {/* Physical Address */}
+                      <p className="text-[8.5px] font-light text-black leading-tight pt-0.5">
+                        {storeConfig.address}
+                      </p>
+                    </div>
                   </header>
 
                   {/* ============================================================= */}
                   {/* SUPPORT / HELPLINE NUMBER (SPAN FULL WIDTH OF PAGE)           */}
                   {/* ============================================================= */}
                   <section
-                    className="w-full bg-black text-white text-center py-2 px-1 my-2 rounded-xs select-all"
+                    className="w-full bg-black text-white text-center py-0.5 px-1 my-1 rounded-xs select-all"
                     title="Store Support Helpline"
                   >
-                    <div className="text-[8.5px] font-bold tracking-widest uppercase opacity-90 leading-none mb-1 flex items-center justify-center gap-1">
-                      <Phone className="h-2.5 w-2.5 inline" />
+                    <div className="text-[8px] font-bold tracking-widest uppercase opacity-90 leading-none mb-0.5 flex items-center justify-center gap-1">
+                      <Phone className="h-2 w-2 inline" />
                       <span>HELPLINE</span>
                     </div>
-                    <div className="font-mono font-black text-[13.5px] sm:text-[14px] tracking-wider leading-tight whitespace-nowrap">
+                    <div className="font-mono font-black text-[13px] sm:text-[13.5px] tracking-wider leading-none whitespace-nowrap py-0.5">
                       {storeConfig.phone}
                     </div>
                   </section>
@@ -555,29 +599,38 @@ function PrintContent() {
                   {/* ============================================================= */}
                   {/* ORDER NUMBER & INVOICE NUMBER                                 */}
                   {/* ============================================================= */}
-                  <section className="border-t-2 border-black py-1 my-2 space-y-1 font-mono text-black">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9.5px] font-black uppercase tracking-wider">
+                  <section className="my-0.5 space-y-0.5 font-mono text-black">
+                    <div className="flex items-center justify-between gap-1 leading-tight">
+                      <span className="text-[9px] font-black uppercase tracking-wider">
                         ORDER NO:
                       </span>
-                      <span className="font-black text-[13px] sm:text-[13.5px] tracking-tight select-all">
-                        #{order.order_number || order.id}
+                      <span className="font-black text-[12.5px] sm:text-[13px] tracking-tight select-all leading-tight">
+                        {String(order.order_number || order.id).replace(/^#+/, "")}
                       </span>
                     </div>
 
+                    {formattedConsignmentId && (
+                      <div
+                        className="text-center font-black text-[16px] sm:text-[17px] tracking-wider select-all py-0.5 border-t border-black/40 leading-none my-0.5"
+                        title="Courier Consignment ID"
+                      >
+                        #{formattedConsignmentId}
+                      </div>
+                    )}
+
                     {(order as any).invoice_number && (
-                      <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-black/40">
-                        <span className="text-[9px] font-bold uppercase tracking-wider">
+                      <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-black/40 leading-tight">
+                        <span className="text-[8.5px] font-bold uppercase tracking-wider">
                           INVOICE NO:
                         </span>
-                        <span className="font-bold text-[12px] select-all">
+                        <span className="font-bold text-[11px] select-all leading-tight">
                           {(order as any).invoice_number}
                         </span>
                       </div>
                     )}
 
                     {(order as any).payment_method === "credit_terms" && (order as any).payment_due_date && (
-                      <div className="flex items-center justify-between gap-1 text-[9px] font-bold p-1 bg-black/5 border border-black rounded-xs">
+                      <div className="flex items-center justify-between gap-1 text-[8.5px] font-bold px-1 py-0.5 bg-black/5 border border-black rounded-xs my-0.5">
                         <span>CREDIT DUE DATE:</span>
                         <span>{String((order as any).payment_due_date)}</span>
                       </div>
@@ -586,9 +639,9 @@ function PrintContent() {
 
                   {/* Delivery Note for delivery man */}
                   {order.notes && order.notes.filter((n) => n.type === "delivery").length > 0 && (
-                    <div className="p-1.5 my-1.5 bg-black/5 border-2 border-black text-[9px] rounded-xs">
-                      <span className="font-black uppercase text-[8.5px] flex items-center gap-1 font-mono">
-                        <Truck className="h-3 w-3 shrink-0 inline text-black" />
+                    <div className="p-1 my-1 bg-black/5 border border-black text-[8.5px] rounded-xs">
+                      <span className="font-black uppercase text-[8px] flex items-center gap-1 font-mono">
+                        <Truck className="h-2.5 w-2.5 shrink-0 inline text-black" />
                         <span>DELIVERY INSTRUCTIONS (FOR DELIVERY MAN):</span>
                       </span>
                       <div className="space-y-0.5 mt-0.5">
@@ -604,36 +657,41 @@ function PrintContent() {
                   {/* ============================================================= */}
                   {/* 3. ORDER ITEM NAME AND QUANTITY                                */}
                   {/* ============================================================= */}
-                  <section className="my-2 border-t-2 border-b-2 border-black py-1.5">
-                    <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider pb-1 border-b border-black">
+                  <section className="mt-0.5 mb-0 pb-0 pt-0.5">
+                    <div className="flex items-center justify-between text-[8.5px] font-black uppercase tracking-wider pb-0.5 border-b border-black">
                       <span>ORDER ITEMS</span>
                       <span className="text-right">QTY</span>
                     </div>
 
-                    <div className="divide-y divide-dashed divide-black/50">
+                    <div className="divide-y divide-dashed divide-black/40">
                       {order.items && order.items.length > 0 ? (
-                        order.items.map((it, idx) => (
-                          <div key={it.id || idx} className="py-1.5 space-y-0.5">
-                            {/* Product Name & Quantity Badge */}
-                            <div className="flex items-start justify-between gap-1.5">
-                              <span className="font-bold text-[10.5px] leading-tight text-black break-words flex-1">
-                                {idx + 1}. {it.product_name}
-                              </span>
-                              <span className="font-mono font-black bg-black text-white px-1.5 py-0.5 rounded-xs text-[9.5px] shrink-0">
-                                {it.quantity}
-                              </span>
-                            </div>
+                        order.items.map((it, idx) => {
+                          const banglaName = resolveItemBanglaName(it);
+                          const banglaVariant = resolveItemBanglaVariant(it);
 
-                            {/* Variant / Pack description if present */}
-                            {it.variant_name && (
-                              <div className="text-[9px] text-black/80 font-medium pl-3">
-                                Pack: {it.variant_name}
+                          return (
+                            <div key={it.id || idx} className="py-0.5 space-y-0">
+                              {/* Product Name & Quantity Badge */}
+                              <div className="flex items-start justify-between gap-1">
+                                <span className="font-bold text-[10px] sm:text-[10.5px] leading-tight text-black break-words flex-1">
+                                  {idx + 1}. {banglaName}
+                                </span>
+                                <span className="font-mono font-black bg-black text-white px-1 py-0.2 rounded-xs text-[9px] shrink-0 leading-tight">
+                                  {it.quantity}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        ))
+
+                              {/* Variant / Pack description if present */}
+                              {banglaVariant && (
+                                <div className="text-[8.5px] text-black/80 font-medium pl-2.5 leading-tight">
+                                  প্যাক: {banglaVariant}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
-                        <p className="text-[10px] italic text-center py-2 text-black/70">
+                        <p className="text-[9.5px] italic text-center py-1 text-black/70">
                           No line items found.
                         </p>
                       )}
@@ -643,29 +701,32 @@ function PrintContent() {
                   {/* ============================================================= */}
                   {/* 4. CONTACT INFORMATION (WEB ADDRESS, QR CODE OF WEB ADDRESS)   */}
                   {/* ============================================================= */}
-                  <footer className="text-center space-y-1.5">
+                  <footer className="text-center space-y-0.5 mt-0.5">
                     {/* QR Code */}
                     {showQrCode && qrSvgString && (
-                      <div className="flex flex-col items-center justify-center pt-1">
+                      <div className="flex flex-col items-center justify-center pt-0">
                         <div
-                          className="w-[84px] h-[84px] border border-black p-1 bg-white inline-flex items-center justify-center"
+                          className="w-[72px] h-[72px] border border-black p-0.5 bg-white inline-flex items-center justify-center"
                           dangerouslySetInnerHTML={{ __html: qrSvgString }}
                           title={`Scan to visit ${storeConfig.website}`}
                         />
-                        <p className="text-[8px] font-bold uppercase tracking-wider text-black pt-0.5 flex items-center justify-center gap-1">
-                          <Globe className="h-2.5 w-2.5 inline" />
+                        <p className="text-[7.5px] font-bold uppercase tracking-wider text-black pt-0.5 leading-tight flex items-center justify-center gap-1">
+                          <Globe className="h-2 w-2 inline" />
                           <span>SCAN TO VISIT OUR STORE</span>
+                        </p>
+                        <p className="font-mono text-[8px] font-bold text-black tracking-tight leading-tight select-all">
+                          {storeConfig.website.replace(/^https?:\/\//, "").replace(/\/+$/, "")}
                         </p>
                       </div>
                     )}
                   </footer>
 
                   {/* Perforation / Tear Marker for Roll Printers */}
-                  <div className="thermal-tear-line text-[9px] font-mono tracking-widest text-center py-1 border-b-2 border-dotted border-black select-none flex items-center justify-center gap-1.5 text-black my-2">
+                  <div className="thermal-tear-line text-[8px] font-mono tracking-widest text-center py-0.5 border-b border-dotted border-black select-none flex items-center justify-center gap-1 text-black my-1">
                     <span className="tracking-widest">• • •</span>
-                    <Scissors className="h-2.5 w-2.5 inline rotate-90" />
+                    <Scissors className="h-2 w-2 inline rotate-90" />
                     <span className="font-bold">TEAR HERE</span>
-                    <Scissors className="h-2.5 w-2.5 inline -rotate-90" />
+                    <Scissors className="h-2 w-2 inline -rotate-90" />
                     <span className="tracking-widest">• • •</span>
                   </div>
 
@@ -679,20 +740,20 @@ function PrintContent() {
                     if (packagingNotes.length === 0) return null;
 
                     return (
-                      <div className="pt-2 pb-1 text-[9px] text-black">
-                        <div className="flex items-center justify-between font-black uppercase text-[8.5px] font-mono border-b border-black pb-0.5 mb-1">
+                      <div className="pt-0.5 pb-0.5 text-[8.5px] text-black">
+                        <div className="flex items-center justify-between font-black uppercase text-[8px] font-mono border-b border-black pb-0.5 mb-0.5">
                           <span className="flex items-center gap-1">
-                            <Package className="h-2.5 w-2.5 shrink-0 inline text-black" />
+                            <Package className="h-2 w-2 shrink-0 inline text-black" />
                             <span>PACKAGING NOTE</span>
                           </span>
-                          <span className="text-[8px] font-mono">
-                            #{order.order_number || order.id}
+                          <span className="text-[7.5px] font-mono">
+                            {String(order.order_number || order.id).replace(/^#+/, "")}
                           </span>
                         </div>
                         <div className="space-y-0.5">
                           {packagingNotes.map((n) => (
                             <p key={n.id} className="text-black font-medium leading-tight flex items-start gap-1">
-                              <Square className="h-2.5 w-2.5 shrink-0 mt-0.5 text-black" />
+                              <Square className="h-2 w-2 shrink-0 mt-0.5 text-black" />
                               <span>{n.text}</span>
                             </p>
                           ))}

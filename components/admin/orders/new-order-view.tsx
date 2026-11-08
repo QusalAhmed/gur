@@ -107,7 +107,7 @@ export function NewOrderView({
 
   // Extract reference token if user pasted whole WhatsApp message or raw ref
   const extractRefToken = (input: string) => {
-    const match = input.match(/[#]?[WwPp]-\d+/);
+    const match = input.match(/[#]?[WwPp]-[A-Za-z0-9]+/);
     return match ? match[0].toUpperCase() : input.trim();
   };
 

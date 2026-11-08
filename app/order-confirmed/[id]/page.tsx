@@ -331,23 +331,35 @@ function OrderConfirmedContent() {
     }
 
     // 1. Fire browser Pixel Purchase event (with deduplication key = order_number)
-    trackPurchase({
-      orderNumber: orderNum,
-      orderId: order.id,
-      value: order.grand_total,
-      currency: order.currency || "BDT",
-      items: (order.items || []).map((item) => ({
-        productId: item.product_id || undefined,
-        variantId: item.variant_id || undefined,
-        productName: item.product_name,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-      })),
-      phone: order.phone || order.shipping_phone,
-      force: isForceTest,
-    });
+    // Gate to ensure only confirmed/eligible orders are counted, matching CAPI purchase rules.
+    let purchaseEventId: string | undefined;
+    const CONFIRMED_PURCHASE_ELIGIBLE_STATUSES = [
+      "confirmed",
+      "processing",
+      "shipped",
+      "delivered",
+      "partially_delivered",
+    ];
+    if (order.status && CONFIRMED_PURCHASE_ELIGIBLE_STATUSES.includes(order.status)) {
+      const res = trackPurchase({
+        orderNumber: orderNum,
+        orderId: order.id,
+        value: order.grand_total,
+        currency: order.currency || "BDT",
+        items: (order.items || []).map((item) => ({
+          productId: item.product_id || undefined,
+          variantId: item.variant_id || undefined,
+          productName: item.product_name,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+        })),
+        phone: order.phone || order.shipping_phone,
+        force: isForceTest,
+      });
+      purchaseEventId = res.eventId;
+    }
 
-    // 2. Silently enrich server meta_tracking with genuine customer IP, User-Agent, _fbp, _fbc
+    // 2. Silently enrich server meta_tracking with genuine customer IP, User-Agent, _fbp, _fbc, and shared eventId
     const { fbp, fbc } = getClientFbpAndFbc();
     const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
 
@@ -357,12 +369,13 @@ function OrderConfirmedContent() {
       fbp,
       fbc,
       url: currentUrl,
+      eventId: purchaseEventId,
     }).catch((enrichErr) => {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[Order Confirmed] Failed to enrich meta tracking:", enrichErr);
       }
     });
-  }, [order?.order_number, order?.id, order?.grand_total, order?.phone, order?.shipping_phone]);
+  }, [order?.order_number, order?.id, order?.status, order?.grand_total, order?.phone, order?.shipping_phone]);
 
   const whatsappMessage = encodeURIComponent(
     order?.order_number

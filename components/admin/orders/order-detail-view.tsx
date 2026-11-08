@@ -238,9 +238,15 @@ export function OrderDetailView({
   // WhatsApp and Phone Click to Call with Confirmation Link
   const phoneClean = order.customer_phone ? order.customer_phone.replace(/[^\d+]/g, "") : "";
   const waNumber = phoneClean.startsWith("+") ? phoneClean.slice(1) : phoneClean;
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://gur-phi.vercel.app";
-  const confirmationLink = `${origin}/order-confirmed/${order.order_number}${order.public_token ? `?token=${order.public_token}` : ""}`;
-  const waUrl = waNumber
+  const origin = React.useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => ""
+  );
+  const confirmationLink = origin
+    ? `${origin}/order-confirmed/${order.order_number}${order.public_token ? `?token=${order.public_token}` : ""}`
+    : "";
+  const waUrl = waNumber && confirmationLink
     ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`আসসালামু আলাইকুম ${order.customer_name || "সম্মানিত গ্রাহক"}, আপনার অর্ডার #${order.order_number} গ্রহণ করা হয়েছে। বিস্তারিত বিবরণ দেখতে এই লিংকে প্রবেশ করুন:\n${confirmationLink}`)}`
     : "";
 
