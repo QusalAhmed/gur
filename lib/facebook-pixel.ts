@@ -597,6 +597,7 @@ export const trackInitiateCheckout = ({
     currency,
   };
 
+  console.log("[Pixel payload]", JSON.stringify(params));
   fbq("track", "InitiateCheckout", params, { eventID: eventId });
 
   return { eventId, fired: true };
@@ -760,7 +761,7 @@ export const trackPurchase = ({
     0
   );
 
-  const payload: Record<string, any> = {
+  const params: Record<string, any> = {
     content_ids: safeItems.map((item) => String(item.variantId || item.productId || "")).filter(Boolean),
     content_type: "product",
     contents: safeItems.map((item) => ({
@@ -773,6 +774,7 @@ export const trackPurchase = ({
     currency: validCurrency,
     order_id: orderNumber || orderId,
   };
+  const payload = params;
 
   console.log(
     `%c[Facebook Pixel] Firing Purchase event for order #${orderNumber || orderId}:`,
@@ -781,7 +783,9 @@ export const trackPurchase = ({
     { eventID: effectiveEventId }
   );
 
-  fbq("track", "Purchase", payload, { eventID: effectiveEventId });
+  console.log("[Pixel payload]", JSON.stringify(params));
+
+  fbq("track", "Purchase", params, { eventID: effectiveEventId });
 
   return { eventId: effectiveEventId, fired: true };
 };
