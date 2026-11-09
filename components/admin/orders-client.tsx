@@ -3809,68 +3809,7 @@ export function OrdersClient() {
                   Check list ({selectedOrders.length})
                 </Button>
 
-                {/* 4. Export Selected CSV */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs bg-background hover:bg-muted"
-                  onClick={() => {
-                    const headers = [
-                      "Order ID",
-                      "Date",
-                      "Customer",
-                      "Phone",
-                      "Alternative Phone",
-                      "Recipient Name",
-                      "Shipping Phone",
-                      "Status",
-                      "Payment",
-                      "Method",
-                      "Courier",
-                      "Fulfillment",
-                      "Grand Total (BDT)",
-                    ];
-                    const rows = selectedOrders.map((o) => {
-                      const recipientName = o.address?.recipient_name || o.recipient_name || o.customer || "";
-                      const shippingPhone = o.address?.phone || o.shipping_phone || o.phone || "";
-                      return [
-                        o.id,
-                        formatDate(o.date),
-                        `"${o.customer.replace(/"/g, '""')}"`,
-                        `"${o.phone}"`,
-                        `"${o.alternative_phone || ""}"`,
-                        `"${recipientName.replace(/"/g, '""')}"`,
-                        `"${shippingPhone}"`,
-                        o.status,
-                        o.payment,
-                        o.method,
-                        o.courier_name || "",
-                        o.fulfillment,
-                        o.grand_total,
-                      ];
-                    });
-                    const csvContent =
-                      "data:text/csv;charset=utf-8," +
-                      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-                    const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute(
-                      "download",
-                      `gur_orders_selected_${new Date().toISOString().slice(0, 10)}.csv`
-                    );
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    showToast(`Exported ${selectedOrders.length} order(s) to CSV.`, "info");
-                  }}
-                >
-                  <Download className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                  Export CSV
-                </Button>
-
-                {/* 5. Delete Selected */}
+                {/* 4. Delete Selected */}
                 <Button
                   type="button"
                   variant="outline"

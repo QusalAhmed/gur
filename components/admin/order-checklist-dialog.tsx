@@ -24,11 +24,10 @@ import {
 import {
   ClipboardCheck,
   Printer,
-  Download,
   Search,
   CheckCheck,
   RotateCcw,
-  Package,
+  Scale,
   Layers,
   ShoppingBag,
 } from "lucide-react";
@@ -47,8 +46,44 @@ export interface ConsolidatedChecklistItem {
   variant_name: string;
   sku: string;
   total_quantity: number;
+  unit_weight_kg: number;
+  total_weight_kg: number;
   order_count: number;
   order_ids: string[];
+}
+
+/**
+ * Extracts approximate unit weight in kilograms from variant name, product name, or SKU.
+ * Supports units: kg, g/gm, liter/l, ml (and Bengali variants কেজি, গ্রাম, লিটার, মিলি).
+ * Falls back to 1 kg per unit if unknown.
+ */
+function extractUnitWeightKg(variantName = "", productName = "", sku = ""): number {
+  const combined = `${variantName} ${productName} ${sku}`.toLowerCase();
+
+  // 1. Matches like 0.5 kg, 1kg, 2.5 kg, 1 কেজি, 2 কিলো
+  const kgMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
+  if (kgMatch) return parseFloat(kgMatch[1]);
+
+  // 2. Matches like 500g, 250 gm, 200 g, 500 গ্রাম, 200গ্রা
+  const gMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:gm|gms|gram|grams|g|গ্রাম|গ্রা)(?![a-z])/i);
+  if (gMatch) return parseFloat(gMatch[1]) / 1000;
+
+  // 3. Matches like 1L, 1.5 ltr, 1 liter, 1 লিটার
+  const lMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:liter|liters|ltr|l|লিটার)/i);
+  if (lMatch) return parseFloat(lMatch[1]);
+
+  // 4. Matches like 500ml, 250 ml, 250 মিলি
+  const mlMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:ml|মিলি)/i);
+  if (mlMatch) return parseFloat(mlMatch[1]) / 1000;
+
+  // Fallback default: 1 kg per unit
+  return 1;
+}
+
+function formatWeightKg(kg: number): string {
+  if (kg <= 0) return "0 kg";
+  const formatted = Number.isInteger(kg) ? kg.toString() : kg.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted} kg`;
 }
 
 export function OrderChecklistDialog({
@@ -94,10 +129,13 @@ export function OrderChecklistDialog({
         const key = `${prodName}___${variantName}___${sku}`.toLowerCase();
 
         const qty = Number(item.quantity) || 1;
+        const unitWeight = extractUnitWeightKg(variantName, prodName, sku);
+        const lineWeight = unitWeight * qty;
         const existing = map.get(key);
 
         if (existing) {
           existing.total_quantity += qty;
+          existing.total_weight_kg += lineWeight;
           if (!existing.order_ids.includes(order.id)) {
             existing.order_ids.push(order.id);
             existing.order_count += 1;
@@ -109,6 +147,8 @@ export function OrderChecklistDialog({
             variant_name: variantName,
             sku,
             total_quantity: qty,
+            unit_weight_kg: unitWeight,
+            total_weight_kg: lineWeight,
             order_count: 1,
             order_ids: [order.id],
           });
@@ -123,9 +163,9 @@ export function OrderChecklistDialog({
     });
   }, [orders]);
 
-  // Calculate totals
-  const totalUnits = React.useMemo(() => {
-    return consolidatedItems.reduce((acc, curr) => acc + curr.total_quantity, 0);
+  // Calculate total weight (kg)
+  const totalWeightKg = React.useMemo(() => {
+    return consolidatedItems.reduce((acc, curr) => acc + curr.total_weight_kg, 0);
   }, [consolidatedItems]);
 
   const checkedCount = React.useMemo(() => {
@@ -168,34 +208,6 @@ export function OrderChecklistDialog({
   // Uncheck / reset all items
   const handleUncheckAll = () => {
     setCheckedItems({});
-  };
-
-  // Export clean CSV
-  const handleExportCsv = () => {
-    if (consolidatedItems.length === 0) return;
-
-    const headers = ["Product Name", "Variant", "SKU", "Total Quantity"];
-    const rows = consolidatedItems.map((item) => [
-      `"${item.product_name.replace(/"/g, '""')}"`,
-      `"${item.variant_name.replace(/"/g, '""')}"`,
-      `"${item.sku.replace(/"/g, '""')}"`,
-      item.total_quantity,
-    ]);
-
-    const csvContent =
-      "\uFEFF" + // UTF-8 BOM for Excel compatibility
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `gur_packing_checklist_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   // Instant print for 58mm thermal roll
@@ -274,7 +286,7 @@ export function OrderChecklistDialog({
         <div style={{ borderBottom: "1px dashed #000", margin: "4px 0" }} />
 
         <div style={{ fontSize: "10px" }}>
-          {consolidatedItems.map((item, idx) => (
+          {consolidatedItems.map((item) => (
             <div
               key={item.key}
               style={{
@@ -299,12 +311,13 @@ export function OrderChecklistDialog({
                 <div style={{ fontWeight: "bold", fontSize: "11px", lineHeight: 1.2 }}>
                   [{item.total_quantity}x] {item.product_name}
                 </div>
-                {(item.variant_name || item.sku) && (
-                  <div style={{ fontSize: "9px", color: "#222" }}>
-                    {item.variant_name && <span>{item.variant_name} </span>}
-                    {item.sku && <span>({item.sku})</span>}
-                  </div>
-                )}
+                <div style={{ fontSize: "9px", color: "#222" }}>
+                  {item.variant_name && <span>{item.variant_name} </span>}
+                  {item.sku && <span>({item.sku}) </span>}
+                  {item.total_weight_kg > 0 && (
+                    <span style={{ fontWeight: 600 }}>• {formatWeightKg(item.total_weight_kg)}</span>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -318,8 +331,8 @@ export function OrderChecklistDialog({
             <strong>{consolidatedItems.length}</strong>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-            <span>Total Units (Pieces):</span>
-            <strong style={{ fontSize: "12px" }}>{totalUnits} pcs</strong>
+            <span>Total Weight:</span>
+            <strong style={{ fontSize: "12px" }}>{formatWeightKg(totalWeightKg)}</strong>
           </div>
         </div>
 
@@ -349,7 +362,7 @@ export function OrderChecklistDialog({
                     </Badge>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Consolidated products & quantities across selected orders for picking & packing.
+                    Consolidated products, quantities & total weight for picking & packing.
                   </DialogDescription>
                 </div>
               </div>
@@ -373,11 +386,11 @@ export function OrderChecklistDialog({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-background border text-xs">
-                  <Package className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <Scale className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Total Units</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-medium">Total Weight</span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                      {totalUnits} pcs
+                      {formatWeightKg(totalWeightKg)}
                     </span>
                   </div>
                 </div>
@@ -455,7 +468,7 @@ export function OrderChecklistDialog({
                     <TableHead className="w-10 text-center">Status</TableHead>
                     <TableHead>Product Name</TableHead>
                     <TableHead className="w-28">SKU</TableHead>
-                    <TableHead className="w-24 text-right">Total Qty</TableHead>
+                    <TableHead className="w-28 text-right">Qty & Weight</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-xs">
@@ -503,15 +516,22 @@ export function OrderChecklistDialog({
                           {item.sku || "—"}
                         </TableCell>
                         <TableCell className="py-2.5 text-right">
-                          <span
-                            className={`inline-flex items-center justify-center font-bold px-2 py-0.5 rounded-md text-xs ${
-                              isChecked
-                                ? "bg-muted text-muted-foreground"
-                                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono"
-                            }`}
-                          >
-                            {item.total_quantity}
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span
+                              className={`inline-flex items-center justify-center font-bold px-2 py-0.5 rounded-md text-xs ${
+                                isChecked
+                                  ? "bg-muted text-muted-foreground"
+                                  : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono"
+                              }`}
+                            >
+                              {item.total_quantity}
+                            </span>
+                            {item.total_weight_kg > 0 && (
+                              <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                                {formatWeightKg(item.total_weight_kg)}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -524,20 +544,10 @@ export function OrderChecklistDialog({
           {/* Footer Actions */}
           <DialogFooter className="p-3.5 border-t bg-muted/20 flex sm:flex-row items-center justify-between gap-2">
             <div className="text-xs text-muted-foreground">
-              Showing {filteredItems.length} of {consolidatedItems.length} unique products
+              Showing {filteredItems.length} of {consolidatedItems.length} unique products • Total Weight:{" "}
+              <strong className="text-foreground">{formatWeightKg(totalWeightKg)}</strong>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleExportCsv}
-                disabled={consolidatedItems.length === 0}
-                className="h-8 text-xs cursor-pointer"
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
-                Export CSV
-              </Button>
               <Button
                 type="button"
                 variant="default"
