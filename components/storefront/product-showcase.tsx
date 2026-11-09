@@ -9,7 +9,6 @@ import dynamic from "next/dynamic";
 import { IntroSection } from "./intro-section";
 import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
-import type { SelectedProductData } from "./quick-order-sheet";
 import { MobileDock } from "./mobile-dock";
 import { trackContact } from "@/lib/facebook-pixel";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -25,11 +24,6 @@ import {
 const CheckoutSection = dynamic(
   () => import("./checkout-section").then((mod) => mod.CheckoutSection),
   { ssr: true }
-);
-
-const QuickOrderSheet = dynamic(
-  () => import("./quick-order-sheet").then((mod) => mod.QuickOrderSheet),
-  { ssr: false }
 );
 
 const CartSheet = dynamic(
@@ -71,18 +65,6 @@ export function ProductShowcase({
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const displayCartQuantity = isMounted ? cartTotalQuantity : 0;
   const displayCartSubtotal = isMounted ? cartSubtotal : 0;
-  const [activeOrderModal, setActiveOrderModal] = useState<{
-    isOpen: boolean;
-    product: SelectedProductData | null;
-    quantity: number;
-    cartItems?: CartItem[];
-  }>({
-    isOpen: false,
-    product: null,
-    quantity: 1,
-    cartItems: undefined,
-  });
-
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -300,21 +282,8 @@ export function ProductShowcase({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [totalSections]);
 
-  const handleOpenOrder = (selectedData: SelectedProductData, quantity: number) => {
-    setActiveOrderModal({
-      isOpen: true,
-      product: selectedData,
-      quantity,
-      cartItems: undefined,
-    });
-  };
-
   const handleCheckoutFromCart = () => {
     scrollToSection(checkoutSectionIndex);
-  };
-
-  const handleCloseOrder = () => {
-    setActiveOrderModal((prev) => ({ ...prev, isOpen: false }));
   };
 
   const toggleLanguage = () => {
@@ -622,7 +591,6 @@ export function ProductShowcase({
               isActive={activeSectionIndex === productsStartIndex + idx}
               priority={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
               initialVariantId={idx === 0 ? initialVariantId : undefined}
-              onOrderClick={handleOpenOrder}
             />
           ))
         )}
@@ -648,19 +616,6 @@ export function ProductShowcase({
       {/* Redux Cart Drawer Sheet */}
       {isCartOpen && (
         <CartSheet lang={lang} onProceedToCheckout={handleCheckoutFromCart} />
-      )}
-
-      {/* Quick 1-Step Order Bottom Sheet */}
-      {activeOrderModal.isOpen && (
-        <QuickOrderSheet
-          isOpen={activeOrderModal.isOpen}
-          onClose={handleCloseOrder}
-          product={activeOrderModal.product}
-          quantity={activeOrderModal.quantity}
-          cartItems={activeOrderModal.cartItems}
-          lang={lang}
-          hotline={defaultHotline}
-        />
       )}
     </div>
   );

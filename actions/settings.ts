@@ -212,6 +212,22 @@ export async function updateSiteSettingsAction(
     revalidatePath("/admin/settings");
     revalidatePath("/");
 
+    // If simulated demand settings were updated, notify Inngest to dynamically adapt immediately
+    const hasSimulatedDemandChange = entries.some(([key]) =>
+      key.startsWith("inventory.simulated_demand")
+    );
+    if (hasSimulatedDemandChange) {
+      try {
+        const { inngest } = await import("@/lib/inngest/client");
+        await inngest.send({
+          name: "simulated/stock.tick",
+          data: { source: "admin_settings_update" },
+        });
+      } catch (inngestErr) {
+        console.warn("[updateSiteSettingsAction] Failed to trigger Inngest simulated stock tick:", inngestErr);
+      }
+    }
+
     return { success: true, message: "Settings saved successfully to database" };
   } catch (err: any) {
     console.error("Error saving site settings:", err);
@@ -277,6 +293,17 @@ export async function resetSimulatedStockAction(): Promise<SaveSettingsResult> {
 
     revalidatePath("/admin/settings");
     revalidatePath("/");
+
+    // Notify Inngest to realign the loop with 0 KG
+    try {
+      const { inngest } = await import("@/lib/inngest/client");
+      await inngest.send({
+        name: "simulated/stock.tick",
+        data: { source: "admin_stock_reset" },
+      });
+    } catch (inngestErr) {
+      console.warn("[resetSimulatedStockDemandAction] Failed to trigger Inngest simulated stock tick:", inngestErr);
+    }
 
     return {
       success: true,

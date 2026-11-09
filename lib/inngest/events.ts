@@ -118,6 +118,12 @@ export interface SteadfastBulkBookingEventData {
   orders?: any[];
 }
 
+export interface SimulatedStockTickEventData {
+  source?: string;
+  scheduledAt?: string;
+  previousAction?: string;
+}
+
 export type InngestEvents = {
   "order.created": {
     data: OrderCreatedEventData;
@@ -151,5 +157,8 @@ export type InngestEvents = {
       source?: string;
       batchSize?: number;
     };
+  };
+  "simulated/stock.tick": {
+    data?: SimulatedStockTickEventData;
   };
 };

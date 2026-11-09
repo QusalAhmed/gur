@@ -5,7 +5,6 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Minus, Sparkles, Check, ChevronDown, Award } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
-import { SelectedProductData } from "./quick-order-sheet";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   addToCart,
@@ -80,7 +79,6 @@ interface ProductCardProps {
   isActive?: boolean;
   priority?: boolean;
   initialVariantId?: string;
-  onOrderClick?: (selectedData: SelectedProductData, quantity: number) => void;
 }
 
 export function ProductCard({
@@ -91,7 +89,6 @@ export function ProductCard({
   isActive,
   priority = false,
   initialVariantId,
-  onOrderClick,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
 

@@ -28,21 +28,39 @@ function getDhakaTimeParts(date: Date = new Date()) {
 }
 
 /**
- * Inngest scheduled function to automatically decrement live stock
- * by adding simulated pre-order demand during active shopping hours.
+ * Inngest dynamic self-scheduling function to decrement live stock
+ * by adding simulated pre-order demand during active shopping hours (08:00 - 23:30 Dhaka).
+ *
+ * Efficiency Design:
+ * - Replaces the naive 1-minute cron with dynamic self-scheduling (step.sleep + step.sendEvent).
+ * - Runs only when a decrement is actually scheduled (e.g. once every 30 minutes).
+ * - Stops completely overnight (23:30 - 08:00 Dhaka).
+ * - Woken up automatically at 08:00 AM Dhaka (02:00 UTC) to kick off the daily cycle.
+ * - Handles midnight reset at 00:00 Dhaka (18:00 UTC).
+ * - Periodic daytime safety nets (every 4 hours) ensure resilience against dropped executions.
+ * - singleton mode: "cancel" ensures zero duplicates and immediate responsiveness to Admin UI changes.
  */
 export const simulatedStockDecrementorFunction = inngest.createFunction(
   {
     id: "simulated-stock-decrementor",
     name: "Simulated Stock Pre-Order Decrementor",
     retries: 2,
+    singleton: {
+      mode: "cancel",
+    },
     triggers: [
-      { cron: "* * * * *" }, // Evaluates every minute against the configured interval setting
-      { event: "simulated/stock.tick" }, // Supports manual / on-demand trigger
+      // 1. Morning store opening at 08:00 AM Dhaka (02:00 UTC) - launches daytime dynamic loop
+      { cron: "0 2 * * *" },
+      // 2. Midnight reset at 12:00 AM Dhaka (18:00 UTC) - clears daily backlog to 0 KG
+      { cron: "0 18 * * *" },
+      // 3. Daytime resilience check every 4 hours (12pm, 4pm, 8pm Dhaka = 06:00, 10:00, 14:00 UTC)
+      { cron: "0 6,10,14 * * *" },
+      // 4. Dynamic self-scheduled tick or on-demand trigger (from admin settings change / reset)
+      { event: "simulated/stock.tick" },
     ],
   },
   async ({ step }) => {
-    return await step.run("evaluate-and-adjust-simulated-stock", async () => {
+    const evalResult = await step.run("evaluate-and-adjust-simulated-stock", async () => {
       const now = new Date();
       const { hour: dhakaHour, minute: dhakaMinute, dateStr: dhakaDateStr } =
         getDhakaTimeParts(now);
@@ -84,14 +102,15 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
       const minKg = Math.max(1, Math.round(Number(settingsMap["inventory.simulated_demand_min_kg"]) || 1));
       const maxKg = Math.max(minKg, Math.round(Number(settingsMap["inventory.simulated_demand_max_kg"]) || 3));
       const maxCapKg = Math.max(10, Math.round(Number(settingsMap["inventory.simulated_demand_max_cap_kg"]) || 80));
-      const intervalMins =
-        Number(settingsMap["inventory.simulated_demand_interval_mins"]) || 10;
+      const intervalMins = Math.max(
+        1,
+        Math.round(Number(settingsMap["inventory.simulated_demand_interval_mins"]) || 10)
+      );
       const lastResetDate = String(
         settingsMap["inventory.simulated_demand_last_reset_date"] || ""
       ).replace(/^"|"$/g, "");
 
       // 2. Midnight Reset Check (Dhaka Time)
-      // If we crossed into a new day in Dhaka, reset the simulated backlog to 0
       if (lastResetDate !== dhakaDateStr) {
         await supabaseAdmin
           .from("site_settings")
@@ -110,12 +129,15 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
             },
           ]);
 
+        const isOutsideHours = dhakaHour < 8 || dhakaHour > 23 || (dhakaHour === 23 && dhakaMinute > 30);
         return {
           action: "midnight_reset",
           previousKg: currentKg,
           newKg: 0,
           date: dhakaDateStr,
           message: `Simulated stock demand reset to 0 KG for new day: ${dhakaDateStr}`,
+          shouldContinue: !isOutsideHours && isEnabled,
+          intervalMins,
         };
       }
 
@@ -123,7 +145,9 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
       if (!isEnabled) {
         return {
           skipped: true,
+          shouldContinue: false,
           reason: "Simulated demand is currently disabled in site settings",
+          intervalMins,
         };
       }
 
@@ -135,22 +159,27 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
       if (isBeforeOpening || isAfterClosing) {
         return {
           skipped: true,
+          shouldContinue: false,
           reason: `Outside active shopping hours (08:00-23:30 Dhaka). Current Dhaka time: ${String(
             dhakaHour
           ).padStart(2, "0")}:${String(dhakaMinute).padStart(2, "0")}`,
+          intervalMins,
         };
       }
 
-      // 5. Configured Cadence / Interval Check
+      // 5. Configured Cadence / Interval Check (safeguard against premature manual/external triggers)
       const lastUpdateIso = updatedMap["inventory.simulated_demand_kg"];
       if (lastUpdateIso) {
         const lastUpdateMs = new Date(lastUpdateIso).getTime();
         const diffMinutes = (now.getTime() - lastUpdateMs) / (60 * 1000);
-        // Allow a small grace margin (e.g. 0.5 min) to account for cron jitter
+        // Allow a small grace margin (e.g. 0.5 min) to account for sleep/dispatch jitter
         if (diffMinutes < intervalMins - 0.5) {
+          const remainingMins = Math.max(1, Math.round(intervalMins - diffMinutes));
           return {
             skipped: true,
-            reason: `Interval not reached yet (${diffMinutes.toFixed(1)}m < ${intervalMins}m)`,
+            shouldContinue: true,
+            intervalMins: remainingMins,
+            reason: `Interval not reached yet (${diffMinutes.toFixed(1)}m < ${intervalMins}m). Next tick in ${remainingMins}m`,
           };
         }
       }
@@ -159,7 +188,9 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
       if (currentKg >= maxCapKg) {
         return {
           skipped: true,
+          shouldContinue: false,
           reason: `Current simulated demand (${currentKg} KG) has reached maximum cap (${maxCapKg} KG)`,
+          intervalMins,
         };
       }
 
@@ -180,14 +211,37 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
         throw new Error(`Failed to update simulated demand: ${updateErr.message}`);
       }
 
+      // Determine if next cycle will still fall within active shopping hours
+      const nextTotalDhakaMinutes = dhakaHour * 60 + dhakaMinute + intervalMins;
+      const closingDhakaMinutes = 23 * 60 + 30; // 23:30
+      const nextIsPastClosing = nextTotalDhakaMinutes > closingDhakaMinutes;
+      const reachedCap = nextKg >= maxCapKg;
+
       return {
         action: "decremented",
         previousKg: currentKg,
         addedKg: delta,
         newKg: nextKg,
         maxCapKg,
+        intervalMins,
+        shouldContinue: !reachedCap && !nextIsPastClosing,
         timestamp: now.toISOString(),
       };
     });
+
+    // Dynamic Self-Scheduling: Sleep for configured interval then trigger next cycle
+    if (evalResult.shouldContinue && evalResult.intervalMins && evalResult.intervalMins > 0) {
+      await step.sleep("wait-for-configured-interval", `${evalResult.intervalMins}m`);
+      const actionType = "action" in evalResult ? String(evalResult.action) : "tick";
+      await step.sendEvent("trigger-next-stock-decrement", {
+        name: "simulated/stock.tick",
+        data: {
+          scheduledAt: new Date().toISOString(),
+          previousAction: actionType,
+        },
+      });
+    }
+
+    return evalResult;
   }
 );

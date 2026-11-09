@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSyncIncompleteOrderMutation } from "./use-order";
 import { StorefrontOrderItem } from "@/actions/storefront-order";
 import { parseBdPhone } from "@/lib/phone";
@@ -16,6 +16,35 @@ export interface UseAutoSyncIncompleteOrderProps {
   items: StorefrontOrderItem[];
   enabled?: boolean;
   isSubmitting?: boolean;
+  /** Debounce delay in milliseconds after user stops typing (default: 5000ms / 5 seconds) */
+  debounceMs?: number;
+}
+
+/**
+ * Computes a deterministic canonical string hash representing current form state.
+ * Used to ensure background sync requests ONLY execute when form data has actually changed.
+ */
+function computeFormHash(data: {
+  phone: string;
+  name: string;
+  address: string;
+  note: string;
+  zone: string;
+  items: StorefrontOrderItem[];
+}): string {
+  return JSON.stringify({
+    p: data.phone,
+    n: data.name.trim(),
+    a: data.address.trim(),
+    no: data.note.trim(),
+    z: data.zone,
+    i: data.items.map((item) => ({
+      pid: item.productId,
+      vid: item.variantId,
+      q: item.quantity,
+      pr: item.unitPrice,
+    })),
+  });
 }
 
 export function useAutoSyncIncompleteOrder({
@@ -27,6 +56,7 @@ export function useAutoSyncIncompleteOrder({
   items,
   enabled = true,
   isSubmitting = false,
+  debounceMs = 5000,
 }: UseAutoSyncIncompleteOrderProps) {
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const draftOrderIdRef = useRef<string | null>(null);
@@ -46,8 +76,57 @@ export function useAutoSyncIncompleteOrder({
   }, []);
 
   const syncMutation = useSyncIncompleteOrderMutation();
+  const syncMutationRef = useRef(syncMutation);
+  syncMutationRef.current = syncMutation;
+
   const lastSyncedHashRef = useRef<string>("");
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Parse & validate Bangladeshi phone in all 4 supported formats (+8801..., 8801..., 01..., 1...)
+  const parsedPhone = parseBdPhone(customerPhone);
+  const isPhoneValid = parsedPhone.isValid;
+  const normalizedPhone = parsedPhone.normalized;
+
+  // Keep latest parameters in a ref so background sync closures always access fresh values
+  // without triggering spurious re-renders or resetting debounce timers
+  const latestPropsRef = useRef({
+    customerPhone,
+    customerName,
+    addressLine,
+    customerNote,
+    deliveryZone,
+    items,
+    enabled,
+    isSubmitting,
+    isPhoneValid,
+    normalizedPhone,
+  });
+
+  latestPropsRef.current = {
+    customerPhone,
+    customerName,
+    addressLine,
+    customerNote,
+    deliveryZone,
+    items,
+    enabled,
+    isSubmitting,
+    isPhoneValid,
+    normalizedPhone,
+  };
+
+  // Compute canonical hash of current form state
+  const currentHash = useMemo(() => {
+    if (!isPhoneValid) return "";
+    return computeFormHash({
+      phone: normalizedPhone,
+      name: customerName,
+      address: addressLine,
+      note: customerNote,
+      zone: deliveryZone,
+      items,
+    });
+  }, [isPhoneValid, normalizedPhone, customerName, addressLine, customerNote, deliveryZone, items]);
 
   // Cancel any scheduled debounced sync
   const cancelPendingSync = useCallback(() => {
@@ -69,10 +148,6 @@ export function useAutoSyncIncompleteOrder({
     }
   }, [cancelPendingSync]);
 
-  // Parse & validate Bangladeshi phone in all 4 supported formats (+8801..., 8801..., 01..., 1...)
-  const parsedPhone = parseBdPhone(customerPhone);
-  const isPhoneValid = parsedPhone.isValid;
-
   // Clear draft from memory and sessionStorage upon completed order placement
   const clearDraft = useCallback(() => {
     cancelPendingSync();
@@ -86,51 +161,70 @@ export function useAutoSyncIncompleteOrder({
     }
   }, [cancelPendingSync]);
 
-  // Primary synchronization function
+  // Primary synchronization function: sends data ONLY if data has changed compared to last sync
   const performSync = useCallback(async () => {
-    if (!enabled || isSubmitting || !parsedPhone.isValid) return;
+    const {
+      enabled: isEnabled,
+      isSubmitting: isSub,
+      isPhoneValid: isValid,
+      normalizedPhone: phone,
+      customerName: name,
+      addressLine: address,
+      customerNote: note,
+      deliveryZone: zone,
+      items: orderItems,
+    } = latestPropsRef.current;
 
-    // Generate hash of current state to prevent duplicate calls
-    const currentHash = JSON.stringify({
-      phone: parsedPhone.normalized,
-      name: customerName.trim(),
-      address: addressLine.trim(),
-      note: customerNote.trim(),
-      zone: deliveryZone,
-      items: items.map((i) => ({
-        pid: i.productId,
-        vid: i.variantId,
-        qty: i.quantity,
-        price: i.unitPrice,
-      })),
+    // Guard: Only sync when enabled, not actively submitting order, and phone is valid
+    if (!isEnabled || isSub || !isValid || !phone) return;
+
+    // Compute hash for current data snapshot
+    const hashToSync = computeFormHash({
+      phone,
+      name,
+      address,
+      note,
+      zone,
+      items: orderItems,
     });
 
-    if (currentHash === lastSyncedHashRef.current) {
+    // Guard: strictly send user data only when form data has changed
+    if (hashToSync === lastSyncedHashRef.current) {
       return;
     }
 
-    const currentPromise = syncMutation.mutateAsync({
+    // Guard: avoid concurrent duplicate in-flight requests
+    if (inFlightPromiseRef.current) {
+      return;
+    }
+
+    const mutation = syncMutationRef.current;
+    const currentPromise = mutation.mutateAsync({
       orderId: draftOrderIdRef.current || undefined,
-      customerPhone: parsedPhone.normalized,
-      customerName: customerName.trim() || undefined,
-      addressLine: addressLine.trim() || undefined,
-      customerNote: customerNote.trim() || undefined,
-      deliveryZone,
-      items,
+      customerPhone: phone,
+      customerName: name.trim() || undefined,
+      addressLine: address.trim() || undefined,
+      customerNote: note.trim() || undefined,
+      deliveryZone: zone,
+      items: orderItems,
     });
 
     inFlightPromiseRef.current = currentPromise;
 
     try {
       const res = await currentPromise;
-      if (res.success && res.orderId) {
-        draftOrderIdRef.current = res.orderId;
-        setDraftOrderId(res.orderId);
-        lastSyncedHashRef.current = currentHash;
-        try {
-          sessionStorage.setItem(DRAFT_ORDER_SESSION_KEY, res.orderId);
-        } catch {
-          // Safe ignore
+      if (res.success) {
+        // Mark this hash as synced immediately on success (fixes endless loop when orderId is undefined in Inngest async queue)
+        lastSyncedHashRef.current = hashToSync;
+
+        if (res.orderId && res.orderId !== draftOrderIdRef.current) {
+          draftOrderIdRef.current = res.orderId;
+          setDraftOrderId(res.orderId);
+          try {
+            sessionStorage.setItem(DRAFT_ORDER_SESSION_KEY, res.orderId);
+          } catch {
+            // Safe ignore
+          }
         }
       }
     } catch (err) {
@@ -141,53 +235,54 @@ export function useAutoSyncIncompleteOrder({
         inFlightPromiseRef.current = null;
       }
     }
-  }, [
-    enabled,
-    isSubmitting,
-    parsedPhone.isValid,
-    parsedPhone.normalized,
-    customerName,
-    addressLine,
-    customerNote,
-    deliveryZone,
-    items,
-    syncMutation,
-  ]);
+  }, []);
 
-  // Immediate sync trigger (for blur events, cart modifications, or delivery zone toggles)
+  // Immediate sync trigger (used on field blur, cart quantity changes, or delivery zone toggles)
   const triggerSyncNow = useCallback(() => {
     cancelPendingSync();
-    if (!isSubmitting) {
+    const { isSubmitting: isSub, isPhoneValid: isValid } = latestPropsRef.current;
+    if (!isSub && isValid) {
       performSync();
     }
-  }, [cancelPendingSync, isSubmitting, performSync]);
+  }, [cancelPendingSync, performSync]);
 
-  // Trigger sync on text typing with 600ms debounce
+  // Debounced auto-save: triggers ONLY when phone is valid, form data has changed, and 5 seconds after user stops typing
   useEffect(() => {
-    if (!enabled || isSubmitting || !isPhoneValid) {
+    if (!enabled || isSubmitting || !isPhoneValid || !currentHash) {
       cancelPendingSync();
       return;
     }
 
+    // Do nothing if current form state matches what has already been synced to backend
+    if (currentHash === lastSyncedHashRef.current) {
+      cancelPendingSync();
+      return;
+    }
+
+    // Form data has changed! Cancel any prior timer and set new debounce timer (5 seconds)
     cancelPendingSync();
 
     debounceTimerRef.current = setTimeout(() => {
       performSync();
-    }, 600);
+    }, debounceMs);
 
     return () => {
       cancelPendingSync();
     };
-  }, [enabled, isSubmitting, isPhoneValid, performSync, cancelPendingSync]);
+  }, [enabled, isSubmitting, isPhoneValid, currentHash, debounceMs, cancelPendingSync, performSync]);
 
-  // Track discrete cart changes and delivery zone toggles immediately
-  const itemsSerialized = JSON.stringify(
-    items.map((i) => ({
-      pid: i.productId,
-      vid: i.variantId,
-      qty: i.quantity,
-      price: i.unitPrice,
-    }))
+  // Track discrete cart changes and delivery zone toggles immediately (if data has changed)
+  const itemsSerialized = useMemo(
+    () =>
+      JSON.stringify(
+        items.map((i) => ({
+          pid: i.productId,
+          vid: i.variantId,
+          qty: i.quantity,
+          price: i.unitPrice,
+        }))
+      ),
+    [items]
   );
   const prevItemsSerializedRef = useRef(itemsSerialized);
   const prevZoneRef = useRef(deliveryZone);
@@ -214,4 +309,3 @@ export function useAutoSyncIncompleteOrder({
     clearDraft,
   };
 }
-
