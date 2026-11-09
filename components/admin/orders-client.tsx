@@ -47,6 +47,7 @@ import {
   ShieldCheck,
   Bot,
   Printer,
+  ClipboardCheck,
   Package,
   XCircle,
 } from "lucide-react";
@@ -97,6 +98,7 @@ import {
 } from "@/lib/order-reprint";
 import { SteadfastFailureDialog } from "@/components/admin/steadfast-failure-dialog";
 import { SteadfastBulkDialog } from "@/components/admin/steadfast-bulk-dialog";
+import { OrderChecklistDialog } from "@/components/admin/order-checklist-dialog";
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { useBatchSteadfastDeliveryRecords } from "@/hooks/use-steadfast-delivery-record";
@@ -1352,6 +1354,10 @@ export function OrdersClient() {
 
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = React.useState(false);
   const [bulkDeleteError, setBulkDeleteError] = React.useState<ParsedDatabaseError | null>(null);
+
+  // Check list (Picking & Packing) state
+  const [isChecklistOpen, setIsChecklistOpen] = React.useState(false);
+  const [checklistOrders, setChecklistOrders] = React.useState<Order[]>([]);
 
   // Steadfast Auto-booking Failure & Bulk Results States
   const [steadfastFailureState, setSteadfastFailureState] = React.useState<{
@@ -3787,6 +3793,22 @@ export function OrdersClient() {
                   Print ({selectedOrders.length})
                 </Button>
 
+                {/* 3.5 Check List (Picking & Packing) */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setChecklistOrders(selectedOrders);
+                    setIsChecklistOpen(true);
+                  }}
+                  className="h-7 text-xs bg-background hover:bg-muted text-foreground hover:text-emerald-600 cursor-pointer"
+                  title="Open consolidated product picking and packing check list"
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  Check list ({selectedOrders.length})
+                </Button>
+
                 {/* 4. Export Selected CSV */}
                 <Button
                   type="button"
@@ -5571,6 +5593,15 @@ export function OrdersClient() {
         onSaveWithoutRecreate={handleSaveWithoutRecreateInOrdersClient}
         isProcessing={isRecreatingOrder}
       />
+
+      {/* Consolidated Picking & Packing Check List Dialog */}
+      {isChecklistOpen && (
+        <OrderChecklistDialog
+          isOpen={isChecklistOpen}
+          onClose={() => setIsChecklistOpen(false)}
+          orders={checklistOrders}
+        />
+      )}
     </div>
   );
 }
