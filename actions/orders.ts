@@ -566,14 +566,6 @@ export async function updateOrderStatusAction(
             message: `Steadfast Consignment #${c.consignment_id} created (Tracking: ${c.tracking_code})${c.item_description ? ` • Items: ${c.item_description}` : ""}`,
             actor_id: null,
           });
-
-          await client.from("order_notes").insert({
-            order_id: orderUuidForRelations,
-            order_number: resolvedOrder.order_number || orderId,
-            type: "internal",
-            note: `Steadfast Consignment ID: ${c.consignment_id} | Tracking: ${c.tracking_code} | Link: ${c.tracking_link}${c.item_description ? ` | Parcel Items: ${c.item_description}` : ""}`,
-            author: "Steadfast Courier Bot",
-          });
         } else if (forceWithoutCourier && isSteadfast && isEnteringProcessing) {
           await client.from("order_events").insert({
             order_id: orderUuidForRelations,

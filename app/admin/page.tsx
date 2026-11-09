@@ -15,6 +15,8 @@ export const metadata = {
   description: "Operations dashboard for molasses sales, inventory, and fulfillment",
 };
 
+export const instant = false;
+
 interface AdminPageProps {
   searchParams: Promise<{
     from?: string;

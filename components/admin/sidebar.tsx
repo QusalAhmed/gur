@@ -250,19 +250,33 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const emptySubscribe = () => () => {};
+function useMounted() {
+  return React.useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export function AdminSidebar() {
   const pathname = usePathname();
   const { user, role, logout } = useAdminAuth();
   const { data: counts } = useAdminBadgeCounts();
   const { storeName, storeNameBn, logoUrl } = useSiteSettings();
+  const mounted = useMounted();
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
 
-  const brandName = storeNameBn || storeName || "খাঁটি গুড়";
+  // Render stable server fallback ("গুড়" / placeholder initial) until mounted
+  // to avoid SSR/client hydration mismatches when React Query client cache has settings
+  const brandName = mounted ? (storeNameBn || storeName || "গুড়") : "গুড়";
   const brandSubtitle =
-    storeName && storeNameBn && storeName !== storeNameBn
+    mounted && storeName && storeNameBn && storeName !== storeNameBn
       ? storeName
       : "Molasses Operations";
+  const effectiveLogoUrl = mounted ? logoUrl : "";
+
   const brandInitial =
     brandName.length >= 2 && brandName.charCodeAt(1) >= 0x0980 && brandName.charCodeAt(1) <= 0x09ff
       ? brandName.slice(0, 2)
@@ -280,11 +294,11 @@ export function AdminSidebar() {
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
           title={brandName}
         >
-          {logoUrl ? (
+          {effectiveLogoUrl ? (
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white dark:bg-zinc-900 border border-border/80 shadow-xs">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={logoUrl}
+                src={effectiveLogoUrl}
                 alt={brandName}
                 className="h-full w-full object-contain p-0.5"
               />
@@ -331,7 +345,7 @@ export function AdminSidebar() {
                       ? pathname === "/admin"
                       : pathname === item.href || pathname.startsWith(item.href + "/");
 
-                  const badgeCount = item.badgeKey && counts ? counts[item.badgeKey] : 0;
+                  const badgeCount = mounted && item.badgeKey && counts ? counts[item.badgeKey] : 0;
 
                   return (
                     <SidebarMenuItem key={item.href}>

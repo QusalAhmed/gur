@@ -1763,11 +1763,17 @@ export function OrdersClient() {
     }
   }, [allExpanded, filteredOrders]);
 
-  const copyToClipboard = React.useCallback((text: string, label: string) => {
+  const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
+
+  const copyToClipboard = React.useCallback((text: string, label: string, key?: string) => {
     if (!text) return;
     try {
       navigator.clipboard?.writeText(text);
       showToast(`Copied ${label} to clipboard`, "info");
+      if (key) {
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(null), 1800);
+      }
     } catch {
       // ignore
     }
@@ -2510,17 +2516,43 @@ export function OrdersClient() {
                     <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                     <span>{order.phone}</span>
                   </a>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.9 }}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyToClipboard(order.phone, "Phone number");
+                      copyToClipboard(order.phone, "Phone number", `${order.id}-phone`);
                     }}
-                    className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                    className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer transition-colors"
                     title="Copy phone"
                   >
-                    <Copy className="h-3 w-3" />
-                  </button>
+                    <AnimatePresence mode="wait" initial={false}>
+                      {copiedKey === `${order.id}-phone` ? (
+                        <motion.span
+                          key="check"
+                          initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          exit={{ scale: 0.4, opacity: 0 }}
+                          transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                          className="inline-block text-emerald-600"
+                        >
+                          <Check className="h-3 w-3 stroke-[2.5]" />
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="copy"
+                          initial={{ scale: 0.4, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.4, opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="inline-block"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                 </div>
               )}
 
@@ -2544,17 +2576,43 @@ export function OrdersClient() {
                       <span>{order.alternative_phone}</span>
                     </a>
                     <span className="text-xs text-muted-foreground font-normal">(Alt)</span>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        copyToClipboard(order.alternative_phone!, "Alternative phone");
+                        copyToClipboard(order.alternative_phone!, "Alternative phone", `${order.id}-alt-phone`);
                       }}
-                      className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer transition-colors"
                       title="Copy alternative phone"
                     >
-                      <Copy className="h-3 w-3" />
-                    </button>
+                      <AnimatePresence mode="wait" initial={false}>
+                        {copiedKey === `${order.id}-alt-phone` ? (
+                          <motion.span
+                            key="check"
+                            initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                            exit={{ scale: 0.4, opacity: 0 }}
+                            transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                            className="inline-block text-emerald-600"
+                          >
+                            <Check className="h-3 w-3 stroke-[2.5]" />
+                          </motion.span>
+                        ) : (
+                          <motion.span
+                            key="copy"
+                            initial={{ scale: 0.4, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.4, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="inline-block"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
                   </div>
                   <div>
                     <SteadfastDeliveryRecordBadge phone={order.alternative_phone} variant="compact" />
@@ -2606,17 +2664,43 @@ export function OrdersClient() {
                           <Phone className="h-3 w-3 text-amber-600 shrink-0" />
                           <span>{shipPhone}</span>
                         </a>
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.9 }}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyToClipboard(shipPhone, "Shipping phone");
+                            copyToClipboard(shipPhone, "Shipping phone", `${order.id}-ship-phone`);
                           }}
-                          className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                          className="text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer transition-colors"
                           title="Copy shipping phone"
                         >
-                          <Copy className="h-3 w-3" />
-                        </button>
+                          <AnimatePresence mode="wait" initial={false}>
+                            {copiedKey === `${order.id}-ship-phone` ? (
+                              <motion.span
+                                key="check"
+                                initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                                exit={{ scale: 0.4, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                                className="inline-block text-emerald-600"
+                              >
+                                <Check className="h-3 w-3 stroke-[2.5]" />
+                              </motion.span>
+                            ) : (
+                              <motion.span
+                                key="copy"
+                                initial={{ scale: 0.4, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.4, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="inline-block"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                        </motion.button>
                       </div>
                     )}
                     {shipPhone && (
@@ -2990,7 +3074,7 @@ export function OrdersClient() {
         enableHiding: false,
       },
     ],
-    [expandedRows, toggleRowExpanded, copyToClipboard, phoneToOrdersMap, orders, handleOpenView]
+    [expandedRows, toggleRowExpanded, copyToClipboard, phoneToOrdersMap, orders, handleOpenView, copiedKey]
   );
 
   const renderOrderDetailsSubRow = (order: Order) => {

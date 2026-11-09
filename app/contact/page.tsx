@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
 import { PhoneHelpForm } from "@/components/storefront/phone-help-form";
+import { CopyPhoneButton } from "@/components/storefront/copy-phone-button";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
 
 export const instant = false;
@@ -88,13 +89,16 @@ export default async function ContactPage() {
               </div>
             </div>
 
-            <a
-              href={`tel:${rawPhone}`}
-              className="mt-4 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-sm transition-all"
-            >
-              <Phone className="w-4 h-4" />
-              <span>এখনই কল করুন</span>
-            </a>
+            <div className="mt-4 flex items-center gap-2">
+              <a
+                href={`tel:${rawPhone}`}
+                className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 px-3 rounded-xl shadow-sm transition-all"
+              >
+                <Phone className="w-4 h-4" />
+                <span>এখনই কল করুন</span>
+              </a>
+              <CopyPhoneButton phone={hotline} lang="bn" variant="compact" />
+            </div>
           </div>
 
           {/* 2. WhatsApp Chat */}

@@ -27,7 +27,10 @@ import {
   ChevronRight,
   ShieldCheck,
   AlertTriangle,
+  Copy,
+  Check,
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -131,6 +134,7 @@ export function OrderDetailView({
   const [payOpen, setPayOpen] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [copiedPhone, setCopiedPhone] = React.useState(false);
 
   // Note form state
   const [newNote, setNewNote] = React.useState("");
@@ -663,6 +667,53 @@ export function OrderDetailView({
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{formatPhoneDisplay(order.customer_phone)}</span>
                     <div className="flex items-center gap-1">
+                      <motion.button
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        type="button"
+                        onClick={() => {
+                          if (order.customer_phone) {
+                            try {
+                              navigator.clipboard?.writeText(order.customer_phone);
+                            } catch {
+                              // ignore
+                            }
+                            setCopiedPhone(true);
+                            toast.success("Phone number copied to clipboard");
+                            setTimeout(() => setCopiedPhone(false), 2000);
+                          }
+                        }}
+                        className="inline-flex items-center justify-center h-6 px-2 text-[10px] gap-1 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
+                        title="Copy Phone"
+                      >
+                        <AnimatePresence mode="wait" initial={false}>
+                          {copiedPhone ? (
+                            <motion.span
+                              key="check"
+                              initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                              exit={{ scale: 0.4, opacity: 0 }}
+                              transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                              className="inline-flex items-center gap-1 text-emerald-600 font-medium"
+                            >
+                              <Check className="h-2.5 w-2.5 stroke-[2.5]" />
+                              <span>Copied</span>
+                            </motion.span>
+                          ) : (
+                            <motion.span
+                              key="copy"
+                              initial={{ scale: 0.4, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.4, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <Copy className="h-2.5 w-2.5" />
+                              <span>Copy</span>
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </motion.button>
                       <Button asChild size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1">
                         <a href={`tel:${phoneClean}`}>
                           <Phone className="h-2.5 w-2.5" />

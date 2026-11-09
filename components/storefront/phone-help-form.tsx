@@ -22,6 +22,7 @@ import { StorefrontOrderItem } from "@/actions/storefront-order";
 import { toast } from "sonner";
 import { createNotificationAction } from "@/actions/notifications";
 import { setPixelUserPhone } from "@/lib/facebook-pixel";
+import { CopyPhoneButton } from "./copy-phone-button";
 
 interface PhoneHelpFormProps {
   lang?: StorefrontLang;
@@ -303,7 +304,7 @@ export function PhoneHelpForm({
 
         {/* Quick Hotline & Fast Callback Reminder */}
                 <div className="mt-3 pt-2.5 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2 text-stone-600 dark:text-stone-400 text-[11px] sm:text-xs">
-                  <span className="flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1.5">
                     <span>{t.phoneHelpOrCallDirect}</span>
                     <a
                       href={`tel:${rawHotline}`}
@@ -312,6 +313,12 @@ export function PhoneHelpForm({
                     >
                       {hotline}
                     </a>
+                    <CopyPhoneButton
+                      phone={hotline}
+                      lang={lang}
+                      variant="icon"
+                      className="py-0.5 px-1.5 h-6 text-emerald-700 dark:text-emerald-400 bg-transparent border-0 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/50"
+                    />
                   </span>
                   <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                     <Clock className="w-3 h-3 text-emerald-600" aria-hidden="true" />

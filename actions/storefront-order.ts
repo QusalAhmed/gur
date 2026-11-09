@@ -904,57 +904,26 @@ export async function placeStorefrontOrderAction(
         }
       }
 
-      // Notes & Events logging for Rules 1, 2, and 3
+      // Events logging for Rules 1 and 2 (Timeline status audit, no automated order_notes)
       if (wasIncomplete && finalStatus === "pending") {
-        // Rule 2: Incomplete upgraded to pending -> write system note about this upgradation
-        Promise.all([
-          client.from("order_notes").insert({
-            order_id: orderDbId,
-            order_number: orderNumber,
-            type: "system",
-            author: "System",
-            note: `Incomplete order upgraded to pending upon customer order submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
-          }),
+        Promise.resolve(
           client.from("order_events").insert({
             order_id: orderDbId,
             event_type: "status_change",
             from_value: "incomplete_order",
             to_value: "pending",
             message: `গ্রাহক ওয়েবসাইট থেকে অর্ডার নিশ্চিত করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
-          }),
-        ]).catch(() => {});
+          })
+        ).catch(() => {});
       } else if (wasPending && finalStatus === "pending") {
-        // Rule 1: Existing pending order updated
-        Promise.all([
-          client.from("order_notes").insert({
-            order_id: orderDbId,
-            order_number: orderNumber,
-            type: "system",
-            author: "System",
-            note: `Pending order updated with new items and details from customer submission (${resolvedItems.length} items, total ৳${cleanGrandTotal}).`,
-          }),
+        Promise.resolve(
           client.from("order_events").insert({
             order_id: orderDbId,
             event_type: "updated",
             to_value: "pending",
             message: `গ্রাহক পেন্ডিং অর্ডার আপডেট করেছেন (${resolvedItems.length}টি আইটেম, মোট ৳${cleanGrandTotal})`,
-          }),
-        ]).catch(() => {});
-      }
-
-      // Rule 3: Note if customer phone has other orders with specific details (e.g. other order: delivered, note: old customer)
-      if (hasOtherOrders && (!existingOrder || wasIncomplete)) {
-        const noteInserts = otherOrdersList.slice(0, 5).map((o: any) => {
-          const insight = getOtherOrderInsight(o.status);
-          return {
-            order_id: orderDbId,
-            order_number: orderNumber,
-            type: "system",
-            author: "System",
-            note: `Other order ${o.order_number || o.id}: ${insight.statusText}, note: ${insight.note}`,
-          };
-        });
-        Promise.resolve(client.from("order_notes").insert(noteInserts)).catch(() => {});
+          })
+        ).catch(() => {});
       }
 
       // Trigger Outbox Background Notification Job (Tier 2 fallback path)

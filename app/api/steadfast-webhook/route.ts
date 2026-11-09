@@ -203,21 +203,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             actor_id: null,
           });
 
-          // Add system delivery note
-          const noteText = `Steadfast Delivery Confirmed: Consignment #${rawConsignmentId || matchedOrder.courier_consignment_id || "N/A"} delivered.${
-            codAmount !== null ? ` COD collected: ৳${codAmount}.` : ""
-          }${deliveryCharge !== null ? ` Courier charge: ৳${deliveryCharge}.` : ""}${
-            trackingMessage ? ` Note: ${trackingMessage}` : ""
-          }`.trim();
-
-          await supabaseAdmin.from("order_notes").insert({
-            order_id: matchedOrder.id,
-            order_number: matchedOrder.order_number,
-            type: "delivery",
-            author: "Steadfast Courier",
-            note: noteText,
-          });
-
           result.message = "Order marked as delivered with COD collection synced.";
 
           // Trigger automated customer SMS notification and Meta CAPI via Outbox
@@ -276,20 +261,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             to_value: "delivered",
             message: trackingMessage || "Parcel partially delivered by Steadfast Courier",
             actor_id: null,
-          });
-
-          const noteText = `Steadfast Partial Delivery: Consignment #${rawConsignmentId || matchedOrder.courier_consignment_id || "N/A"}.${
-            codAmount !== null ? ` COD collected: ৳${codAmount}.` : ""
-          }${deliveryCharge !== null ? ` Courier charge: ৳${deliveryCharge}.` : ""}${
-            trackingMessage ? ` Note: ${trackingMessage}` : ""
-          }`.trim();
-
-          await supabaseAdmin.from("order_notes").insert({
-            order_id: matchedOrder.id,
-            order_number: matchedOrder.order_number,
-            type: "delivery",
-            author: "Steadfast Courier",
-            note: noteText,
           });
 
           result.message = "Order marked as delivered (partially paid).";
@@ -355,16 +326,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             actor_id: null,
           });
 
-          await supabaseAdmin.from("order_notes").insert({
-            order_id: matchedOrder.id,
-            order_number: matchedOrder.order_number,
-            type: "delivery",
-            author: "Steadfast Courier",
-            note: `Steadfast Parcel ${isShipped ? "Returned" : "Cancelled"}: Consignment #${rawConsignmentId || "N/A"}.${
-              trackingMessage ? ` Reason: ${trackingMessage}` : ""
-            }`.trim(),
-          });
-
           // Trigger high-priority admin notification per user specification
           await supabaseAdmin.from("notifications").insert({
             type: "system_alert",
@@ -416,14 +377,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             message: trackingMessage,
             actor_id: null,
           });
-
-          await supabaseAdmin.from("order_notes").insert({
-            order_id: matchedOrder.id,
-            order_number: matchedOrder.order_number,
-            type: "delivery",
-            author: "Steadfast Courier",
-            note: `[Steadfast Tracking] ${trackingMessage}`,
-          });
         }
         result.message = "Tracking checkpoint recorded on order.";
         break;
@@ -448,14 +401,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           actor_id: null,
         });
 
-        await supabaseAdmin.from("order_notes").insert({
-          order_id: matchedOrder.id,
-          order_number: matchedOrder.order_number,
-          type: "delivery",
-          author: "Steadfast Courier",
-          note: `[Steadfast Consignment Updated] Changed: ${changedDesc} | New values: ${JSON.stringify(values)}`,
-        });
-
         result.message = "Consignment modification recorded on order.";
         break;
       }
@@ -476,14 +421,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           to_value: null,
           message: `Steadfast return request received: ${reason}`,
           actor_id: null,
-        });
-
-        await supabaseAdmin.from("order_notes").insert({
-          order_id: matchedOrder.id,
-          order_number: matchedOrder.order_number,
-          type: "delivery",
-          author: "Steadfast Courier",
-          note: `[Steadfast Return Request] Reason: ${reason}`,
         });
 
         // Trigger high-priority admin alert notification per user specification

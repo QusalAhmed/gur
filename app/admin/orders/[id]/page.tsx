@@ -9,6 +9,9 @@ interface OrderPageProps {
   }>;
 }
 
+// Opt-out of instant navigation validation for dynamic order detail data
+export const instant = false;
+
 export default async function OrderDetailPage({ params }: OrderPageProps) {
   const { id } = await params;
   const session = await requireStaffMember(`/admin/orders/${id}`);

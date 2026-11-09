@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
 import {
   Phone,
@@ -16,6 +16,7 @@ import {
   Truck,
   Factory,
 } from "lucide-react";
+import { toast } from "sonner";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
 import { LiveStockSection } from "./live-stock-section";
@@ -70,8 +71,20 @@ export function ContactSection({
   const handleCopyNumber = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard.writeText(hotline);
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(hotline);
+      }
+    } catch {
+      // Fallback
+    }
     setCopied(true);
+    toast.success(
+      lang === "bn"
+        ? `হটলাইন নম্বর কপি হয়েছে: ${hotline}`
+        : `Hotline copied to clipboard: ${hotline}`,
+      { duration: 2500 }
+    );
     setTimeout(() => setCopied(false), 2200);
   };
 
@@ -190,9 +203,30 @@ export function ContactSection({
                   {lang === "bn" ? "হটলাইন" : "Hotline"}
                 </span>
               </div>
-              <span className="block font-mono text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-50 tracking-wider leading-none mt-1">
-                {hotline}
-              </span>
+              <button
+                type="button"
+                onClick={handleCopyNumber}
+                className="group/phone relative block text-left mt-1 cursor-pointer focus:outline-hidden"
+                title={lang === "bn" ? "হটলাইন নম্বর কপি করতে ক্লিক করুন" : "Click to copy hotline number"}
+                aria-label={`${hotline} - ${lang === "bn" ? "কপি করতে ক্লিক করুন" : "click to copy"}`}
+              >
+                <motion.span
+                  animate={copied ? { scale: [1, 1.05, 0.98, 1] } : {}}
+                  transition={{ duration: 0.35 }}
+                  className={`font-mono text-xl sm:text-2xl font-black tracking-wider leading-none transition-colors duration-200 block ${
+                    copied
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-stone-900 dark:text-stone-50 group-hover/phone:text-emerald-600 dark:group-hover/phone:text-emerald-400"
+                  }`}
+                >
+                  {hotline}
+                </motion.span>
+                <motion.span
+                  initial={false}
+                  animate={{ width: copied ? "100%" : "0%" }}
+                  className="h-0.5 bg-emerald-500 rounded-full block group-hover/phone:w-full transition-all duration-300 mt-0.5"
+                />
+              </button>
               <span className="block text-[11px] text-stone-600 dark:text-stone-400 mt-1">
                 {lang === "bn" ? "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা" : "Daily 8:00 AM - 10:00 PM"}
               </span>
@@ -210,28 +244,82 @@ export function ContactSection({
               <span>{t.callNowBtn}</span>
             </a>
 
-            <button
+            <motion.button
               type="button"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.93 }}
               onClick={handleCopyNumber}
               aria-label={copied ? (lang === "bn" ? "হটলাইন নম্বর কপি হয়েছে" : "Hotline number copied") : (lang === "bn" ? "হটলাইন নম্বর কপি করুন" : "Copy hotline number")}
-              className="inline-flex items-center justify-center gap-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl border border-stone-200 dark:border-stone-700 transition-all touch-manipulation cursor-pointer"
+              className={`relative inline-flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl border transition-all duration-200 touch-manipulation cursor-pointer select-none ${
+                copied
+                  ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-500/70 dark:border-emerald-500/60 shadow-sm ring-2 ring-emerald-500/25"
+                  : "bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700"
+              }`}
               title={t.copyNumberBtn}
             >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-600" aria-hidden="true" />
-                  <span className="text-[11px] text-emerald-600 font-bold">{t.numberCopied}</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" aria-hidden="true" />
-                  <span className="hidden xs:inline text-[11px] font-semibold">{t.copyNumberBtn}</span>
-                </>
+              {/* Expanding Ripple Ring Animation on Copy */}
+              {copied && (
+                <motion.span
+                  initial={{ scale: 0.85, opacity: 0.85 }}
+                  animate={{ scale: 1.35, opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  className="absolute inset-0 rounded-xl sm:rounded-2xl border-2 border-emerald-500 dark:border-emerald-400 pointer-events-none"
+                  aria-hidden="true"
+                />
               )}
+
+              {/* Floating Animated Popover Tooltip */}
+              <AnimatePresence>
+                {copied && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.85 }}
+                    animate={{ opacity: 1, y: -44, scale: 1 }}
+                    exit={{ opacity: 0, y: -50, scale: 0.85 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 24 }}
+                    className="absolute -top-1 left-1/2 -translate-x-1/2 z-30 pointer-events-none whitespace-nowrap drop-shadow-lg"
+                  >
+                    <div className="bg-stone-900/95 dark:bg-stone-100 text-stone-50 dark:text-stone-900 text-[11px] font-bold py-1 px-3 rounded-full flex items-center gap-1.5 border border-emerald-500/40 backdrop-blur-xs">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600 stroke-[2.5]" />
+                      <span>{lang === "bn" ? "নম্বর কপি হয়েছে!" : "Phone copied!"}</span>
+                    </div>
+                    <div className="w-2 h-2 bg-stone-900/95 dark:bg-stone-100 rotate-45 mx-auto -mt-1" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Morphing Icon and Text Transition */}
+              <AnimatePresence mode="wait" initial={false}>
+                {copied ? (
+                  <motion.span
+                    key="copied"
+                    initial={{ scale: 0.5, rotate: -20, opacity: 0 }}
+                    animate={{ scale: [0.5, 1.25, 1], rotate: 0, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                    className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold"
+                  >
+                    <Check className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+                    <span className="text-[11px]">{t.numberCopied}</span>
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="copy"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <Copy className="w-4 h-4" aria-hidden="true" />
+                    <span className="hidden xs:inline text-[11px] font-semibold">{t.copyNumberBtn}</span>
+                  </motion.span>
+                )}
+              </AnimatePresence>
+
               <span className="sr-only" aria-live="polite">
                 {copied ? (lang === "bn" ? "হটলাইন নম্বর ক্লিপবোর্ডে কপি হয়েছে" : "Hotline number copied to clipboard") : ""}
               </span>
-            </button>
+            </motion.button>
           </div>
         </motion.div>
 

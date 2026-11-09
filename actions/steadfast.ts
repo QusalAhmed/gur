@@ -593,21 +593,13 @@ export async function bookSteadfastBulkParcelsAction(
             .select("id");
 
           const matchingOrderUuid = updatedOrderRows?.[0]?.id;
-          // Record order timeline event & delivery note with parcel items
+          // Record order timeline event with parcel items
           if (matchingOrderUuid) {
             await client.from("order_events").insert({
               order_id: matchingOrderUuid,
               event_type: "courier_consignment_created",
               message: `Steadfast Consignment #${consignmentId} created (Tracking: ${trackingCode})${matchingValidItem?.itemDescription ? ` • Items: ${matchingValidItem.itemDescription}` : ""}`,
               actor_id: null,
-            }).select().maybeSingle();
-
-            await client.from("order_notes").insert({
-              order_id: matchingOrderUuid,
-              order_number: orderId,
-              type: "internal",
-              note: `Steadfast Consignment ID: ${consignmentId} | Tracking: ${trackingCode} | Link: ${trackingLink}${matchingValidItem?.itemDescription ? ` | Parcel Items: ${matchingValidItem.itemDescription}` : ""}`,
-              author: "Steadfast Courier Bot",
             }).select().maybeSingle();
           }
 
@@ -870,7 +862,7 @@ export async function recreateSteadfastParcelAction(
       cancellationResult.message = cancelErr.message || "Failed calling return/cancel API";
     }
 
-    // 3. Record order timeline event & delivery note archiving previous consignment
+    // 3. Record order timeline event archiving previous consignment
     try {
       if (orderUuid) {
         await client.from("order_events").insert({
@@ -879,17 +871,9 @@ export async function recreateSteadfastParcelAction(
           message: `Steadfast Consignment #${oldCid} (Tracking: ${oldTracking || "N/A"}) superseded due to updated order information`,
           actor_id: null,
         });
-
-        await client.from("order_notes").insert({
-          order_id: orderUuid,
-          order_number: orderId,
-          type: "internal",
-          note: `[Previous Parcel Superseded] Consignment #${oldCid} | Tracking: ${oldTracking || "N/A"} | Invoice: ${oldInvoice}${cancellationResult.attempted ? ` | Return Request: ${cancellationResult.success ? "Submitted" : cancellationResult.message}` : ""}`,
-          author: "Steadfast Courier Bot",
-        });
       }
     } catch (noteErr) {
-      console.warn("Could not insert superseded note/event:", noteErr);
+      console.warn("Could not insert superseded event:", noteErr);
     }
   }
 
@@ -922,7 +906,7 @@ export async function recreateSteadfastParcelAction(
 
   const c = bookingResult.consignment!;
 
-  // 7. Record recreation timeline event & delivery note for the new parcel
+  // 7. Record recreation timeline event for the new parcel
   try {
     if (orderUuid) {
       await client.from("order_events").insert({
@@ -931,17 +915,9 @@ export async function recreateSteadfastParcelAction(
         message: `Steadfast Consignment recreated #${c.consignment_id} (Tracking: ${c.tracking_code}, Invoice: ${nextInvoice})${c.item_description ? ` • Items: ${c.item_description}` : ""}`,
         actor_id: null,
       });
-
-      await client.from("order_notes").insert({
-        order_id: orderUuid,
-        order_number: orderId,
-        type: "internal",
-        note: `Steadfast Consignment Recreated: #${c.consignment_id} | Tracking: ${c.tracking_code} | Invoice: ${nextInvoice} | Link: ${c.tracking_link}${c.item_description ? ` | Parcel Items: ${c.item_description}` : ""}`,
-        author: "Steadfast Courier Bot",
-      });
     }
   } catch (eventErr) {
-    console.warn("Could not insert recreation events/notes:", eventErr);
+    console.warn("Could not insert recreation events:", eventErr);
   }
 
   // 8. Re-fetch fresh updated order from DB
