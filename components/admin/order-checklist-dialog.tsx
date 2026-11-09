@@ -52,38 +52,74 @@ export interface ConsolidatedChecklistItem {
   order_ids: string[];
 }
 
-/**
- * Extracts approximate unit weight in kilograms from variant name, product name, or SKU.
- * Supports units: kg, g/gm, liter/l, ml (and Bengali variants কেজি, গ্রাম, লিটার, মিলি).
- * Falls back to 1 kg per unit if unknown.
- */
-function extractUnitWeightKg(variantName = "", productName = "", sku = ""): number {
-  const combined = `${variantName} ${productName} ${sku}`.toLowerCase();
+const BN_TO_EN_DIGITS: Record<string, string> = {
+  "০": "0",
+  "১": "1",
+  "২": "2",
+  "৩": "3",
+  "৪": "4",
+  "৫": "5",
+  "৬": "6",
+  "৭": "7",
+  "৮": "8",
+  "৯": "9",
+};
+
+function normalizeBengaliDigits(text = ""): string {
+  return text.replace(/[০-৯]/g, (d) => BN_TO_EN_DIGITS[d] ?? d);
+}
+
+function parseWeightFromText(rawText = ""): number | null {
+  if (!rawText || typeof rawText !== "string") return null;
+  const text = normalizeBengaliDigits(rawText.toLowerCase());
 
   // 1. Matches like 0.5 kg, 1kg, 2.5 kg, 1 কেজি, 2 কিলো
-  const kgMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
+  const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
   if (kgMatch) return parseFloat(kgMatch[1]);
 
   // 2. Matches like 500g, 250 gm, 200 g, 500 গ্রাম, 200গ্রা
-  const gMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:gm|gms|gram|grams|g|গ্রাম|গ্রা)(?![a-z])/i);
+  const gMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:gm|gms|gram|grams|g|গ্রাম|গ্রা)(?![a-z])/i);
   if (gMatch) return parseFloat(gMatch[1]) / 1000;
 
   // 3. Matches like 1L, 1.5 ltr, 1 liter, 1 লিটার
-  const lMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:liter|liters|ltr|l|লিটার)/i);
+  const lMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:liter|liters|ltr|l|লিটার)/i);
   if (lMatch) return parseFloat(lMatch[1]);
 
   // 4. Matches like 500ml, 250 ml, 250 মিলি
-  const mlMatch = combined.match(/(\d+(?:\.\d+)?)\s*(?:ml|মিলি)/i);
+  const mlMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:ml|মিলি)/i);
   if (mlMatch) return parseFloat(mlMatch[1]) / 1000;
 
-  // Fallback default: 1 kg per unit
+  return null;
+}
+
+/**
+ * Extracts approximate unit weight in kilograms from variant name, product name, or SKU.
+ * Checks variant name first, then product name, then SKU, falling back to 1 kg if unspecified.
+ * Supports units: kg, g/gm, liter/l, ml (and Bengali variants কেজি, গ্রাম, লিটার, মিলি).
+ */
+function extractUnitWeightKg(variantName = "", productName = "", sku = ""): number {
+  const variantWeight = parseWeightFromText(variantName);
+  if (variantWeight !== null) return variantWeight;
+
+  const productWeight = parseWeightFromText(productName);
+  if (productWeight !== null) return productWeight;
+
+  const skuWeight = parseWeightFromText(sku);
+  if (skuWeight !== null) return skuWeight;
+
   return 1;
 }
 
 function formatWeightKg(kg: number): string {
   if (kg <= 0) return "0 kg";
+  if (kg < 0.01) {
+    const grams = Number.isInteger(kg * 1000)
+      ? (kg * 1000).toString()
+      : (kg * 1000).toFixed(2).replace(/\.?0+$/, "");
+    return `${grams} g`;
+  }
   const formatted = Number.isInteger(kg) ? kg.toString() : kg.toFixed(2).replace(/\.?0+$/, "");
-  return `${formatted} kg`;
+  return `${formatted || "0"} kg`;
 }
 
 export function OrderChecklistDialog({
