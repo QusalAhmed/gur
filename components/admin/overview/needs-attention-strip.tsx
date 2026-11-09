@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertCircle, Clock, CreditCard, ShieldAlert, FileQuestion, Star, ArrowRight } from "lucide-react";
+import {
+  AlertCircle,
+  Clock,
+  CreditCard,
+  ShieldAlert,
+  FileQuestion,
+  Star,
+  ArrowRight,
+  ShoppingCart,
+} from "lucide-react";
 import { NeedsAttentionItem } from "@/lib/admin-overview-data";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -25,12 +34,22 @@ const SEVERITY_CONFIG = {
   },
 };
 
+const ITEM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  pending_orders: ShoppingCart,
+  pending_old: ShoppingCart,
+  incomplete_orders: Clock,
+  payments_unreconciled: CreditCard,
+  quarantined_lots: ShieldAlert,
+  new_quotes: FileQuestion,
+  pending_reviews: Star,
+};
+
 export function NeedsAttentionStrip({ items }: { items: NeedsAttentionItem[] }) {
   if (items.length === 0) {
     return (
       <div className="flex items-center gap-2 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-700 dark:text-emerald-400">
         <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-        <span className="font-semibold">All operations clear:</span> No urgent orders, payments, quarantined lots, or RFQs awaiting action.
+        <span className="font-semibold">All operations clear:</span> No pending orders, incomplete checkouts, payments, quarantined lots, or RFQs awaiting action.
       </div>
     );
   }
@@ -47,7 +66,7 @@ export function NeedsAttentionStrip({ items }: { items: NeedsAttentionItem[] }) 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5">
         {items.map((item) => {
           const cfg = SEVERITY_CONFIG[item.severity];
-          const Icon = cfg.icon;
+          const Icon = ITEM_ICONS[item.id] || cfg.icon;
 
           return (
             <Link

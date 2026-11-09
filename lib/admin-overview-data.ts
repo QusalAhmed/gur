@@ -77,9 +77,6 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
 
   const bucket = durationDays > 45 ? "week" : "day";
 
-  // Two hours ago ISO for pending order alerts
-  const twoHoursAgoIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-
   // 2. Fetch all overview data in parallel via RPC and PostgREST
   const [
     kpiCurrentRes,
@@ -88,7 +85,8 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     topProductsRes,
     statusBreakdownRes,
     sourceBreakdownRes,
-    pendingOldRes,
+    pendingOrdersRes,
+    incompleteOrdersRes,
     unreconciledPaymentsRes,
     quarantinedLotsRes,
     newQuotesRes,
@@ -105,8 +103,11 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .lte("created_at", twoHoursAgoIso),
+      .eq("status", "pending"),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "incomplete_order"),
     supabase
       .from("payments")
       .select("id", { count: "exact", head: true })
@@ -131,8 +132,8 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
       .limit(10),
   ]);
 
-  let currentKpisData = kpiCurrentRes.data as any;
-  let prevKpisData = kpiPrevRes.data as any;
+  let currentKpisData = kpiCurrentRes.data as unknown as KpiStats | null;
+  let prevKpisData = kpiPrevRes.data as unknown as KpiStats | null;
   let seriesData = seriesRes.data || [];
   let topProductsData = topProductsRes.data || [];
   let statusBreakdownData = statusBreakdownRes.data || [];
@@ -155,8 +156,8 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
         .limit(10),
     ]);
 
-    if (fbKpiCurr.data) currentKpisData = fbKpiCurr.data as any;
-    if (fbKpiPrev.data) prevKpisData = fbKpiPrev.data as any;
+    if (fbKpiCurr.data) currentKpisData = fbKpiCurr.data as unknown as KpiStats;
+    if (fbKpiPrev.data) prevKpisData = fbKpiPrev.data as unknown as KpiStats;
     if (fbSeries.data && fbSeries.data.length > 0) seriesData = fbSeries.data;
     if (fbTop.data && fbTop.data.length > 0) topProductsData = fbTop.data;
     if (fbStatus.data && fbStatus.data.length > 0) statusBreakdownData = fbStatus.data;
@@ -203,15 +204,40 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
   // Build Needs Attention Strip
   const needsAttention: NeedsAttentionItem[] = [];
 
-  if ((pendingOldRes.count || 0) > 0) {
+  let pendingCount = pendingOrdersRes.count || 0;
+  let incompleteCount = incompleteOrdersRes.count || 0;
+
+  // Fallback to service role if counts failed due to session state
+  if (supabase !== supabaseAdmin && (pendingOrdersRes.error || incompleteOrdersRes.error)) {
+    const [fbPending, fbIncomplete] = await Promise.all([
+      supabaseAdmin.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabaseAdmin.from("orders").select("id", { count: "exact", head: true }).eq("status", "incomplete_order"),
+    ]);
+    if (fbPending.count != null) pendingCount = fbPending.count;
+    if (fbIncomplete.count != null) incompleteCount = fbIncomplete.count;
+  }
+
+  if (pendingCount > 0) {
     needsAttention.push({
-      id: "pending_old",
-      title: "Pending Orders (> 2h)",
-      titleBn: "২ ঘণ্টার বেশি পেন্ডিং অর্ডার",
-      count: pendingOldRes.count || 0,
+      id: "pending_orders",
+      title: "Pending Orders",
+      titleBn: "পেন্ডিং অর্ডারসমূহ",
+      count: pendingCount,
       href: "/admin/orders?status=pending",
       severity: "urgent",
-      description: "Customer waiting for confirmation call or verification",
+      description: "Awaiting customer confirmation call or verification",
+    });
+  }
+
+  if (incompleteCount > 0) {
+    needsAttention.push({
+      id: "incomplete_orders",
+      title: "Incomplete Orders",
+      titleBn: "অসম্পূর্ণ চেকআউট",
+      count: incompleteCount,
+      href: "/admin/incomplete",
+      severity: "warning",
+      description: "Abandoned checkouts awaiting recovery outreach",
     });
   }
 
