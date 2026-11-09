@@ -180,9 +180,10 @@ export function canRoleAccessPath(role: AdminRole, pathname: string): boolean {
     return true; // All staff have at least read access
   }
 
-  // Catalog: Products, Categories, Posts, FAQs
+  // Catalog: Products, Combos, Categories, Posts, FAQs
   if (
     path.startsWith("/admin/products") ||
+    path.startsWith("/admin/combos") ||
     path.startsWith("/admin/categories") ||
     path.startsWith("/admin/posts") ||
     path.startsWith("/admin/faqs")

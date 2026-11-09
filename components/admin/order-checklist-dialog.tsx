@@ -50,6 +50,10 @@ export interface ConsolidatedChecklistItem {
   total_weight_kg: number;
   order_count: number;
   order_ids: string[];
+  combo_sources?: Array<{
+    combo_name: string;
+    count: number;
+  }>;
 }
 
 const BN_TO_EN_DIGITS: Record<string, string> = {
@@ -159,35 +163,87 @@ export function OrderChecklistDialog({
       if (!order.items || !Array.isArray(order.items)) continue;
 
       for (const item of order.items) {
-        const prodName = (item.product_name || "Unknown Product").trim();
-        const variantName = (item.variant_name || "").trim();
-        const sku = (item.sku || "").trim();
-        const key = `${prodName}___${variantName}___${sku}`.toLowerCase();
+        // If item is a combo and has components snapshot, explode into physical components
+        const isComboItem = Boolean(item.is_combo) || (Array.isArray(item.combo_components) && item.combo_components.length > 0);
+        if (isComboItem && Array.isArray(item.combo_components) && item.combo_components.length > 0) {
+          const comboQty = Number(item.quantity) || 1;
+          const comboName = (item.product_name || "Combo").trim();
 
-        const qty = Number(item.quantity) || 1;
-        const unitWeight = extractUnitWeightKg(variantName, prodName, sku);
-        const lineWeight = unitWeight * qty;
-        const existing = map.get(key);
+          for (const comp of item.combo_components) {
+            const compProdName = (comp.product_name || "Unknown Product").trim();
+            const compVarName = (comp.variant_name || "").trim();
+            const compSku = (comp.sku || "").trim();
+            const key = `${compProdName}___${compVarName}___${compSku}`.toLowerCase();
 
-        if (existing) {
-          existing.total_quantity += qty;
-          existing.total_weight_kg += lineWeight;
-          if (!existing.order_ids.includes(order.id)) {
-            existing.order_ids.push(order.id);
-            existing.order_count += 1;
+            const singleCompQty = Number(comp.quantity) || 1;
+            const totalCompQty = singleCompQty * comboQty;
+            const unitWeight = comp.weight_grams
+              ? comp.weight_grams / 1000
+              : extractUnitWeightKg(compVarName, compProdName, compSku);
+            const lineWeight = unitWeight * totalCompQty;
+
+            const existing = map.get(key);
+            if (existing) {
+              existing.total_quantity += totalCompQty;
+              existing.total_weight_kg += lineWeight;
+              if (!existing.order_ids.includes(order.id)) {
+                existing.order_ids.push(order.id);
+                existing.order_count += 1;
+              }
+              if (!existing.combo_sources) existing.combo_sources = [];
+              const src = existing.combo_sources.find((s) => s.combo_name === comboName);
+              if (src) {
+                src.count += totalCompQty;
+              } else {
+                existing.combo_sources.push({ combo_name: comboName, count: totalCompQty });
+              }
+            } else {
+              map.set(key, {
+                key,
+                product_name: compProdName,
+                variant_name: compVarName,
+                sku: compSku,
+                total_quantity: totalCompQty,
+                unit_weight_kg: unitWeight,
+                total_weight_kg: lineWeight,
+                order_count: 1,
+                order_ids: [order.id],
+                combo_sources: [{ combo_name: comboName, count: totalCompQty }],
+              });
+            }
           }
         } else {
-          map.set(key, {
-            key,
-            product_name: prodName,
-            variant_name: variantName,
-            sku,
-            total_quantity: qty,
-            unit_weight_kg: unitWeight,
-            total_weight_kg: lineWeight,
-            order_count: 1,
-            order_ids: [order.id],
-          });
+          // Standard loose physical item
+          const prodName = (item.product_name || "Unknown Product").trim();
+          const variantName = (item.variant_name || "").trim();
+          const sku = (item.sku || "").trim();
+          const key = `${prodName}___${variantName}___${sku}`.toLowerCase();
+
+          const qty = Number(item.quantity) || 1;
+          const unitWeight = extractUnitWeightKg(variantName, prodName, sku);
+          const lineWeight = unitWeight * qty;
+          const existing = map.get(key);
+
+          if (existing) {
+            existing.total_quantity += qty;
+            existing.total_weight_kg += lineWeight;
+            if (!existing.order_ids.includes(order.id)) {
+              existing.order_ids.push(order.id);
+              existing.order_count += 1;
+            }
+          } else {
+            map.set(key, {
+              key,
+              product_name: prodName,
+              variant_name: variantName,
+              sku,
+              total_quantity: qty,
+              unit_weight_kg: unitWeight,
+              total_weight_kg: lineWeight,
+              order_count: 1,
+              order_ids: [order.id],
+            });
+          }
         }
       }
     }
@@ -352,6 +408,11 @@ export function OrderChecklistDialog({
                   {item.sku && <span>({item.sku}) </span>}
                   {item.total_weight_kg > 0 && (
                     <span style={{ fontWeight: 600 }}>• {formatWeightKg(item.total_weight_kg)}</span>
+                  )}
+                  {item.combo_sources && item.combo_sources.length > 0 && (
+                    <div style={{ fontSize: "8px", fontStyle: "italic", color: "#444", marginTop: "1px" }}>
+                      ↳ {item.combo_sources.map((s) => `${s.count} from ${s.combo_name}`).join(", ")}
+                    </div>
                   )}
                 </div>
               </div>
@@ -545,6 +606,19 @@ export function OrderChecklistDialog({
                               >
                                 {item.variant_name}
                               </Badge>
+                            )}
+                            {item.combo_sources && item.combo_sources.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {item.combo_sources.map((src, sIdx) => (
+                                  <Badge
+                                    key={sIdx}
+                                    variant="outline"
+                                    className="text-[10px] font-normal px-1.5 py-0 h-4 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                  >
+                                    {src.count} from {src.combo_name}
+                                  </Badge>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </TableCell>

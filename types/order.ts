@@ -12,6 +12,20 @@ export interface OrderItem {
   package_type?: string | null;
   product_name_bn?: string | null;
   variant_name_bn?: string | null;
+  is_combo?: boolean;
+  combo_components?: Array<{
+    component_variant_id: string;
+    product_id?: string;
+    sku?: string;
+    product_name?: string;
+    product_name_bn?: string;
+    variant_name?: string;
+    variant_name_bn?: string;
+    quantity: number;
+    unit_price?: number;
+    weight_grams?: number;
+    pack_type?: string;
+  }>;
 }
 
 export type OrderNoteType =

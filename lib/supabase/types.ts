@@ -40,6 +40,20 @@ export interface DbProductVariant {
   is_default: boolean;
   is_active: boolean;
   sort_order: number;
+  is_combo?: boolean;
+  combo_items?: Array<{
+    id?: string;
+    component_variant_id: string;
+    quantity: number;
+    sort_order?: number;
+    product_name?: string;
+    product_name_bn?: string;
+    variant_name?: string;
+    variant_name_bn?: string;
+    unit_price?: number;
+    weight_grams?: number;
+    pack_type?: string;
+  }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -129,6 +143,20 @@ export interface DbShippingMethod {
   is_pickup: boolean;
   is_active: boolean;
   sort_order: number;
+  is_combo?: boolean;
+  combo_items?: Array<{
+    id?: string;
+    component_variant_id: string;
+    quantity: number;
+    sort_order?: number;
+    product_name?: string;
+    product_name_bn?: string;
+    variant_name?: string;
+    variant_name_bn?: string;
+    unit_price?: number;
+    weight_grams?: number;
+    pack_type?: string;
+  }>;
   created_at?: string;
   updated_at?: string;
 }

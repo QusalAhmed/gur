@@ -185,6 +185,9 @@ export async function getOrdersAction(params: GetOrdersParams = {}): Promise<Get
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const hasMore = page < pageCount;
 
+  // Enrich order items with combo recipes if snapshot is missing
+  await enrichOrderItemsWithCombos(client, rawOrders);
+
   // Format orders to standard domain Order objects
   const orders: Order[] = rawOrders.map((row: any) => formatDbOrderRecord(row));
 
@@ -227,6 +230,60 @@ export async function getOrdersAction(params: GetOrdersParams = {}): Promise<Get
     statusCounts: initialStatusCounts,
     totalRevenue,
   };
+}
+
+/**
+ * Dynamically enriches order items with their combo components recipe if snapshot is missing
+ */
+async function enrichOrderItemsWithCombos(client: any, rawOrders: any[]) {
+  if (!rawOrders || rawOrders.length === 0) return;
+
+  const candidateVarIds = new Set<string>();
+  for (const o of rawOrders) {
+    if (!o || !Array.isArray(o.order_items)) continue;
+    for (const it of o.order_items) {
+      if (
+        it.variant_id &&
+        (!it.is_combo || !Array.isArray(it.combo_components) || it.combo_components.length === 0)
+      ) {
+        candidateVarIds.add(it.variant_id);
+      }
+    }
+  }
+
+  if (candidateVarIds.size === 0) return;
+
+  try {
+    const { data: comboVariants } = await client
+      .from("product_variants")
+      .select("id, is_combo")
+      .in("id", Array.from(candidateVarIds))
+      .eq("is_combo", true);
+
+    if (comboVariants && comboVariants.length > 0) {
+      const comboRecipeMap = new Map<string, any[]>();
+      for (const cv of comboVariants) {
+        const { data: recipe } = await client.rpc("get_combo_details", {
+          p_combo_variant_id: cv.id,
+        });
+        if (recipe && Array.isArray(recipe) && recipe.length > 0) {
+          comboRecipeMap.set(cv.id, recipe);
+        }
+      }
+
+      for (const o of rawOrders) {
+        if (!o || !Array.isArray(o.order_items)) continue;
+        for (const it of o.order_items) {
+          if (it.variant_id && comboRecipeMap.has(it.variant_id)) {
+            it.is_combo = true;
+            it.combo_components = comboRecipeMap.get(it.variant_id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not dynamically enrich order items with combo recipes:", err);
+  }
 }
 
 /**
@@ -310,11 +367,13 @@ export async function getOrderAction(idOrNumber: string): Promise<Order | null> 
     if (fallbackRes.error || !fallbackRes.data) {
       return null;
     }
+    await enrichOrderItemsWithCombos(client, [fallbackRes.data]);
     await enrichOrderItemsWithImages(client, fallbackRes.data);
     return formatDbOrderRecord(fallbackRes.data);
   }
 
   if (!data) return null;
+  await enrichOrderItemsWithCombos(client, [data]);
   await enrichOrderItemsWithImages(client, data);
   return formatDbOrderRecord(data);
 }

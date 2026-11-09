@@ -17,12 +17,16 @@ import {
   Sliders,
   RefreshCw,
   Share2,
+  Gift,
+  Boxes,
+  Percent,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DbProduct,
   deleteProductImageFromStorage,
   fetchCategoriesList,
+  fetchProductsFromDb,
 } from "@/lib/supabase";
 import { saveProductAction } from "@/actions/products";
 import { ImageUploader, UploadedImage } from "@/components/ui/image-uploader";
@@ -63,6 +67,15 @@ interface FormVariant {
   low_stock_threshold: number;
   is_default: boolean;
   is_active: boolean;
+  is_combo?: boolean;
+  combo_items?: Array<{
+    component_variant_id: string;
+    quantity: number;
+    product_name?: string;
+    variant_name?: string;
+    unit_price?: number;
+    weight_grams?: number;
+  }>;
 }
 
 interface FormImage {
@@ -168,6 +181,17 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         low_stock_threshold: Number(v.low_stock_threshold) || 5,
         is_default: Boolean(v.is_default) || (!hasDefault && idx === 0),
         is_active: v.is_active ?? true,
+        is_combo: Boolean((v as any).is_combo),
+        combo_items: Array.isArray((v as any).combo_items)
+          ? (v as any).combo_items.map((ci: any) => ({
+              component_variant_id: ci.component_variant_id,
+              quantity: Number(ci.quantity) || 1,
+              product_name: ci.product_name,
+              variant_name: ci.variant_name,
+              unit_price: Number(ci.unit_price) || 0,
+              weight_grams: ci.weight_grams,
+            }))
+          : [],
       }));
     }
     // Default initial variant for new products
@@ -186,6 +210,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         low_stock_threshold: 5,
         is_default: true,
         is_active: true,
+        is_combo: false,
+        combo_items: [],
       },
     ];
   });
@@ -240,6 +266,100 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
     queryFn: fetchCategoriesList,
   });
 
+  // Fetch full catalog products to populate combo component selector
+  const { data: catalogProducts = [] } = useQuery({
+    queryKey: ["admin", "catalog-products-for-combo"],
+    queryFn: fetchProductsFromDb,
+  });
+
+  const selectableComponentVariants = React.useMemo(() => {
+    if (!catalogProducts || !Array.isArray(catalogProducts)) return [];
+    const list: Array<{
+      variantId: string;
+      label: string;
+      productName: string;
+      variantName: string;
+      price: number;
+      weightGrams?: number;
+      stockStatus: string;
+    }> = [];
+
+    for (const p of catalogProducts) {
+      if (initialData?.id && p.id === initialData.id) continue;
+      if (p.variantList && Array.isArray(p.variantList)) {
+        for (const cv of p.variantList) {
+          if (!cv.isCombo) {
+            list.push({
+              variantId: cv.id,
+              label: `${p.name} - ${cv.name} (৳${cv.price})`,
+              productName: p.name,
+              variantName: cv.name,
+              price: cv.price,
+              weightGrams: cv.weightGrams,
+              stockStatus: cv.stockStatus,
+            });
+          }
+        }
+      }
+    }
+    return list;
+  }, [catalogProducts, initialData?.id]);
+
+  const handleAddComboComponent = (variantIndex: number, componentVariantId: string) => {
+    const comp = selectableComponentVariants.find((c) => c.variantId === componentVariantId);
+    if (!comp) return;
+
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== variantIndex) return v;
+        const currentItems = v.combo_items || [];
+        if (currentItems.some((ci) => ci.component_variant_id === componentVariantId)) {
+          toast.info("This product variant is already in the combo.");
+          return v;
+        }
+        const newItems = [
+          ...currentItems,
+          {
+            component_variant_id: comp.variantId,
+            quantity: 1,
+            product_name: comp.productName,
+            variant_name: comp.variantName,
+            unit_price: comp.price,
+            weight_grams: comp.weightGrams,
+          },
+        ];
+        return { ...v, combo_items: newItems };
+      })
+    );
+  };
+
+  const handleRemoveComboComponent = (variantIndex: number, componentIndex: number) => {
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== variantIndex) return v;
+        const newItems = (v.combo_items || []).filter((_, idx) => idx !== componentIndex);
+        return { ...v, combo_items: newItems };
+      })
+    );
+  };
+
+  const handleUpdateComboComponentQty = (
+    variantIndex: number,
+    componentIndex: number,
+    qty: number
+  ) => {
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== variantIndex) return v;
+        const newItems = (v.combo_items || []).map((ci, idx) => {
+          if (idx !== componentIndex) return ci;
+          return { ...ci, quantity: Math.max(1, qty) };
+        });
+        return { ...v, combo_items: newItems };
+      })
+    );
+  };
+
   const categoryItems = React.useMemo(() => {
     return categories.map((c) => ({
       value: c.id,
@@ -276,6 +396,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
       low_stock_threshold: 5,
       is_default: variants.length === 0,
       is_active: true,
+      is_combo: false,
+      combo_items: [],
     };
     setVariants((prev) => [...prev, newVariant]);
   };
@@ -339,6 +461,14 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           ...v,
           price: p,
           compare_at_price: cp !== null && cp > p ? cp : null,
+          is_combo: Boolean(v.is_combo),
+          combo_items: v.is_combo
+            ? (v.combo_items || []).map((ci, idx) => ({
+                component_variant_id: ci.component_variant_id,
+                quantity: Number(ci.quantity) || 1,
+                sort_order: idx,
+              }))
+            : [],
         };
       });
 
@@ -1089,6 +1219,180 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                           className="h-9 text-xs"
                         />
                       </div>
+                    </div>
+
+                    {/* ── Combo Offer Toggle & Configuration ── */}
+                    <div className="mt-4 pt-3.5 border-t border-border/70">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Gift className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <span className="text-xs font-bold text-foreground">
+                            Combo / Bundle Offer (কম্বো অফার)
+                          </span>
+                          {v.is_combo && (
+                            <Badge className="h-4 px-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                              Active Combo
+                            </Badge>
+                          )}
+                        </div>
+
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(v.is_combo)}
+                            onChange={(e) => {
+                              handleUpdateVariant(index, "is_combo", e.target.checked);
+                            }}
+                            className="rounded border-border text-amber-600 focus:ring-amber-500 h-4 w-4 cursor-pointer"
+                          />
+                          <span>This pack is a Combo of multiple products</span>
+                        </label>
+                      </div>
+
+                      {v.is_combo && (
+                        <div className="mt-3 p-3.5 rounded-lg bg-amber-500/5 border border-amber-500/25 space-y-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Select products included in this combo. Stock and checklist will be calculated automatically.
+                            </span>
+                            <span className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                              <Boxes className="h-3.5 w-3.5" />
+                              Virtual Stock (Tied to components)
+                            </span>
+                          </div>
+
+                          {/* Component Selector */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select
+                              onValueChange={(val: any) => {
+                                if (typeof val === "string" && val) handleAddComboComponent(index, val);
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs flex-1 min-w-[220px] bg-background">
+                                <SelectValue placeholder="Add a product to this combo..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {selectableComponentVariants.map((scv) => (
+                                  <SelectItem key={scv.variantId} value={scv.variantId}>
+                                    {scv.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Components List */}
+                          {v.combo_items && v.combo_items.length > 0 ? (
+                            <div className="space-y-2">
+                              {v.combo_items.map((ci, ciIdx) => {
+                                const linePrice = (ci.unit_price || 0) * (ci.quantity || 1);
+                                return (
+                                  <div
+                                    key={ci.component_variant_id || ciIdx}
+                                    className="flex items-center justify-between gap-3 p-2.5 bg-background rounded-md border border-border/80 text-xs"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-semibold text-foreground truncate">
+                                        {ci.product_name || "Product"}
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground truncate">
+                                        {ci.variant_name || "Variant"} · Unit: ৳{ci.unit_price || 0}
+                                      </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] text-muted-foreground">Qty:</span>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={ci.quantity}
+                                        onChange={(e) =>
+                                          handleUpdateComboComponentQty(
+                                            index,
+                                            ciIdx,
+                                            parseInt(e.target.value) || 1
+                                          )
+                                        }
+                                        className="h-7 w-16 text-center text-xs font-semibold"
+                                      />
+                                      <span className="w-16 text-right font-medium text-foreground">
+                                        ৳{linePrice}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleRemoveComboComponent(index, ciIdx)}
+                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                        title="Remove component"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Combo Math & Savings Summary */}
+                              {(() => {
+                                const regularTotal = (v.combo_items || []).reduce(
+                                  (sum, ci) => sum + (ci.unit_price || 0) * (ci.quantity || 1),
+                                  0
+                                );
+                                const comboPrice = v.price || 0;
+                                const savingsAmount = Math.max(0, regularTotal - comboPrice);
+                                const savingsPct =
+                                  regularTotal > 0
+                                    ? Math.round((savingsAmount / regularTotal) * 100)
+                                    : 0;
+
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-3 text-xs bg-amber-500/10 p-2.5 rounded-md">
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">Regular Value:</span>
+                                        <span className="font-semibold text-foreground">
+                                          ৳{regularTotal}
+                                        </span>
+                                        <span className="text-muted-foreground">| Combo Price:</span>
+                                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                                          ৳{comboPrice}
+                                        </span>
+                                      </div>
+                                      {savingsAmount > 0 ? (
+                                        <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                          Customer saves ৳{savingsAmount} ({savingsPct}% discount)
+                                        </div>
+                                      ) : (
+                                        <div className="text-[11px] text-muted-foreground">
+                                          Set your combo price below regular total to offer savings.
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {regularTotal > comboPrice && v.compare_at_price !== regularTotal && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleUpdateVariant(index, "compare_at_price", regularTotal)
+                                        }
+                                        className="h-7 text-[11px] bg-background border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15"
+                                      >
+                                        Set Strike-through to ৳{regularTotal}
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic py-1">
+                              No products added yet. Select products from the dropdown above to define this combo.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -3179,9 +3179,37 @@ export function OrdersClient() {
                       {item.sku}
                     </TableCell>
                     <TableCell className="py-2.5">
-                      <p className="font-medium text-foreground text-sm">{item.product_name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground text-sm">{item.product_name}</p>
+                        {item.is_combo && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                          >
+                            Combo Package
+                          </Badge>
+                        )}
+                      </div>
                       {item.variant_name && (
                         <p className="text-xs sm:text-sm text-muted-foreground">{item.variant_name}</p>
+                      )}
+                      {item.is_combo && Array.isArray(item.combo_components) && item.combo_components.length > 0 && (
+                        <div className="mt-1.5 pl-2.5 border-l-2 border-amber-400/60 dark:border-amber-600/40 space-y-0.5">
+                          {item.combo_components.map((comp, cIdx) => (
+                            <div key={cIdx} className="text-xs text-stone-600 dark:text-stone-300 flex items-center gap-1.5">
+                              <span className="font-mono text-amber-700 dark:text-amber-400 font-bold">
+                                {comp.quantity * item.quantity}x
+                              </span>
+                              <span>{comp.product_name}</span>
+                              {comp.variant_name && (
+                                <span className="text-[11px] text-muted-foreground">({comp.variant_name})</span>
+                              )}
+                              {comp.sku && (
+                                <span className="text-[10px] font-mono text-muted-foreground/80">• {comp.sku}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs sm:text-sm py-2.5">

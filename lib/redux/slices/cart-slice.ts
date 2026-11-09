@@ -13,6 +13,8 @@ export interface CartItem {
   image: string;
   description?: string;
   descriptionBn?: string;
+  isCombo?: boolean;
+  comboItems?: any[];
 }
 
 export interface CartState {

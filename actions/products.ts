@@ -19,6 +19,12 @@ export interface SaveProductVariantInput {
   low_stock_threshold?: number;
   is_default?: boolean;
   is_active?: boolean;
+  is_combo?: boolean;
+  combo_items?: Array<{
+    component_variant_id: string;
+    quantity: number;
+    sort_order?: number;
+  }>;
 }
 
 export interface SaveProductImageInput {
@@ -240,6 +246,8 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       const variantStockStatus = v.stock_status || "in_stock";
       const threshold = Number(v.low_stock_threshold) || 5;
 
+      const isComboVariant = Boolean(v.is_combo);
+
       const variantPayload: any = {
         product_id: productId,
         sku: v.sku.trim(),
@@ -253,6 +261,7 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
         low_stock_threshold: threshold,
         is_default: isThisDefault,
         is_active: v.is_active ?? true,
+        is_combo: isComboVariant,
         sort_order: i,
         updated_at: now,
       };
@@ -289,52 +298,101 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
         variantId = newV.id;
       }
 
-      // Synchronize warehouse inventory level to satisfy DB trigger `trg_variants_stock_status`:
-      // - 'in_stock': on_hand >= threshold + 50 (e.g. 100)
-      // - 'low_stock': 1 <= on_hand <= threshold (e.g. Math.max(1, threshold - 1))
-      // - 'out_of_stock': on_hand = 0, allow_backorder = false
-      // - 'backorder': on_hand = 0, allow_backorder = true
-      if (defaultWarehouseId && variantId) {
-        let onHandQty = 100;
-        let allowBackorder = false;
+      // Synchronize combo_items if this variant is a combo
+      if (isComboVariant && variantId) {
+        // Remove existing items first
+        await client.from("combo_items").delete().eq("combo_variant_id", variantId);
 
-        if (variantStockStatus === "out_of_stock") {
-          onHandQty = 0;
-          allowBackorder = false;
-        } else if (variantStockStatus === "backorder") {
-          onHandQty = 0;
-          allowBackorder = true;
-        } else if (variantStockStatus === "low_stock") {
-          onHandQty = Math.max(1, Math.min(3, threshold - 1));
-          allowBackorder = false;
-        } else {
-          onHandQty = Math.max(100, threshold * 4);
-          allowBackorder = false;
+        if (v.combo_items && v.combo_items.length > 0) {
+          const comboRows = v.combo_items.map((ci, idx) => ({
+            combo_variant_id: variantId,
+            component_variant_id: ci.component_variant_id,
+            quantity: Number(ci.quantity) || 1,
+            sort_order: ci.sort_order ?? idx,
+          }));
+          const { error: ciErr } = await client.from("combo_items").insert(comboRows);
+          if (ciErr) {
+            console.error("Error inserting combo items:", ciErr);
+          }
         }
 
-        // Upsert inventory level
-        await client
-          .from("inventory_levels")
-          .upsert(
-            {
-              variant_id: variantId,
-              warehouse_id: defaultWarehouseId,
-              on_hand: onHandQty,
-              reserved: 0,
-              updated_at: now,
-            },
-            { onConflict: "variant_id,warehouse_id" }
-          );
+        // Calculate dynamic virtual stock for this combo
+        const { data: virtStock } = await client.rpc("get_combo_variant_available_stock", {
+          p_combo_variant_id: variantId,
+        });
 
-        // Update allow_backorder and track_inventory
-        await client
-          .from("product_variants")
-          .update({
-            allow_backorder: allowBackorder,
-            track_inventory: true,
-            updated_at: now,
-          })
-          .eq("id", variantId);
+        const availableUnits = Number(virtStock) || 0;
+        if (defaultWarehouseId) {
+          await client
+            .from("inventory_levels")
+            .upsert(
+              {
+                variant_id: variantId,
+                warehouse_id: defaultWarehouseId,
+                on_hand: availableUnits,
+                reserved: 0,
+                updated_at: now,
+              },
+              { onConflict: "variant_id,warehouse_id" }
+            );
+
+          await client
+            .from("product_variants")
+            .update({
+              allow_backorder: false,
+              track_inventory: true,
+              stock_status: availableUnits > threshold ? "in_stock" : availableUnits > 0 ? "low_stock" : "out_of_stock",
+              updated_at: now,
+            })
+            .eq("id", variantId);
+        }
+      } else if (variantId) {
+        // If it was changed from a combo to a regular variant, remove any previous combo_items
+        await client.from("combo_items").delete().eq("combo_variant_id", variantId);
+
+        // Standard warehouse inventory level synchronization
+        if (defaultWarehouseId) {
+          let onHandQty = 100;
+          let allowBackorder = false;
+
+          if (variantStockStatus === "out_of_stock") {
+            onHandQty = 0;
+            allowBackorder = false;
+          } else if (variantStockStatus === "backorder") {
+            onHandQty = 0;
+            allowBackorder = true;
+          } else if (variantStockStatus === "low_stock") {
+            onHandQty = Math.max(1, Math.min(3, threshold - 1));
+            allowBackorder = false;
+          } else {
+            onHandQty = Math.max(100, threshold * 4);
+            allowBackorder = false;
+          }
+
+          // Upsert inventory level
+          await client
+            .from("inventory_levels")
+            .upsert(
+              {
+                variant_id: variantId,
+                warehouse_id: defaultWarehouseId,
+                on_hand: onHandQty,
+                reserved: 0,
+                updated_at: now,
+              },
+              { onConflict: "variant_id,warehouse_id" }
+            );
+
+          // Update allow_backorder and track_inventory
+          await client
+            .from("product_variants")
+            .update({
+              allow_backorder: allowBackorder,
+              track_inventory: true,
+              updated_at: now,
+            })
+            .eq("id", variantId);
+        }
       }
     }
 

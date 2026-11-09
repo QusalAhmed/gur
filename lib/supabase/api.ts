@@ -131,6 +131,20 @@ export interface UiProductVariantItem {
   stockQty?: number;
   isActive: boolean;
   isDefault?: boolean;
+  isCombo?: boolean;
+  comboItems?: Array<{
+    id?: string;
+    component_variant_id: string;
+    quantity: number;
+    sort_order?: number;
+    product_name?: string;
+    product_name_bn?: string;
+    variant_name?: string;
+    variant_name_bn?: string;
+    unit_price?: number;
+    weight_grams?: number;
+    pack_type?: string;
+  }>;
 }
 
 export interface UiProductItem {
@@ -206,6 +220,7 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
           stockStatus: v.stock_status || "in_stock",
           isActive: v.is_active ?? true,
           isDefault: Boolean(v.is_default),
+          isCombo: Boolean(v.is_combo),
         };
 
         const existing = variantListMap.get(v.product_id) || [];
@@ -307,6 +322,45 @@ export async function fetchProductDetailById(id: string): Promise<DbProduct | nu
       .eq("product_id", id)
       .order("sort_order", { ascending: true });
 
+    // Fetch combo items if any variant is a combo
+    const variantList = variants || [];
+    const comboVariantIds = variantList.filter((v) => v.is_combo).map((v) => v.id);
+    const comboMap = new Map<string, any[]>();
+
+    if (comboVariantIds.length > 0) {
+      const { data: comboRows } = await supabase
+        .from("combo_items")
+        .select("*, component:product_variants!combo_items_component_variant_id_fkey(*, product:products(name, name_bn))")
+        .in("combo_variant_id", comboVariantIds)
+        .order("sort_order", { ascending: true });
+
+      if (comboRows) {
+        for (const row of comboRows) {
+          const list = comboMap.get(row.combo_variant_id) || [];
+          list.push({
+            id: row.id,
+            component_variant_id: row.component_variant_id,
+            quantity: Number(row.quantity) || 1,
+            sort_order: row.sort_order,
+            product_name: row.component?.product?.name,
+            product_name_bn: row.component?.product?.name_bn,
+            variant_name: row.component?.name,
+            variant_name_bn: row.component?.name_bn,
+            unit_price: Number(row.component?.price) || 0,
+            weight_grams: row.component?.weight_grams ? Number(row.component.weight_grams) : undefined,
+            pack_type: row.component?.pack_type,
+          });
+          comboMap.set(row.combo_variant_id, list);
+        }
+      }
+    }
+
+    const enhancedVariants = variantList.map((v) => ({
+      ...v,
+      is_combo: Boolean(v.is_combo),
+      combo_items: comboMap.get(v.id) || [],
+    }));
+
     // Fetch images
     const { data: images } = await supabase
       .from("product_images")
@@ -321,7 +375,7 @@ export async function fetchProductDetailById(id: string): Promise<DbProduct | nu
 
     return {
       ...product,
-      variants: variants || [],
+      variants: enhancedVariants,
       images: mappedImages,
     };
   } catch (err) {
@@ -1885,6 +1939,8 @@ export function formatDbOrderRecord(data: any): Order {
     image: it.image || null,
     product_name_bn: it.product_name_bn || it.products?.name_bn || null,
     variant_name_bn: it.variant_name_bn || it.product_variants?.name_bn || null,
+    is_combo: Boolean(it.is_combo),
+    combo_components: Array.isArray(it.combo_components) ? it.combo_components : [],
   }));
 
   const rawEvents = data.order_events || data.timeline || [];
@@ -2276,6 +2332,8 @@ export async function updateOrderInDb(
             variant_name: it.variant_name || "Standard",
             quantity: qty,
             unit_price: price,
+            is_combo: Boolean(it.is_combo),
+            combo_components: it.combo_components || [],
           };
         });
 

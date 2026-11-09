@@ -831,6 +831,31 @@ export async function placeStorefrontOrderAction(
           candidateVarIds
         );
 
+        // Lookup combo details for any combo variants in fallback path
+        const comboDetailsMap = new Map<string, any[]>();
+        if (candidateVarIds.length > 0) {
+          try {
+            const { data: comboVariants } = await client
+              .from("product_variants")
+              .select("id, is_combo")
+              .in("id", candidateVarIds)
+              .eq("is_combo", true);
+
+            if (comboVariants && comboVariants.length > 0) {
+              for (const cv of comboVariants) {
+                const { data: comps } = await client.rpc("get_combo_details", {
+                  p_combo_variant_id: cv.id,
+                });
+                if (comps && Array.isArray(comps)) {
+                  comboDetailsMap.set(cv.id, comps);
+                }
+              }
+            }
+          } catch (comboErr) {
+            console.warn("Could not query combo details in fallback order path:", comboErr);
+          }
+        }
+
         const itemRows = resolvedItems.map((item) => {
           const hasValidProd = validProdIds.has(item.productId);
           const hasValidVar = validVarIds.has(item.variantId);
@@ -844,6 +869,9 @@ export async function placeStorefrontOrderAction(
               .slice(0, 10)
               .toUpperCase() || "STD";
 
+          const isCombo = hasValidVar && comboDetailsMap.has(item.variantId);
+          const comboComps = isCombo ? comboDetailsMap.get(item.variantId) || [] : [];
+
           const row: Record<string, any> = {
             order_id: orderDbId,
             sku: `GUR-${cleanSku}`,
@@ -851,6 +879,8 @@ export async function placeStorefrontOrderAction(
             variant_name: item.variantName || "1 Pack",
             quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
             unit_price: Math.max(0, Number(item.unitPrice) || 0),
+            is_combo: isCombo,
+            combo_components: comboComps,
           };
 
           if (resolvedProdId) row.product_id = resolvedProdId;

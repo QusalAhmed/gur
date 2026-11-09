@@ -65,7 +65,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         .order("created_at", { ascending: false }),
       client
         .from("product_variants")
-        .select("id, product_id, name, name_bn, price, net_quantity, net_unit, stock_status, is_default, is_active, sort_order")
+        .select("id, product_id, name, name_bn, price, compare_at_price, net_quantity, net_unit, stock_status, is_default, is_active, is_combo, sort_order")
         .order("sort_order", { ascending: true })
         .order("price", { ascending: true }),
       client
@@ -74,6 +74,35 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         .order("is_primary", { ascending: false })
         .order("sort_order", { ascending: true }),
     ]);
+
+    const comboVariantIds = (varRes.data || [])
+      .filter((v) => v.is_combo)
+      .map((v) => v.id);
+
+    const comboItemsMap = new Map<string, any[]>();
+    if (comboVariantIds.length > 0) {
+      const { data: comboRows } = await client
+        .from("combo_items")
+        .select("*, component:product_variants!combo_items_component_variant_id_fkey(*, product:products(name, name_bn))")
+        .in("combo_variant_id", comboVariantIds)
+        .order("sort_order", { ascending: true });
+
+      if (comboRows) {
+        for (const row of comboRows) {
+          const list = comboItemsMap.get(row.combo_variant_id) || [];
+          list.push({
+            component_variant_id: row.component_variant_id,
+            product_name: row.component?.product?.name,
+            product_name_bn: row.component?.product?.name_bn,
+            variant_name: row.component?.name,
+            variant_name_bn: row.component?.name_bn,
+            quantity: Number(row.quantity) || 1,
+            unit_price: Number(row.component?.price) || 0,
+          });
+          comboItemsMap.set(row.combo_variant_id, list);
+        }
+      }
+    }
 
     const variantsByProduct = new Map<string, any[]>();
     if (varRes.data) {
@@ -85,11 +114,14 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
           name: v.name,
           nameBn: v.name_bn || v.name,
           price: Number(v.price) || 0,
+          compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
           netQuantity: v.net_quantity,
           netUnit: v.net_unit,
           stockStatus: v.stock_status,
           isDefault: Boolean(v.is_default),
           sortOrder: typeof v.sort_order === "number" ? v.sort_order : 0,
+          isCombo: Boolean(v.is_combo),
+          comboItems: comboItemsMap.get(v.id) || [],
         });
         variantsByProduct.set(v.product_id, list);
       }

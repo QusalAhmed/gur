@@ -26,6 +26,7 @@ import {
   Clock,
   ShieldCheck,
   LogOut,
+  Gift,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useAdminBadgeCounts } from "@/hooks/use-admin-badge-counts";
@@ -146,6 +147,12 @@ const navGroups: NavGroup[] = [
         titleBn: "পণ্য তালিকা",
         href: "/admin/products",
         icon: Package,
+      },
+      {
+        title: "Combos & Bundles",
+        titleBn: "কম্বো অফার",
+        href: "/admin/combos",
+        icon: Gift,
       },
       {
         title: "Categories",

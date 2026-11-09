@@ -249,19 +249,17 @@ export function ProductShowcase({
       const height = container.clientHeight || window.innerHeight;
       const currentIdx = Math.round(container.scrollTop / height);
 
-      // If user is inside the scrollable overview section, let keyboard scroll the inner content first
-      if (currentIdx === 0) {
-        const overviewEl = container.querySelector("#storefront-overview") as HTMLElement | null;
-        if (overviewEl && overviewEl.scrollHeight > overviewEl.clientHeight) {
-          const atTop = overviewEl.scrollTop <= 4;
-          const atBottom =
-            overviewEl.scrollHeight - overviewEl.clientHeight - overviewEl.scrollTop <= 10;
-          if ((e.key === "ArrowDown" || e.key === "PageDown") && !atBottom) {
-            return;
-          }
-          if ((e.key === "ArrowUp" || e.key === "PageUp") && !atTop) {
-            return;
-          }
+      // If user is inside any scrollable section (overview, product card, checkout), let keyboard scroll the inner content first
+      const currentSectionEl = container.children[currentIdx] as HTMLElement | null;
+      if (currentSectionEl && currentSectionEl.scrollHeight > currentSectionEl.clientHeight) {
+        const atTop = currentSectionEl.scrollTop <= 4;
+        const atBottom =
+          currentSectionEl.scrollHeight - currentSectionEl.clientHeight - currentSectionEl.scrollTop <= 10;
+        if ((e.key === "ArrowDown" || e.key === "PageDown") && !atBottom) {
+          return;
+        }
+        if ((e.key === "ArrowUp" || e.key === "PageUp") && !atTop) {
+          return;
         }
       }
 

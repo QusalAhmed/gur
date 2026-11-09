@@ -1371,9 +1371,19 @@ export function OrderDetailsSheet({
                                     )}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="font-medium text-foreground text-sm leading-snug truncate">
-                                      {item.product_name}
-                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="font-medium text-foreground text-sm leading-snug truncate">
+                                        {item.product_name}
+                                      </p>
+                                      {item.is_combo && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 shrink-0"
+                                        >
+                                          Combo Package
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
                                       {item.variant_name && (
                                         <span>{item.variant_name}</span>
@@ -1393,6 +1403,29 @@ export function OrderDetailsSheet({
                                         </button>
                                       )}
                                     </div>
+                                    {item.is_combo && Array.isArray(item.combo_components) && item.combo_components.length > 0 && (
+                                      <div className="mt-2 pl-3 border-l-2 border-amber-400/60 dark:border-amber-600/40 space-y-1">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                                          Package Breakdown ({item.combo_components.length} items):
+                                        </p>
+                                        <div className="space-y-1 text-xs text-stone-600 dark:text-stone-300">
+                                          {item.combo_components.map((comp, cIdx) => (
+                                            <div key={cIdx} className="flex items-center gap-1.5 font-medium">
+                                              <span className="font-mono text-amber-700 dark:text-amber-400 font-bold">
+                                                {comp.quantity * item.quantity}x
+                                              </span>
+                                              <span>{comp.product_name}</span>
+                                              {comp.variant_name && (
+                                                <span className="text-[11px] text-muted-foreground">({comp.variant_name})</span>
+                                              )}
+                                              {comp.sku && (
+                                                <span className="text-[10px] font-mono text-muted-foreground/80">• {comp.sku}</span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </TableCell>
