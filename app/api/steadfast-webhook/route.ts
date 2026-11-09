@@ -263,6 +263,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             actor_id: null,
           });
 
+          // Trigger order status change notification for partial delivery per user specification
+          await supabaseAdmin.from("notifications").insert({
+            type: "order_status_changed",
+            title: `Order ${matchedOrder.order_number} Partially Delivered`,
+            message: `Steadfast marked order as partially delivered${
+              codAmount !== null && !isNaN(codAmount) ? ` (COD collected: ৳${codAmount})` : ""
+            }.${trackingMessage ? ` Note: ${trackingMessage}` : ""}`,
+            data: {
+              order_id: matchedOrder.id,
+              order_number: matchedOrder.order_number,
+              consignment_id: rawConsignmentId,
+              status: "partially_delivered",
+              previous_status: matchedOrder.status,
+              payment_status: "partially_paid",
+              amount_paid: codAmount,
+              source: "courier_webhook",
+              link: `/admin/orders?search=${encodeURIComponent(matchedOrder.order_number)}`,
+            },
+          });
+
           result.message = "Order marked as delivered (partially paid).";
 
           // Trigger automated customer SMS notification and Meta CAPI via Outbox (partial delivery)
@@ -326,10 +346,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             actor_id: null,
           });
 
-          // Trigger high-priority admin notification per user specification
+          // Trigger order status change notification for courier cancellation / return
           await supabaseAdmin.from("notifications").insert({
-            type: "system_alert",
-            title: `Steadfast Alert: Order ${matchedOrder.order_number} ${isShipped ? "Returned" : "Cancelled"}`,
+            type: "order_status_changed",
+            title: `Order ${matchedOrder.order_number} ${isShipped ? "Returned" : "Cancelled"} by Courier`,
             message: `Order ${matchedOrder.order_number} was marked as ${newStatus} by Steadfast Courier.${
               trackingMessage ? ` Note: ${trackingMessage}` : ""
             }`,
@@ -338,6 +358,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               order_number: matchedOrder.order_number,
               consignment_id: rawConsignmentId,
               status: newStatus,
+              previous_status: matchedOrder.status,
+              source: "courier_webhook",
               link: `/admin/orders?search=${encodeURIComponent(matchedOrder.order_number)}`,
             },
           });

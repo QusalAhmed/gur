@@ -58,6 +58,12 @@ function getNotificationIcon(type: NotificationType, data?: Record<string, any>)
   if (data?.alert_subtype === "incomplete_order_lead" || data?.status === "incomplete_order") {
     return <ShoppingCart className="h-4 w-4 text-amber-500" />;
   }
+  if (data?.status === "cancelled" || data?.status === "returned") {
+    return <AlertTriangle className="h-4 w-4 text-rose-500" />;
+  }
+  if (data?.status === "partially_delivered") {
+    return <Truck className="h-4 w-4 text-amber-500" />;
+  }
   switch (type) {
     case "order_created":
       return <ShoppingCart className="h-4 w-4 text-emerald-500" />;
