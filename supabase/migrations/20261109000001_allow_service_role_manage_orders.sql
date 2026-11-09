@@ -6,7 +6,6 @@ create or replace function private.can_manage_orders() returns boolean
 language sql stable security definer set search_path = '' as $$
   select (
     coalesce(private.current_staff_role() in ('owner', 'admin', 'manager', 'support'), false)
-    or current_user in ('postgres', 'service_role')
     or coalesce((select auth.jwt() ->> 'role'), '') = 'service_role'
   );
 $$;

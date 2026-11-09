@@ -8,6 +8,7 @@ import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@
 
 interface OrderSuccessViewProps {
   orderId?: string;
+  publicToken?: string;
   orderNumber: string;
   customerName: string;
   phone: string;
@@ -20,6 +21,7 @@ interface OrderSuccessViewProps {
 
 export function OrderSuccessView({
   orderId,
+  publicToken,
   orderNumber,
   customerName,
   phone,
@@ -127,7 +129,7 @@ export function OrderSuccessView({
       {/* View Full Online Receipt Link */}
       {orderId && (
         <Link
-          href={`/order-confirmed/${orderId}`}
+          href={`/order-confirmed/${orderId}${publicToken ? `?token=${encodeURIComponent(publicToken)}` : ""}`}
           onClick={onReset}
           className="w-full inline-flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-amber-950 dark:text-amber-100 font-bold py-2.5 px-4 rounded-xl border border-amber-300/80 dark:border-stone-700 transition-all text-xs sm:text-sm mb-3.5"
         >

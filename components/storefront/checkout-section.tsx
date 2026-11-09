@@ -290,7 +290,8 @@ export function CheckoutSection({
         formResetRef.current?.();
         setDeliveryZone("inside_dhaka");
 
-        const targetUrl = `/order-confirmed/${result.orderId}`;
+        const tokenQuery = result.publicToken ? `?token=${encodeURIComponent(result.publicToken)}` : "";
+        const targetUrl = `/order-confirmed/${result.orderId}${tokenQuery}`;
         router.replace(targetUrl);
 
         // Immediate safety fallback: if router.replace hasn't committed within 250ms, navigate via location

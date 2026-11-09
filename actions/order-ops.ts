@@ -1,6 +1,6 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdmin, isServiceRoleConfigured } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
@@ -17,7 +17,7 @@ export type ActionResult<T = any> =
 export async function confirmOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     const { data, error } = await client
       .from("orders")
@@ -57,7 +57,7 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
 export async function processOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     const { data, error } = await client
       .from("orders")
@@ -107,7 +107,7 @@ export async function cancelOrderWithReasonAction(
 
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     // Call cancel_order RPC
     const { error: rpcErr } = await client.rpc("cancel_order", {
@@ -150,8 +150,8 @@ export async function addStaffNoteAction(
   }
 
   try {
-    const session = await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     // 1. Insert into staff_notes table
     const { data, error } = await client
@@ -210,7 +210,7 @@ export async function setOrderItemsAction(
 ): Promise<ActionResult> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     const { data, error } = await client.rpc("set_order_items", {
       p_order_id: orderId,

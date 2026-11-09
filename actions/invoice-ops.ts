@@ -1,6 +1,6 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdmin, isServiceRoleConfigured } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { assertStaffRole } from "@/lib/admin-guard";
 
@@ -11,7 +11,7 @@ import { assertStaffRole } from "@/lib/admin-guard";
 export async function assignInvoiceNumberAction(orderId: string) {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = supabaseAdmin || (await createClient());
+    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
 
     const { data, error } = await client.rpc("assign_invoice_number", {
       p_order_id: orderId,

@@ -47,6 +47,7 @@ export interface StorefrontOrderResult {
   success: boolean;
   orderId?: string;
   orderNumber?: string;
+  publicToken?: string;
   status?: "incomplete_order" | "pending";
   grandTotal?: number;
   subtotal?: number;
@@ -533,6 +534,7 @@ export async function placeStorefrontOrderAction(
       let existingOrder: {
         id: string;
         order_number: string;
+        public_token?: string | null;
         status: string;
         customer_name?: string | null;
         customer_note?: string | null;
@@ -550,7 +552,7 @@ export async function placeStorefrontOrderAction(
         // Rule 1: Check for existing pending order with the same phone number to update
         const { data: foundPending } = await client
           .from("orders")
-          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+          .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
           .eq("customer_phone", normalizedPhone)
           .eq("status", "pending")
           .order("created_at", { ascending: false })
@@ -564,7 +566,7 @@ export async function placeStorefrontOrderAction(
           // Rule 2: Check for existing incomplete order with the same phone number to update and upgrade
           const { data: foundIncomplete } = await client
             .from("orders")
-            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
             .eq("customer_phone", normalizedPhone)
             .eq("status", "incomplete_order")
             .order("created_at", { ascending: false })
@@ -580,7 +582,7 @@ export async function placeStorefrontOrderAction(
         if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
           const { data: foundById } = await client
             .from("orders")
-            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
             .eq("id", payload.orderId)
             .maybeSingle();
 
@@ -592,7 +594,7 @@ export async function placeStorefrontOrderAction(
         if (!existingOrder) {
           const { data: foundByPhone } = await client
             .from("orders")
-            .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
             .eq("customer_phone", normalizedPhone)
             .eq("status", "incomplete_order")
             .order("created_at", { ascending: false })
@@ -609,7 +611,7 @@ export async function placeStorefrontOrderAction(
       if (!existingOrder && payload.orderId && UUID_REGEX.test(payload.orderId)) {
         const { data: foundById } = await client
           .from("orders")
-          .select("id, order_number, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+          .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
           .eq("id", payload.orderId)
           .maybeSingle();
 
@@ -717,10 +719,12 @@ export async function placeStorefrontOrderAction(
 
       let orderDbId: string;
       let orderNumber: string;
+      let publicToken: string | undefined;
 
       if (existingOrder) {
         orderDbId = existingOrder.id;
         orderNumber = existingOrder.order_number;
+        publicToken = existingOrder.public_token || undefined;
         const previousStatus = existingOrder.status;
 
         const updatePayload: Record<string, any> = {
@@ -800,7 +804,7 @@ export async function placeStorefrontOrderAction(
         const { data: orderData, error: orderErr } = await client
           .from("orders")
           .insert(dbInsertPayload)
-          .select("id, order_number")
+          .select("id, order_number, public_token")
           .maybeSingle();
 
         if (orderErr) {
@@ -813,6 +817,7 @@ export async function placeStorefrontOrderAction(
 
         orderDbId = orderData?.id;
         orderNumber = orderData?.order_number;
+        publicToken = orderData?.public_token;
       }
 
       // Synchronize order items if items were supplied
@@ -1034,6 +1039,7 @@ export async function placeStorefrontOrderAction(
         success: true,
         orderId: orderDbId,
         orderNumber: orderNumber,
+        publicToken: publicToken,
         status: finalStatus,
         grandTotal: cleanGrandTotal,
         subtotal: cleanSubtotal,

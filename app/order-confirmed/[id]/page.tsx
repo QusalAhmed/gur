@@ -257,6 +257,13 @@ function OrderConfirmedContent() {
   // TanStack Query to fetch the single order in background using the UUID or order_number
   const { data: order, isLoading } = useOrder(orderId, {
     enabled: Boolean(orderId),
+    refetchInterval: (query) => {
+      const currentOrder = query.state.data;
+      if (currentOrder && currentOrder.status === "pending") {
+        return 4000;
+      }
+      return false;
+    },
   });
 
   const handleCopyOrderNumber = () => {

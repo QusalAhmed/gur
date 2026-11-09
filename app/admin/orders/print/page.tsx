@@ -77,15 +77,30 @@ function resolveItemBanglaName(it: any): string {
     return String(it.product_name_bn).trim();
   }
   const name = it.product_name || "";
-  if (/[\u0980-\u09FF]/.test(name)) {
+  if (!name || /[\u0980-\u09FF]/.test(name)) {
     return name;
   }
   const lower = name.toLowerCase().trim();
-  for (const [en, bn] of Object.entries(PRODUCT_NAME_BN_MAP)) {
-    if (lower === en || lower.includes(en) || en.includes(lower)) {
-      return bn;
+  if (!lower) {
+    return name;
+  }
+
+  // 1. Exact match first (check own properties to avoid inherited Object prototype properties)
+  if (Object.prototype.hasOwnProperty.call(PRODUCT_NAME_BN_MAP, lower)) {
+    return PRODUCT_NAME_BN_MAP[lower];
+  }
+
+  // 2. Select longest map key contained in normalized name (prefer more-specific over shorter partial matches)
+  let bestKey = "";
+  for (const en of Object.keys(PRODUCT_NAME_BN_MAP)) {
+    if (lower.includes(en) && en.length > bestKey.length) {
+      bestKey = en;
     }
   }
+  if (bestKey) {
+    return PRODUCT_NAME_BN_MAP[bestKey];
+  }
+
   return name;
 }
 
@@ -99,11 +114,16 @@ function resolveItemBanglaVariant(it: any): string {
     return vname;
   }
   const lower = vname.toLowerCase().trim();
-  if (lower.includes("1kg") || lower.includes("1 kg")) {
-    return "স্ট্যান্ডার্ড প্যাক (১ কেজি)";
-  }
-  if (lower.includes("0.5kg") || lower.includes("0.5 kg") || lower.includes("500g")) {
+
+  // Check 0.5 kg / 500g before 1 kg, using numeric boundaries so that:
+  // - 0.5 kg matches neither 10.5 kg nor other numeric prefixes
+  // - 500g does not match 1500g
+  // - 1 kg matches neither 1.5 kg nor 21 kg nor other numeric prefixes
+  if (/(?<![\d.])(?:0\.5\s*kg|500\s*g)(?![\d.])/i.test(lower)) {
     return "স্ট্যান্ডার্ড প্যাক (০.৫ কেজি)";
+  }
+  if (/(?<![\d.])1\s*kg(?![\d.])/i.test(lower)) {
+    return "স্ট্যান্ডার্ড প্যাক (১ কেজি)";
   }
   if (lower.includes("1 pack")) return "১ প্যাক";
   if (lower.includes("2 pack")) return "২ প্যাক";

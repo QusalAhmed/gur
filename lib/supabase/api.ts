@@ -1260,6 +1260,118 @@ export async function fetchRawShippingMethodsFromDb(): Promise<
   }
 }
 
+interface ConvertStorefrontInquiryParams {
+  orderId?: string | null;
+  attribution?: Order["attribution"];
+  normalizedPhone?: string | null;
+  flowContext: string;
+}
+
+async function convertStorefrontInquiryForOrder({
+  orderId,
+  attribution,
+  normalizedPhone,
+  flowContext,
+}: ConvertStorefrontInquiryParams): Promise<boolean> {
+  const matchedInquiryId =
+    attribution?.matched_inquiry_id ||
+    attribution?.meta_tracking?.matched_inquiry_id;
+
+  let converted = false;
+  if (matchedInquiryId && orderId) {
+    try {
+      const idUpdatePayload: Record<string, unknown> = {
+        status: "converted",
+        converted_order_id: orderId,
+        updated_at: new Date().toISOString(),
+      };
+      if (normalizedPhone) {
+        idUpdatePayload.customer_phone = normalizedPhone;
+      }
+      const { data, error } = await supabase
+        .from("storefront_inquiries")
+        .update(idUpdatePayload)
+        .eq("id", matchedInquiryId)
+        .neq("status", "converted")
+        .select("id");
+
+      if (!error && data && data.length > 0) {
+        converted = true;
+      } else if (error) {
+        console.warn(`Could not mark inquiry converted by ID in ${flowContext}:`, error);
+      }
+    } catch (inqErr) {
+      console.warn(`Error marking inquiry converted by ID in ${flowContext}:`, inqErr);
+    }
+  }
+
+  if (!converted && attribution?.inquiry_ref_code) {
+    try {
+      const cleanRef = String(attribution.inquiry_ref_code).replace(/^#/, "").trim();
+      if (cleanRef) {
+        const candidateRefs = Array.from(
+          new Set([cleanRef, cleanRef.toUpperCase(), cleanRef.toLowerCase()])
+        );
+
+        const { data: matchingInquiries, error: searchErr } = await supabase
+          .from("storefront_inquiries")
+          .select("id, ref_code")
+          .in("ref_code", candidateRefs)
+          .neq("status", "converted");
+
+        if (searchErr) {
+          console.warn(`Could not search inquiries by ref_code in ${flowContext}:`, searchErr);
+        } else if (!matchingInquiries || matchingInquiries.length === 0) {
+          console.info(`[createOrderInDb] Fallback inquiry update matched 0 rows for ref_code: "${cleanRef}" in ${flowContext}.`);
+        } else {
+          let resolvedInquiryId: string | null = null;
+          if (matchingInquiries.length === 1) {
+            resolvedInquiryId = matchingInquiries[0].id;
+          } else {
+            const exactMatches = matchingInquiries.filter((row) => row.ref_code === cleanRef);
+            if (exactMatches.length === 1) {
+              resolvedInquiryId = exactMatches[0].id;
+            } else {
+              console.warn(`[createOrderInDb] Ambiguous matching inquiries found (${matchingInquiries.length}) for ref_code: "${cleanRef}" in ${flowContext}. Skipping update.`);
+            }
+          }
+
+          if (resolvedInquiryId && orderId) {
+            const refUpdatePayload: Record<string, unknown> = {
+              status: "converted",
+              converted_order_id: orderId,
+              updated_at: new Date().toISOString(),
+            };
+            if (normalizedPhone) {
+              refUpdatePayload.customer_phone = normalizedPhone;
+            }
+            const { data: updatedRows, error: updateErr } = await supabase
+              .from("storefront_inquiries")
+              .update(refUpdatePayload)
+              .eq("id", resolvedInquiryId)
+              .neq("status", "converted")
+              .select("id");
+
+            if (updateErr) {
+              console.warn(`Could not mark inquiry converted by ref_code in ${flowContext}:`, updateErr);
+            } else if (!updatedRows || updatedRows.length === 0) {
+              console.info(`[createOrderInDb] Fallback inquiry update matched 0 rows for resolved inquiry ${resolvedInquiryId} in ${flowContext}.`);
+            } else {
+              converted = true;
+            }
+          } else if (resolvedInquiryId && !orderId) {
+            console.warn(`[createOrderInDb] Missing order ID for resolved inquiry ${resolvedInquiryId} in ${flowContext}. Skipping conversion.`);
+          }
+        }
+      }
+    } catch (inqErr) {
+      console.warn(`Could not mark inquiry converted in ${flowContext}:`, inqErr);
+    }
+  }
+
+  return converted;
+}
+
 export async function createOrderInDb(savedOrder: Order): Promise<Order> {
   const isDraft =
     savedOrder.status === "incomplete_order" || savedOrder.status === "pending";
@@ -1504,24 +1616,12 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
         }
       }
 
-      if (savedOrder.attribution?.inquiry_ref_code) {
-        try {
-          const cleanRef = String(savedOrder.attribution.inquiry_ref_code).replace(/^#/, "").trim();
-          if (cleanRef) {
-            await supabase
-              .from("storefront_inquiries")
-              .update({
-                status: "converted",
-                converted_order_id: orderDbId || undefined,
-                customer_phone: normalizedPhone || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("ref_code", cleanRef.toUpperCase());
-          }
-        } catch (inqErr) {
-          console.warn("Could not mark inquiry converted in direct insert flow:", inqErr);
-        }
-      }
+      await convertStorefrontInquiryForOrder({
+        orderId: orderDbId,
+        attribution: savedOrder.attribution,
+        normalizedPhone,
+        flowContext: "direct insert flow",
+      });
     } catch (insertErr: any) {
       console.error("Error attempting order insert:", insertErr);
       throw new Error(insertErr?.message || "Failed to save order in database");
@@ -1749,24 +1849,12 @@ export async function createOrderInDb(savedOrder: Order): Promise<Order> {
     }
   }
 
-  if (savedOrder.attribution?.inquiry_ref_code) {
-    try {
-      const cleanRef = String(savedOrder.attribution.inquiry_ref_code).replace(/^#/, "").trim();
-      if (cleanRef) {
-        await supabase
-          .from("storefront_inquiries")
-          .update({
-            status: "converted",
-            converted_order_id: placeData?.order_id || undefined,
-            customer_phone: normalizedPhone || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("ref_code", cleanRef.toUpperCase());
-      }
-    } catch (inqErr) {
-      console.warn("Could not mark inquiry converted in place_order flow:", inqErr);
-    }
-  }
+  await convertStorefrontInquiryForOrder({
+    orderId: placeData?.order_id,
+    attribution: savedOrder.attribution,
+    normalizedPhone,
+    flowContext: "place_order flow",
+  });
 
   if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(createdResult.status)) {
     import("@/actions/facebook-capi")

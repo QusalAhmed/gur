@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type Query } from "@tanstack/react-query";
 import { getOrderAction } from "@/actions/orders";
 import {
   placeStorefrontOrderAction,
@@ -19,7 +19,7 @@ export interface UseOrderOptions {
   enabled?: boolean;
   initialData?: Order | null;
   staleTime?: number;
-  refetchInterval?: number | false;
+  refetchInterval?: number | false | ((query: Query<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>) => number | false | undefined);
 }
 
 /**
@@ -33,7 +33,7 @@ export function useOrder(
   const cleanId = (idOrNumber || "").trim();
   const isEnabled = Boolean(cleanId && (options?.enabled ?? true));
 
-  return useQuery<Order | null>({
+  return useQuery<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>({
     queryKey: ORDER_QUERY_KEY(cleanId),
     queryFn: async () => {
       if (!cleanId) return null;

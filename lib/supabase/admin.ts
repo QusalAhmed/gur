@@ -6,6 +6,12 @@ const supabaseUrl =
 
 let adminClient: SupabaseClient | null = null;
 
+export function isServiceRoleConfigured(): boolean {
+  return Boolean(
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
+  );
+}
+
 export function getSupabaseAdmin(): SupabaseClient {
   // In browser context, always reuse the singleton client to prevent multiple GoTrueClient instances
   if (typeof window !== "undefined") {
