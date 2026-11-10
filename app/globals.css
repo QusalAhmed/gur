@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "intro.js/introjs.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -225,4 +226,424 @@
     page-break-after: avoid;
     break-after: avoid;
   }
+}
+
+/* ================= Intro.js Storefront Onboarding Theme ================= */
+.introjs-overlay {
+  pointer-events: none;
+}
+
+.introjs-helperLayer.gur-intro-highlight {
+  pointer-events: none;
+  margin: -2px 0 0 -2px;
+  border-radius: 16px;
+  border: 2px solid rgba(217, 119, 6, 0.92);
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, 0.25),
+    rgba(28, 22, 17, 0.62) 0 0 0 5000px !important;
+}
+
+.dark .introjs-helperLayer.gur-intro-highlight {
+  border-color: rgba(251, 191, 36, 0.92);
+  box-shadow:
+    0 0 0 4px rgba(251, 191, 36, 0.22),
+    rgba(10, 8, 6, 0.74) 0 0 0 5000px !important;
+}
+
+@keyframes gurIntroPlusPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+  75%,
+  100% {
+    transform: scale(1.24);
+    opacity: 0;
+  }
+}
+
+.introjs-helperLayer.gur-intro-highlight.gur-intro-plus-highlight {
+  border-radius: 14px;
+}
+
+.introjs-helperLayer.gur-intro-highlight.gur-intro-plus-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 16px;
+  border: 2px solid rgba(217, 119, 6, 0.95);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28);
+  pointer-events: none;
+  animation: gurIntroPlusPulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.dark .introjs-helperLayer.gur-intro-highlight.gur-intro-plus-highlight::after,
+.introjs-dark .introjs-helperLayer.gur-intro-highlight.gur-intro-plus-highlight::after {
+  border-color: rgba(251, 191, 36, 0.98);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.26);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .introjs-helperLayer.gur-intro-highlight.gur-intro-plus-highlight::after {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
+.introjs-tooltipReferenceLayer {
+  pointer-events: none;
+  font-family: var(--font-sans);
+}
+
+.introjs-tooltipReferenceLayer * {
+  font-family: var(--font-sans);
+  box-sizing: border-box;
+}
+
+.introjs-tooltipReferenceLayer .introjs-tooltip.gur-intro-tooltip {
+  --introjs-bg: #fffdf8;
+  --introjs-color: #292524;
+  --introjs-arrow-color: #fffdf8;
+  --gur-arrow-border: rgba(217, 119, 6, 0.9);
+  pointer-events: auto;
+  background-color: var(--introjs-bg);
+  color: var(--introjs-color);
+  border: 1.5px solid rgba(245, 158, 11, 0.72);
+  border-radius: 18px;
+  min-width: min(260px, calc(100vw - 24px));
+  max-width: min(340px, calc(100vw - 24px));
+  box-shadow:
+    0 20px 44px -10px rgba(69, 26, 3, 0.28),
+    0 8px 18px -6px rgba(69, 26, 3, 0.14);
+  overflow: visible;
+}
+
+.dark .introjs-tooltipReferenceLayer .introjs-tooltip.gur-intro-tooltip,
+.introjs-dark .introjs-tooltipReferenceLayer .introjs-tooltip.gur-intro-tooltip {
+  --introjs-bg: #1c1611;
+  --introjs-color: #fef3c7;
+  --introjs-arrow-color: #1c1611;
+  --gur-arrow-border: rgba(245, 158, 11, 0.85);
+  border-color: rgba(217, 119, 6, 0.65);
+  box-shadow:
+    0 22px 48px -10px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(251, 191, 36, 0.18);
+}
+
+/* Sharp target-aligned directional arrow with matching amber outline */
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow {
+  box-sizing: content-box;
+  width: 0;
+  height: 0;
+  border: 9px solid transparent;
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow::after {
+  content: "";
+  position: absolute;
+  box-sizing: content-box;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+  pointer-events: none;
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow[data-arrow-axis="x"] {
+  left: var(--gur-arrow-left, 50%);
+  right: auto;
+  margin-left: -9px;
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow[data-arrow-axis="y"] {
+  top: var(--gur-arrow-top, 20px);
+  bottom: auto;
+  margin-top: -9px;
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom-middle,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom-right {
+  bottom: -18px;
+  border-top-color: var(--gur-arrow-border);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom-middle::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.bottom-right::after {
+  left: -8px;
+  top: -10.5px;
+  border-top-color: var(--introjs-arrow-color);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top-middle,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top-right {
+  top: -18px;
+  border-bottom-color: var(--gur-arrow-border);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top-middle::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.top-right::after {
+  left: -8px;
+  top: -5.5px;
+  border-bottom-color: var(--introjs-arrow-color);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.left,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.left-bottom {
+  left: -18px;
+  border-right-color: var(--gur-arrow-border);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.left::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.left-bottom::after {
+  top: -8px;
+  left: -5.5px;
+  border-right-color: var(--introjs-arrow-color);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.right,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.right-bottom {
+  right: -18px;
+  border-left-color: var(--gur-arrow-border);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.right::after,
+.introjs-tooltipReferenceLayer .gur-intro-tooltip .introjs-arrow.right-bottom::after {
+  top: -8px;
+  left: -10.5px;
+  border-left-color: var(--introjs-arrow-color);
+}
+
+.introjs-tooltipReferenceLayer .gur-intro-tooltip.introjs-floating .introjs-arrow {
+  display: none !important;
+}
+
+.gur-intro-tooltip .introjs-tooltip-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 9px;
+  min-height: auto;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.22);
+}
+
+.gur-intro-tooltip .introjs-tooltip-title {
+  width: auto;
+  flex: 1;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #451a03;
+}
+
+.dark .gur-intro-tooltip .introjs-tooltip-title,
+.introjs-dark .gur-intro-tooltip .introjs-tooltip-title {
+  color: #fde68a;
+}
+
+.gur-intro-tooltip .introjs-skipbutton {
+  position: static;
+  width: auto;
+  height: auto;
+  line-height: 1.25;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #78716c;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  text-shadow: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.gur-intro-tooltip .introjs-skipbutton:hover,
+.gur-intro-tooltip .introjs-skipbutton:focus {
+  color: #451a03;
+  background-color: rgba(245, 158, 11, 0.22);
+}
+
+.dark .gur-intro-tooltip .introjs-skipbutton,
+.introjs-dark .gur-intro-tooltip .introjs-skipbutton {
+  color: #d6d3d1;
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+.dark .gur-intro-tooltip .introjs-skipbutton:hover,
+.dark .gur-intro-tooltip .introjs-skipbutton:focus,
+.introjs-dark .gur-intro-tooltip .introjs-skipbutton:hover,
+.introjs-dark .gur-intro-tooltip .introjs-skipbutton:focus {
+  color: #fef3c7;
+  background-color: rgba(251, 191, 36, 0.22);
+}
+
+.gur-intro-tooltip .introjs-tooltiptext {
+  padding: 11px 16px 9px;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  font-weight: 500;
+  color: #44403c;
+}
+
+.dark .gur-intro-tooltip .introjs-tooltiptext,
+.introjs-dark .gur-intro-tooltip .introjs-tooltiptext {
+  color: #e7e5e4;
+}
+
+.gur-intro-tooltip .introjs-bullets {
+  padding: 4px 16px 8px;
+}
+
+.gur-intro-tooltip .introjs-bullets ul {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gur-intro-tooltip .introjs-bullets ul li {
+  float: none;
+  margin: 0;
+}
+
+.gur-intro-tooltip .introjs-bullets ul li a {
+  width: 7px;
+  height: 7px;
+  background: #e7e5e4;
+  border-radius: 9999px;
+  transition: width 0.15s ease, background-color 0.15s ease;
+}
+
+.dark .gur-intro-tooltip .introjs-bullets ul li a,
+.introjs-dark .gur-intro-tooltip .introjs-bullets ul li a {
+  background: #44403c;
+}
+
+.gur-intro-tooltip .introjs-bullets ul li a:hover,
+.gur-intro-tooltip .introjs-bullets ul li a:focus,
+.gur-intro-tooltip .introjs-bullets ul li a.active {
+  width: 18px;
+  background: #d97706;
+}
+
+.dark .gur-intro-tooltip .introjs-bullets ul li a.active,
+.introjs-dark .gur-intro-tooltip .introjs-bullets ul li a.active {
+  background: #f59e0b;
+}
+
+.gur-intro-tooltip .introjs-progress {
+  height: 5px;
+  margin: 0 16px 10px;
+  border-radius: 9999px;
+  background-color: rgba(245, 158, 11, 0.18);
+}
+
+.gur-intro-tooltip .introjs-progressbar {
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #d97706, #059669);
+  transition: width 0.25s ease;
+}
+
+.gur-intro-tooltip .introjs-tooltipbuttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
+  text-align: initial;
+}
+
+.gur-intro-tooltip .introjs-tooltipbuttons:after {
+  display: none;
+}
+
+.gur-intro-tooltip .introjs-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow: none;
+  box-shadow: none;
+  transition: all 0.15s ease;
+}
+
+.gur-intro-tooltip .introjs-prevbutton {
+  float: none;
+  margin-right: auto;
+  background-color: #faf7f0;
+  border: 1px solid #d6d3d1;
+  color: #57534e;
+}
+
+.gur-intro-tooltip .introjs-prevbutton:hover,
+.gur-intro-tooltip .introjs-prevbutton:focus {
+  background-color: #fef3c7;
+  border-color: #f59e0b;
+  color: #451a03;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.dark .gur-intro-tooltip .introjs-prevbutton,
+.introjs-dark .gur-intro-tooltip .introjs-prevbutton {
+  background-color: #292524;
+  border-color: #44403c;
+  color: #d6d3d1;
+}
+
+.dark .gur-intro-tooltip .introjs-prevbutton:hover,
+.dark .gur-intro-tooltip .introjs-prevbutton:focus,
+.introjs-dark .gur-intro-tooltip .introjs-prevbutton:hover,
+.introjs-dark .gur-intro-tooltip .introjs-prevbutton:focus {
+  background-color: #3f3834;
+  border-color: #d97706;
+  color: #fef3c7;
+}
+
+.gur-intro-tooltip .introjs-nextbutton {
+  float: none;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border: 1px solid #b45309;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(180, 83, 9, 0.26);
+}
+
+.gur-intro-tooltip .introjs-nextbutton:hover,
+.gur-intro-tooltip .introjs-nextbutton:focus {
+  background: linear-gradient(135deg, #b45309, #92400e);
+  border-color: #92400e;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}
+
+.gur-intro-tooltip .introjs-donebutton {
+  float: none;
+  background: linear-gradient(135deg, #059669, #047857);
+  border: 1px solid #047857;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(4, 120, 87, 0.28);
+}
+
+.gur-intro-tooltip .introjs-donebutton:hover,
+.gur-intro-tooltip .introjs-donebutton:focus {
+  background: linear-gradient(135deg, #047857, #065f46);
+  border-color: #065f46;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.gur-intro-tooltip .introjs-hidden {
+  display: none !important;
 }

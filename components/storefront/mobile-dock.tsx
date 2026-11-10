@@ -41,7 +41,10 @@ export function MobileDock({
   const displayName = storeName || t.storeName;
 
   return (
-    <div className="fixed bottom-2.5 inset-x-2.5 z-40 sm:hidden flex justify-center pointer-events-none">
+    <div
+      data-mobile-dock="true"
+      className="fixed bottom-2.5 inset-x-2.5 z-40 sm:hidden flex justify-center pointer-events-none"
+    >
       <motion.nav
         initial={{ y: 50, opacity: 0, scale: 0.92 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -98,6 +101,7 @@ export function MobileDock({
         <motion.button
           whileTap={{ scale: 0.92 }}
           type="button"
+          data-tour="mobile-checkout-cta"
           onClick={() => {
             if (onCheckoutClick) {
               onCheckoutClick();

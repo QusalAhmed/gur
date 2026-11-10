@@ -19,6 +19,7 @@ import {
   openCart,
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
+import { useStorefrontIntro } from "@/hooks/use-storefront-intro";
 
 // Code-split heavy interactive sections & modals to reduce initial mobile bundle size
 const CheckoutSection = dynamic(
@@ -81,6 +82,18 @@ export function ProductShowcase({
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
+
+  const { isTourActiveRef } = useStorefrontIntro({
+    lang,
+    activeSectionIndex,
+    productsStartIndex,
+    checkoutSectionIndex,
+    isLoading,
+    hasProducts: products.length > 0,
+    isCartOpen,
+    hasCartItems: displayCartQuantity > 0,
+    containerRef,
+  });
 
   // Track active full-screen section on scroll
   useEffect(() => {
@@ -176,6 +189,10 @@ export function ProductShowcase({
     let scrollTimeout: NodeJS.Timeout;
 
     const handleWheel = (e: WheelEvent) => {
+      if (isTourActiveRef.current) {
+        e.preventDefault();
+        return;
+      }
       if (Math.abs(e.deltaY) < 15) return;
       if (isScrolling) {
         e.preventDefault();
@@ -233,7 +250,7 @@ export function ProductShowcase({
       container.removeEventListener("wheel", handleWheel);
       clearTimeout(scrollTimeout);
     };
-  }, [totalSections]);
+  }, [totalSections, isTourActiveRef]);
 
   // Keyboard Up/Down arrow keys support for changing full-screen products
   useEffect(() => {
@@ -241,6 +258,7 @@ export function ProductShowcase({
     if (!container) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTourActiveRef.current) return;
       // Don't intercept if user is typing in an input
       if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
         return;
@@ -278,7 +296,7 @@ export function ProductShowcase({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [totalSections]);
+  }, [totalSections, isTourActiveRef]);
 
   const handleCheckoutFromCart = () => {
     scrollToSection(checkoutSectionIndex);
@@ -341,6 +359,7 @@ export function ProductShowcase({
           </button>
           <button
             type="button"
+            data-tour="header-checkout-cta"
             onClick={() => scrollToSection(checkoutSectionIndex)}
             className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
@@ -363,6 +382,7 @@ export function ProductShowcase({
           {/* Redux Cart Button with Live Counter Badge */}
           <button
             type="button"
+            data-tour="header-cart-cta"
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"

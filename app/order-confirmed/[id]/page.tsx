@@ -27,6 +27,7 @@ import {
   FileText,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useOrder } from "@/hooks/use-order";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
 import type { OrderItem } from "@/types/order";
@@ -324,6 +325,8 @@ function OrderConfirmedContent() {
   useEffect(() => {
     const orderNum = order?.order_number || order?.id;
     if (!order || !orderNum) return;
+
+    markReturningCustomer();
 
     let isForceTest = false;
     let publicToken: string | undefined;

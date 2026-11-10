@@ -640,7 +640,10 @@ export function ProductCard({
           </div>
 
           {/* Control Deck: Variation Selector, Price & Quantity Stepper */}
-          <div className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5">
+          <div
+            data-tour-zone={index === 0 ? "product-controls" : undefined}
+            className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5"
+          >
             {/* Variation Dropdown */}
             {sortedVariants.length > 1 && (
               <div className="space-y-1.5 px-1">
@@ -662,6 +665,7 @@ export function ProductCard({
                 >
                   <SelectTrigger
                     id={`variant-select-${product.id}`}
+                    data-tour={index === 0 ? "product-variant-select" : undefined}
                     aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
                     className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm px-3.5 rounded-xl border border-amber-300/80 dark:border-stone-700 shadow-xs hover:border-amber-400 dark:hover:border-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500/50"
                   >
@@ -794,6 +798,7 @@ export function ProductCard({
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   type="button"
+                  data-tour={index === 0 ? "product-combo-buy" : undefined}
                   onClick={handleBuyNow}
                   className="w-full h-12 sm:h-14 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:to-amber-700 active:from-amber-800 active:to-amber-800 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-amber-950/20 border-2 border-amber-300/80 dark:border-amber-500/50 flex items-center justify-center gap-2.5 transition-all touch-manipulation cursor-pointer group"
                 >
@@ -803,7 +808,7 @@ export function ProductCard({
                 </motion.button>
               </div>
             ) : (
-              <>
+              <div className="space-y-2.5">
                 {/* Quantity Stepper with Minus, Counter, Plus */}
                 <div className="relative">
                   {/* Flying Miniature Product Animation into Bag */}
@@ -925,6 +930,7 @@ export function ProductCard({
                     {/* Right: Plus Button */}
                     <motion.button
                       ref={plusRef}
+                      data-tour={index === 0 ? "product-plus-btn" : undefined}
                       whileTap={{ scale: 0.85 }}
                       whileHover={{ scale: 1.05 }}
                       type="button"
@@ -964,7 +970,7 @@ export function ProductCard({
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
           </div>
 

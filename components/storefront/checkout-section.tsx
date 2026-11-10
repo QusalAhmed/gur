@@ -40,6 +40,7 @@ import {
   formatStorePrice,
   toBnNumber,
 } from "@/lib/storefront-i18n";
+import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useAppDispatch, useAppSelector, useAppStore } from "@/lib/redux/hooks";
 import {
   selectCartItems,
@@ -233,6 +234,8 @@ export function CheckoutSection({
   const createOrderMutation = useCreateOrderMutation({
     onSuccess: (result, variables) => {
       setIsRedirecting(true);
+      // Mark visitor as a returning customer so onboarding tours don't auto-show again
+      markReturningCustomer();
       // Clear draft tracking, Redux cart, and pixel checkout tracking upon confirmed placement
       clearDraftRef.current?.();
       dispatch(clearCart());
@@ -632,7 +635,10 @@ return (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
         {/* Left Column (5 Cols): Either Selected Items Table OR Direct Phone Order Assistance */}
         {displayCartItems.length > 0 ? (
-          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+          <div
+            data-tour="checkout-summary"
+            className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between"
+          >
             <div>
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-stone-200 dark:border-stone-800">
                 <div className="flex items-center gap-2">
@@ -719,7 +725,10 @@ return (
           </div>
         ) : (
           /* When 0 products selected: Helpful direct order prompt */
-          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+          <div
+            data-tour="checkout-summary"
+            className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between"
+          >
             <div>
               <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-stone-200 dark:border-stone-800">
                 <ShoppingBag className="w-5 h-5 text-amber-600" />
@@ -809,6 +818,7 @@ return (
           )}
 
           <form
+            data-tour-zone="checkout-form"
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -824,7 +834,7 @@ return (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <form.Field name="customerName">
                 {(field) => (
-                  <div>
+                  <div data-tour="checkout-name">
                     <label
                       htmlFor="customerName"
                       className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -867,7 +877,7 @@ return (
                 {(field) => {
                   const hasError = Boolean(field.state.meta.errors && field.state.meta.errors.length > 0);
                   return (
-                    <div>
+                    <div data-tour="checkout-phone">
                       <label
                         htmlFor="customerPhone"
                         className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -913,7 +923,7 @@ return (
             </div>
 
             {/* Delivery Zone Selection Pills */}
-            <div>
+            <div data-tour="checkout-zone">
               <label className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-2 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
                 <span>{lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}</span>
@@ -960,7 +970,7 @@ return (
             {/* Address Line */}
             <form.Field name="addressLine">
               {(field) => (
-                <div>
+                <div data-tour="checkout-address">
                   <label
                     htmlFor="addressLine"
                     className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -1050,6 +1060,7 @@ return (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     type="submit"
+                    data-tour="checkout-submit"
                     disabled={isProcessing}
                     className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-85 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
                   >
