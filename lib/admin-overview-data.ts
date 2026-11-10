@@ -235,7 +235,7 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
       title: "Incomplete Orders",
       titleBn: "অসম্পূর্ণ চেকআউট",
       count: incompleteCount,
-      href: "/admin/incomplete",
+      href: "/admin/orders?status=incomplete_order",
       severity: "warning",
       description: "Abandoned checkouts awaiting recovery outreach",
     });

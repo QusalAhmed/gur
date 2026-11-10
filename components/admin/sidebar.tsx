@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -96,7 +96,7 @@ const navGroups: NavGroup[] = [
       {
         title: "Incomplete",
         titleBn: "অসম্পূর্ণ চেকআউট",
-        href: "/admin/incomplete",
+        href: "/admin/orders?status=incomplete_order",
         icon: Clock,
         badgeKey: "incompleteOrders",
       },
@@ -268,6 +268,7 @@ function useMounted() {
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, role, logout } = useAdminAuth();
   const { data: counts } = useAdminBadgeCounts();
   const { storeName, storeNameBn, logoUrl } = useSiteSettings();
@@ -347,10 +348,26 @@ export function AdminSidebar() {
               <SidebarMenu className="gap-0.5">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive =
-                    item.href === "/admin"
-                      ? pathname === "/admin"
-                      : pathname === item.href || pathname.startsWith(item.href + "/");
+                  const [itemPath, itemQuery] = item.href.split("?");
+
+                  let isActive = false;
+                  if (item.href === "/admin") {
+                    isActive = pathname === "/admin";
+                  } else if (itemQuery) {
+                    const itemParams = new URLSearchParams(itemQuery);
+                    const matchesPath = pathname === itemPath;
+                    const matchesParams = Array.from(itemParams.entries()).every(
+                      ([k, v]) => searchParams.get(k) === v
+                    );
+                    isActive = matchesPath && matchesParams;
+                  } else {
+                    const matchesPath =
+                      pathname === item.href || pathname.startsWith(item.href + "/");
+                    const hasStatusIncomplete =
+                      pathname === "/admin/orders" &&
+                      searchParams.get("status") === "incomplete_order";
+                    isActive = matchesPath && !hasStatusIncomplete;
+                  }
 
                   const badgeCount = mounted && item.badgeKey && counts ? counts[item.badgeKey] : 0;
 

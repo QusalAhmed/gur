@@ -10,9 +10,7 @@ import {
   Users,
   CreditCard,
   Settings,
-  HelpCircle,
   FileText,
-  Search,
   Truck,
   Building2,
   Clock,
@@ -20,7 +18,6 @@ import {
   Star,
   ShieldCheck,
   Bell,
-  Archive,
   PlusCircle,
   FileQuestion,
 } from "lucide-react";
@@ -38,6 +35,12 @@ import { formatBDT } from "@/lib/admin-format";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { canRoleAccessPath } from "@/lib/admin-permissions";
 
+const EMPTY_RESULTS: QuickSearchResult = {
+  orders: [],
+  products: [],
+  customers: [],
+};
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -48,33 +51,25 @@ export function CommandPalette({
   const router = useRouter();
   const { role } = useAdminAuth();
   const [query, setQuery] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [searchResults, setSearchResults] = React.useState<QuickSearchResult>({
-    orders: [],
-    products: [],
-    customers: [],
-  });
+  const [isPending, startTransition] = React.useTransition();
+  const [searchResults, setSearchResults] = React.useState<QuickSearchResult>(EMPTY_RESULTS);
+
+  const isShortQuery = !query || query.trim().length < 2;
+  const effectiveResults = isShortQuery ? EMPTY_RESULTS : searchResults;
 
   // Debounced search
   React.useEffect(() => {
-    if (!query || query.trim().length < 2) {
-      setSearchResults({ orders: [], products: [], customers: [] });
-      setLoading(false);
-      return;
-    }
+    if (isShortQuery) return;
 
-    setLoading(true);
-    const timeout = setTimeout(async () => {
-      try {
+    const timeout = setTimeout(() => {
+      startTransition(async () => {
         const res = await searchGlobalAction(query);
         setSearchResults(res);
-      } finally {
-        setLoading(false);
-      }
+      });
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [query]);
+  }, [query, isShortQuery]);
 
   const handleSelect = (url: string) => {
     onOpenChange(false);
@@ -86,7 +81,7 @@ export function CommandPalette({
     { label: "Overview / ড্যাশবোর্ড", path: "/admin", icon: LayoutDashboard },
     { label: "Orders / অর্ডার তালিকা", path: "/admin/orders", icon: ShoppingCart },
     { label: "Create Order / নতুন অর্ডার", path: "/admin/orders/new", icon: PlusCircle },
-    { label: "Incomplete Checkouts / অসম্পূর্ণ অর্ডার", path: "/admin/incomplete", icon: Clock },
+    { label: "Incomplete Checkouts / অসম্পূর্ণ অর্ডার", path: "/admin/orders?status=incomplete_order", icon: Clock },
     { label: "Shipments / শিপমেন্ট", path: "/admin/shipments", icon: Truck },
     { label: "Inventory Levels / স্টক তালিকা", path: "/admin/inventory", icon: Package },
     { label: "Lots & Batches / গুড়ের লট", path: "/admin/batches", icon: Layers },
@@ -122,13 +117,13 @@ export function CommandPalette({
       />
       <CommandList>
         <CommandEmpty>
-          {loading ? "Searching..." : "No matching orders, products or pages found."}
+          {isPending ? "Searching..." : "No matching orders, products or pages found."}
         </CommandEmpty>
 
         {/* Live Search: Orders */}
-        {searchResults.orders.length > 0 && (
+        {effectiveResults.orders.length > 0 && (
           <CommandGroup heading="Orders">
-            {searchResults.orders.map((o) => (
+            {effectiveResults.orders.map((o) => (
               <CommandItem
                 key={o.id}
                 value={`order-${o.order_number}-${o.customer_name}-${o.customer_phone}`}
@@ -154,9 +149,9 @@ export function CommandPalette({
         )}
 
         {/* Live Search: Products */}
-        {searchResults.products.length > 0 && (
+        {effectiveResults.products.length > 0 && (
           <CommandGroup heading="Products">
-            {searchResults.products.map((p) => (
+            {effectiveResults.products.map((p) => (
               <CommandItem
                 key={p.id}
                 value={`product-${p.name}-${p.slug}`}
@@ -174,9 +169,9 @@ export function CommandPalette({
         )}
 
         {/* Live Search: Customers */}
-        {searchResults.customers.length > 0 && (
+        {effectiveResults.customers.length > 0 && (
           <CommandGroup heading="Customers">
-            {searchResults.customers.map((c) => (
+            {effectiveResults.customers.map((c) => (
               <CommandItem
                 key={c.id}
                 value={`customer-${c.name}-${c.phone}`}
