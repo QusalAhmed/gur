@@ -328,11 +328,16 @@ export async function fetchProductDetailById(id: string): Promise<DbProduct | nu
     const comboMap = new Map<string, any[]>();
 
     if (comboVariantIds.length > 0) {
-      const { data: comboRows } = await supabase
+      const { data: comboRows, error: comboErr } = await supabase
         .from("combo_items")
         .select("*, component:product_variants!combo_items_component_variant_id_fkey(*, product:products(name, name_bn))")
         .in("combo_variant_id", comboVariantIds)
         .order("sort_order", { ascending: true });
+
+      if (comboErr) {
+        console.error("Error fetching combo items for product:", comboErr);
+        throw new Error(`Failed to fetch combo recipe items: ${comboErr.message}`);
+      }
 
       if (comboRows) {
         for (const row of comboRows) {

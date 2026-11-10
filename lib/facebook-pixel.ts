@@ -653,18 +653,21 @@ export const trackPurchase = ({
   eventId: customEventId,
   force = false,
 }: TrackPurchaseParams): { eventId: string; fired: boolean } => {
+  const orderRef =
+    (orderNumber ? String(orderNumber).trim() : "") ||
+    (orderId ? String(orderId).trim() : "");
+
   const effectiveEventId =
     customEventId ||
-    (orderNumber ? String(orderNumber).trim() : undefined) ||
-    (orderId ? String(orderId).trim() : undefined) ||
+    orderRef ||
     generateEventId();
 
   if (typeof window !== "undefined") {
     try {
-      const storageKey = `fb_pixel_purchase_${orderNumber || orderId}`;
+      const storageKey = `fb_pixel_purchase_${orderRef || effectiveEventId}`;
       if (sessionStorage.getItem(storageKey) && !force) {
         console.log(
-          `%c[Facebook Pixel] Purchase event skipped: Already recorded in this session for order #${orderNumber || orderId} (deduplicated to prevent duplicate conversion reporting). Pass ?test=1 in URL or clear sessionStorage to re-test.`,
+          `%c[Facebook Pixel] Purchase event skipped: Already recorded in this session for order #${orderRef || effectiveEventId} (deduplicated to prevent duplicate conversion reporting). Pass ?test=1 in URL or clear sessionStorage to re-test.`,
           "color: #f59e0b; font-weight: bold; background: #fffbeb; padding: 2px 6px; border-radius: 4px;"
         );
         return { eventId: effectiveEventId, fired: false };
@@ -697,11 +700,11 @@ export const trackPurchase = ({
     num_items: totalQuantity || 1,
     value: safeValue,
     currency: String(currency || "BDT").trim().toUpperCase(),
-    order_id: orderNumber || orderId,
+    order_id: orderRef || undefined,
   };
 
   console.log(
-    `%c[Facebook Pixel] Firing Purchase event for order #${orderNumber || orderId}:`,
+    `%c[Facebook Pixel] Firing Purchase event for order #${orderRef || effectiveEventId}:`,
     "background: #1877F2; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;",
     payload,
     { eventID: effectiveEventId }

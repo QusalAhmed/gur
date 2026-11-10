@@ -135,6 +135,15 @@ export function OrderDetailView({
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [cancelOpen, setCancelOpen] = React.useState(false);
   const [copiedPhone, setCopiedPhone] = React.useState(false);
+  const copiedPhoneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (copiedPhoneTimeoutRef.current) {
+        clearTimeout(copiedPhoneTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Note form state
   const [newNote, setNewNote] = React.useState("");
@@ -671,16 +680,22 @@ export function OrderDetailView({
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.92 }}
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (order.customer_phone) {
                             try {
-                              navigator.clipboard?.writeText(order.customer_phone);
+                              if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+                                throw new Error("Clipboard API unavailable");
+                              }
+                              await navigator.clipboard.writeText(order.customer_phone);
+                              if (copiedPhoneTimeoutRef.current) {
+                                clearTimeout(copiedPhoneTimeoutRef.current);
+                              }
+                              setCopiedPhone(true);
+                              toast.success("Phone number copied to clipboard");
+                              copiedPhoneTimeoutRef.current = setTimeout(() => setCopiedPhone(false), 2000);
                             } catch {
-                              // ignore
+                              toast.error("Failed to copy phone number");
                             }
-                            setCopiedPhone(true);
-                            toast.success("Phone number copied to clipboard");
-                            setTimeout(() => setCopiedPhone(false), 2000);
                           }
                         }}
                         className="inline-flex items-center justify-center h-6 px-2 text-[10px] gap-1 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"

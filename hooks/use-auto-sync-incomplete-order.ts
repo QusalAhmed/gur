@@ -77,10 +77,10 @@ export function useAutoSyncIncompleteOrder({
 
   const syncMutation = useSyncIncompleteOrderMutation();
   const syncMutationRef = useRef(syncMutation);
-  syncMutationRef.current = syncMutation;
 
   const lastSyncedHashRef = useRef<string>("");
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resyncRequestedRef = useRef(false);
 
   // Parse & validate Bangladeshi phone in all 4 supported formats (+8801..., 8801..., 01..., 1...)
   const parsedPhone = parseBdPhone(customerPhone);
@@ -102,18 +102,21 @@ export function useAutoSyncIncompleteOrder({
     normalizedPhone,
   });
 
-  latestPropsRef.current = {
-    customerPhone,
-    customerName,
-    addressLine,
-    customerNote,
-    deliveryZone,
-    items,
-    enabled,
-    isSubmitting,
-    isPhoneValid,
-    normalizedPhone,
-  };
+  useEffect(() => {
+    syncMutationRef.current = syncMutation;
+    latestPropsRef.current = {
+      customerPhone,
+      customerName,
+      addressLine,
+      customerNote,
+      deliveryZone,
+      items,
+      enabled,
+      isSubmitting,
+      isPhoneValid,
+      normalizedPhone,
+    };
+  });
 
   // Compute canonical hash of current form state
   const currentHash = useMemo(() => {
@@ -130,6 +133,7 @@ export function useAutoSyncIncompleteOrder({
 
   // Cancel any scheduled debounced sync
   const cancelPendingSync = useCallback(() => {
+    resyncRequestedRef.current = false;
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -193,8 +197,9 @@ export function useAutoSyncIncompleteOrder({
       return;
     }
 
-    // Guard: avoid concurrent duplicate in-flight requests
+    // Guard: avoid concurrent duplicate in-flight requests; mark that a newer sync is needed
     if (inFlightPromiseRef.current) {
+      resyncRequestedRef.current = true;
       return;
     }
 
@@ -233,6 +238,10 @@ export function useAutoSyncIncompleteOrder({
     } finally {
       if (inFlightPromiseRef.current === currentPromise) {
         inFlightPromiseRef.current = null;
+      }
+      if (resyncRequestedRef.current) {
+        resyncRequestedRef.current = false;
+        performSync();
       }
     }
   }, []);

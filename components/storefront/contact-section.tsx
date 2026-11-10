@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
 import {
@@ -47,10 +47,16 @@ export function ContactSection({
 }: ContactSectionProps) {
   const [copied, setCopied] = useState(false);
   const [inquiryRef, setInquiryRef] = useState<string>("");
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const t = STOREFRONT_TEXT[lang];
 
   useEffect(() => {
     setInquiryRef(getOrGenerateInquiryRefCode("W"));
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
   }, []);
 
   const finalMessengerUrl =
@@ -68,24 +74,35 @@ export function ContactSection({
 
   const displayName = storeName || t.storeName;
 
-  const handleCopyNumber = (e: React.MouseEvent) => {
+  const handleCopyNumber = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(hotline);
+      if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API unavailable");
       }
+      await navigator.clipboard.writeText(hotline);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      setCopied(true);
+      toast.success(
+        lang === "bn"
+          ? `হটলাইন নম্বর কপি হয়েছে: ${hotline}`
+          : `Hotline copied to clipboard: ${hotline}`,
+        { duration: 2500 }
+      );
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+        copyTimeoutRef.current = null;
+      }, 2200);
     } catch {
-      // Fallback
+      toast.error(
+        lang === "bn"
+          ? "নম্বর কপি করা সম্ভব হয়নি"
+          : "Could not copy hotline number"
+      );
     }
-    setCopied(true);
-    toast.success(
-      lang === "bn"
-        ? `হটলাইন নম্বর কপি হয়েছে: ${hotline}`
-        : `Hotline copied to clipboard: ${hotline}`,
-      { duration: 2500 }
-    );
-    setTimeout(() => setCopied(false), 2200);
   };
 
   const handleScrollToHelp = () => {

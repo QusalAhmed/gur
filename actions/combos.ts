@@ -318,6 +318,8 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
 }> {
   const client = supabaseAdmin || supabase;
   const now = new Date().toISOString();
+  let demotedVariantIds: string[] = [];
+  let createdVariantId: string | null = null;
 
   try {
     if (!input.name.trim()) {
@@ -325,6 +327,21 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     }
     if (!input.components || input.components.length === 0) {
       return { success: false, error: "A combo must contain at least one product component." };
+    }
+
+    // Validate components before any product or variant writes
+    const compIds = input.components.map((c) => c.componentVariantId);
+    if (input.comboVariantId && compIds.some((cid) => cid === input.comboVariantId)) {
+      return {
+        success: false,
+        error: "Combo cannot include itself as a component.",
+      };
+    }
+    if (new Set(compIds).size !== compIds.length) {
+      return {
+        success: false,
+        error: "Combo cannot have duplicate component items. Each component must be unique.",
+      };
     }
 
     // 1. Get default warehouse
@@ -347,6 +364,7 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
 
     let productId = input.comboProductId;
     let variantId = input.comboVariantId;
+    demotedVariantIds = [];
 
     if (productId) {
       // Update existing product
@@ -404,6 +422,31 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
 
       if (vErr) throw new Error(vErr.message);
     } else {
+      // If converting an existing product into a combo, demote any existing default variants first
+      // to avoid creating duplicate default variants
+      const { data: currentDefaults, error: fetchDefErr } = await client
+        .from("product_variants")
+        .select("id")
+        .eq("product_id", productId)
+        .eq("is_default", true);
+
+      if (fetchDefErr) {
+        throw new Error(`Failed to check existing default variants: ${fetchDefErr.message}`);
+      }
+
+      demotedVariantIds = (currentDefaults || []).map((v) => v.id);
+
+      if (demotedVariantIds.length > 0) {
+        const { error: demoteErr } = await client
+          .from("product_variants")
+          .update({ is_default: false, updated_at: now })
+          .in("id", demotedVariantIds);
+
+        if (demoteErr) {
+          throw new Error(`Failed to demote existing default variants: ${demoteErr.message}`);
+        }
+      }
+
       const { data: newV, error: vErr } = await client
         .from("product_variants")
         .insert([
@@ -429,12 +472,37 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
         .select("id")
         .single();
 
-      if (vErr || !newV) throw new Error(vErr?.message || "Failed to create combo variant");
+      if (vErr || !newV) {
+        // Restore demoted default variants on creation failure
+        if (demotedVariantIds.length > 0) {
+          const { error: restoreDefErr } = await client
+            .from("product_variants")
+            .update({ is_default: true, updated_at: now })
+            .in("id", demotedVariantIds);
+          if (restoreDefErr) {
+            console.error("Failed to restore default variants after creation failure:", restoreDefErr);
+          }
+        }
+        throw new Error(vErr?.message || "Failed to create combo variant");
+      }
+      createdVariantId = newV.id;
       variantId = newV.id;
     }
 
-    // 4. Synchronize combo_items (Bill of Materials)
-    await client.from("combo_items").delete().eq("combo_variant_id", variantId);
+    // 4. Synchronize combo_items (Bill of Materials) with safe rollback
+    const { data: priorRows, error: fetchPriorErr } = await client
+      .from("combo_items")
+      .select("combo_variant_id, component_variant_id, quantity, sort_order")
+      .eq("combo_variant_id", variantId);
+
+    if (fetchPriorErr) throw new Error(`Failed to inspect prior combo items: ${fetchPriorErr.message}`);
+
+    const { error: ciDeleteErr } = await client
+      .from("combo_items")
+      .delete()
+      .eq("combo_variant_id", variantId);
+
+    if (ciDeleteErr) throw new Error(`Failed to remove prior combo items: ${ciDeleteErr.message}`);
 
     const comboRows = input.components.map((c, idx) => ({
       combo_variant_id: variantId,
@@ -444,7 +512,16 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     }));
 
     const { error: ciInsertErr } = await client.from("combo_items").insert(comboRows);
-    if (ciInsertErr) throw new Error(ciInsertErr.message);
+    if (ciInsertErr) {
+      // Restore prior recipe if insertion failed and log any restoration failure
+      if (priorRows && priorRows.length > 0) {
+        const { error: restoreErr } = await client.from("combo_items").insert(priorRows);
+        if (restoreErr) {
+          console.error("Failed to restore prior combo recipe after insertion failure:", restoreErr);
+        }
+      }
+      throw new Error(`Failed to insert combo items: ${ciInsertErr.message}`);
+    }
 
     // 5. Calculate and synchronize virtual stock
     const { data: virtStock } = await client.rpc("get_combo_variant_available_stock", {
@@ -514,6 +591,26 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     return { success: true, comboId: productId };
   } catch (err: any) {
     console.error("saveComboAction error:", err);
+    // Delete partially created variant on rollback before restoring demoted defaults
+    if (createdVariantId) {
+      const { error: delVarErr } = await client
+        .from("product_variants")
+        .delete()
+        .eq("id", createdVariantId);
+      if (delVarErr) {
+        console.error("Failed to delete partially created variant during rollback:", delVarErr);
+      }
+    }
+    // If a subsequent step failed before completion, restore demoted default variants
+    if (demotedVariantIds.length > 0 && !input.comboVariantId) {
+      const { error: restoreErr } = await client
+        .from("product_variants")
+        .update({ is_default: true, updated_at: new Date().toISOString() })
+        .in("id", demotedVariantIds);
+      if (restoreErr) {
+        console.error("Failed to restore demoted default variants in catch block:", restoreErr);
+      }
+    }
     return { success: false, error: err.message || "Failed to save combo offer." };
   }
 }
@@ -528,24 +625,53 @@ export async function toggleComboStatusAction(
   const client = supabaseAdmin || supabase;
 
   try {
-    const { error: pErr } = await client
-      .from("products")
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", productId);
+    // 1. Verify this product actually has a confirmed combo variant and check for regular variants
+    const { data: allVariants, error: checkErr } = await client
+      .from("product_variants")
+      .select("id, is_combo")
+      .eq("product_id", productId);
 
-    if (pErr) throw new Error(pErr.message);
+    if (checkErr || !allVariants) {
+      return {
+        success: false,
+        error: checkErr?.message || "Product is not a confirmed combo or does not exist.",
+      };
+    }
 
-    // Also update variant active state
-    await client
+    const comboVariants = allVariants.filter((v) => v.is_combo);
+    const nonComboVariants = allVariants.filter((v) => !v.is_combo);
+
+    if (comboVariants.length === 0) {
+      return {
+        success: false,
+        error: "Product is not a confirmed combo or does not exist.",
+      };
+    }
+
+    // Change products.status only when every variant is a combo; for mixed products, keep product status unchanged
+    if (nonComboVariants.length === 0) {
+      const { error: pErr } = await client
+        .from("products")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", productId);
+
+      if (pErr) throw new Error(pErr.message);
+    }
+
+    // For mixed products and pure combos alike, update is_active only on combo variants so regular offers remain unaffected
+    const comboVariantIds = comboVariants.map((v) => v.id);
+    const { error: vErr } = await client
       .from("product_variants")
       .update({
         is_active: newStatus === "active",
         updated_at: new Date().toISOString(),
       })
-      .eq("product_id", productId);
+      .in("id", comboVariantIds);
+
+    if (vErr) throw new Error(vErr.message);
 
     revalidatePath("/admin/combos");
     revalidatePath("/admin/products");
@@ -563,25 +689,103 @@ export async function toggleComboStatusAction(
  */
 export async function deleteComboAction(
   productId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; archived?: boolean; error?: string }> {
   const client = supabaseAdmin || supabase;
 
   try {
-    // Delete product cascade removes product_variants and combo_items automatically
+    // 1. Restrict delete action to confirmed combo products only
+    const { data: allVariants, error: checkErr } = await client
+      .from("product_variants")
+      .select("id, is_combo")
+      .eq("product_id", productId);
+
+    if (checkErr || !allVariants) {
+      return {
+        success: false,
+        error: checkErr?.message || "Product is not a confirmed combo product or does not exist.",
+      };
+    }
+
+    const comboVariants = allVariants.filter((v) => v.is_combo);
+    const nonComboVariants = allVariants.filter((v) => !v.is_combo);
+
+    if (comboVariants.length === 0) {
+      return {
+        success: false,
+        error: "Product is not a confirmed combo product or does not exist.",
+      };
+    }
+
+    const comboVariantIds = comboVariants.map((v) => v.id);
+
+    // If product has non-combo variants, remove or archive ONLY the combo variants
+    if (nonComboVariants.length > 0) {
+      const { error: delVarErr } = await client
+        .from("product_variants")
+        .delete()
+        .in("id", comboVariantIds);
+
+      if (delVarErr) {
+        // If restricted by foreign keys, archive combo variants by deactivating
+        const { error: archVarErr } = await client
+          .from("product_variants")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .in("id", comboVariantIds);
+
+        if (archVarErr) {
+          return {
+            success: false,
+            error: `Could not delete or archive combo variant: ${archVarErr.message}`,
+          };
+        }
+
+        revalidatePath("/admin/combos");
+        revalidatePath("/admin/products");
+        revalidatePath("/");
+        revalidateTag("storefront-products", "max");
+
+        return { success: true, archived: true };
+      }
+
+      revalidatePath("/admin/combos");
+      revalidatePath("/admin/products");
+      revalidatePath("/");
+      revalidateTag("storefront-products", "max");
+
+      return { success: true, archived: false };
+    }
+
+    // Pure combo product: delete product cascade or archive product as fallback
     const { error: delErr } = await client.from("products").delete().eq("id", productId);
 
     if (delErr) {
-      // If restricted by foreign keys, archive instead
-      await client
+      // If restricted by foreign keys (e.g. order_items history), archive instead
+      const { error: archErr } = await client
         .from("products")
         .update({ status: "archived", updated_at: new Date().toISOString() })
         .eq("id", productId);
+
+      if (archErr) {
+        return {
+          success: false,
+          error: `Could not delete or archive combo product: ${archErr.message}`,
+        };
+      }
+
+      revalidatePath("/admin/combos");
+      revalidatePath("/admin/products");
+      revalidatePath("/");
+      revalidateTag("storefront-products", "max");
+
+      return { success: true, archived: true };
     }
 
     revalidatePath("/admin/combos");
     revalidatePath("/admin/products");
     revalidatePath("/");
     revalidateTag("storefront-products", "max");
+
+    return { success: true, archived: false };
 
     return { success: true };
   } catch (err: any) {

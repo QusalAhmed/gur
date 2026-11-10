@@ -145,12 +145,16 @@ export function CombosClient() {
       }
       return res;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "combos"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
       setComboToDelete(null);
-      toast.success("Combo bundle deleted successfully.");
+      if (data?.archived) {
+        toast.success("Combo bundle archived (preserved for order history).");
+      } else {
+        toast.success("Combo bundle deleted successfully.");
+      }
     },
     onError: (err: any) => {
       toast.error(err?.message || "Failed to delete combo.");
@@ -268,16 +272,16 @@ export function CombosClient() {
       ];
     });
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvString = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csvString], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `combos_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // KPI Calculations
@@ -925,13 +929,32 @@ export function CombosClient() {
                   className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={async () => {
                     try {
-                      await Promise.all(
+                      const settled = await Promise.allSettled(
                         selectedRows.map((c) => toggleComboStatusAction(c.id, "active"))
                       );
                       queryClient.invalidateQueries({ queryKey: ["admin", "combos"] });
+                      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
                       clearSelection();
-                      toast.success(`Activated ${selectedRows.length} combos.`);
+
+                      const failures = settled.filter(
+                        (r) => r.status === "rejected" || !r.value.success
+                      );
+
+                      if (failures.length === 0) {
+                        toast.success(`Activated ${selectedRows.length} combos.`);
+                      } else if (failures.length === selectedRows.length) {
+                        toast.error(`Failed to activate all ${selectedRows.length} combos.`);
+                      } else {
+                        toast.warning(
+                          `Activated ${selectedRows.length - failures.length} combos (${failures.length} failed).`
+                        );
+                      }
                     } catch (err: any) {
+                      queryClient.invalidateQueries({ queryKey: ["admin", "combos"] });
+                      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+                      clearSelection();
                       toast.error("Failed to activate some combos.");
                     }
                   }}
@@ -945,13 +968,32 @@ export function CombosClient() {
                   className="h-7 px-2.5 text-xs border-amber-500/30 hover:bg-amber-500/20 text-foreground cursor-pointer"
                   onClick={async () => {
                     try {
-                      await Promise.all(
+                      const settled = await Promise.allSettled(
                         selectedRows.map((c) => toggleComboStatusAction(c.id, "draft"))
                       );
                       queryClient.invalidateQueries({ queryKey: ["admin", "combos"] });
+                      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
                       clearSelection();
-                      toast.success(`Drafted ${selectedRows.length} combos.`);
+
+                      const failures = settled.filter(
+                        (r) => r.status === "rejected" || !r.value.success
+                      );
+
+                      if (failures.length === 0) {
+                        toast.success(`Drafted ${selectedRows.length} combos.`);
+                      } else if (failures.length === selectedRows.length) {
+                        toast.error(`Failed to draft all ${selectedRows.length} combos.`);
+                      } else {
+                        toast.warning(
+                          `Drafted ${selectedRows.length - failures.length} combos (${failures.length} failed).`
+                        );
+                      }
                     } catch (err: any) {
+                      queryClient.invalidateQueries({ queryKey: ["admin", "combos"] });
+                      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                      queryClient.invalidateQueries({ queryKey: ["storefront", "products"] });
+                      clearSelection();
                       toast.error("Failed to draft some combos.");
                     }
                   }}

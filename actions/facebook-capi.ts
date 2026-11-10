@@ -252,6 +252,19 @@ async function dispatchCapiEventWithQueue(
 /**
  * Extracts incoming request headers and cookies for CAPI user data.
  */
+function sanitizeMetaEventUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl || typeof rawUrl !== "string") return undefined;
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.searchParams.delete("token");
+    parsed.searchParams.delete("test");
+    parsed.searchParams.delete("force");
+    return parsed.toString();
+  } catch {
+    return rawUrl.replace(/([?&])(token|test|force)=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+  }
+}
+
 async function getRequestContext(
   clientUserData?: Partial<CapiUserData>,
   clientUrl?: string
@@ -260,7 +273,7 @@ async function getRequestContext(
   let fbc = clientUserData?.fbc;
   let clientIp = clientUserData?.client_ip_address;
   let userAgent = clientUserData?.client_user_agent;
-  let resolvedUrl = clientUrl;
+  let resolvedUrl = sanitizeMetaEventUrl(clientUrl);
 
   try {
     const cookieStore = await cookies();
@@ -284,7 +297,7 @@ async function getRequestContext(
       }
     }
     if (!resolvedUrl) {
-      resolvedUrl = headerStore.get("referer") || undefined;
+      resolvedUrl = sanitizeMetaEventUrl(headerStore.get("referer") || undefined);
     }
   } catch {
     // Ignore if headers cannot be accessed
@@ -800,6 +813,7 @@ export async function enrichOrderMetaTrackingAction(params: {
 
     const enrichedMeta = {
       ...existingMeta,
+      purchase_event_id: params.eventId || existingMeta.purchase_event_id || null,
       event_id:
         params.eventId ||
         existingMeta.event_id ||
@@ -975,15 +989,18 @@ export async function triggerCapiPurchaseOnOrderConfirmedAction(
         success: true,
         skipped: true,
         reason: `Purchase event already sent at ${metaTracking.purchase_event_sent_at}`,
-        eventId: metaTracking.purchase_event_id,
+        eventId:
+          metaTracking.purchase_event_id ||
+          (orderRow.order_number ? String(orderRow.order_number).trim() : undefined) ||
+          (orderRow.id ? String(orderRow.id).trim() : undefined) ||
+          ("evt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11)),
       };
     }
 
     // 3. Prepare payload using up-to-date order details
-    // Standardize eventId for Purchase deduplication: use the shared event_id from client Pixel enrichment
-    // when it exists; retain fallback to order_number / order ID when it does not.
+    // Align Purchase event ID with confirmation-page Pixel event: both use the shared Purchase-specific
+    // identifier (purchase_event_id, order_number, or order ID) with consistent fallback behavior.
     const eventId =
-      metaTracking.event_id ||
       metaTracking.purchase_event_id ||
       (orderRow.order_number ? String(orderRow.order_number).trim() : undefined) ||
       (orderRow.id ? String(orderRow.id).trim() : undefined) ||

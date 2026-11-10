@@ -39,6 +39,18 @@ function consolidateOrders(orders: Order[]) {
     order_ids: string[];
     combo_sources?: Array<{ combo_name: string; count: number }>;
   }>();
+  const idToKey = new Map<string, string>();
+  const attrsToKey = new Map<string, string>();
+
+  const resolveKey = (varId: string, attrsKey: string): string => {
+    let key = (varId && idToKey.get(varId)) || attrsToKey.get(attrsKey);
+    if (!key) {
+      key = varId ? `var_${varId}`.toLowerCase() : attrsKey;
+    }
+    if (varId) idToKey.set(varId, key);
+    attrsToKey.set(attrsKey, key);
+    return key;
+  };
 
   for (const order of orders) {
     if (!order.items || !Array.isArray(order.items)) continue;
@@ -54,7 +66,9 @@ function consolidateOrders(orders: Order[]) {
           const compProdName = (comp.product_name || "Unknown Product").trim();
           const compVarName = (comp.variant_name || "").trim();
           const compSku = (comp.sku || "").trim();
-          const key = `${compProdName}___${compVarName}___${compSku}`.toLowerCase();
+          const compVarId = (comp as any).component_variant_id ? String((comp as any).component_variant_id).trim() : "";
+          const compAttrsKey = `${compProdName}___${compVarName}___${compSku}`.toLowerCase();
+          const key = resolveKey(compVarId, compAttrsKey);
 
           const singleCompQty = Number(comp.quantity) || 1;
           const totalCompQty = singleCompQty * comboQty;
@@ -94,7 +108,9 @@ function consolidateOrders(orders: Order[]) {
         const prodName = (item.product_name || "Unknown Product").trim();
         const variantName = (item.variant_name || "").trim();
         const sku = (item.sku || "").trim();
-        const key = `${prodName}___${variantName}___${sku}`.toLowerCase();
+        const itemVarId = item.variant_id ? String(item.variant_id).trim() : "";
+        const itemAttrsKey = `${prodName}___${variantName}___${sku}`.toLowerCase();
+        const key = resolveKey(itemVarId, itemAttrsKey);
 
         const qty = Number(item.quantity) || 1;
         const unitWeight = extractUnitWeightKg(variantName, prodName, sku);
@@ -284,5 +300,57 @@ describe("Combo Packing Checklist Consolidation", () => {
     // Total package weight must be 3kg
     const totalWeight = consolidated.reduce((acc, it) => acc + it.total_weight_kg, 0);
     expect(totalWeight).toBe(3);
+  });
+
+  it("reconciles key between component without variant_id and loose item with variant_id regardless of processing order", () => {
+    // Order 1: Loose item with variant_id = "v-liquid"
+    const orderWithVariantId = {
+      id: "ord-loose",
+      order_number: "ORD-001",
+      customer_name: "Customer A",
+      items: [
+        {
+          product_name: "Liquid Gur",
+          variant_name: "1kg Jar",
+          sku: "MOL-100",
+          variant_id: "v-liquid",
+          quantity: 2,
+        },
+      ],
+    };
+
+    // Order 2: Combo containing component with same name/sku but WITHOUT component_variant_id
+    const orderWithoutVariantId = {
+      id: "ord-combo",
+      order_number: "ORD-002",
+      customer_name: "Customer B",
+      items: [
+        {
+          product_name: "Special Combo",
+          quantity: 1,
+          is_combo: true,
+          combo_components: [
+            {
+              product_name: "Liquid Gur",
+              variant_name: "1kg Jar",
+              sku: "MOL-100",
+              quantity: 3,
+            },
+          ],
+        },
+      ],
+    };
+
+    // Forward order: Loose item with variant_id processed first
+    const forwardConsolidated = consolidateOrders([orderWithVariantId, orderWithoutVariantId] as unknown as Order[]);
+    expect(forwardConsolidated).toHaveLength(1);
+    expect(forwardConsolidated[0].total_quantity).toBe(5);
+    expect(forwardConsolidated[0].order_ids).toHaveLength(2);
+
+    // Reverse order: Combo component without variant_id processed first
+    const reverseConsolidated = consolidateOrders([orderWithoutVariantId, orderWithVariantId] as unknown as Order[]);
+    expect(reverseConsolidated).toHaveLength(1);
+    expect(reverseConsolidated[0].total_quantity).toBe(5);
+    expect(reverseConsolidated[0].order_ids).toHaveLength(2);
   });
 });

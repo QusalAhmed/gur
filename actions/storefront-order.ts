@@ -362,6 +362,28 @@ export async function placeStorefrontOrderAction(
         eventSourceUrl: payload.eventSourceUrl,
       });
 
+      // Validate order ownership before passing orderId to RPC or fallback mutation
+      let validatedOrderId: string | null = null;
+      if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
+        const { data: orderOwner } = await client
+          .from("orders")
+          .select("customer_phone")
+          .eq("id", payload.orderId)
+          .maybeSingle();
+
+        if (orderOwner && orderOwner.customer_phone === normalizedPhone) {
+          validatedOrderId = payload.orderId;
+        } else if (!orderOwner) {
+          // If order does not exist in DB yet, do not trust arbitrary client UUID
+          validatedOrderId = null;
+        } else {
+          console.warn(
+            `[Storefront Order] Order ID ${payload.orderId} does not match customer phone. Discarding orderId.`
+          );
+          validatedOrderId = null;
+        }
+      }
+
       // =========================================================================
       // Tier 1: Database-Level Atomic Transaction via PostgreSQL RPC
       // If public.process_storefront_order is available, the entire order creation,
@@ -371,7 +393,7 @@ export async function placeStorefrontOrderAction(
       // =========================================================================
       try {
         const rpcPayload = {
-          p_order_id: payload.orderId && UUID_REGEX.test(payload.orderId) ? payload.orderId : null,
+          p_order_id: validatedOrderId,
           p_status: targetStatus,
           p_customer_phone: normalizedPhone,
           p_customer_name: payload.customerName !== undefined ? (payload.customerName.trim() || null) : null,
@@ -394,6 +416,22 @@ export async function placeStorefrontOrderAction(
         const { data: rpcData, error: rpcErr } = await client.rpc("process_storefront_order", rpcPayload);
 
         if (!rpcErr && rpcData?.success) {
+          // If phone-based deduplication matched an existing pending order without an owned order ID:
+          // Preserve the successful draft response for autosaves, but return an error for explicit checkout.
+          if (rpcData.pending_order_exists) {
+            if (targetStatus === "incomplete_order") {
+              return {
+                success: true,
+                status: "incomplete_order",
+                phone: rpcData.phone || normalizedPhone,
+              };
+            }
+            return {
+              success: false,
+              error: "An active order already exists for this phone number.",
+            };
+          }
+
           // Persist meta_tracking in order's attribution for delayed CAPI purchase upon admin confirmation
           let currentAttr: Record<string, any> = {};
           try {
@@ -579,11 +617,12 @@ export async function placeStorefrontOrderAction(
           }
         }
       } else {
-        if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
+        if (validatedOrderId) {
           const { data: foundById } = await client
             .from("orders")
             .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-            .eq("id", payload.orderId)
+            .eq("id", validatedOrderId)
+            .eq("customer_phone", normalizedPhone)
             .maybeSingle();
 
           if (foundById) {
@@ -608,11 +647,12 @@ export async function placeStorefrontOrderAction(
       }
 
       // Explicit orderId check if not yet matched
-      if (!existingOrder && payload.orderId && UUID_REGEX.test(payload.orderId)) {
+      if (!existingOrder && validatedOrderId) {
         const { data: foundById } = await client
           .from("orders")
           .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-          .eq("id", payload.orderId)
+            .eq("id", validatedOrderId)
+            .eq("customer_phone", normalizedPhone)
           .maybeSingle();
 
         if (foundById) {
@@ -1066,11 +1106,30 @@ export async function syncStorefrontIncompleteOrderAction(
   payload: Omit<StorefrontOrderPayload, "status">
 ): Promise<StorefrontOrderResult> {
   try {
+    const rawPhone = payload.customerPhone ? String(payload.customerPhone).trim() : "";
+    const normalizedPhone = normalizeBdPhone(rawPhone);
+
+    let validatedOrderId =
+      payload.orderId && UUID_REGEX.test(payload.orderId) ? payload.orderId : undefined;
+
+    if (validatedOrderId && normalizedPhone) {
+      const client = supabaseAdmin || supabase;
+      const { data: owner } = await client
+        .from("orders")
+        .select("customer_phone")
+        .eq("id", validatedOrderId)
+        .maybeSingle();
+
+      if (owner && owner.customer_phone !== normalizedPhone) {
+        validatedOrderId = undefined;
+      }
+    }
+
     const { inngest } = await import("@/lib/inngest/client");
     await inngest.send({
       name: "order.draft.autosave",
       data: {
-        orderId: payload.orderId,
+        orderId: validatedOrderId,
         customerPhone: payload.customerPhone,
         customerName: payload.customerName,
         addressLine: payload.addressLine,
@@ -1082,7 +1141,7 @@ export async function syncStorefrontIncompleteOrderAction(
 
     return {
       success: true,
-      orderId: payload.orderId,
+      orderId: validatedOrderId,
       status: "incomplete_order",
     };
   } catch (err) {

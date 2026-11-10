@@ -63,6 +63,7 @@ interface FormVariant {
   price: number;
   compare_at_price?: number | null;
   stock_status: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+  initial_stock_status?: string;
   track_inventory: boolean;
   low_stock_threshold: number;
   is_default: boolean;
@@ -177,6 +178,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         price: Number(v.price) || 0,
         compare_at_price: v.compare_at_price ? Number(v.compare_at_price) : null,
         stock_status: v.stock_status || "in_stock",
+        initial_stock_status: v.stock_status || "in_stock",
         track_inventory: v.track_inventory ?? true,
         low_stock_threshold: Number(v.low_stock_threshold) || 5,
         is_default: Boolean(v.is_default) || (!hasDefault && idx === 0),
@@ -461,6 +463,9 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           ...v,
           price: p,
           compare_at_price: cp !== null && cp > p ? cp : null,
+          initial_stock_status: v.initial_stock_status,
+          stock_status_changed:
+            v.initial_stock_status !== undefined && v.stock_status !== v.initial_stock_status,
           is_combo: Boolean(v.is_combo),
           combo_items: v.is_combo
             ? (v.combo_items || []).map((ci, idx) => ({
@@ -471,6 +476,13 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
             : [],
         };
       });
+
+      // Validate combo variants have at least one component before saving
+      for (const v of sanitizedVariants) {
+        if (v.is_combo && (!v.combo_items || v.combo_items.length === 0)) {
+          throw new Error(`Variant "${v.name}" is marked as a combo but has no component products. Please add at least one component.`);
+        }
+      }
 
       const res = await saveProductAction({
         productId: initialData?.id,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +28,15 @@ export function CopyPhoneButton({
   onCopy,
 }: CopyPhoneButtonProps) {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const defaultLabel = label ?? (lang === "bn" ? "নম্বর কপি করুন" : "Copy Number");
   const defaultCopiedLabel = copiedLabel ?? (lang === "bn" ? "নম্বর কপি হয়েছে!" : "Number Copied!");
@@ -40,31 +49,47 @@ export function CopyPhoneButton({
       ? "হটলাইন নম্বর কপি করুন"
       : "Copy phone number";
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(phone);
+      if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API unavailable");
+      }
+      await navigator.clipboard.writeText(phone);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      setCopied(true);
+      toast.success(
+        lang === "bn"
+          ? `হটলাইন নম্বর কপি হয়েছে: ${phone}`
+          : `Phone number copied: ${phone}`,
+        { duration: 2500 }
+      );
+
+      timeoutRef.current = setTimeout(() => {
+        setCopied(false);
+        timeoutRef.current = null;
+      }, 2200);
+
+      if (onCopy) {
+        try {
+          onCopy();
+        } catch (cbErr) {
+          console.error("Error in onCopy callback:", cbErr);
+        }
       }
     } catch {
-      // Fallback
+      toast.error(
+        lang === "bn"
+          ? "নম্বর কপি করা সম্ভব হয়নি"
+          : "Could not copy phone number"
+      );
     }
-
-    setCopied(true);
-    toast.success(
-      lang === "bn"
-        ? `হটলাইন নম্বর কপি হয়েছে: ${phone}`
-        : `Phone number copied: ${phone}`,
-      { duration: 2500 }
-    );
-
-    if (onCopy) onCopy();
-
-    setTimeout(() => {
-      setCopied(false);
-    }, 2200);
   };
 
   const getVariantStyles = () => {

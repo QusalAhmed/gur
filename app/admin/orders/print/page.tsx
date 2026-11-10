@@ -125,9 +125,9 @@ function resolveItemBanglaVariant(it: any): string {
   if (/(?<![\d.])1\s*kg(?![\d.])/i.test(lower)) {
     return "স্ট্যান্ডার্ড প্যাক (১ কেজি)";
   }
-  if (lower.includes("1 pack")) return "১ প্যাক";
-  if (lower.includes("2 pack")) return "২ প্যাক";
-  if (lower.includes("3 pack")) return "৩ প্যাক";
+  if (/(?<![\d.])1\s*pack(?![\d.])/i.test(lower)) return "১ প্যাক";
+  if (/(?<![\d.])2\s*pack(?![\d.])/i.test(lower)) return "২ প্যাক";
+  if (/(?<![\d.])3\s*pack(?![\d.])/i.test(lower)) return "৩ প্যাক";
   return vname;
 }
 

@@ -158,6 +158,18 @@ export function OrderChecklistDialog({
   // Aggregate items across all selected orders
   const consolidatedItems = React.useMemo<ConsolidatedChecklistItem[]>(() => {
     const map = new Map<string, ConsolidatedChecklistItem>();
+    const idToKey = new Map<string, string>();
+    const attrsToKey = new Map<string, string>();
+
+    const resolveKey = (varId: string, attrsKey: string): string => {
+      let key = (varId && idToKey.get(varId)) || attrsToKey.get(attrsKey);
+      if (!key) {
+        key = varId ? `var_${varId}`.toLowerCase() : attrsKey;
+      }
+      if (varId) idToKey.set(varId, key);
+      attrsToKey.set(attrsKey, key);
+      return key;
+    };
 
     for (const order of orders) {
       if (!order.items || !Array.isArray(order.items)) continue;
@@ -173,7 +185,9 @@ export function OrderChecklistDialog({
             const compProdName = (comp.product_name || "Unknown Product").trim();
             const compVarName = (comp.variant_name || "").trim();
             const compSku = (comp.sku || "").trim();
-            const key = `${compProdName}___${compVarName}___${compSku}`.toLowerCase();
+            const compVarId = comp.component_variant_id ? String(comp.component_variant_id).trim() : "";
+            const compAttrsKey = `${compProdName}___${compVarName}___${compSku}`.toLowerCase();
+            const key = resolveKey(compVarId, compAttrsKey);
 
             const singleCompQty = Number(comp.quantity) || 1;
             const totalCompQty = singleCompQty * comboQty;
@@ -217,7 +231,9 @@ export function OrderChecklistDialog({
           const prodName = (item.product_name || "Unknown Product").trim();
           const variantName = (item.variant_name || "").trim();
           const sku = (item.sku || "").trim();
-          const key = `${prodName}___${variantName}___${sku}`.toLowerCase();
+          const itemVarId = item.variant_id ? String(item.variant_id).trim() : "";
+          const itemAttrsKey = `${prodName}___${variantName}___${sku}`.toLowerCase();
+          const key = resolveKey(itemVarId, itemAttrsKey);
 
           const qty = Number(item.quantity) || 1;
           const unitWeight = extractUnitWeightKg(variantName, prodName, sku);

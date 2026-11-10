@@ -15,6 +15,8 @@ export interface SaveProductVariantInput {
   price: number;
   compare_at_price?: number | null;
   stock_status: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+  initial_stock_status?: string;
+  stock_status_changed?: boolean;
   track_inventory?: boolean;
   low_stock_threshold?: number;
   is_default?: boolean;
@@ -96,6 +98,31 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     }
     if (!params.variants || params.variants.length === 0) {
       return { success: false, error: "At least one packaging variant is required." };
+    }
+
+    // Validate combo variants across params.variants before step 1 writes anything
+    for (const v of params.variants) {
+      if (v.is_combo) {
+        if (!v.combo_items || v.combo_items.length === 0) {
+          return {
+            success: false,
+            error: `Combo variant "${v.name}" must have at least one component.`,
+          };
+        }
+        const compIds = v.combo_items.map((ci) => ci.component_variant_id);
+        if (v.id && compIds.some((cid) => cid === v.id)) {
+          return {
+            success: false,
+            error: `Combo variant "${v.name}" cannot include itself as a component.`,
+          };
+        }
+        if (new Set(compIds).size !== compIds.length) {
+          return {
+            success: false,
+            error: `Combo variant "${v.name}" has duplicate component items. Each component must be unique.`,
+          };
+        }
+      }
     }
 
     const now = new Date().toISOString();
@@ -267,8 +294,16 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       };
 
       let variantId = v.id;
+      let previousStockStatus: string | null = null;
 
       if (variantId) {
+        const { data: existingVar } = await client
+          .from("product_variants")
+          .select("stock_status")
+          .eq("id", variantId)
+          .maybeSingle();
+        previousStockStatus = existingVar?.stock_status ?? null;
+
         const { error: vUpdateErr } = await client
           .from("product_variants")
           .update(variantPayload)
@@ -300,8 +335,27 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
 
       // Synchronize combo_items if this variant is a combo
       if (isComboVariant && variantId) {
-        // Remove existing items first
-        await client.from("combo_items").delete().eq("combo_variant_id", variantId);
+        // Preserve prior recipe rows for safe rollback
+        const { data: priorRecipeRows, error: fetchPriorErr } = await client
+          .from("combo_items")
+          .select("combo_variant_id, component_variant_id, quantity, sort_order")
+          .eq("combo_variant_id", variantId);
+
+        if (fetchPriorErr) {
+          return {
+            success: false,
+            error: `Failed to inspect prior combo items: ${fetchPriorErr.message}`,
+          };
+        }
+
+        // Remove existing items first and check for delete failure
+        const { error: ciDelErr } = await client.from("combo_items").delete().eq("combo_variant_id", variantId);
+        if (ciDelErr) {
+          return {
+            success: false,
+            error: `Failed to remove prior combo recipe items: ${ciDelErr.message}`,
+          };
+        }
 
         if (v.combo_items && v.combo_items.length > 0) {
           const comboRows = v.combo_items.map((ci, idx) => ({
@@ -312,7 +366,14 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
           }));
           const { error: ciErr } = await client.from("combo_items").insert(comboRows);
           if (ciErr) {
-            console.error("Error inserting combo items:", ciErr);
+            // Restore prior recipe on failure
+            if (priorRecipeRows && priorRecipeRows.length > 0) {
+              await client.from("combo_items").insert(priorRecipeRows);
+            }
+            return {
+              success: false,
+              error: `Error inserting combo items: ${ciErr.message}`,
+            };
           }
         }
 
@@ -323,6 +384,13 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
 
         const availableUnits = Number(virtStock) || 0;
         if (defaultWarehouseId) {
+          const { data: existingLevel } = await client
+            .from("inventory_levels")
+            .select("reserved")
+            .eq("variant_id", variantId)
+            .eq("warehouse_id", defaultWarehouseId)
+            .maybeSingle();
+
           await client
             .from("inventory_levels")
             .upsert(
@@ -330,7 +398,7 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
                 variant_id: variantId,
                 warehouse_id: defaultWarehouseId,
                 on_hand: availableUnits,
-                reserved: 0,
+                reserved: existingLevel?.reserved ?? 0,
                 updated_at: now,
               },
               { onConflict: "variant_id,warehouse_id" }
@@ -352,6 +420,13 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
 
         // Standard warehouse inventory level synchronization
         if (defaultWarehouseId) {
+          const { data: existingLevel } = await client
+            .from("inventory_levels")
+            .select("on_hand, reserved")
+            .eq("variant_id", variantId)
+            .eq("warehouse_id", defaultWarehouseId)
+            .maybeSingle();
+
           let onHandQty = 100;
           let allowBackorder = false;
 
@@ -369,22 +444,54 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
             allowBackorder = false;
           }
 
-          // Upsert inventory level
-          await client
-            .from("inventory_levels")
-            .upsert(
-              {
-                variant_id: variantId,
-                warehouse_id: defaultWarehouseId,
-                on_hand: onHandQty,
-                reserved: 0,
-                updated_at: now,
-              },
-              { onConflict: "variant_id,warehouse_id" }
-            );
+          if (!existingLevel) {
+            // Initialize on_hand only for brand new row
+            const { error: insLevelErr } = await client.from("inventory_levels").insert({
+              variant_id: variantId,
+              warehouse_id: defaultWarehouseId,
+              on_hand: onHandQty,
+              reserved: 0,
+              updated_at: now,
+            });
+            if (insLevelErr) {
+              return {
+                success: false,
+                error: `Failed to initialize inventory level for variant "${v.name}": ${insLevelErr.message}`,
+              };
+            }
+          } else {
+            // Apply calculated onHandQty only when stock status selection has changed, preserving reserved value
+            const hasStockStatusChanged =
+              v.stock_status_changed !== undefined
+                ? v.stock_status_changed
+                : v.initial_stock_status !== undefined
+                ? variantStockStatus !== v.initial_stock_status
+                : previousStockStatus !== null && variantStockStatus !== previousStockStatus;
+
+            const updatePayload: Record<string, any> = {
+              updated_at: now,
+            };
+
+            if (hasStockStatusChanged) {
+              updatePayload.on_hand = onHandQty;
+            }
+
+            const { error: updLevelErr } = await client
+              .from("inventory_levels")
+              .update(updatePayload)
+              .eq("variant_id", variantId)
+              .eq("warehouse_id", defaultWarehouseId);
+
+            if (updLevelErr) {
+              return {
+                success: false,
+                error: `Failed to update inventory level for variant "${v.name}": ${updLevelErr.message}`,
+              };
+            }
+          }
 
           // Update allow_backorder and track_inventory
-          await client
+          const { error: updVarErr } = await client
             .from("product_variants")
             .update({
               allow_backorder: allowBackorder,
@@ -392,6 +499,13 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
               updated_at: now,
             })
             .eq("id", variantId);
+
+          if (updVarErr) {
+            return {
+              success: false,
+              error: `Failed to update variant stock settings for "${v.name}": ${updVarErr.message}`,
+            };
+          }
         }
       }
     }

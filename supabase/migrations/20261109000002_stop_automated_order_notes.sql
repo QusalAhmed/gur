@@ -356,7 +356,7 @@ BEGIN
                '{other_order_numbers}',
                to_jsonb(v_other_order_numbers)
              ),
-             '{zero_items_phone_order}', (v_item_count = 0)
+             '{zero_items_phone_order}', to_jsonb(v_item_count = 0)
            ),
            updated_at               = now()
      WHERE id = v_order_id;

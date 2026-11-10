@@ -80,14 +80,19 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
       .map((v) => v.id);
 
     const comboItemsMap = new Map<string, any[]>();
+    let comboQueryFailed = false;
+
     if (comboVariantIds.length > 0) {
-      const { data: comboRows } = await client
+      const { data: comboRows, error: comboErr } = await client
         .from("combo_items")
         .select("*, component:product_variants!combo_items_component_variant_id_fkey(*, product:products(name, name_bn))")
         .in("combo_variant_id", comboVariantIds)
         .order("sort_order", { ascending: true });
 
-      if (comboRows) {
+      if (comboErr) {
+        console.error("Failed to query combo_items for storefront products:", comboErr);
+        comboQueryFailed = true;
+      } else if (comboRows) {
         for (const row of comboRows) {
           const list = comboItemsMap.get(row.combo_variant_id) || [];
           list.push({
@@ -108,6 +113,13 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     if (varRes.data) {
       for (const v of varRes.data) {
         if (v.is_active === false) continue;
+        // Omit combo variant if recipe query failed or recipe data is missing
+        if (v.is_combo) {
+          const recipe = comboItemsMap.get(v.id);
+          if (comboQueryFailed || !recipe || recipe.length === 0) {
+            continue;
+          }
+        }
         const list = variantsByProduct.get(v.product_id) || [];
         list.push({
           id: v.id,
@@ -144,54 +156,48 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     }
 
     if (prodRes.data && prodRes.data.length > 0) {
-      realProducts = prodRes.data.map((p) => {
-        const productImgs = imagesByProduct.get(p.id) || [];
-        const resolvedImgs =
-          productImgs.length > 0 ? productImgs : [resolveProductImage()];
-        const primaryImg = resolvedImgs[0];
-        const rawVariants = variantsByProduct.get(p.id) || [];
-        const variants = (
-          rawVariants.length > 0
-            ? rawVariants
-            : [
-              {
-                id: `v-${p.id}`,
-                name: "1 Pack",
-                nameBn: "১ প্যাক",
-                price: 700,
-                isDefault: true,
-                sortOrder: 0,
-              },
-            ]
-        ).sort((a, b) => {
-          if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
-            return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      realProducts = prodRes.data
+        .map((p) => {
+          const rawVariants = variantsByProduct.get(p.id) || [];
+          // If product has no active valid variants, omit product rather than generating synthetic fallback
+          if (rawVariants.length === 0) {
+            return null;
           }
-          return Number(a.price) - Number(b.price);
-        });
 
-        // Ensure exactly one variant has isDefault: true
-        const defaultIndex = variants.findIndex((v) => v.isDefault);
-        const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
-        variants.forEach((v, idx) => {
-          v.isDefault = idx === resolvedDefaultIndex;
-        });
+          const productImgs = imagesByProduct.get(p.id) || [];
+          const resolvedImgs =
+            productImgs.length > 0 ? productImgs : [resolveProductImage()];
+          const primaryImg = resolvedImgs[0];
+          const variants = [...rawVariants].sort((a, b) => {
+            if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+              return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+            }
+            return Number(a.price) - Number(b.price);
+          });
 
-        return {
-          id: p.id,
-          slug: (p as any).slug || undefined,
-          name: p.name,
-          nameBn: p.name_bn || p.name,
-          summary: p.summary,
-          summaryBn: p.summary_bn,
-          image: primaryImg,
-          images: resolvedImgs,
-          origin: p.origin,
-          ratingAvg: Number(p.rating_avg) || 5,
-          ratingCount: Number(p.rating_count) || 1,
-          variants,
-        };
-      });
+          // Ensure exactly one variant has isDefault: true
+          const defaultIndex = variants.findIndex((v) => v.isDefault);
+          const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
+          variants.forEach((v, idx) => {
+            v.isDefault = idx === resolvedDefaultIndex;
+          });
+
+          return {
+            id: p.id,
+            slug: (p as any).slug || undefined,
+            name: p.name,
+            nameBn: p.name_bn || p.name,
+            summary: p.summary,
+            summaryBn: p.summary_bn,
+            image: primaryImg,
+            images: resolvedImgs,
+            origin: p.origin,
+            ratingAvg: Number(p.rating_avg) || 5,
+            ratingCount: Number(p.rating_count) || 1,
+            variants,
+          };
+        })
+        .filter((p): p is any => p !== null);
     }
   } catch (err) {
     console.error("Error fetching real products from Supabase DB in actions/storefront-products.ts:", err);

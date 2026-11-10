@@ -274,7 +274,9 @@ async function enrichOrderItemsWithCombos(client: any, rawOrders: any[]) {
       for (const o of rawOrders) {
         if (!o || !Array.isArray(o.order_items)) continue;
         for (const it of o.order_items) {
-          if (it.variant_id && comboRecipeMap.has(it.variant_id)) {
+          const hasExistingSnapshot =
+            Array.isArray(it.combo_components) && it.combo_components.length > 0;
+          if (!hasExistingSnapshot && it.variant_id && comboRecipeMap.has(it.variant_id)) {
             it.is_combo = true;
             it.combo_components = comboRecipeMap.get(it.variant_id);
           }

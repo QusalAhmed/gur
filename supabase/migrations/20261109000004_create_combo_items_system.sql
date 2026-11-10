@@ -32,7 +32,9 @@ CREATE INDEX IF NOT EXISTS idx_combo_items_component_variant ON public.combo_ite
 
 -- Permissions & RLS for combo_items
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.combo_items TO anon, authenticated, service_role;
+REVOKE INSERT, UPDATE, DELETE ON public.combo_items FROM anon, authenticated;
+GRANT SELECT ON public.combo_items TO anon, authenticated, service_role;
+GRANT INSERT, UPDATE, DELETE ON public.combo_items TO authenticated, service_role;
 
 ALTER TABLE public.combo_items ENABLE ROW LEVEL SECURITY;
 
@@ -40,23 +42,26 @@ DROP POLICY IF EXISTS combo_items_select_all ON public.combo_items;
 DROP POLICY IF EXISTS combo_items_insert_all ON public.combo_items;
 DROP POLICY IF EXISTS combo_items_update_all ON public.combo_items;
 DROP POLICY IF EXISTS combo_items_delete_all ON public.combo_items;
+DROP POLICY IF EXISTS combo_items_insert_admin ON public.combo_items;
+DROP POLICY IF EXISTS combo_items_update_admin ON public.combo_items;
+DROP POLICY IF EXISTS combo_items_delete_admin ON public.combo_items;
 
 CREATE POLICY combo_items_select_all ON public.combo_items
   FOR SELECT TO anon, authenticated, service_role
   USING (true);
 
-CREATE POLICY combo_items_insert_all ON public.combo_items
-  FOR INSERT TO anon, authenticated, service_role
-  WITH CHECK (true);
+CREATE POLICY combo_items_insert_admin ON public.combo_items
+  FOR INSERT TO authenticated, service_role
+  WITH CHECK ((select private.can_manage_content()) or (select private.is_admin()));
 
-CREATE POLICY combo_items_update_all ON public.combo_items
-  FOR UPDATE TO anon, authenticated, service_role
-  USING (true)
-  WITH CHECK (true);
+CREATE POLICY combo_items_update_admin ON public.combo_items
+  FOR UPDATE TO authenticated, service_role
+  USING ((select private.can_manage_content()) or (select private.is_admin()))
+  WITH CHECK ((select private.can_manage_content()) or (select private.is_admin()));
 
-CREATE POLICY combo_items_delete_all ON public.combo_items
-  FOR DELETE TO anon, authenticated, service_role
-  USING (true);
+CREATE POLICY combo_items_delete_admin ON public.combo_items
+  FOR DELETE TO authenticated, service_role
+  USING ((select private.can_manage_content()) or (select private.is_admin()));
 
 -- =============================================================================
 -- 2. SCHEMA CHANGES: order_items
@@ -142,6 +147,27 @@ GRANT EXECUTE ON FUNCTION public.get_combo_variant_available_stock(uuid) TO anon
 -- 4. STOCK RESERVATION & RELEASE ROUTINES
 -- =============================================================================
 
+CREATE TABLE IF NOT EXISTS public.order_stock_reservations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  variant_id uuid NOT NULL REFERENCES public.product_variants(id) ON DELETE CASCADE,
+  warehouse_id uuid NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,
+  quantity numeric(12,3) NOT NULL CHECK (quantity > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT order_stock_reservations_unique UNIQUE (order_id, variant_id, warehouse_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_stock_reservations_order_id ON public.order_stock_reservations(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_stock_reservations_variant_id ON public.order_stock_reservations(variant_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.order_stock_reservations TO service_role;
+GRANT SELECT ON public.order_stock_reservations TO authenticated;
+ALTER TABLE public.order_stock_reservations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS order_stock_reservations_read ON public.order_stock_reservations;
+CREATE POLICY order_stock_reservations_read ON public.order_stock_reservations
+  FOR SELECT TO authenticated USING ((select private.can_manage_content()) or (select private.is_admin()));
+
 CREATE OR REPLACE FUNCTION private.reserve_order_stock(p_order_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -171,6 +197,11 @@ BEGIN
           FROM jsonb_array_elements(v_item.combo_components) AS c
       LOOP
         IF v_comp.comp_var_id IS NOT NULL AND v_comp.comp_qty > 0 THEN
+          INSERT INTO public.order_stock_reservations (order_id, variant_id, warehouse_id, quantity)
+          VALUES (p_order_id, v_comp.comp_var_id, v_wh, v_item.quantity * v_comp.comp_qty)
+          ON CONFLICT (order_id, variant_id, warehouse_id)
+          DO UPDATE SET quantity = public.order_stock_reservations.quantity + (v_item.quantity * v_comp.comp_qty);
+
           INSERT INTO public.inventory_levels (variant_id, warehouse_id, reserved)
           VALUES (v_comp.comp_var_id, v_wh, v_item.quantity * v_comp.comp_qty)
           ON CONFLICT (variant_id, warehouse_id)
@@ -180,6 +211,11 @@ BEGIN
       END LOOP;
     ELSIF v_item.variant_id IS NOT NULL THEN
       -- Standard variant reservation
+      INSERT INTO public.order_stock_reservations (order_id, variant_id, warehouse_id, quantity)
+      VALUES (p_order_id, v_item.variant_id, v_wh, v_item.quantity)
+      ON CONFLICT (order_id, variant_id, warehouse_id)
+      DO UPDATE SET quantity = public.order_stock_reservations.quantity + v_item.quantity;
+
       INSERT INTO public.inventory_levels (variant_id, warehouse_id, reserved)
       VALUES (v_item.variant_id, v_wh, v_item.quantity)
       ON CONFLICT (variant_id, warehouse_id)
@@ -197,38 +233,19 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_wh   uuid;
-  v_item record;
-  v_comp record;
+  v_res record;
 BEGIN
-  SELECT id INTO v_wh FROM public.warehouses WHERE is_default AND is_active LIMIT 1;
-  IF v_wh IS NULL THEN
-    RETURN;
-  END IF;
-
-  FOR v_item IN
-    SELECT oi.id, oi.variant_id, oi.quantity, oi.shipped_quantity, oi.is_combo, oi.combo_components
-      FROM public.order_items oi
-     WHERE oi.order_id = p_order_id
+  -- Release inventory ONLY for stock recorded in reservation records belonging to this order
+  FOR v_res IN
+    DELETE FROM public.order_stock_reservations
+     WHERE order_id = p_order_id
+    RETURNING variant_id, warehouse_id, quantity
   LOOP
-    IF v_item.is_combo AND jsonb_typeof(v_item.combo_components) = 'array' AND jsonb_array_length(v_item.combo_components) > 0 THEN
-      FOR v_comp IN
-        SELECT (c ->> 'component_variant_id')::uuid AS comp_var_id,
-               (c ->> 'quantity')::numeric AS comp_qty
-          FROM jsonb_array_elements(v_item.combo_components) AS c
-      LOOP
-        IF v_comp.comp_var_id IS NOT NULL AND v_comp.comp_qty > 0 THEN
-          UPDATE public.inventory_levels
-             SET reserved = greatest(reserved - ((v_item.quantity - v_item.shipped_quantity) * v_comp.comp_qty), 0),
-                 updated_at = now()
-           WHERE variant_id = v_comp.comp_var_id AND warehouse_id = v_wh;
-        END IF;
-      END LOOP;
-    ELSIF v_item.variant_id IS NOT NULL THEN
+    IF v_res.variant_id IS NOT NULL AND v_res.warehouse_id IS NOT NULL AND v_res.quantity > 0 THEN
       UPDATE public.inventory_levels
-         SET reserved = greatest(reserved - (v_item.quantity - v_item.shipped_quantity), 0),
+         SET reserved = greatest(reserved - v_res.quantity, 0),
              updated_at = now()
-       WHERE variant_id = v_item.variant_id AND warehouse_id = v_wh;
+       WHERE variant_id = v_res.variant_id AND warehouse_id = v_res.warehouse_id;
     END IF;
   END LOOP;
 END;
@@ -354,61 +371,6 @@ BEGIN
     v_final_status := 'pending';
   END IF;
 
-  -- 3. Lookup existing order with row-level lock based on phone number and status
-  IF v_final_status = 'pending' THEN
-    SELECT * INTO v_existing
-      FROM public.orders
-     WHERE customer_phone = v_phone
-       AND status = 'pending'
-     ORDER BY created_at DESC
-     LIMIT 1
-     FOR UPDATE;
-
-    IF v_existing.id IS NOT NULL THEN
-      v_was_pending := true;
-    END IF;
-
-    IF v_existing.id IS NULL THEN
-      SELECT * INTO v_existing
-        FROM public.orders
-       WHERE customer_phone = v_phone
-         AND status = 'incomplete_order'
-       ORDER BY created_at DESC
-       LIMIT 1
-       FOR UPDATE;
-
-      IF v_existing.id IS NOT NULL THEN
-        v_was_incomplete := true;
-      END IF;
-    END IF;
-  ELSE
-    SELECT * INTO v_existing
-      FROM public.orders
-     WHERE customer_phone = v_phone
-       AND status = 'incomplete_order'
-     ORDER BY created_at DESC
-     LIMIT 1
-     FOR UPDATE;
-
-    IF v_existing.id IS NULL THEN
-      SELECT * INTO v_existing
-        FROM public.orders
-       WHERE customer_phone = v_phone
-         AND status = 'pending'
-       ORDER BY created_at DESC
-       LIMIT 1
-       FOR UPDATE;
-
-      IF v_existing.id IS NOT NULL THEN
-        v_was_pending := true;
-      END IF;
-    END IF;
-  END IF;
-
-  IF v_existing.id IS NOT NULL AND v_existing.status::text = 'pending' AND v_final_status = 'incomplete_order' THEN
-    v_final_status := 'pending';
-  END IF;
-
   -- Rule 3 check: Check for any other existing orders with this phone number
   SELECT coalesce(array_agg(o.order_number ORDER BY o.created_at DESC), '{}'),
          coalesce(jsonb_agg(jsonb_build_object(
@@ -433,10 +395,112 @@ BEGIN
     INTO v_other_order_numbers, v_other_orders_json
     FROM public.orders o
    WHERE o.customer_phone = v_phone
-     AND (v_existing.id IS NULL OR o.id <> v_existing.id);
+     AND (p_order_id IS NULL OR o.id <> p_order_id);
 
   IF array_length(v_other_order_numbers, 1) > 0 THEN
     v_has_other_orders := true;
+  END IF;
+
+  -- 3. Lookup existing order with row-level lock based on phone number and status
+  IF v_final_status = 'incomplete_order' THEN
+    -- A queued draft save MUST NOT overwrite an existing pending order.
+    SELECT * INTO v_existing
+      FROM public.orders
+     WHERE (p_order_id IS NOT NULL AND id = p_order_id AND status = 'pending')
+        OR (customer_phone = v_phone AND status = 'pending')
+     ORDER BY created_at DESC
+     LIMIT 1;
+
+    IF v_existing.id IS NOT NULL THEN
+      -- Return existing pending order safely without modifying line items, totals, or stock
+      RETURN jsonb_build_object(
+        'success', true,
+        'order_id', v_existing.id,
+        'order_number', v_existing.order_number,
+        'status', 'pending',
+        'grand_total', v_existing.grand_total,
+        'subtotal', v_existing.subtotal,
+        'shipping_total', v_existing.shipping_total,
+        'customer_name', v_existing.customer_name,
+        'phone', v_existing.customer_phone,
+        'item_count', 0,
+        'was_pending_updated', false,
+        'was_incomplete_upgraded', false,
+        'has_other_orders', v_has_other_orders,
+        'other_order_numbers', to_jsonb(v_other_order_numbers)
+      );
+    END IF;
+
+    -- Lookup existing incomplete_order to update
+    IF p_order_id IS NOT NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE id = p_order_id AND status = 'incomplete_order'
+       LIMIT 1
+       FOR UPDATE;
+    END IF;
+
+    IF v_existing.id IS NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE customer_phone = v_phone
+         AND status = 'incomplete_order'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE;
+    END IF;
+
+    IF v_existing.id IS NOT NULL THEN
+      v_was_incomplete := true;
+    END IF;
+
+  ELSE
+    -- Explicit submission / resubmission (p_status = 'pending')
+    -- If updating by p_order_id: strictly select only pending or incomplete_order
+    IF p_order_id IS NOT NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE id = p_order_id
+         AND status IN ('pending', 'incomplete_order')
+       LIMIT 1
+       FOR UPDATE;
+
+      IF v_existing.id IS NOT NULL THEN
+        IF v_existing.status = 'pending' THEN
+          v_was_pending := true;
+        ELSIF v_existing.status = 'incomplete_order' THEN
+          v_was_incomplete := true;
+        END IF;
+      END IF;
+    END IF;
+
+    IF v_existing.id IS NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE customer_phone = v_phone
+         AND status = 'pending'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE;
+
+      IF v_existing.id IS NOT NULL THEN
+        v_was_pending := true;
+      END IF;
+    END IF;
+
+    IF v_existing.id IS NULL THEN
+      SELECT * INTO v_existing
+        FROM public.orders
+       WHERE customer_phone = v_phone
+         AND status = 'incomplete_order'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE;
+
+      IF v_existing.id IS NOT NULL THEN
+        v_was_incomplete := true;
+      END IF;
+    END IF;
   END IF;
 
   -- 4. Customer Data SSOT
@@ -629,7 +693,7 @@ BEGIN
       attribution = jsonb_build_object(
         'source', 'direct_storefront_web',
         'client_timestamp', now()::text,
-        'zero_items_phone_order', (v_item_count = 0),
+        'zero_items_phone_order', to_jsonb(v_item_count = 0),
         'last_sync_status', v_final_status,
         'was_pending_updated', v_was_pending,
         'was_incomplete_upgraded', v_was_incomplete,
@@ -684,7 +748,7 @@ BEGIN
       jsonb_build_object(
         'source', 'direct_storefront_web',
         'client_timestamp', now()::text,
-        'zero_items_phone_order', (v_item_count = 0),
+        'zero_items_phone_order', to_jsonb(v_item_count = 0),
         'initial_status', v_final_status,
         'has_other_orders', v_has_other_orders,
         'other_order_numbers', to_jsonb(v_other_order_numbers),
@@ -741,24 +805,8 @@ BEGIN
     END IF;
   END IF;
 
-  -- 8. Log Notes & Events
+  -- 8. Log Events (No automated order_notes inserted)
   IF v_was_incomplete AND v_final_status = 'pending' THEN
-    INSERT INTO public.order_notes (
-      order_id,
-      order_number,
-      type,
-      author,
-      note,
-      created_at
-    ) VALUES (
-      v_order_id,
-      v_order_number,
-      'system',
-      'System',
-      'Incomplete order upgraded to pending upon customer order submission (' || v_item_count::text || ' items, total ৳' || v_grand_total::text || ')',
-      now()
-    );
-
     INSERT INTO public.order_events (order_id, event_type, from_value, to_value, message)
     VALUES (
       v_order_id,
@@ -766,22 +814,6 @@ BEGIN
       'incomplete_order',
       'pending',
       'Incomplete order upgraded to pending upon customer order submission'
-    );
-  ELSIF v_was_pending AND v_final_status = 'pending' THEN
-    INSERT INTO public.order_notes (
-      order_id,
-      order_number,
-      type,
-      author,
-      note,
-      created_at
-    ) VALUES (
-      v_order_id,
-      v_order_number,
-      'system',
-      'System',
-      'Customer re-submitted order form. Updated delivery details/items (' || v_item_count::text || ' items, total ৳' || v_grand_total::text || ')',
-      now()
     );
   END IF;
 

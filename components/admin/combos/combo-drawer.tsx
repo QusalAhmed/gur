@@ -58,7 +58,6 @@ interface ComponentItemState {
   unitPrice: number;
   quantity: number;
   physicalStock: number;
-  otherCombosCount: number;
 }
 
 export function ComboDrawer({
@@ -153,7 +152,6 @@ export function ComboDrawer({
             unitPrice: c.unitPrice,
             quantity: c.quantity,
             physicalStock: c.physicalStock,
-            otherCombosCount: (variantUsageMap.get(c.componentVariantId) || []).length,
           }))
         );
         setMode("new");
@@ -172,7 +170,7 @@ export function ComboDrawer({
       }
       setSelectedVariantToAdd("");
     }
-  }, [isOpen, combo, variantUsageMap]);
+  }, [isOpen, combo]);
 
   // Auto-generate slug when name changes in "new" mode
   const handleNameChange = (val: string) => {
@@ -229,7 +227,6 @@ export function ComboDrawer({
         unitPrice: item.price,
         quantity: 1,
         physicalStock: 100, // will be resolved server-side
-        otherCombosCount: otherCombos.length,
       },
     ]);
 
@@ -602,11 +599,14 @@ export function ComboDrawer({
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-muted-foreground mt-0.5 text-[11px]">
                         <span>Unit: ৳{comp.unitPrice}</span>
-                        {comp.otherCombosCount > 0 && (
-                          <span className="text-amber-700 dark:text-amber-400 font-medium">
-                            • In {comp.otherCombosCount} other {comp.otherCombosCount === 1 ? "combo" : "combos"}
-                          </span>
-                        )}
+                        {(() => {
+                          const otherCombosCount = (variantUsageMap.get(comp.componentVariantId) || []).length;
+                          return otherCombosCount > 0 ? (
+                            <span className="text-amber-700 dark:text-amber-400 font-medium">
+                              • In {otherCombosCount} other {otherCombosCount === 1 ? "combo" : "combos"}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
 
