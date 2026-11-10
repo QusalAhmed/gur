@@ -189,3 +189,15 @@ export function sortNotesNewestFirst<T extends { created_at?: string; id?: strin
   });
 }
 
+/**
+ * Extracts and normalizes an inquiry/session reference token from text (e.g. pasted WhatsApp message).
+ * Uppercases matched ref tokens (e.g. #W-ABCD or P-1234), while stripping surrounding formatting
+ * and preserving original casing for unmatched reference strings.
+ */
+export function extractRefToken(input: string): string {
+  const match = input.match(/[#]?[WwPp]-[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?/);
+  if (match) return match[0].toUpperCase();
+  return input.trim().replace(/^[*_~`]+|[*_~`]+$/g, "").trim();
+}
+
+

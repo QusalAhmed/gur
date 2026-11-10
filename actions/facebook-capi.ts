@@ -703,31 +703,158 @@ export async function sendCapiContactAction(params: {
     if (params.refCode) {
       try {
         const cleanRef = params.refCode.replace(/^#/, "").trim().toUpperCase();
-        const client = supabaseAdmin || supabase;
-        await client.from("storefront_inquiries").upsert(
-          {
-            ref_code: cleanRef,
-            channel: params.channel || "whatsapp",
-            customer_phone: params.phone || null,
-            fbp: userData.fbp || null,
-            fbc: userData.fbc || null,
-            client_ip: userData.client_ip_address || null,
-            user_agent: userData.client_user_agent || null,
-            event_source_url: eventSourceUrl || null,
-            meta_tracking: {
+        if (cleanRef) {
+          const client = supabaseAdmin || supabase;
+
+          const isSessionAuthorized = (
+            existingFbp: string | null | undefined,
+            callerFbp: string | null | undefined
+          ) => {
+            if (existingFbp) {
+              return Boolean(callerFbp && existingFbp === callerFbp);
+            }
+            return true;
+          };
+
+          // Fetch existing inquiry to inspect stored fields and verify originating session
+          const { data: existingInq, error: readErr } = await client
+            .from("storefront_inquiries")
+            .select("id, channel, customer_phone, fbp, fbc, event_source_url, client_ip, user_agent, meta_tracking")
+            .eq("ref_code", cleanRef)
+            .maybeSingle();
+
+          // Ensure a failed read prevents overwriting stored values
+          if (readErr) {
+            console.warn("[CAPI Action] Failed to read storefront inquiry for ref_code:", cleanRef, readErr);
+          } else if (existingInq) {
+            // Verify originating session: ensure callers cannot modify inquiries from other sessions
+            if (!isSessionAuthorized(existingInq.fbp, userData.fbp)) {
+              console.warn(
+                `[CAPI Action] Session mismatch for inquiry ${cleanRef}: update rejected (caller fbp does not match originating session)`
+              );
+            } else {
+              const mergedPhone = params.phone || existingInq.customer_phone || null;
+              const mergedFbp = userData.fbp || existingInq.fbp || null;
+              const mergedFbc = userData.fbc || existingInq.fbc || null;
+              const mergedUrl = eventSourceUrl || existingInq.event_source_url || null;
+              const mergedIp = userData.client_ip_address || existingInq.client_ip || null;
+              const mergedUa = userData.client_user_agent || existingInq.user_agent || null;
+
+              const existingMeta =
+                existingInq.meta_tracking && typeof existingInq.meta_tracking === "object"
+                  ? (existingInq.meta_tracking as Record<string, any>)
+                  : {};
+
+              const { error: updateErr } = await client
+                .from("storefront_inquiries")
+                .update({
+                  channel: params.channel || existingInq.channel || "whatsapp",
+                  customer_phone: mergedPhone,
+                  fbp: mergedFbp,
+                  fbc: mergedFbc,
+                  client_ip: mergedIp,
+                  user_agent: mergedUa,
+                  event_source_url: mergedUrl,
+                  meta_tracking: {
+                    ...existingMeta,
+                    fbp: mergedFbp,
+                    fbc: mergedFbc,
+                    client_ip_address: mergedIp,
+                    client_user_agent: mergedUa,
+                    event_source_url: mergedUrl,
+                    ref_code: cleanRef,
+                    channel: params.channel || existingMeta.channel || "whatsapp",
+                    updated_at: new Date().toISOString(),
+                  },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingInq.id);
+
+              if (updateErr) {
+                console.warn("[CAPI Action] Failed to update storefront inquiry:", updateErr);
+              }
+            }
+          } else {
+            // Insert new inquiry; handle concurrent insertion race safely on ref_code unique constraint
+            const { error: insErr } = await client.from("storefront_inquiries").insert({
+              ref_code: cleanRef,
+              channel: params.channel || "whatsapp",
+              customer_phone: params.phone || null,
               fbp: userData.fbp || null,
               fbc: userData.fbc || null,
-              client_ip_address: userData.client_ip_address || null,
-              client_user_agent: userData.client_user_agent || null,
+              client_ip: userData.client_ip_address || null,
+              user_agent: userData.client_user_agent || null,
               event_source_url: eventSourceUrl || null,
-              ref_code: cleanRef,
-              channel: params.channel,
-              created_at: new Date().toISOString(),
-            },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "ref_code", ignoreDuplicates: true }
-        );
+              meta_tracking: {
+                fbp: userData.fbp || null,
+                fbc: userData.fbc || null,
+                client_ip_address: userData.client_ip_address || null,
+                client_user_agent: userData.client_user_agent || null,
+                event_source_url: eventSourceUrl || null,
+                ref_code: cleanRef,
+                channel: params.channel || "whatsapp",
+                created_at: new Date().toISOString(),
+              },
+              updated_at: new Date().toISOString(),
+            });
+
+            // Handle concurrent insertion race condition on ref_code unique constraint
+            if (insErr) {
+              if (insErr.code === "23505" || insErr.message?.includes("duplicate key")) {
+                const { data: raceInq, error: raceReadErr } = await client
+                  .from("storefront_inquiries")
+                  .select("id, channel, customer_phone, fbp, fbc, event_source_url, client_ip, user_agent, meta_tracking")
+                  .eq("ref_code", cleanRef)
+                  .maybeSingle();
+
+                if (!raceReadErr && raceInq) {
+                  if (!isSessionAuthorized(raceInq.fbp, userData.fbp)) {
+                    console.warn(
+                      `[CAPI Action] Session mismatch on concurrent inquiry insert for ${cleanRef}: update rejected`
+                    );
+                  } else {
+                    const raceMeta =
+                      raceInq.meta_tracking && typeof raceInq.meta_tracking === "object"
+                        ? (raceInq.meta_tracking as Record<string, any>)
+                        : {};
+
+                    const { error: raceUpdateErr } = await client
+                      .from("storefront_inquiries")
+                      .update({
+                        customer_phone: params.phone || raceInq.customer_phone || null,
+                        fbp: userData.fbp || raceInq.fbp || null,
+                        fbc: userData.fbc || raceInq.fbc || null,
+                        client_ip: userData.client_ip_address || raceInq.client_ip || null,
+                        user_agent: userData.client_user_agent || raceInq.user_agent || null,
+                        event_source_url: eventSourceUrl || raceInq.event_source_url || null,
+                        meta_tracking: {
+                          ...raceMeta,
+                          fbp: userData.fbp || raceInq.fbp || null,
+                          fbc: userData.fbc || raceInq.fbc || null,
+                          client_ip_address: userData.client_ip_address || raceInq.client_ip || null,
+                          client_user_agent: userData.client_user_agent || raceInq.user_agent || null,
+                          event_source_url: eventSourceUrl || raceInq.event_source_url || null,
+                          ref_code: cleanRef,
+                          updated_at: new Date().toISOString(),
+                        },
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("id", raceInq.id);
+
+                    if (raceUpdateErr) {
+                      console.warn(
+                        "[CAPI Action] Failed to update inquiry during race recovery:",
+                        raceUpdateErr
+                      );
+                    }
+                  }
+                }
+              } else {
+                console.warn("[CAPI Action] Failed to insert inquiry:", insErr);
+              }
+            }
+          }
+        }
       } catch (inqErr) {
         console.warn("[CAPI Action] Failed to persist storefront inquiry:", inqErr);
       }
@@ -811,9 +938,13 @@ export async function enrichOrderMetaTrackingAction(params: {
         ? (attr.meta_tracking as Record<string, any>)
         : {};
 
+    const hasSentPurchase = Boolean(existingMeta.purchase_event_sent_at);
     const enrichedMeta = {
       ...existingMeta,
-      purchase_event_id: params.eventId || existingMeta.purchase_event_id || null,
+      purchase_event_id:
+        hasSentPurchase && existingMeta.purchase_event_id
+          ? existingMeta.purchase_event_id
+          : params.eventId || existingMeta.purchase_event_id || null,
       event_id:
         params.eventId ||
         existingMeta.event_id ||

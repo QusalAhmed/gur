@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export interface ComboComponentDetail {
   id: string;
@@ -95,6 +96,7 @@ export async function fetchCombosListAction(): Promise<ComboItemView[]> {
         price,
         compare_at_price,
         stock_status,
+        is_active,
         created_at,
         updated_at,
         product:products (
@@ -133,7 +135,24 @@ export async function fetchCombosListAction(): Promise<ComboItemView[]> {
       }
     }
 
-    // 4. Fetch all combo_items for these combo variants
+    // 4. Fetch all variants for these products to identify mixed vs pure combo products
+    const { data: allProductVariants } = await client
+      .from("product_variants")
+      .select("id, product_id, is_combo")
+      .in("product_id", productIds);
+
+    const nonComboVariantsByProduct = new Map<string, any[]>();
+    if (allProductVariants) {
+      for (const v of allProductVariants) {
+        if (!v.is_combo) {
+          const list = nonComboVariantsByProduct.get(v.product_id) || [];
+          list.push(v);
+          nonComboVariantsByProduct.set(v.product_id, list);
+        }
+      }
+    }
+
+    // 5. Fetch all combo_items for these combo variants
     const { data: comboItems, error: ciErr } = await client
       .from("combo_items")
       .select(`
@@ -278,13 +297,24 @@ export async function fetchCombosListAction(): Promise<ComboItemView[]> {
       const savingsAmount = Math.max(0, regularTotal - comboPrice);
       const savingsPct = regularTotal > 0 ? Math.round((savingsAmount / regularTotal) * 100) : 0;
 
+      const nonComboVars = nonComboVariantsByProduct.get(prod.id) || [];
+      const isPureCombo = nonComboVars.length === 0;
+      const effectiveStatus: "active" | "draft" | "archived" =
+        prod.status === "archived"
+          ? "archived"
+          : isPureCombo
+          ? (prod.status as any) || (cv.is_active ? "active" : "draft")
+          : cv.is_active
+          ? "active"
+          : "draft";
+
       results.push({
         id: prod.id,
         variantId: cv.id,
         name: prod.name,
         nameBn: prod.name_bn,
         slug: prod.slug,
-        status: (prod.status as any) || "draft",
+        status: effectiveStatus,
         sku: cv.sku,
         image: imageMap.get(prod.id),
         price: comboPrice,
@@ -316,12 +346,14 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
   comboId?: string;
   error?: string;
 }> {
-  const client = supabaseAdmin || supabase;
-  const now = new Date().toISOString();
   let demotedVariantIds: string[] = [];
   let createdVariantId: string | null = null;
+  let client: typeof supabaseAdmin | typeof supabase | null = null;
 
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    client = supabaseAdmin || supabase;
+    const now = new Date().toISOString();
     if (!input.name.trim()) {
       return { success: false, error: "Combo name is required." };
     }
@@ -367,16 +399,37 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     demotedVariantIds = [];
 
     if (productId) {
+      // Check if product has non-combo (regular) variants
+      const { data: existingVars, error: fetchVarsErr } = await client
+        .from("product_variants")
+        .select("id, is_combo")
+        .eq("product_id", productId);
+
+      if (fetchVarsErr) {
+        throw new Error(`Failed to check existing product variants: ${fetchVarsErr.message}`);
+      }
+
+      const hasNonComboVariants = (existingVars || []).some(
+        (v) => !v.is_combo && v.id !== variantId
+      );
+
+      const productUpdatePayload: Record<string, any> = {
+        name: input.name.trim(),
+        name_bn: input.nameBn?.trim() || null,
+        slug: cleanSlug,
+        updated_at: now,
+      };
+
+      // Only update product status if it's a pure combo (no regular variants);
+      // for mixed products, preserve parent product's status following toggleComboStatusAction behavior
+      if (!hasNonComboVariants) {
+        productUpdatePayload.status = input.status;
+      }
+
       // Update existing product
       const { error: pErr } = await client
         .from("products")
-        .update({
-          name: input.name.trim(),
-          name_bn: input.nameBn?.trim() || null,
-          slug: cleanSlug,
-          status: input.status,
-          updated_at: now,
-        })
+        .update(productUpdatePayload)
         .eq("id", productId);
 
       if (pErr) throw new Error(pErr.message);
@@ -591,9 +644,10 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     return { success: true, comboId: productId };
   } catch (err: any) {
     console.error("saveComboAction error:", err);
+    const rollbackClient = client || supabaseAdmin || supabase;
     // Delete partially created variant on rollback before restoring demoted defaults
     if (createdVariantId) {
-      const { error: delVarErr } = await client
+      const { error: delVarErr } = await rollbackClient
         .from("product_variants")
         .delete()
         .eq("id", createdVariantId);
@@ -603,7 +657,7 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     }
     // If a subsequent step failed before completion, restore demoted default variants
     if (demotedVariantIds.length > 0 && !input.comboVariantId) {
-      const { error: restoreErr } = await client
+      const { error: restoreErr } = await rollbackClient
         .from("product_variants")
         .update({ is_default: true, updated_at: new Date().toISOString() })
         .in("id", demotedVariantIds);
@@ -622,9 +676,9 @@ export async function toggleComboStatusAction(
   productId: string,
   newStatus: "active" | "draft"
 ): Promise<{ success: boolean; error?: string }> {
-  const client = supabaseAdmin || supabase;
-
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const client = supabaseAdmin || supabase;
     // 1. Verify this product actually has a confirmed combo variant and check for regular variants
     const { data: allVariants, error: checkErr } = await client
       .from("product_variants")
@@ -690,13 +744,13 @@ export async function toggleComboStatusAction(
 export async function deleteComboAction(
   productId: string
 ): Promise<{ success: boolean; archived?: boolean; error?: string }> {
-  const client = supabaseAdmin || supabase;
-
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const client = supabaseAdmin || supabase;
     // 1. Restrict delete action to confirmed combo products only
     const { data: allVariants, error: checkErr } = await client
       .from("product_variants")
-      .select("id, is_combo")
+      .select("id, is_combo, is_default")
       .eq("product_id", productId);
 
     if (checkErr || !allVariants) {
@@ -717,6 +771,7 @@ export async function deleteComboAction(
     }
 
     const comboVariantIds = comboVariants.map((v) => v.id);
+    const hasDefaultRegular = nonComboVariants.some((v) => v.is_default);
 
     // If product has non-combo variants, remove or archive ONLY the combo variants
     if (nonComboVariants.length > 0) {
@@ -726,10 +781,10 @@ export async function deleteComboAction(
         .in("id", comboVariantIds);
 
       if (delVarErr) {
-        // If restricted by foreign keys, archive combo variants by deactivating
+        // If restricted by foreign keys, archive combo variants by deactivating and clearing is_default
         const { error: archVarErr } = await client
           .from("product_variants")
-          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .update({ is_active: false, is_default: false, updated_at: new Date().toISOString() })
           .in("id", comboVariantIds);
 
         if (archVarErr) {
@@ -739,12 +794,34 @@ export async function deleteComboAction(
           };
         }
 
+        // Promote first remaining regular variant only if no regular variant is already default
+        if (!hasDefaultRegular) {
+          const { error: promoErr } = await client
+            .from("product_variants")
+            .update({ is_default: true, updated_at: new Date().toISOString() })
+            .eq("id", nonComboVariants[0].id);
+          if (promoErr) {
+            console.error("Failed to promote regular variant to default on combo archival:", promoErr);
+          }
+        }
+
         revalidatePath("/admin/combos");
         revalidatePath("/admin/products");
         revalidatePath("/");
         revalidateTag("storefront-products", "max");
 
         return { success: true, archived: true };
+      }
+
+      // Promote first remaining regular variant only if no regular variant is already default
+      if (!hasDefaultRegular) {
+        const { error: promoErr } = await client
+          .from("product_variants")
+          .update({ is_default: true, updated_at: new Date().toISOString() })
+          .eq("id", nonComboVariants[0].id);
+        if (promoErr) {
+          console.error("Failed to promote regular variant to default on combo deletion:", promoErr);
+        }
       }
 
       revalidatePath("/admin/combos");

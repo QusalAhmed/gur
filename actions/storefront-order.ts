@@ -428,7 +428,7 @@ export async function placeStorefrontOrderAction(
             }
             return {
               success: false,
-              error: "An active order already exists for this phone number.",
+              error: "এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।",
             };
           }
 
@@ -587,36 +587,79 @@ export async function placeStorefrontOrderAction(
       let wasIncomplete = false;
 
       if (targetStatus === "pending") {
-        // Rule 1: Check for existing pending order with the same phone number to update
-        const { data: foundPending } = await client
-          .from("orders")
-          .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-          .eq("customer_phone", normalizedPhone)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (foundPending) {
-          existingOrder = foundPending;
-          wasPending = true;
-        } else {
-          // Rule 2: Check for existing incomplete order with the same phone number to update and upgrade
-          const { data: foundIncomplete } = await client
+        // Reuse an existing pending or incomplete order ONLY when its ID has been ownership-validated
+        if (validatedOrderId) {
+          const { data: foundById } = await client
             .from("orders")
             .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .eq("id", validatedOrderId)
             .eq("customer_phone", normalizedPhone)
-            .eq("status", "incomplete_order")
-            .order("created_at", { ascending: false })
+            .in("status", ["pending", "incomplete_order"])
+            .maybeSingle();
+
+          if (foundById) {
+            if (foundById.status === "pending") {
+              const shippingAddr =
+                typeof foundById.shipping_address === "object" && foundById.shipping_address !== null
+                  ? (foundById.shipping_address as Record<string, any>)
+                  : typeof foundById.shipping_address === "string"
+                  ? (() => {
+                      try {
+                        return JSON.parse(foundById.shipping_address);
+                      } catch {
+                        return null;
+                      }
+                    })()
+                  : null;
+
+              const rawZone = shippingAddr?.delivery_zone || shippingAddr?.zone;
+              const savedDeliveryZone: "inside_dhaka" | "outside_dhaka" | undefined =
+                rawZone === "inside_dhaka" || rawZone === "outside_dhaka"
+                  ? rawZone
+                  : undefined;
+
+              return {
+                success: true,
+                orderId: foundById.id,
+                orderNumber: foundById.order_number,
+                publicToken: foundById.public_token || undefined,
+                status: "pending",
+                grandTotal: Number(foundById.grand_total) || 0,
+                subtotal: Number(foundById.subtotal) || 0,
+                shippingTotal: Number(foundById.shipping_total) || 0,
+                customerName: foundById.customer_name || undefined,
+                phone: normalizedPhone,
+                deliveryZone: savedDeliveryZone,
+                eventId: payload.eventId,
+              };
+            }
+            existingOrder = foundById;
+            if (foundById.status === "incomplete_order") wasIncomplete = true;
+          }
+        }
+
+        // Deduplication safeguard: If no validated orderId matched and targetStatus is pending,
+        // check if a pending order exists for this phone number.
+        // Reject with error without mutating or exposing the existing pending order.
+        if (!existingOrder) {
+          const { data: phonePending } = await client
+            .from("orders")
+            .select("id, status")
+            .eq("customer_phone", normalizedPhone)
+            .eq("status", "pending")
             .limit(1)
             .maybeSingle();
 
-          if (foundIncomplete) {
-            existingOrder = foundIncomplete;
-            wasIncomplete = true;
+          if (phonePending) {
+            return {
+              success: false,
+              error: "এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।",
+            };
           }
         }
       } else {
+        // targetStatus === "incomplete_order"
+        // Require established ownership proof (validatedOrderId) before reading or updating an existing draft
         if (validatedOrderId) {
           const { data: foundById } = await client
             .from("orders")
@@ -629,21 +672,8 @@ export async function placeStorefrontOrderAction(
             existingOrder = foundById;
           }
         }
-
-        if (!existingOrder) {
-          const { data: foundByPhone } = await client
-            .from("orders")
-            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-            .eq("customer_phone", normalizedPhone)
-            .eq("status", "incomplete_order")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (foundByPhone) {
-            existingOrder = foundByPhone;
-          }
-        }
+        // If not matched by validatedOrderId, do not select an existing draft by phone alone;
+        // a separate order will be created instead to preserve privacy and prevent draft hijacking.
       }
 
       // Explicit orderId check if not yet matched
@@ -764,7 +794,10 @@ export async function placeStorefrontOrderAction(
       if (existingOrder) {
         orderDbId = existingOrder.id;
         orderNumber = existingOrder.order_number;
-        publicToken = existingOrder.public_token || undefined;
+        // Only return publicToken if the order was validated by ID (do not return token for phone-only matches)
+        publicToken = validatedOrderId && existingOrder.id === validatedOrderId
+          ? existingOrder.public_token || undefined
+          : undefined;
         const previousStatus = existingOrder.status;
 
         const updatePayload: Record<string, any> = {
@@ -1109,20 +1142,29 @@ export async function syncStorefrontIncompleteOrderAction(
     const rawPhone = payload.customerPhone ? String(payload.customerPhone).trim() : "";
     const normalizedPhone = normalizeBdPhone(rawPhone);
 
-    let validatedOrderId =
-      payload.orderId && UUID_REGEX.test(payload.orderId) ? payload.orderId : undefined;
+    let validatedOrderId: string | undefined = undefined;
 
-    if (validatedOrderId && normalizedPhone) {
+    if (payload.orderId && UUID_REGEX.test(payload.orderId) && normalizedPhone) {
       const client = supabaseAdmin || supabase;
-      const { data: owner } = await client
+      const { data: owner, error: ownerErr } = await client
         .from("orders")
         .select("customer_phone")
-        .eq("id", validatedOrderId)
+        .eq("id", payload.orderId)
         .maybeSingle();
 
-      if (owner && owner.customer_phone !== normalizedPhone) {
-        validatedOrderId = undefined;
+      if (!ownerErr && owner && owner.customer_phone === normalizedPhone) {
+        validatedOrderId = payload.orderId;
       }
+    }
+
+    // Establish and retain an owned draft ID on initial draft creation so the client receives
+    // the ID and subsequent autosaves reuse it rather than creating separate incomplete orders
+    if (!validatedOrderId) {
+      return await placeStorefrontOrderAction({
+        ...payload,
+        orderId: undefined,
+        status: "incomplete_order",
+      });
     }
 
     const { inngest } = await import("@/lib/inngest/client");

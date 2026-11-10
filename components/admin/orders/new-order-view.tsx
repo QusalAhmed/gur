@@ -43,6 +43,7 @@ import {
   InquiryLookupResult,
 } from "@/actions/new-order-ops";
 import { formatBDT, normalizeBDPhone } from "@/lib/admin-format";
+import { extractRefToken } from "@/lib/utils";
 
 interface CatalogVariant {
   id: string;
@@ -104,12 +105,6 @@ export function NewOrderView({
   const [refCodeInput, setRefCodeInput] = useState("");
   const [isSearchingRefCode, setIsSearchingRefCode] = useState(false);
   const [matchedInquiry, setMatchedInquiry] = useState<InquiryLookupResult | null>(null);
-
-  // Extract reference token if user pasted whole WhatsApp message or raw ref
-  const extractRefToken = (input: string) => {
-    const match = input.match(/[#]?[WwPp]-[A-Za-z0-9]+/);
-    return match ? match[0].toUpperCase() : input.trim();
-  };
 
   // Handle ref code lookup
   const handleRefCodeLookup = async () => {

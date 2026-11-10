@@ -69,7 +69,7 @@ import {
   FormFieldError,
   createShallowSelector,
 } from "@/components/ui/tanstack-form";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, extractRefToken } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct } from "@/types/order";
 import {
@@ -462,12 +462,6 @@ export function OrderFormDialog({
       setMatchedInquiry(null);
     }
   }, [open, order]);
-
-  // Extract reference token if user pasted whole WhatsApp message or raw ref
-  const extractRefToken = (input: string) => {
-    const match = input.match(/[#]?[WwPp]-[A-Za-z0-9]+/);
-    return match ? match[0].toUpperCase() : input.trim();
-  };
 
   // Handle ref code lookup
   const handleRefCodeLookup = async () => {

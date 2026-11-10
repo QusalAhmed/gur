@@ -2362,6 +2362,8 @@ export async function updateOrderInDb(
             unit_price: Number(it.unit_price) || 0,
             line_total: (Number(it.quantity) || 1) * (Number(it.unit_price) || 0),
             variant_id: it.variant_id,
+            is_combo: Boolean(it.is_combo),
+            combo_components: it.combo_components || [],
           }));
         }
       } else {

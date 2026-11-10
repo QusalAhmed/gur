@@ -283,6 +283,11 @@ export function ComboDrawer({
       return;
     }
 
+    if (!isEditing && mode === "existing" && !selectedExistingProductId) {
+      toast.error("Please select an existing product to convert into a combo offer.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await saveComboAction({
