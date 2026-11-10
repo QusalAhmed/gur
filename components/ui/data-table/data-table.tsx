@@ -64,6 +64,7 @@ export interface DataTableProps<TData, TValue> {
   pagination?: PaginationState;
   onPaginationChange?: OnChangeFn<PaginationState>;
   manualSorting?: boolean;
+  initialSorting?: SortingState;
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
   isLoading?: boolean;
@@ -108,6 +109,7 @@ export function DataTable<TData, TValue>({
   pagination: controlledPagination,
   onPaginationChange,
   manualSorting = false,
+  initialSorting,
   sorting: controlledSorting,
   onSortingChange,
   isLoading = false,
@@ -124,7 +126,7 @@ export function DataTable<TData, TValue>({
     setMounted(true);
   }, []);
 
-  const [internalSorting, setInternalSorting] = React.useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>(initialSorting || []);
   const [internalPagination, setInternalPagination] = React.useState<PaginationState>({
     pageIndex: 0,
     pageSize: effectivePageSize,

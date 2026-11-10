@@ -56,6 +56,7 @@ export interface SaveProductInput {
     shelf_life_days?: number;
     tax_rate?: number;
     is_featured?: boolean;
+    sort_order?: number;
     seo_title?: string;
     seo_description?: string;
     google_product_category?: string | null;
@@ -128,6 +129,17 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     const now = new Date().toISOString();
     let savedProduct: any;
 
+    let initialSortOrder = 0;
+    if (!params.productId) {
+      const { data: maxRow } = await client
+        .from("products")
+        .select("sort_order")
+        .order("sort_order", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      initialSortOrder = (maxRow?.sort_order ?? 0) + 1;
+    }
+
     const productPayload = {
       name: params.product.name.trim(),
       name_bn: params.product.nameBn?.trim() || null,
@@ -174,7 +186,7 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     } else {
       const { data, error: insertErr } = await client
         .from("products")
-        .insert([{ ...productPayload, created_at: now }])
+        .insert([{ ...productPayload, sort_order: initialSortOrder, created_at: now }])
         .select()
         .single();
 
@@ -186,6 +198,22 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     }
 
     const productId = savedProduct.id;
+
+    // Apply explicit sort_order if provided, shifting sibling products atomically
+    if (typeof params.product.sort_order === "number" && params.product.sort_order > 0) {
+      const targetOrder = Math.max(1, Math.floor(params.product.sort_order));
+      const { error: rpcErr } = await client.rpc("set_product_sort_order", {
+        p_product_id: productId,
+        p_new_order: targetOrder,
+      });
+      if (rpcErr) {
+        console.warn("Could not call set_product_sort_order RPC, direct updating:", rpcErr);
+        await client
+          .from("products")
+          .update({ sort_order: targetOrder, updated_at: now })
+          .eq("id", productId);
+      }
+    }
 
     // 2. Handle Deleted Variants
     if (params.deletedVariantIds && params.deletedVariantIds.length > 0) {
@@ -690,6 +718,52 @@ export async function updateProductStatusAction(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to update product status." };
+  }
+}
+
+/**
+ * Server Action: Updates the sort order of products in bulk and syncs storefront cache.
+ */
+export async function updateProductsSortOrderAction(
+  orderedIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const client = supabaseAdmin || supabase;
+  if (!orderedIds || orderedIds.length === 0) {
+    return { success: false, error: "No product IDs provided." };
+  }
+
+  try {
+    const { error } = await client.rpc("reorder_products", {
+      p_ordered_ids: orderedIds,
+    });
+
+    if (error) {
+      console.warn("RPC reorder_products failed, falling back to batch update:", error);
+      for (let i = 0; i < orderedIds.length; i++) {
+        await client
+          .from("products")
+          .update({ sort_order: i + 1, updated_at: new Date().toISOString() })
+          .eq("id", orderedIds[i]);
+      }
+    }
+
+    try {
+      revalidatePath("/admin/products");
+      revalidatePath("/");
+      revalidatePath("/products");
+      try {
+        updateTag("storefront-products");
+        revalidateTag("storefront-products", "max");
+      } catch {}
+    } catch {}
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Failed to reorder products:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to update product order.",
+    };
   }
 }
 

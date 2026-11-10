@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   LogOut,
   Gift,
+  ArrowUpDown,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useAdminBadgeCounts } from "@/hooks/use-admin-badge-counts";
@@ -147,6 +148,12 @@ const navGroups: NavGroup[] = [
         titleBn: "পণ্য তালিকা",
         href: "/admin/products",
         icon: Package,
+      },
+      {
+        title: "Product Ordering",
+        titleBn: "পণ্য ক্রম সাজানো",
+        href: "/admin/products/reorder",
+        icon: ArrowUpDown,
       },
       {
         title: "Combos & Bundles",
@@ -276,6 +283,18 @@ export function AdminSidebar() {
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
 
+  // Set of all base item paths across all sidebar groups to prevent parent links
+  // (like /admin/products) from remaining highlighted when on a child page with its own sidebar item (like /admin/products/reorder)
+  const allItemPaths = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        set.add(item.href.split("?")[0]);
+      }
+    }
+    return set;
+  }, []);
+
   // Render stable server fallback ("গুড়" / placeholder initial) until mounted
   // to avoid SSR/client hydration mismatches when React Query client cache has settings
   const brandName = mounted ? (storeNameBn || storeName || "গুড়") : "গুড়";
@@ -361,12 +380,24 @@ export function AdminSidebar() {
                     );
                     isActive = matchesPath && matchesParams;
                   } else {
-                    const matchesPath =
-                      pathname === item.href || pathname.startsWith(item.href + "/");
-                    const hasStatusIncomplete =
-                      pathname === "/admin/orders" &&
-                      searchParams?.get("status") === "incomplete_order";
-                    isActive = matchesPath && !hasStatusIncomplete;
+                    if (pathname === itemPath) {
+                      const hasStatusIncomplete =
+                        pathname === "/admin/orders" &&
+                        searchParams?.get("status") === "incomplete_order";
+                      isActive = !hasStatusIncomplete;
+                    } else if (pathname.startsWith(itemPath + "/")) {
+                      // Only treat parent item as active if there is no other specific sidebar item matching pathname
+                      const hasSpecificSidebarMatch = allItemPaths.has(pathname);
+                      isActive = !hasSpecificSidebarMatch;
+                    }
+
+                    // Explicit safeguard: when on /admin/products/reorder, do not highlight /admin/products or /admin/orders
+                    if (
+                      pathname.startsWith("/admin/products/reorder") &&
+                      (itemPath === "/admin/products" || itemPath === "/admin/orders")
+                    ) {
+                      isActive = false;
+                    }
                   }
 
                   const badgeCount = mounted && item.badgeKey && counts ? counts[item.badgeKey] : 0;

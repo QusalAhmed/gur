@@ -136,6 +136,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
     initialData?.status || "draft"
   );
   const [isFeatured, setIsFeatured] = React.useState(initialData?.is_featured || false);
+  const [sortOrder, setSortOrder] = React.useState<number>(initialData?.sort_order ?? 1);
   const [summary, setSummary] = React.useState(initialData?.summary || "");
   const [summaryBn, setSummaryBn] = React.useState(initialData?.summary_bn || "");
   const [description, setDescription] = React.useState(initialData?.description || "");
@@ -503,6 +504,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           shelf_life_days: typeof shelfLifeDays === "number" ? shelfLifeDays : undefined,
           tax_rate: taxRate,
           is_featured: isFeatured,
+          sort_order: sortOrder,
           seo_title: seoTitle.trim() || undefined,
           seo_description: seoDescription.trim() || undefined,
           google_product_category: googleProductCategory.trim() || undefined,
@@ -888,6 +890,34 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                       onChange={(e) => setIsFeatured(e.target.checked)}
                       className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 cursor-pointer"
                     />
+                  </div>
+
+                  {/* Storefront Display Order */}
+                  <div className="pt-2 border-t border-border">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="productSortOrder" className="text-xs font-medium text-foreground">
+                        Display Order (Storefront Position)
+                      </label>
+                      <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0 border-amber-500/30 text-amber-700 dark:text-amber-300 bg-amber-500/5">
+                        #{sortOrder || 1}
+                      </Badge>
+                    </div>
+                    <Input
+                      id="productSortOrder"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={sortOrder}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setSortOrder(isNaN(val) || val < 1 ? 1 : val);
+                      }}
+                      className="h-10 text-sm bg-background"
+                      placeholder="e.g. 1"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                      Determines which product shows 1st, 2nd, and so on. Other products automatically shift if there is a conflict.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

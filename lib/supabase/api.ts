@@ -161,6 +161,7 @@ export interface UiProductItem {
   rating: number;
   reviews: number;
   featured: boolean;
+  sortOrder: number;
   basePrice?: number;
   maxPrice?: number;
   imageUrl?: string | null;
@@ -289,6 +290,7 @@ export async function fetchProductsFromDb(): Promise<UiProductItem[]> {
         rating: Number(p.rating_avg) || 0,
         reviews: p.rating_count || 0,
         featured: Boolean(p.is_featured),
+        sortOrder: typeof p.sort_order === "number" ? p.sort_order : 0,
         basePrice: vInfo.minPrice || 0,
         maxPrice: vInfo.maxPrice || vInfo.minPrice || 0,
         imageUrl: imageMap.get(p.id) || null,
@@ -523,6 +525,7 @@ export async function saveProductWithDetails(params: {
     shelf_life_days?: number;
     tax_rate?: number;
     is_featured?: boolean;
+    sort_order?: number;
     seo_title?: string;
     seo_description?: string;
   };
