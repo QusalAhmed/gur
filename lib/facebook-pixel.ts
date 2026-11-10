@@ -414,30 +414,18 @@ export const trackUserProperties = ({
       }
     }
 
-    import("@/actions/facebook-capi")
-      .then(({ sendCapiUserPropertiesAction }) => {
-        sendCapiUserPropertiesAction({
-          eventId,
-          phone: formattedPhone || phone || null,
-          email: email || null,
-          name: name || null,
-          externalId: externalId || null,
-          url: currentUrl,
-          fbp,
-          fbc,
-          customData,
-          testEventCode: effectiveTestCode,
-        }).catch((err) => {
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[Facebook Pixel/CAPI] sendCapiUserPropertiesAction error:", err);
-          }
-        });
-      })
-      .catch((importErr) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[Facebook Pixel/CAPI] Failed to import CAPI action:", importErr);
-        }
-      });
+    sendCapiClientEvent("UserProperties", {
+      eventId,
+      phone: formattedPhone || phone || null,
+      email: email || null,
+      name: name || null,
+      externalId: externalId || null,
+      url: currentUrl,
+      fbp,
+      fbc,
+      customData,
+      testEventCode: effectiveTestCode,
+    });
   }
 
   return { eventId, fired: true };
@@ -593,32 +581,59 @@ export const trackContact = ({
     const { fbp, fbc } = getClientFbpAndFbc();
     const currentUrl = window.location.href;
 
-    import("@/actions/facebook-capi")
-      .then(({ sendCapiContactAction }) => {
-        sendCapiContactAction({
-          eventId,
-          channel,
-          refCode,
-          phone: phone || null,
-          url: currentUrl,
-          fbp,
-          fbc,
-          customData: payload,
-        }).catch((err) => {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[Facebook Pixel/CAPI] sendCapiContactAction error:", err);
-          }
-        });
-      })
-      .catch((importErr) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[Facebook Pixel/CAPI] Failed to import sendCapiContactAction:", importErr);
-        }
-      });
+    sendCapiClientEvent("Contact", {
+      eventId,
+      channel,
+      refCode,
+      phone: phone || null,
+      url: currentUrl,
+      fbp,
+      fbc,
+      customData: payload,
+    });
   }
 
   return eventId;
 };
+
+/**
+ * Dispatches a CAPI event from the browser to the /api/facebook-capi endpoint.
+ * Completely decouples analytics pings from Next.js Server Actions and Router transitions,
+ * preventing 'Router action dispatched before initialization' errors.
+ */
+export async function sendCapiClientEvent(
+  eventType: string,
+  params: Record<string, any>
+): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  const payload = { eventType, ...params };
+  const jsonStr = JSON.stringify(payload);
+
+  try {
+    // If sendBeacon is available, prefer it for lightweight fire-and-forget delivery
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.sendBeacon === "function" &&
+      jsonStr.length < 64000
+    ) {
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const queued = navigator.sendBeacon("/api/facebook-capi", blob);
+      if (queued) return;
+    }
+
+    await fetch("/api/facebook-capi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: jsonStr,
+      keepalive: true,
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[Facebook CAPI] Failed to send ${eventType}:`, err);
+    }
+  }
+}
 
 export interface TrackPurchaseParams {
   orderNumber: string;

@@ -116,6 +116,11 @@ export function useSiteSettings(): ParsedSiteSettings {
   const query = useQuery({
     queryKey: SITE_SETTINGS_QUERY_KEY,
     queryFn: async () => {
+      // In client browser, fetch directly from Supabase DB to prevent premature Server Action dispatch before App Router initialization
+      if (typeof window !== "undefined") {
+        return fetchSiteSettingsFromDb();
+      }
+
       try {
         const res = await getSiteSettingsAction();
         if (res.success && res.settings && Object.keys(res.settings).length > 0) {

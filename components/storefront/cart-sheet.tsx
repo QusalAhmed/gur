@@ -17,8 +17,7 @@ import {
   removeFromCart,
   clearCart,
 } from "@/lib/redux/slices/cart-slice";
-import { trackAddToCart, getClientFbpAndFbc } from "@/lib/facebook-pixel";
-import { sendCapiAddToCartAction } from "@/actions/facebook-capi";
+import { trackAddToCart, getClientFbpAndFbc, sendCapiClientEvent } from "@/lib/facebook-pixel";
 
 interface CartSheetProps {
   lang: StorefrontLang;
@@ -217,7 +216,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                     currency: "BDT",
                                   });
                                   const { fbp, fbc } = getClientFbpAndFbc();
-                                  sendCapiAddToCartAction({
+                                  sendCapiClientEvent("AddToCart", {
                                     eventId,
                                     productId: item.productId,
                                     variantId: item.variantId,
@@ -228,7 +227,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                     url: typeof window !== "undefined" ? window.location.href : undefined,
                                     fbp,
                                     fbc,
-                                  }).catch(() => {});
+                                  });
                                 }}
                                 disabled={item.quantity >= 50}
                                 className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-950 dark:text-amber-100 flex items-center justify-center font-bold active:scale-95 disabled:opacity-40 transition-all touch-manipulation"

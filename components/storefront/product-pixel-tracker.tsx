@@ -10,8 +10,8 @@ import {
 import {
   trackViewContent,
   getClientFbpAndFbc,
+  sendCapiClientEvent,
 } from "@/lib/facebook-pixel";
-import { sendCapiViewContentAction } from "@/actions/facebook-capi";
 import type { StorefrontProduct } from "./product-card";
 
 interface ProductPixelTrackerProps {
@@ -63,7 +63,7 @@ export function ProductPixelTracker({ product, variantId }: ProductPixelTrackerP
     });
 
     const { fbp, fbc } = getClientFbpAndFbc();
-    sendCapiViewContentAction({
+    sendCapiClientEvent("ViewContent", {
       eventId,
       productId: product.id,
       variantId: targetVariant?.id,
@@ -73,7 +73,7 @@ export function ProductPixelTracker({ product, variantId }: ProductPixelTrackerP
       url: typeof window !== "undefined" ? window.location.href : undefined,
       fbp,
       fbc,
-    }).catch(() => {});
+    });
   }, [product, productId, targetVariantId, targetVariant, hasFired, dispatch]);
 
   return null;

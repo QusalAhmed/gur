@@ -357,7 +357,7 @@ export function AdminSidebar() {
                     const itemParams = new URLSearchParams(itemQuery);
                     const matchesPath = pathname === itemPath;
                     const matchesParams = Array.from(itemParams.entries()).every(
-                      ([k, v]) => searchParams.get(k) === v
+                      ([k, v]) => searchParams?.get(k) === v
                     );
                     isActive = matchesPath && matchesParams;
                   } else {
@@ -365,7 +365,7 @@ export function AdminSidebar() {
                       pathname === item.href || pathname.startsWith(item.href + "/");
                     const hasStatusIncomplete =
                       pathname === "/admin/orders" &&
-                      searchParams.get("status") === "incomplete_order";
+                      searchParams?.get("status") === "incomplete_order";
                     isActive = matchesPath && !hasStatusIncomplete;
                   }
 

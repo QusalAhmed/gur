@@ -66,8 +66,8 @@ import {
   setPixelUserPhone,
   generateEventId,
   getClientFbpAndFbc,
+  sendCapiClientEvent,
 } from "@/lib/facebook-pixel";
-import { sendCapiInitiateCheckoutAction } from "@/actions/facebook-capi";
 
 interface AutoSyncOrderWatcherProps {
   form: any;
@@ -213,7 +213,7 @@ export function CheckoutSection({
 
       if (fired && eventId) {
         const { fbp, fbc } = getClientFbpAndFbc();
-        sendCapiInitiateCheckoutAction({
+        sendCapiClientEvent("InitiateCheckout", {
           eventId,
           items: itemsPayload,
           value: totalVal,
@@ -222,16 +222,12 @@ export function CheckoutSection({
           url: typeof window !== "undefined" ? window.location.href : undefined,
           fbp,
           fbc,
-        }).catch(() => {});
+        });
       }
     },
     [store]
   );
 
-  // Prefetch order-confirmed dynamic route structure ahead of time for 0ms transition
-  useEffect(() => {
-    router.prefetch("/order-confirmed/preview");
-  }, [router]);
 
   // TanStack Query Mutation: Create order with optimistic invalidation and redirection
   const createOrderMutation = useCreateOrderMutation({

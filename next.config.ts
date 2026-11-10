@@ -46,6 +46,15 @@ const nextConfig: NextConfig = {
         ],
     },
     experimental: {},
+    async redirects() {
+      return [
+        {
+          source: "/admin/orders/new",
+          destination: "/admin/orders?create=true",
+          permanent: false,
+        },
+      ];
+    },
 };
 
 export default nextConfig;

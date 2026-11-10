@@ -68,6 +68,7 @@ export async function Product({
         featuredIdentifier={featuredIdentifier}
         initialVariantId={initialVariantId}
         autoScrollToProduct={autoScrollToProduct}
+        initialData={storefrontData}
       />
     </HydrationBoundary>
   );

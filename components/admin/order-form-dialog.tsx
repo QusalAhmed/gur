@@ -126,6 +126,24 @@ function detectItemPackageType(name?: string, packType?: string): string {
   return "Jar";
 }
 
+function toDatetimeLocalString(dateInput?: string | Date | null): string {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function fromDatetimeLocalString(val: string): string {
+  if (!val) return new Date().toISOString();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
 interface OrderEditNoteItemProps {
   note: OrderNote;
   onSave: (id: string, text: string, type: OrderNoteType) => Promise<void>;
@@ -481,12 +499,6 @@ export function OrderFormDialog({
         if (res.data.customerPhone && !curPhone) {
           form.setFieldValue("phone", res.data.customerPhone);
         }
-        // Auto match channel
-        if (res.data.channel === "whatsapp") {
-          form.setFieldValue("channel", "whatsapp");
-        } else if (res.data.channel === "phone") {
-          form.setFieldValue("channel", "phone");
-        }
       } else {
         setMatchedInquiry(null);
         if (showToast) {
@@ -521,7 +533,7 @@ export function OrderFormDialog({
       division: (mode === "edit" && order?.address?.division ? order.address.division : "") || "",
       district: (mode === "edit" && order?.address?.district ? order.address.district : "") || "",
       address_line: (mode === "edit" && order?.address?.address_line ? order.address.address_line : "") || "",
-      channel: (mode === "edit" ? (order?.channel || "phone") : "phone") as Order["channel"],
+      channel: (mode === "edit" ? (order?.channel || "") : "") as Order["channel"],
       method: (mode === "edit" ? (order?.method || "cod") : "cod") as Order["method"],
       status: (mode === "edit" ? (order?.status || "confirmed") : (defaultStatus || "confirmed")) as Order["status"],
       payment: (mode === "edit" ? (order?.payment || "unpaid") : "unpaid") as Order["payment"],
@@ -535,6 +547,9 @@ export function OrderFormDialog({
       packaging_note: "",
       courier_name: mode === "edit" ? (order?.courier_name || "") : "",
       cancel_reason: mode === "edit" ? (order?.cancel_reason || "") : "",
+      order_date: mode === "edit" && order?.date
+        ? toDatetimeLocalString(order.date)
+        : toDatetimeLocalString(new Date()),
       items: (mode === "edit" && order?.items ? order.items.map((it) => ({ ...it })) : []) as OrderItem[],
     },
     onSubmitInvalid: ({ formApi }) => {
@@ -616,7 +631,7 @@ export function OrderFormDialog({
 
           const baseAttr = order?.attribution || {};
           let orderAttribution: Record<string, any> | undefined = undefined;
-          if (matchedInquiry) {
+          if (valid.channel !== "web" && matchedInquiry) {
             const meta = matchedInquiry.metaTracking || {};
             orderAttribution = {
               ...baseAttr,
@@ -637,7 +652,7 @@ export function OrderFormDialog({
                 matched_at: new Date().toISOString(),
               },
             };
-          } else if (refCodeInput.trim()) {
+          } else if (valid.channel !== "web" && refCodeInput.trim()) {
             const cleanRef = extractRefToken(refCodeInput).replace(/^#/, "");
             orderAttribution = {
               ...baseAttr,
@@ -649,7 +664,11 @@ export function OrderFormDialog({
               },
             };
           } else {
-            orderAttribution = Object.keys(baseAttr).length > 0 ? baseAttr : undefined;
+            const { inquiry_ref_code: _discard, ...restAttr } = baseAttr;
+            orderAttribution = {
+              ...restAttr,
+              channel_source: valid.channel,
+            };
           }
 
           const createdOrder: Order = {
@@ -671,14 +690,16 @@ export function OrderFormDialog({
             payment: valid.payment,
             fulfillment: valid.fulfillment,
             method: valid.method,
-            channel: valid.channel,
+            channel: valid.channel as Order["channel"],
             subtotal,
             discount_total,
             shipping_total,
             grand_total,
             amount_paid: finalAmountPaid,
             currency: currency || "BDT",
-            date: nowStr,
+            date: valid.order_date
+              ? fromDatetimeLocalString(valid.order_date)
+              : nowStr,
             customer_note: (() => {
               const custNoteInList = notesList.find((n) => n.type === "customer");
               if (custNoteInList) return custNoteInList.text.trim();
@@ -811,7 +832,7 @@ export function OrderFormDialog({
             status: valid.status,
             payment: valid.payment,
             fulfillment: valid.fulfillment,
-            channel: valid.channel,
+            channel: valid.channel as Order["channel"],
             method: valid.method,
             shipping_total,
             discount_total,
@@ -819,14 +840,17 @@ export function OrderFormDialog({
             grand_total,
             amount_paid: finalAmountPaid,
             customer_note: finalCustomerNote,
-            courier_name: valid.courier_name || order.courier_name || "",
+            courier_name: valid.courier_name || "",
             cancel_reason: valid.cancel_reason || "",
+            date: valid.order_date
+              ? fromDatetimeLocalString(valid.order_date)
+              : (order.date || nowStr),
             items: valid.items as OrderItem[],
             notes: updatedNotes,
             events: [editEvent, ...(order.events || [])],
             attribution: (() => {
               const baseAttr = order.attribution || {};
-              if (matchedInquiry) {
+              if (valid.channel !== "web" && matchedInquiry) {
                 const meta = matchedInquiry.metaTracking || {};
                 return {
                   ...baseAttr,
@@ -847,14 +871,19 @@ export function OrderFormDialog({
                     matched_at: new Date().toISOString(),
                   },
                 };
-              } else if (refCodeInput.trim()) {
+              } else if (valid.channel !== "web" && refCodeInput.trim()) {
                 const cleanRef = extractRefToken(refCodeInput).replace(/^#/, "");
                 return {
                   ...baseAttr,
+                  channel_source: valid.channel,
                   inquiry_ref_code: cleanRef,
                 };
               }
-              return baseAttr;
+              const { inquiry_ref_code: _discard, ...restAttr } = baseAttr;
+              return {
+                ...restAttr,
+                channel_source: valid.channel,
+              };
             })(),
           };
 
@@ -919,7 +948,7 @@ export function OrderFormDialog({
           division: order.address?.division || "",
           district: order.address?.district || "",
           address_line: order.address?.address_line || "",
-          channel: order.channel || "phone",
+          channel: order.channel || ("" as Order["channel"]),
           method: order.method || "cod",
           status: order.status || "confirmed",
           payment: order.payment || "unpaid",
@@ -933,6 +962,7 @@ export function OrderFormDialog({
           packaging_note: "",
           courier_name: order.courier_name || "",
           cancel_reason: order.cancel_reason || "",
+          order_date: toDatetimeLocalString(order.date || new Date()),
           items: order.items
             ? order.items.map((it) => ({
                 ...it,
@@ -953,7 +983,7 @@ export function OrderFormDialog({
           division: "",
           district: "",
           address_line: "",
-          channel: "phone",
+          channel: "" as Order["channel"],
           method: "cod",
           status: defaultStatus || "confirmed",
           payment: "unpaid",
@@ -967,6 +997,7 @@ export function OrderFormDialog({
           packaging_note: "",
           courier_name: "",
           cancel_reason: "",
+          order_date: toDatetimeLocalString(new Date()),
           items: [],
         });
       }
@@ -1299,13 +1330,22 @@ export function OrderFormDialog({
                   </>
                 )}
               </DialogTitle>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-muted/60 border text-xs sm:text-sm text-muted-foreground font-medium w-fit">
-                <Calendar className="h-4 w-4 text-amber-600 shrink-0" />
-                <span className="text-muted-foreground">{mode === "edit" ? "Order Placed:" : "Order Date:"}</span>
-                <span className="text-foreground font-semibold">
-                  {order?.date ? formatDateTime(order.date) : formatDateTime(new Date())}
-                </span>
-              </div>
+              <form.Subscribe selector={(state) => state.values.order_date}>
+                {(currentOrderDate) => {
+                  const displayDate = currentOrderDate
+                    ? new Date(currentOrderDate)
+                    : (order?.date ? new Date(order.date) : new Date());
+                  return (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-muted/60 border text-xs sm:text-sm text-muted-foreground font-medium w-fit">
+                      <Calendar className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="text-muted-foreground">{mode === "edit" ? "Order Placed:" : "Order Date:"}</span>
+                      <span className="text-foreground font-semibold">
+                        {formatDateTime(displayDate)}
+                      </span>
+                    </div>
+                  );
+                }}
+              </form.Subscribe>
             </div>
             <DialogDescription>
               {mode === "edit"
@@ -1343,83 +1383,91 @@ export function OrderFormDialog({
                   </span>
                 </div>
 
-                {/* Web / WhatsApp Reference Code Banner */}
-                <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="order_form_reference_id" className="text-xs font-medium flex items-center gap-1.5 text-foreground">
-                      <Link2 className="h-3.5 w-3.5 text-amber-600" />
-                      Web / WhatsApp Reference ID (ওয়েব সেশন রেফারেন্স)
-                    </Label>
-                    {matchedInquiry ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-600 border border-emerald-300">
-                        <Check className="h-2.5 w-2.5" />
-                        Linked: #{matchedInquiry.refCode}
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground">
-                        Links customer&apos;s website visit, ad click &amp; Meta ad cookies (_fbp/_fbc)
-                      </span>
-                    )}
-                  </div>
+                {/* Web / WhatsApp Reference Code Banner (Hidden for Order Channel = web) */}
+                <form.Subscribe selector={(state) => state.values.channel}>
+                  {(currentChannel) => {
+                    if (currentChannel === "web") return null;
 
-                  <div className="flex gap-2">
-                    <Input
-                      id="order_form_reference_id"
-                      placeholder="e.g. #W-7391 or paste customer WhatsApp message"
-                      value={refCodeInput}
-                      onChange={(e) => setRefCodeInput(e.target.value)}
-                      className="h-8 text-xs font-mono bg-background"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleRefCodeLookup();
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={matchedInquiry ? "secondary" : "outline"}
-                      onClick={handleRefCodeLookup}
-                      disabled={isSearchingRefCode || !refCodeInput.trim()}
-                      className="h-8 px-3 text-xs gap-1.5 shrink-0"
-                    >
-                      {isSearchingRefCode ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Link2 className="h-3 w-3" />
-                      )}
-                      {matchedInquiry ? "Linked" : "Link Ref"}
-                    </Button>
-                    {matchedInquiry && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setMatchedInquiry(null);
-                          setRefCodeInput("");
-                        }}
-                        className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
-                        title="Clear linked session"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
+                    return (
+                      <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="order_form_reference_id" className="text-xs font-medium flex items-center gap-1.5 text-foreground">
+                            <Link2 className="h-3.5 w-3.5 text-amber-600" />
+                            Web / WhatsApp Reference ID (ওয়েব সেশন রেফারেন্স)
+                          </Label>
+                          {matchedInquiry ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-600 border border-emerald-300">
+                              <Check className="h-2.5 w-2.5" />
+                              Linked: #{matchedInquiry.refCode}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">
+                              Links customer&apos;s website visit, ad click &amp; Meta ad cookies (_fbp/_fbc)
+                            </span>
+                          )}
+                        </div>
 
-                  {matchedInquiry && (
-                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 p-2 rounded border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
-                      <span>
-                        ✓ Origin: <strong>{matchedInquiry.channel.toUpperCase()}</strong> | 
-                        Meta Tracking: <strong>{matchedInquiry.hasMetaTracking ? "Ad Click / Cookies Attached" : "Direct Web Traffic"}</strong>
-                      </span>
-                      <span className="text-muted-foreground font-mono text-[10px]">
-                        Session: {new Date(matchedInquiry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                        <div className="flex gap-2">
+                          <Input
+                            id="order_form_reference_id"
+                            placeholder="e.g. #W-7391 or paste customer WhatsApp message"
+                            value={refCodeInput}
+                            onChange={(e) => setRefCodeInput(e.target.value)}
+                            className="h-8 text-xs font-mono bg-background"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleRefCodeLookup();
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={matchedInquiry ? "secondary" : "outline"}
+                            onClick={handleRefCodeLookup}
+                            disabled={isSearchingRefCode || !refCodeInput.trim()}
+                            className="h-8 px-3 text-xs gap-1.5 shrink-0"
+                          >
+                            {isSearchingRefCode ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Link2 className="h-3 w-3" />
+                            )}
+                            {matchedInquiry ? "Linked" : "Link Ref"}
+                          </Button>
+                          {matchedInquiry && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setMatchedInquiry(null);
+                                setRefCodeInput("");
+                              }}
+                              className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+                              title="Clear linked session"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+
+                        {matchedInquiry && (
+                          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 p-2 rounded border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              ✓ Origin: <strong>{matchedInquiry.channel.toUpperCase()}</strong> | 
+                              Meta Tracking: <strong>{matchedInquiry.hasMetaTracking ? "Ad Click / Cookies Attached" : "Direct Web Traffic"}</strong>
+                            </span>
+                            <span className="text-muted-foreground font-mono text-[10px]">
+                              Session: {new Date(matchedInquiry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                </form.Subscribe>
 
                 {/* Row 1: Customer Name & Contact Phone Numbers */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1933,7 +1981,27 @@ export function OrderFormDialog({
                     )}
                   </form.Field>
 
-                  <form.Field name="channel">
+                  <form.Field
+                    name="channel"
+                    validators={{
+                      onChangeListenTo: ["status"],
+                      onBlurListenTo: ["status"],
+                      onChange: ({ value }) => {
+                        const curStatus = form.getFieldValue("status");
+                        if (isFieldRequiredForStatus("channel", curStatus) && (!value || !value.trim())) {
+                          return "Please select an order channel";
+                        }
+                        return undefined;
+                      },
+                      onBlur: ({ value }) => {
+                        const curStatus = form.getFieldValue("status");
+                        if (isFieldRequiredForStatus("channel", curStatus) && (!value || !value.trim())) {
+                          return "Please select an order channel";
+                        }
+                        return undefined;
+                      },
+                    }}
+                  >
                     {(field) => (
                       <FormFieldItem>
                         <form.Subscribe selector={(state) => state.values.status}>
@@ -1947,13 +2015,17 @@ export function OrderFormDialog({
                           )}
                         </form.Subscribe>
                         <Select
-                          value={field.state.value}
+                          value={field.state.value || ""}
                           onValueChange={(val) => {
-                            if (val) field.handleChange(val as Order["channel"]);
+                            field.handleChange(val as Order["channel"]);
+                            if (val === "web") {
+                              setMatchedInquiry(null);
+                              setRefCodeInput("");
+                            }
                           }}
                         >
                           <SelectTrigger id="order_form_channel" className="w-full h-9 text-xs bg-background">
-                            <SelectValue />
+                            <SelectValue placeholder="-- Select Channel --" />
                           </SelectTrigger>
                           <SelectContent className="z-[70]">
                             <SelectItem value="phone">Phone Call</SelectItem>
@@ -1964,25 +2036,30 @@ export function OrderFormDialog({
                             <SelectItem value="facebook">Facebook Page</SelectItem>
                           </SelectContent>
                         </Select>
+                        <FormFieldError errors={field.state.meta.errors} />
                       </FormFieldItem>
                     )}
                   </form.Field>
 
-                  <FormFieldItem>
-                    <FormFieldLabel htmlFor="order_form_datetime_display">
-                      Order Date & Time
-                    </FormFieldLabel>
-                    <div
-                      id="order_form_datetime_display"
-                      className="w-full h-9 rounded-lg border border-input bg-muted/40 px-3 flex items-center gap-2 text-sm text-foreground select-all"
-                      title={order?.date ? `Order placed on ${formatDateTime(order.date)}` : `Current order timestamp`}
-                    >
-                      <Clock className="h-4 w-4 text-amber-600 shrink-0" />
-                      <span className="font-medium text-xs sm:text-sm truncate">
-                        {order?.date ? formatDateTime(order.date) : formatDateTime(new Date())}
-                      </span>
-                    </div>
-                  </FormFieldItem>
+                  <form.Field name="order_date">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="order_form_order_date" className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-amber-600" />
+                          Order Date & Time
+                        </FormFieldLabel>
+                        <Input
+                          id="order_form_order_date"
+                          type="datetime-local"
+                          value={field.state.value || ""}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          className="w-full h-9 text-xs sm:text-sm bg-background font-mono"
+                        />
+                        <FormFieldError errors={field.state.meta.errors} />
+                      </FormFieldItem>
+                    )}
+                  </form.Field>
                 </div>
 
                 {/* Conditional Cancellation / Return Reason */}

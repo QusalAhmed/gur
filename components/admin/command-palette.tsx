@@ -80,7 +80,7 @@ export function CommandPalette({
   const navItems = [
     { label: "Overview / ড্যাশবোর্ড", path: "/admin", icon: LayoutDashboard },
     { label: "Orders / অর্ডার তালিকা", path: "/admin/orders", icon: ShoppingCart },
-    { label: "Create Order / নতুন অর্ডার", path: "/admin/orders/new", icon: PlusCircle },
+    { label: "Create Order / নতুন অর্ডার", path: "/admin/orders?create=true", icon: PlusCircle },
     { label: "Incomplete Checkouts / অসম্পূর্ণ অর্ডার", path: "/admin/orders?status=incomplete_order", icon: Clock },
     { label: "Shipments / শিপমেন্ট", path: "/admin/shipments", icon: Truck },
     { label: "Inventory Levels / স্টক তালিকা", path: "/admin/inventory", icon: Package },

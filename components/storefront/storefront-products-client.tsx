@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
+import type { StorefrontDataResult } from "@/actions/storefront-products";
 import { ProductShowcase } from "./product-showcase";
 import { ProductPixelTracker } from "./product-pixel-tracker";
 
@@ -10,12 +11,14 @@ interface StorefrontProductsClientProps {
   featuredIdentifier?: string;
   initialVariantId?: string;
   autoScrollToProduct?: boolean;
+  initialData?: StorefrontDataResult;
 }
 
 export function StorefrontProductsClient({
   featuredIdentifier,
   initialVariantId,
   autoScrollToProduct = false,
+  initialData,
 }: StorefrontProductsClientProps) {
   const searchParams = useSearchParams();
   const urlProduct = searchParams?.get("product") || searchParams?.get("p") || undefined;
@@ -25,7 +28,7 @@ export function StorefrontProductsClient({
   const effectiveAutoScroll = autoScrollToProduct || Boolean(effectiveFeaturedId);
 
   // TanStack Query to get storefront products, variants, and store settings
-  const { data, isLoading } = useStorefrontProducts();
+  const { data, isLoading } = useStorefrontProducts({ initialData });
 
   const featuredProduct = useMemo(() => {
     if (!effectiveFeaturedId || !data?.products || data.products.length === 0) {

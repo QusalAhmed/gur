@@ -325,7 +325,7 @@ export const orderFormSchema = z
     division: z.string().transform((v) => (v || "").trim()).default(""),
     district: z.string().transform((v) => (v || "").trim()).default(""),
     address_line: z.string().transform((v) => (v || "").trim()).default(""),
-    channel: orderChannelSchema,
+    channel: z.string().transform((v) => (v || "").trim()).default(""),
     method: orderMethodSchema,
     status: orderStatusSchema,
     payment: orderPaymentSchema,
@@ -339,6 +339,7 @@ export const orderFormSchema = z
     delivery_note: z.string().max(1000, "Delivery note must not exceed 1000 characters").optional().default(""),
     packaging_note: z.string().max(1000, "Packaging note must not exceed 1000 characters").optional().default(""),
     cancel_reason: z.string().optional().default(""),
+    order_date: z.string().optional().default(""),
     items: z.array(orderItemSchema).default([]),
   })
   .superRefine((data, ctx) => {
@@ -417,6 +418,14 @@ export const orderFormSchema = z
 
     // 1. Confirmed / Active Lifecycle Validation
     if (!isDraft && !isTerminated) {
+      if (!data.channel || !["web", "phone", "whatsapp", "admin", "facebook", "walk_in"].includes(data.channel)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please select an order channel",
+          path: ["channel"],
+        });
+      }
+
       if (!data.customer || data.customer.length < 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

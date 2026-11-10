@@ -18,11 +18,7 @@ import {
   selectHasViewedProduct,
   selectHasViewedVariant,
 } from "@/lib/redux/slices/pixel-slice";
-import { trackViewContent, trackAddToCart, getClientFbpAndFbc } from "@/lib/facebook-pixel";
-import {
-  sendCapiViewContentAction,
-  sendCapiAddToCartAction,
-} from "@/actions/facebook-capi";
+import { trackViewContent, trackAddToCart, getClientFbpAndFbc, sendCapiClientEvent } from "@/lib/facebook-pixel";
 import {
   Carousel,
   CarouselContent,
@@ -185,7 +181,7 @@ export function ProductCard({
             currency: "BDT",
           });
           const { fbp, fbc } = getClientFbpAndFbc();
-          sendCapiViewContentAction({
+          sendCapiClientEvent("ViewContent", {
             eventId,
             productId: product.id,
             variantId: selectedVariant.id,
@@ -195,7 +191,7 @@ export function ProductCard({
             url: typeof window !== "undefined" ? window.location.href : undefined,
             fbp,
             fbc,
-          }).catch(() => {});
+          });
         }, 5000);
       }
       return () => {
@@ -223,7 +219,7 @@ export function ProductCard({
                 currency: "BDT",
               });
               const { fbp, fbc } = getClientFbpAndFbc();
-              sendCapiViewContentAction({
+              sendCapiClientEvent("ViewContent", {
                 eventId,
                 productId: product.id,
                 variantId: selectedVariant.id,
@@ -233,7 +229,7 @@ export function ProductCard({
                 url: typeof window !== "undefined" ? window.location.href : undefined,
                 fbp,
                 fbc,
-              }).catch(() => {});
+              });
               timer = null;
             }, 5000);
           }
@@ -317,7 +313,7 @@ export function ProductCard({
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("variant", found.id);
-      window.history.replaceState(null, "", url.toString());
+      window.history.replaceState(window.history.state, "", url.toString());
     }
 
     // Fire ViewContent for newly selected variant if not already viewed in this session
@@ -333,7 +329,7 @@ export function ProductCard({
     });
 
     const { fbp, fbc } = getClientFbpAndFbc();
-    sendCapiViewContentAction({
+    sendCapiClientEvent("ViewContent", {
       eventId,
       productId: product.id,
       variantId: found.id,
@@ -343,7 +339,7 @@ export function ProductCard({
       url: typeof window !== "undefined" ? window.location.href : undefined,
       fbp,
       fbc,
-    }).catch(() => {});
+    });
   };
 
   // Update or set unit quantity directly in Redux cart (0 removes, >0 updates/adds)
@@ -364,7 +360,7 @@ export function ProductCard({
           currency: "BDT",
         });
         const { fbp, fbc } = getClientFbpAndFbc();
-        sendCapiAddToCartAction({
+        sendCapiClientEvent("AddToCart", {
           eventId,
           productId: product.id,
           variantId: selectedVariant.id,
@@ -375,7 +371,7 @@ export function ProductCard({
           url: typeof window !== "undefined" ? window.location.href : undefined,
           fbp,
           fbc,
-        }).catch(() => {});
+        });
       }
 
       if (currentUnit === 0) {

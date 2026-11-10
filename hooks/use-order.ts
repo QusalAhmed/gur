@@ -31,7 +31,7 @@ export function useOrder(
   options?: UseOrderOptions
 ) {
   const cleanId = (idOrNumber || "").trim();
-  const isEnabled = Boolean(cleanId && (options?.enabled ?? true));
+  const isEnabled = Boolean(cleanId && cleanId !== "preview" && (options?.enabled ?? true));
 
   return useQuery<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>({
     queryKey: ORDER_QUERY_KEY(cleanId),

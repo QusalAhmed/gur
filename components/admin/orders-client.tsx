@@ -273,7 +273,7 @@ const paymentStyles: Record<string, string> = {
 export function OrdersClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const statusParam = searchParams.get("status");
+  const statusParam = searchParams?.get("status") ?? null;
   const queryClient = useQueryClient();
   const { currency, currencySymbol } = useSiteSettings();
 
@@ -305,13 +305,13 @@ export function OrdersClient() {
   );
 
   // ─── URL-DRIVEN SERVER-SIDE PAGINATION & FILTER STATE ────────────────────────
-  const pageParam = Math.max(1, Number(searchParams.get("page")) || 1);
-  const pageSizeParam = Number(searchParams.get("pageSize")) || 10;
-  const searchParam = searchParams.get("search") || "";
-  const channelParam = searchParams.get("channel") || "all";
-  const paymentParam = searchParams.get("payment") || "all";
-  const sortByParam = searchParams.get("sortBy") || "placed_at";
-  const sortOrderParam = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
+  const pageParam = Math.max(1, Number(searchParams?.get("page")) || 1);
+  const pageSizeParam = Number(searchParams?.get("pageSize")) || 10;
+  const searchParam = searchParams?.get("search") || "";
+  const channelParam = searchParams?.get("channel") || "all";
+  const paymentParam = searchParams?.get("payment") || "all";
+  const sortByParam = searchParams?.get("sortBy") || "placed_at";
+  const sortOrderParam = searchParams?.get("sortOrder") === "asc" ? "asc" : "desc";
 
   const [page, setPage] = React.useState<number>(pageParam);
   const [pageSize, setPageSize] = React.useState<number>(pageSizeParam);
@@ -344,7 +344,7 @@ export function OrdersClient() {
       sortBy?: string;
       sortOrder?: "asc" | "desc";
     }) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParams?.toString() || "");
 
       const newPage = updates.page !== undefined ? updates.page : page;
       if (newPage > 1) params.set("page", String(newPage));
@@ -1804,13 +1804,28 @@ export function OrdersClient() {
   };
 
   // Open Create Dialog (Unified form)
-  const handleOpenCreate = () => {
+  const handleOpenCreate = React.useCallback(() => {
     setOrderModalState({
       open: true,
       mode: "create",
       order: null,
     });
-  };
+  }, []);
+
+  // Check if ?create=true was passed in the URL to automatically open the Order Form Dialog
+  const hasHandledCreateRef = React.useRef(false);
+  const createParam = searchParams?.get("create");
+  React.useEffect(() => {
+    if ((createParam === "true" || createParam === "1") && !hasHandledCreateRef.current) {
+      hasHandledCreateRef.current = true;
+      handleOpenCreate();
+      try {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete("create");
+        window.history.replaceState(window.history.state, "", newUrl.toString());
+      } catch {}
+    }
+  }, [createParam, handleOpenCreate]);
 
   // Save handler for unified form
   const handleSaveOrder = async (savedOrder: Order, mode: "create" | "edit") => {
