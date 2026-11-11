@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -94,6 +95,7 @@ export default function RootLayout({
             <Toaster position="top-right" richColors closeButton />
           </QueryProvider>
         </StoreProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
