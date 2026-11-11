@@ -919,12 +919,6 @@ export function ProductCard({
                           />
                         </motion.div>
                       </div>
-
-                      <span className="text-[11px] sm:text-xs font-semibold text-amber-100 dark:text-amber-200 tracking-tight leading-tight mt-1 truncate max-w-full">
-                        {lang === "bn"
-                          ? "পরিমাণ যোগ করতে + বাটনে চাপুন"
-                          : "Tab on plus button to add quantity"}
-                      </span>
                     </div>
 
                     {/* Right: Plus Button */}

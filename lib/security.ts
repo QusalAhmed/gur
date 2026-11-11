@@ -90,3 +90,147 @@ export function sanitizeImageKitFolder(folder: unknown): string | null {
 export function safePublicErrorMessage(fallback = "Request failed"): string {
   return fallback;
 }
+
+const META_PIXEL_OPENBRIDGE_ORIGINS: Record<string, readonly string[]> = {
+  // Exact primary + fallback OpenBridge (CAPIG MPC) origins configured by Meta Signals Config for Pixel 1234708877758735.
+  // Never broaden to *.a.run.app or *.on.aws wildcards.
+  "1234708877758735": [
+    "https://mpc-prod-27-s6uit34pua-uk.a.run.app",
+    "https://0l-a08c0393bf534f3994bcafe6e0dc91b4.ecs.us-west-2.on.aws",
+  ],
+};
+
+function parseHostname(rawUrl?: string | null): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    return parsed.hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Parses a comma- or whitespace-separated list of strict HTTPS origins for CSP allowlists.
+ * Rejects non-HTTPS schemes, embedded credentials, and wildcard hostnames to preserve least privilege.
+ */
+export function parseStrictHttpsOrigins(raw?: string | null): string[] {
+  if (!raw || typeof raw !== "string") return [];
+  const origins = new Set<string>();
+
+  for (const token of raw.split(/[\s,]+/)) {
+    const trimmed = token.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "https:") continue;
+      if (!parsed.hostname || parsed.hostname.includes("*")) continue;
+      if (parsed.username || parsed.password) continue;
+      origins.add(parsed.origin);
+    } catch {
+      // Ignore malformed origin entries
+    }
+  }
+
+  return Array.from(origins);
+}
+
+export interface BuildCspHeaderOptions {
+  nodeEnv?: string;
+  imagekitUrlEndpoint?: string | null;
+  supabaseUrl?: string | null;
+  facebookPixelId?: string | null;
+  metaPixelConnectOrigins?: string | null;
+}
+
+/**
+ * Builds the application's Content-Security-Policy header value with strict least-privilege allowlists.
+ */
+export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
+  const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
+  const isDev = nodeEnv === "development";
+  const isProd = nodeEnv === "production";
+
+  const imagekitHost = parseHostname(options.imagekitUrlEndpoint);
+  const supabaseHost = parseHostname(options.supabaseUrl);
+
+  const rawPixelId = (options.facebookPixelId ?? "1234708877758735").trim();
+  const safePixelId = /^\d{5,32}$/.test(rawPixelId) ? rawPixelId : null;
+
+  const metaConnectOrigins = safePixelId
+    ? Array.from(
+        new Set([
+          "https://www.facebook.com",
+          "https://connect.facebook.net",
+          ...(META_PIXEL_OPENBRIDGE_ORIGINS[safePixelId] ?? []),
+          ...parseStrictHttpsOrigins(options.metaPixelConnectOrigins),
+        ])
+      )
+    : [];
+
+  const imgSources = Array.from(
+    new Set([
+      "'self'",
+      "data:",
+      "blob:",
+      "https://images.unsplash.com",
+      "https://ik.imagekit.io",
+      ...(safePixelId ? ["https://www.facebook.com"] : []),
+      "https://*.supabase.co",
+      ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
+        ? [`https://${imagekitHost}`]
+        : []),
+      ...(supabaseHost ? [`https://${supabaseHost}`] : []),
+    ])
+  );
+
+  const connectSources = Array.from(
+    new Set([
+      "'self'",
+      "https://*.supabase.co",
+      "wss://*.supabase.co",
+      "https://upload.imagekit.io",
+      "https://ik.imagekit.io",
+      ...metaConnectOrigins,
+      ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
+        ? [`https://${imagekitHost}`]
+        : []),
+      ...(supabaseHost ? [`https://${supabaseHost}`, `wss://${supabaseHost}`] : []),
+      ...(isDev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : []),
+    ])
+  );
+
+  const scriptSources = [
+    "'self'",
+    "'unsafe-inline'",
+    ...(isDev ? ["'unsafe-eval'"] : []),
+    ...(safePixelId ? ["https://connect.facebook.net"] : []),
+  ];
+
+  const frameSources = [
+    "'self'",
+    ...(safePixelId ? ["https://www.facebook.com"] : []),
+  ];
+
+  const formActionSources = [
+    "'self'",
+    ...(safePixelId ? ["https://www.facebook.com"] : []),
+  ];
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSources.join(" ")}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `img-src ${imgSources.join(" ")}`,
+    "font-src 'self' data: https://fonts.gstatic.com",
+    `connect-src ${connectSources.join(" ")}`,
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",
+    `frame-src ${frameSources.join(" ")}`,
+    `form-action ${formActionSources.join(" ")}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+    ...(isProd ? ["upgrade-insecure-requests"] : []),
+  ].join("; ");
+}

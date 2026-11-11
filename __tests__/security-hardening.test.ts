@@ -5,9 +5,11 @@ import {
   sanitizeAdminRedirect,
 } from "@/lib/admin-permissions";
 import {
+  buildCspHeader,
   clampInt,
   escapeHtml,
   isValidUuid,
+  parseStrictHttpsOrigins,
   safePublicErrorMessage,
   sanitizeCsvCell,
   sanitizeImageKitFolder,
@@ -380,6 +382,45 @@ describe("Security Sanitizers & Constant-Time Token Verification", () => {
     expect(timingSafeTokenEqual("short", "longer-secret")).toBe(false);
     expect(timingSafeTokenEqual("", "secret")).toBe(false);
     expect(timingSafeTokenEqual(null, "secret")).toBe(false);
+  });
+
+  it("allows exact Meta Pixel OpenBridge endpoints in CSP without broad PaaS wildcards", () => {
+    const csp = buildCspHeader({
+      nodeEnv: "production",
+      facebookPixelId: "1234708877758735",
+      metaPixelConnectOrigins:
+        "https://capig.example.com/events?cee=no http://insecure.example https://*.on.aws https://user:pass@bad.example",
+    });
+
+    const connectDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("connect-src "));
+    expect(connectDirective).toBeDefined();
+    expect(connectDirective).toContain("https://www.facebook.com");
+    expect(connectDirective).toContain("https://connect.facebook.net");
+    expect(connectDirective).toContain("https://mpc-prod-27-s6uit34pua-uk.a.run.app");
+    expect(connectDirective).toContain(
+      "https://0l-a08c0393bf534f3994bcafe6e0dc91b4.ecs.us-west-2.on.aws"
+    );
+    expect(connectDirective).toContain("https://capig.example.com");
+
+    // Least privilege: never allow broad PaaS wildcards or non-HTTPS origins
+    expect(connectDirective).not.toContain("*.a.run.app");
+    expect(connectDirective).not.toContain("*.on.aws");
+    expect(connectDirective).not.toContain("mpc-prod-*");
+    expect(connectDirective).not.toContain("http://insecure.example");
+    expect(connectDirective).not.toContain("bad.example");
+    expect(csp).toContain("upgrade-insecure-requests");
+
+    expect(
+      parseStrictHttpsOrigins(
+        "https://gw.example.com/path, javascript:alert(1), https://*.a.run.app, https://gw.example.com"
+      )
+    ).toEqual(["https://gw.example.com"]);
+
+    const disabledCsp = buildCspHeader({ facebookPixelId: "off" });
+    expect(disabledCsp).not.toContain("connect.facebook.net");
+    expect(disabledCsp).not.toContain("mpc-prod-27");
   });
 });
 

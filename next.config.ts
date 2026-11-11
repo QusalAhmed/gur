@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildCspHeader } from "./lib/security";
 
 const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
   ? (() => {
@@ -10,60 +11,15 @@ const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
     })()
   : undefined;
 
-const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? (() => {
-      try {
-        return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname;
-      } catch {
-        return undefined;
-      }
-    })()
-  : undefined;
-
-const isDev = process.env.NODE_ENV === "development";
 const isProd = process.env.NODE_ENV === "production";
 
-const imgSources = [
-  "'self'",
-  "data:",
-  "blob:",
-  "https://images.unsplash.com",
-  "https://ik.imagekit.io",
-  "https://www.facebook.com",
-  "https://*.supabase.co",
-  ...(imagekitHost && imagekitHost !== "ik.imagekit.io" ? [`https://${imagekitHost}`] : []),
-  ...(supabaseHost ? [`https://${supabaseHost}`] : []),
-];
-
-const connectSources = [
-  "'self'",
-  "https://*.supabase.co",
-  "wss://*.supabase.co",
-  "https://upload.imagekit.io",
-  "https://ik.imagekit.io",
-  "https://www.facebook.com",
-  "https://connect.facebook.net",
-  ...(imagekitHost && imagekitHost !== "ik.imagekit.io" ? [`https://${imagekitHost}`] : []),
-  ...(supabaseHost ? [`https://${supabaseHost}`, `wss://${supabaseHost}`] : []),
-  ...(isDev ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : []),
-];
-
-const cspHeader = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://connect.facebook.net`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  `img-src ${imgSources.join(" ")}`,
-  "font-src 'self' data: https://fonts.gstatic.com",
-  `connect-src ${connectSources.join(" ")}`,
-  "worker-src 'self' blob:",
-  "child-src 'self' blob:",
-  "frame-src 'self' https://www.facebook.com",
-  "form-action 'self' https://www.facebook.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "frame-ancestors 'self'",
-  ...(isProd ? ["upgrade-insecure-requests"] : []),
-].join("; ");
+const cspHeader = buildCspHeader({
+  nodeEnv: process.env.NODE_ENV,
+  imagekitUrlEndpoint: process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT,
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  facebookPixelId: process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || "1234708877758735",
+  metaPixelConnectOrigins: process.env.NEXT_PUBLIC_META_PIXEL_CONNECT_ORIGINS,
+});
 
 const nextConfig: NextConfig = {
     /* config options here */
