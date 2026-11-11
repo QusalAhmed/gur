@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
@@ -29,7 +29,7 @@ export async function getOutboxNotificationsAction(params?: {
 }): Promise<{ ok: boolean; data: OutboxNotification[]; message?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     let query = supabase
       .from("notification_outbox")
@@ -79,7 +79,7 @@ export async function retryOutboxNotificationAction(
 ): Promise<{ ok: boolean; message?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("notification_outbox")

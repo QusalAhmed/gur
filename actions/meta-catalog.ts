@@ -9,6 +9,7 @@ import {
   type MetaCatalogDetails,
   type MetaFetchedProduct,
 } from "@/lib/meta-catalog";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export interface SafeMetaConfig {
   isConfigured: boolean;
@@ -29,6 +30,7 @@ export async function getMetaCatalogConfigAction(): Promise<{
   config: SafeMetaConfig;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const raw = getMetaSdkConfig();
 
     let maskedToken: string | null = null;
@@ -81,6 +83,7 @@ export async function testMetaCatalogConnectionAction(payload?: {
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     return await getCatalogDetails(payload);
   } catch (err: any) {
     console.error("[Meta Catalog Action] testMetaCatalogConnectionAction error:", err);
@@ -105,6 +108,7 @@ export async function fetchMetaCatalogProductsAction(payload?: {
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     return await fetchCatalogProducts({
       catalogId: payload?.catalogId,
       accessToken: payload?.accessToken,
@@ -146,6 +150,7 @@ export async function syncAllProductsToMetaCatalogAction(payload?: {
   }>;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     return await syncProductsToMetaCatalog(payload);
   } catch (err: any) {
     console.error("[Meta Catalog Action] syncAllProductsToMetaCatalogAction error:", err);
@@ -184,6 +189,7 @@ export async function syncSingleProductToMetaCatalogAction(
   }>;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     return await syncProductsToMetaCatalog({
       ...payload,
       productId,
@@ -214,6 +220,7 @@ export async function deleteProductFromMetaCatalogAction(
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const res = await deleteProductFromCatalog(retailerId, payload);
     return {
       success: res.success,

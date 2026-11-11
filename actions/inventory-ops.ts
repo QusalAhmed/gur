@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { assertStaffRole } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { Database } from "@/types/database.types";
 
@@ -48,7 +49,10 @@ export interface UpdateReorderPointParams {
 export async function receiveStockAction(params: ReceiveStockParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.variantId) || !isValidUuid(params.warehouseId) || (params.batchId && !isValidUuid(params.batchId))) {
+      return { ok: false, code: "INVALID_UUID", message: "Invalid variant, warehouse, or batch ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const qty = Number(params.quantity);
     if (!qty || qty <= 0) {
@@ -65,7 +69,7 @@ export async function receiveStockAction(params: ReceiveStockParams) {
         quantity_delta: qty,
         unit_cost: params.unitCost !== undefined && params.unitCost !== null ? Number(params.unitCost) : null,
         note: params.note?.trim() || `Receipt by ${session.user.name}`,
-        created_by: session.user.id,
+        created_by: getActorUuid(session),
       })
       .select()
       .single();
@@ -91,7 +95,10 @@ export async function receiveStockAction(params: ReceiveStockParams) {
 export async function adjustStockAction(params: AdjustStockParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.variantId) || !isValidUuid(params.warehouseId) || (params.batchId && !isValidUuid(params.batchId))) {
+      return { ok: false, code: "INVALID_UUID", message: "Invalid variant, warehouse, or batch ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const delta = Number(params.quantityDelta);
     if (!delta || delta === 0) {
@@ -110,7 +117,7 @@ export async function adjustStockAction(params: AdjustStockParams) {
         movement_type: "adjustment" as StockMovementType,
         quantity_delta: delta,
         note: `Adjustment: ${params.reason.trim()} (${session.user.name})`,
-        created_by: session.user.id,
+        created_by: getActorUuid(session),
       })
       .select()
       .single();
@@ -137,7 +144,10 @@ export async function adjustStockAction(params: AdjustStockParams) {
 export async function writeOffStockAction(params: WriteOffStockParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.variantId) || !isValidUuid(params.warehouseId) || (params.batchId && !isValidUuid(params.batchId))) {
+      return { ok: false, code: "INVALID_UUID", message: "Invalid variant, warehouse, or batch ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const qty = Math.abs(Number(params.quantity));
     if (!qty || qty <= 0) {
@@ -156,7 +166,7 @@ export async function writeOffStockAction(params: WriteOffStockParams) {
         movement_type: "write_off" as StockMovementType,
         quantity_delta: -qty, // Must be negative
         note: `Write-off: ${params.reason.trim()} (${session.user.name})`,
-        created_by: session.user.id,
+        created_by: getActorUuid(session),
       })
       .select()
       .single();
@@ -183,7 +193,10 @@ export async function writeOffStockAction(params: WriteOffStockParams) {
 export async function updateReorderPointAction(params: UpdateReorderPointParams) {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.variantId) || !isValidUuid(params.warehouseId)) {
+      return { ok: false, code: "INVALID_UUID", message: "Invalid variant or warehouse ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const reorderPoint = Math.max(0, Number(params.reorderPoint) || 0);
 

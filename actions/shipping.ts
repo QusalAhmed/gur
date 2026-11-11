@@ -1,7 +1,9 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 export interface ShippingMethodItem {
   id: string;
@@ -37,6 +39,8 @@ export async function getAdminShippingMethodsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: methods, error } = await supabaseAdmin
       .from("shipping_methods")
       .select("*")
@@ -83,6 +87,11 @@ export async function toggleShippingMethodActiveAction(payload: {
   isActive: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid shipping method ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from("shipping_methods")
       .update({ is_active: payload.isActive, updated_at: new Date().toISOString() })
@@ -102,6 +111,8 @@ export async function getAdminDeliveryZonesAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: zones, error } = await supabaseAdmin
       .from("delivery_zones")
       .select("*")

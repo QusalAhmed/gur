@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import { safePublicErrorMessage } from "@/lib/security";
 
 export async function GET() {
   try {
@@ -10,8 +11,9 @@ export async function GET() {
       },
     });
   } catch (err: any) {
+    console.error("[Storefront Products API] Error:", err);
     return NextResponse.json(
-      { error: err?.message || "Failed to fetch products" },
+      { error: safePublicErrorMessage("Failed to fetch products") },
       { status: 500 }
     );
   }

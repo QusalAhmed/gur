@@ -1,10 +1,11 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
-import { normalizeBdPhone } from "@/lib/supabase/api";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeBdPhone, toLocalBdPhone } from "@/lib/phone";
 import { getOtherOrderInsight } from "@/types/order";
-import { captureStorefrontMetaTracking } from "@/actions/facebook-capi";
+import { captureStorefrontMetaTrackingInternal } from "@/lib/capi-service";
+import { createNotificationInternal } from "@/lib/notifications-service";
+import { clampInt, isValidUuid, safePublicErrorMessage } from "@/lib/security";
 import { enqueueAndDispatch } from "@/lib/outbox";
 
 export interface StorefrontOrderItem {
@@ -59,8 +60,6 @@ export interface StorefrontOrderResult {
   error?: string;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // =============================================================================
 // In-Memory Performance Caching & Synchronization
 // =============================================================================
@@ -99,15 +98,15 @@ async function getCatalogPricingData(client: any): Promise<CatalogPricingData> {
     const productNameMap = new Map<string, { id: string; defaultPrice: number; defaultVariantId?: string }>();
     const priceTiersMap = new Map<string, Array<{ minQty: number; unitPrice: number }>>();
 
-    // 1. Process variants
+    // 1. Process active variants
     const activeVariantsByProd = new Map<string, any[]>();
     (varsRes.data || []).forEach((v: any) => {
-      if (!v.id) return;
+      if (!v.id || v.is_active === false) return;
       validVarIds.add(v.id);
       if (v.product_id) {
         varToProdMap.set(v.id, v.product_id);
         const list = activeVariantsByProd.get(v.product_id) || [];
-        if (v.is_active !== false) list.push(v);
+        list.push(v);
         activeVariantsByProd.set(v.product_id, list);
       }
       variantPriceMap.set(v.id, Math.max(0, Number(v.price) || 0));
@@ -129,9 +128,9 @@ async function getCatalogPricingData(client: any): Promise<CatalogPricingData> {
       list.sort((a, b) => b.minQty - a.minQty);
     });
 
-    // 3. Process products & default prices
+    // 3. Process active products & default prices
     (prodsRes.data || []).forEach((p: any) => {
-      if (!p.id) return;
+      if (!p.id || p.status !== "active") return;
       validProdIds.add(p.id);
 
       const variants = activeVariantsByProd.get(p.id) || [];
@@ -150,7 +149,16 @@ async function getCatalogPricingData(client: any): Promise<CatalogPricingData> {
       if (p.name_bn) productNameMap.set(p.name_bn.trim().toLowerCase(), entry);
     });
 
-    cachedCatalogPricing = {
+    // Drop variants whose parent product is not active
+    for (const [varId, prodId] of Array.from(varToProdMap.entries())) {
+      if (!validProdIds.has(prodId)) {
+        validVarIds.delete(varId);
+        varToProdMap.delete(varId);
+        variantPriceMap.delete(varId);
+      }
+    }
+
+    const result: CatalogPricingData = {
       validProdIds,
       validVarIds,
       varToProdMap,
@@ -159,8 +167,12 @@ async function getCatalogPricingData(client: any): Promise<CatalogPricingData> {
       productNameMap,
       priceTiersMap,
     };
-    catalogCacheExpiry = now + 5 * 60 * 1000; // 5-minute memory cache
-    return cachedCatalogPricing;
+
+    if (validProdIds.size > 0 || validVarIds.size > 0) {
+      cachedCatalogPricing = result;
+      catalogCacheExpiry = now + 5 * 60 * 1000; // 5-minute memory cache
+    }
+    return result;
   } catch (err) {
     console.error("[Storefront Order] Error fetching catalog pricing data:", err);
     return {
@@ -201,10 +213,11 @@ function resolveAuthoritativeItemPrice(
   unitPrice: number;
   resolvedVariantId?: string;
   resolvedProductId?: string;
+  matched: boolean;
 } {
-  const qty = Math.max(1, Math.floor(params.quantity || 1));
-  const varId = params.variantId && UUID_REGEX.test(params.variantId) ? params.variantId : undefined;
-  const prodId = params.productId && UUID_REGEX.test(params.productId) ? params.productId : undefined;
+  const qty = clampInt(params.quantity, 1, 1, 1000);
+  const varId = params.variantId && isValidUuid(params.variantId) ? params.variantId : undefined;
+  const prodId = params.productId && isValidUuid(params.productId) ? params.productId : undefined;
 
   // 1. Try finding by variant ID
   if (varId && catalog.validVarIds.has(varId)) {
@@ -214,12 +227,22 @@ function resolveAuthoritativeItemPrice(
     if (tiers && tiers.length > 0) {
       const matchedTier = tiers.find((t) => t.minQty <= qty);
       if (matchedTier) {
-        return { unitPrice: matchedTier.unitPrice, resolvedVariantId: varId, resolvedProductId: parentProdId };
+        return {
+          unitPrice: matchedTier.unitPrice,
+          resolvedVariantId: varId,
+          resolvedProductId: parentProdId,
+          matched: true,
+        };
       }
     }
     const varPrice = catalog.variantPriceMap.get(varId);
     if (varPrice !== undefined) {
-      return { unitPrice: varPrice, resolvedVariantId: varId, resolvedProductId: parentProdId };
+      return {
+        unitPrice: varPrice,
+        resolvedVariantId: varId,
+        resolvedProductId: parentProdId,
+        matched: true,
+      };
     }
   }
 
@@ -227,25 +250,37 @@ function resolveAuthoritativeItemPrice(
   if (prodId && catalog.validProdIds.has(prodId)) {
     const defaultPrice = catalog.productDefaultPriceMap.get(prodId);
     if (defaultPrice !== undefined) {
-      return { unitPrice: defaultPrice, resolvedProductId: prodId };
+      return {
+        unitPrice: defaultPrice,
+        resolvedProductId: prodId,
+        matched: true,
+      };
     }
   }
 
   // 3. Try finding by product name
   if (params.productName) {
     const lowerName = params.productName.trim().toLowerCase();
-    for (const [key, p] of catalog.productNameMap.entries()) {
-      if (lowerName.includes(key) || key.includes(lowerName)) {
-        return { unitPrice: p.defaultPrice, resolvedProductId: p.id, resolvedVariantId: p.defaultVariantId };
+    if (lowerName.length >= 2) {
+      for (const [key, p] of catalog.productNameMap.entries()) {
+        if (lowerName === key || lowerName.includes(key) || key.includes(lowerName)) {
+          return {
+            unitPrice: p.defaultPrice,
+            resolvedProductId: p.id,
+            resolvedVariantId: p.defaultVariantId,
+            matched: true,
+          };
+        }
       }
     }
   }
 
-  // 4. Safe fallback to client-supplied price
+  // 4. Fallback ONLY when catalog pricing maps are unavailable (e.g. unit test mocks)
   return {
     unitPrice: Math.max(0, Number(params.clientPrice) || 0),
     resolvedVariantId: varId,
     resolvedProductId: prodId,
+    matched: false,
   };
 }
 
@@ -299,11 +334,13 @@ export async function placeStorefrontOrderAction(
     try {
       const targetStatus: "incomplete_order" | "pending" = payload.status || "pending";
 
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdmin();
       const catalogPricing = await getCatalogPricingData(client);
+      const catalogHasEntries =
+        catalogPricing.validProdIds.size > 0 || catalogPricing.validVarIds.size > 0;
 
       // Normalize items: support both multi-item list and legacy single item with authoritative server pricing
-      let resolvedItems: StorefrontOrderItem[] = [];
+      const resolvedItems: StorefrontOrderItem[] = [];
       const rawItemList =
         payload.items && payload.items.length > 0
           ? payload.items
@@ -320,28 +357,39 @@ export async function placeStorefrontOrderAction(
             ]
           : [];
 
-      resolvedItems = rawItemList.map((i) => {
-        const safeQuantity = Math.max(1, Math.floor(Number(i.quantity) || 1));
-        const { unitPrice: verifiedUnitPrice, resolvedProductId, resolvedVariantId } = resolveAuthoritativeItemPrice(
-          catalogPricing,
-          {
-            variantId: i.variantId,
-            productId: i.productId,
-            productName: i.productName,
-            quantity: safeQuantity,
-            clientPrice: i.unitPrice,
-          }
-        );
-
+      if (rawItemList.length > 50) {
         return {
-          productId: resolvedProductId || i.productId,
-          productName: i.productName || "Pure Molasses",
-          variantId: resolvedVariantId || i.variantId,
-          variantName: i.variantName || "1 Pack",
-          quantity: safeQuantity,
-          unitPrice: verifiedUnitPrice,
+          success: false,
+          error: "একটি অর্ডারে সর্বোচ্চ ৫০টি পণ্য যুক্ত করা যাবে।",
         };
-      });
+      }
+
+      for (const i of rawItemList) {
+        const safeQuantity = clampInt(i.quantity, 1, 1, 1000);
+        const priceResult = resolveAuthoritativeItemPrice(catalogPricing, {
+          variantId: i.variantId,
+          productId: i.productId,
+          productName: i.productName,
+          quantity: safeQuantity,
+          clientPrice: i.unitPrice,
+        });
+
+        if (catalogHasEntries && !priceResult.matched) {
+          return {
+            success: false,
+            error: "অনুগ্রহ করে বৈধ পণ্য নির্বাচন করুন এবং আবার চেষ্টা করুন।",
+          };
+        }
+
+        resolvedItems.push({
+          productId: priceResult.resolvedProductId || i.productId,
+          productName: String(i.productName || "Pure Molasses").slice(0, 200),
+          variantId: priceResult.resolvedVariantId || i.variantId,
+          variantName: String(i.variantName || "1 Pack").slice(0, 120),
+          quantity: safeQuantity,
+          unitPrice: priceResult.unitPrice,
+        });
+      }
 
       const hasItems = resolvedItems.length > 0;
       const rawSubtotal = hasItems
@@ -351,11 +399,8 @@ export async function placeStorefrontOrderAction(
       const hasDeliveryZone = Boolean(payload.deliveryZone);
       const isDhaka = payload.deliveryZone === "inside_dhaka";
       const baseShippingFee = hasItems && hasDeliveryZone ? (isDhaka ? 70 : 130) : 0;
-      const shippingMethodName = payload.courierName
-        ? payload.courierName.trim()
-        : null;
 
-      const metaTracking = await captureStorefrontMetaTracking({
+      const metaTracking = await captureStorefrontMetaTrackingInternal({
         eventId: payload.eventId,
         fbp: payload.fbp,
         fbc: payload.fbc,
@@ -364,7 +409,7 @@ export async function placeStorefrontOrderAction(
 
       // Validate order ownership before passing orderId to RPC or fallback mutation
       let validatedOrderId: string | null = null;
-      if (payload.orderId && UUID_REGEX.test(payload.orderId)) {
+      if (payload.orderId && isValidUuid(payload.orderId)) {
         const { data: orderOwner } = await client
           .from("orders")
           .select("customer_phone")
@@ -434,12 +479,17 @@ export async function placeStorefrontOrderAction(
 
           // Persist meta_tracking in order's attribution for delayed CAPI purchase upon admin confirmation
           let currentAttr: Record<string, any> = {};
+          let resolvedPublicToken: string | undefined = rpcData.public_token || undefined;
           try {
             const { data: currentOrderRow } = await client
               .from("orders")
-              .select("attribution")
+              .select("attribution, public_token")
               .eq("id", rpcData.order_id)
               .maybeSingle();
+
+            if (!resolvedPublicToken && currentOrderRow?.public_token) {
+              resolvedPublicToken = currentOrderRow.public_token;
+            }
 
             currentAttr =
               currentOrderRow?.attribution && typeof currentOrderRow.attribution === "object"
@@ -540,6 +590,7 @@ export async function placeStorefrontOrderAction(
             success: true,
             orderId: rpcData.order_id,
             orderNumber: rpcData.order_number,
+            publicToken: resolvedPublicToken,
             status: rpcData.status,
             grandTotal: Number(rpcData.grand_total) || 0,
             subtotal: Number(rpcData.subtotal) || 0,
@@ -553,9 +604,12 @@ export async function placeStorefrontOrderAction(
 
         // If the error was a database business validation error raised by the RPC (e.g. code P0001)
         if (rpcErr && rpcErr.code === "P0001") {
+          const isPhoneErr = typeof rpcErr.message === "string" && rpcErr.message.startsWith("INVALID_PHONE");
           return {
             success: false,
-            error: rpcErr.message || "অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে। ডাটাবেজে কোনো পরিবর্তন করা হয়নি।",
+            error: isPhoneErr
+              ? "অনুগ্রহ করে একটি সঠিক মোবাইল নম্বর দিন (উদা: 017XXXXXXXX, 1XXXXXXXXX বা +8801XXXXXXXXX)।"
+              : safePublicErrorMessage("অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে। ডাটাবেজে কোনো পরিবর্তন করা হয়নি।"),
           };
         }
       } catch (rpcCallErr) {
@@ -837,7 +891,7 @@ export async function placeStorefrontOrderAction(
           console.error("Storefront order update DB error:", updateErr);
           return {
             success: false,
-            error: updateErr.message || "অর্ডার আপডেট করতে সমস্যা হয়েছে।",
+            error: safePublicErrorMessage("অর্ডার আপডেট করতে সমস্যা হয়েছে।"),
           };
         }
       } else {
@@ -884,7 +938,7 @@ export async function placeStorefrontOrderAction(
           console.error("Storefront order creation DB error:", orderErr);
           return {
             success: false,
-            error: orderErr.message || "অর্ডার সম্পন্ন করতে সমস্যা হয়েছে, অনুগ্রহ করে সরাসরি ফোন করুন।",
+            error: safePublicErrorMessage("অর্ডার সম্পন্ন করতে সমস্যা হয়েছে, অনুগ্রহ করে সরাসরি ফোন করুন।"),
           };
         }
 
@@ -895,8 +949,8 @@ export async function placeStorefrontOrderAction(
 
       // Synchronize order items if items were supplied
       if (orderDbId && resolvedItems.length > 0) {
-        const candidateProdIds = resolvedItems.map((i) => i.productId).filter((id) => UUID_REGEX.test(id || ""));
-        const candidateVarIds = resolvedItems.map((i) => i.variantId).filter((id) => UUID_REGEX.test(id || ""));
+        const candidateProdIds = resolvedItems.map((i) => i.productId).filter((id) => isValidUuid(id));
+        const candidateVarIds = resolvedItems.map((i) => i.variantId).filter((id) => isValidUuid(id));
 
         const { validProdIds, validVarIds, varToProdMap } = await getValidCatalogIds(
           client,
@@ -1125,7 +1179,7 @@ export async function placeStorefrontOrderAction(
       console.error("Unexpected error in placeStorefrontOrderAction:", err);
       return {
         success: false,
-        error: err.message || "একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
+        error: safePublicErrorMessage("একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।"),
       };
     }
   });
@@ -1144,8 +1198,8 @@ export async function syncStorefrontIncompleteOrderAction(
 
     let validatedOrderId: string | undefined = undefined;
 
-    if (payload.orderId && UUID_REGEX.test(payload.orderId) && normalizedPhone) {
-      const client = supabaseAdmin || supabase;
+    if (payload.orderId && isValidUuid(payload.orderId) && normalizedPhone) {
+      const client = getSupabaseAdmin();
       const { data: owner, error: ownerErr } = await client
         .from("orders")
         .select("customer_phone")
@@ -1213,7 +1267,7 @@ export interface AssistedPhoneOrderPayload {
 export async function submitAssistedPhoneOrderAction(
   payload: AssistedPhoneOrderPayload
 ): Promise<StorefrontOrderResult> {
-  return placeStorefrontOrderAction({
+  const result = await placeStorefrontOrderAction({
     orderId: payload.orderId,
     status: "pending",
     customerPhone: payload.customerPhone,
@@ -1223,4 +1277,26 @@ export async function submitAssistedPhoneOrderAction(
     addressLine: undefined,
     items: payload.items || [],
   });
+
+  if (result.success) {
+    const localPhone =
+      toLocalBdPhone(payload.customerPhone) ||
+      toLocalBdPhone(result.phone) ||
+      String(payload.customerPhone || "").trim();
+
+    createNotificationInternal({
+      type: "customer_inquiry",
+      title: "Phone Callback Request",
+      message: `Customer ${localPhone} requested phone assistance (Draft: ${result.orderNumber || "New"})`,
+      data: {
+        phone: localPhone,
+        order_number: result.orderNumber,
+        link: result.orderNumber
+          ? `/admin/orders?search=${result.orderNumber}`
+          : "/admin/orders",
+      },
+    }).catch(() => {});
+  }
+
+  return result;
 }

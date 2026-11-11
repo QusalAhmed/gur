@@ -1,6 +1,8 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 export interface ShipmentItem {
   id: string;
@@ -37,6 +39,8 @@ export async function getAdminShipmentsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: rawShipments, error } = await supabaseAdmin
       .from("shipments")
       .select(
@@ -140,6 +144,11 @@ export async function updateShipmentStatusAction(payload: {
   status: "preparing" | "in_transit" | "delivered" | "failed" | "returned";
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid shipment ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const updateData: any = {
       status: payload.status,
       updated_at: new Date().toISOString(),
@@ -168,6 +177,12 @@ export async function bulkUpdateShipmentStatusAction(payload: {
   status: "preparing" | "in_transit" | "delivered" | "failed" | "returned";
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const validIds = (payload.ids || []).filter((id) => isValidUuid(id));
+    if (validIds.length === 0) {
+      return { success: false, error: "No valid shipment IDs provided" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const updateData: any = {
       status: payload.status,
       updated_at: new Date().toISOString(),
@@ -182,7 +197,7 @@ export async function bulkUpdateShipmentStatusAction(payload: {
     const { error } = await supabaseAdmin
       .from("shipments")
       .update(updateData)
-      .in("id", payload.ids);
+      .in("id", validIds);
 
     if (error) return { success: false, error: error.message };
     return { success: true };

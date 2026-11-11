@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface TransactionItem {
@@ -61,7 +61,7 @@ export async function getAdminPaymentsAction(): Promise<{
 }> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     // Query payments using staff session (RLS applies)
     const { data: rawPayments, error: payError } = await supabase
@@ -94,7 +94,7 @@ export async function getAdminPaymentsAction(): Promise<{
     // payment_logs: secret key allowed ONLY for admin and owner after explicit role check
     let logs: PaymentLogItem[] = [];
     if (session.role === "owner" || session.role === "admin") {
-      const { data: rawLogs } = await supabaseAdmin
+      const { data: rawLogs } = await supabase
         .from("payment_logs")
         .select("id, payment_id, provider, event, created_at")
         .order("created_at", { ascending: false })
@@ -225,14 +225,27 @@ export async function recordManualPaymentAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
+
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { success: false, error: "Payment amount must be greater than zero" };
+    }
+
+    const cleanOrderRef = sanitizePostgrestFilterTerm(payload.orderNumber);
+    if (!cleanOrderRef) {
+      return { success: false, error: "Order reference is required" };
+    }
 
     // Find order
-    const { data: order, error: orderErr } = await supabase
+    let orderQuery = supabase
       .from("orders")
-      .select("id, grand_total, amount_paid, payment_status")
-      .or(`order_number.eq.${payload.orderNumber},id.eq.${payload.orderNumber}`)
-      .single();
+      .select("id, grand_total, amount_paid, payment_status");
+    orderQuery = isValidUuid(cleanOrderRef)
+      ? orderQuery.or(`order_number.eq.${cleanOrderRef},id.eq.${cleanOrderRef}`)
+      : orderQuery.eq("order_number", cleanOrderRef);
+
+    const { data: order, error: orderErr } = await orderQuery.single();
 
     if (orderErr || !order) {
       return { success: false, error: "Order not found" };
@@ -244,10 +257,10 @@ export async function recordManualPaymentAction(payload: {
       kind: "charge",
       method: payload.method,
       provider: "manual",
-      amount: payload.amount,
+      amount,
       status: "succeeded",
       paid_at: new Date().toISOString(),
-      provider_txn_id: payload.gatewayRef || `MANUAL-${Date.now()}`,
+      provider_txn_id: payload.gatewayRef?.trim() || `MANUAL-${Date.now()}`,
     });
 
     if (payErr) {
@@ -259,8 +272,8 @@ export async function recordManualPaymentAction(payload: {
       await supabase.from("staff_notes").insert({
         entity_type: "order",
         entity_id: order.id,
-        author_id: session.user.id,
-        body: `[Payment Recorded] ৳${payload.amount} via ${payload.method}: ${payload.notes.trim()}`,
+        author_id: getActorUuid(session),
+        body: `[Payment Recorded] ৳${amount} via ${payload.method}: ${payload.notes.trim()}`,
       });
     }
 
@@ -281,13 +294,26 @@ export async function refundPaymentAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
-    const { data: orig, error: origErr } = await supabase
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { success: false, error: "Refund amount must be greater than zero" };
+    }
+
+    const cleanTxRef = sanitizePostgrestFilterTerm(payload.transactionId);
+    if (!cleanTxRef) {
+      return { success: false, error: "Transaction ID is required" };
+    }
+
+    let origQuery = supabase
       .from("payments")
-      .select("id, order_id, method, provider")
-      .or(`id.eq.${payload.transactionId},provider_txn_id.eq.${payload.transactionId}`)
-      .single();
+      .select("id, order_id, method, provider");
+    origQuery = isValidUuid(cleanTxRef)
+      ? origQuery.or(`id.eq.${cleanTxRef},provider_txn_id.eq.${cleanTxRef}`)
+      : origQuery.eq("provider_txn_id", cleanTxRef);
+
+    const { data: orig, error: origErr } = await origQuery.single();
 
     if (origErr || !orig) {
       return { success: false, error: "Original transaction not found" };
@@ -298,7 +324,7 @@ export async function refundPaymentAction(payload: {
       kind: "refund",
       method: orig.method,
       provider: orig.provider,
-      amount: payload.amount,
+      amount,
       status: "succeeded",
       paid_at: new Date().toISOString(),
       provider_txn_id: `REFUND-${Date.now()}`,
@@ -313,8 +339,8 @@ export async function refundPaymentAction(payload: {
       await supabase.from("staff_notes").insert({
         entity_type: "order",
         entity_id: orig.order_id,
-        author_id: session.user.id,
-        body: `[Refund Processed] ৳${payload.amount}: ${payload.reason.trim()}`,
+        author_id: getActorUuid(session),
+        body: `[Refund Processed] ৳${amount}: ${payload.reason.trim()}`,
       });
     }
 
@@ -334,15 +360,24 @@ export async function updatePaymentStatusAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
-    const { error } = await supabase
+    const cleanTxRef = sanitizePostgrestFilterTerm(payload.transactionId);
+    if (!cleanTxRef) {
+      return { success: false, error: "Transaction ID is required" };
+    }
+
+    let updQuery = supabase
       .from("payments")
       .update({
         status: payload.status,
         updated_at: new Date().toISOString(),
-      })
-      .or(`id.eq.${payload.transactionId},provider_txn_id.eq.${payload.transactionId}`);
+      });
+    updQuery = isValidUuid(cleanTxRef)
+      ? updQuery.or(`id.eq.${cleanTxRef},provider_txn_id.eq.${cleanTxRef}`)
+      : updQuery.eq("provider_txn_id", cleanTxRef);
+
+    const { error } = await updQuery;
 
     if (error) {
       const friendly = mapDatabaseError(error);

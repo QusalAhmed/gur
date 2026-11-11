@@ -1,8 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getSiteSettingsAction, SiteSettingsMap } from "@/actions/settings";
-import { fetchSiteSettingsFromDb } from "@/lib/supabase/api";
+import { usePathname } from "next/navigation";
+import {
+  getSiteSettingsAction,
+  getPublicSiteSettingsAction,
+  SiteSettingsMap,
+} from "@/actions/settings";
 
 export interface ParsedSiteSettings {
   raw: SiteSettingsMap;
@@ -113,23 +117,25 @@ export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSett
  * React hook to retrieve reactive, cached site settings across the application.
  */
 export function useSiteSettings(): ParsedSiteSettings {
-  const query = useQuery({
-    queryKey: SITE_SETTINGS_QUERY_KEY,
-    queryFn: async () => {
-      // In client browser, fetch directly from Supabase DB to prevent premature Server Action dispatch before App Router initialization
-      if (typeof window !== "undefined") {
-        return fetchSiteSettingsFromDb();
-      }
+  const pathname = usePathname();
+  const isProtectedAdmin = Boolean(
+    pathname?.startsWith("/admin") && pathname !== "/admin/login"
+  );
 
-      try {
-        const res = await getSiteSettingsAction();
-        if (res.success && res.settings && Object.keys(res.settings).length > 0) {
-          return res.settings;
+  const query = useQuery({
+    queryKey: [SITE_SETTINGS_QUERY_KEY[0], isProtectedAdmin ? "admin" : "public"],
+    queryFn: async () => {
+      if (isProtectedAdmin) {
+        try {
+          const res = await getSiteSettingsAction();
+          if (res.success && res.settings && Object.keys(res.settings).length > 0) {
+            return res.settings;
+          }
+        } catch (e) {
+          console.warn("Could not get admin settings via server action, falling back to public settings:", e);
         }
-      } catch (e) {
-        console.warn("Could not get settings via server action, falling back to db:", e);
       }
-      return fetchSiteSettingsFromDb();
+      return getPublicSiteSettingsAction();
     },
     staleTime: 1000 * 60 * 5, // 5 minutes cache
   });

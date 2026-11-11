@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enqueueAndDispatch } from "@/lib/outbox";
+import { timingSafeTokenEqual } from "@/lib/server-security";
+import { safePublicErrorMessage, sanitizePostgrestFilterTerm } from "@/lib/security";
 
 interface WebhookResult {
   success: boolean;
@@ -12,19 +14,25 @@ interface WebhookResult {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const startTime = Date.now();
   const idempotencyKey =
     req.headers.get("idempotency-key") ||
     req.headers.get("x-idempotency-key") ||
     null;
 
-  // 1. Authenticate with Bearer token matching STEADFAST_WEBHOOK_TOKEN
+  // 1. Fail-closed Bearer token verification against STEADFAST_WEBHOOK_TOKEN
   const expectedToken = (process.env.STEADFAST_WEBHOOK_TOKEN || "").trim();
+  if (!expectedToken) {
+    console.error("[Steadfast Webhook] STEADFAST_WEBHOOK_TOKEN is not configured.");
+    return NextResponse.json(
+      { success: false, error: "Webhook authentication is not configured." },
+      { status: 503 }
+    );
+  }
+
   const authHeader = req.headers.get("authorization") || "";
   const tokenMatch = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-  // If token is configured in .env, enforce validation
-  if (expectedToken && tokenMatch !== expectedToken) {
+  if (!timingSafeTokenEqual(tokenMatch, expectedToken)) {
     return NextResponse.json(
       { success: false, error: "Unauthorized: Invalid or missing Bearer token." },
       { status: 401 }
@@ -35,22 +43,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let payload: any = null;
   try {
     payload = await req.json();
-  } catch (parseErr) {
+  } catch {
     return NextResponse.json(
       { success: false, error: "Invalid JSON body." },
       { status: 400 }
     );
   }
 
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return NextResponse.json(
+      { success: false, error: "Invalid webhook payload." },
+      { status: 400 }
+    );
+  }
+
+  const adminClient = getSupabaseAdmin();
+
   const notificationType: string = String(payload?.notification_type || "unknown").trim();
-  const rawConsignmentId = payload?.consignment_id != null ? String(payload.consignment_id).trim() : null;
+  const rawConsignmentId =
+    payload?.consignment_id != null ? String(payload.consignment_id).trim() : null;
   const rawInvoice = payload?.invoice != null ? String(payload.invoice).trim() : null;
-  const rawTrackingCode = payload?.tracking_code != null ? String(payload.tracking_code).trim() : null;
+  const rawTrackingCode =
+    payload?.tracking_code != null ? String(payload.tracking_code).trim() : null;
+
+  const safeConsignmentId = rawConsignmentId ? sanitizePostgrestFilterTerm(rawConsignmentId) : "";
+  const safeInvoice = rawInvoice ? sanitizePostgrestFilterTerm(rawInvoice) : "";
 
   // 3. Idempotency Check: prevent duplicate processing if same event was already processed
   if (idempotencyKey) {
     try {
-      const { data: existingLog } = await supabaseAdmin
+      const { data: existingLog } = await adminClient
         .from("courier_webhook_logs")
         .select("id, status, response_data")
         .eq("idempotency_key", idempotencyKey)
@@ -93,22 +115,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     shipping_phone?: string;
   } | null = null;
 
-  if (rawConsignmentId || rawInvoice) {
+  if (safeConsignmentId || safeInvoice) {
     try {
-      let query = supabaseAdmin
+      let query = adminClient
         .from("orders")
         .select(
           "id, order_number, status, payment_status, fulfillment_status, grand_total, amount_paid, courier_consignment_id, courier_invoice, courier_tracking_code, courier_tracking_url, shipping_address, customer_name, customer_phone, customer_alternative_phone, shipping_phone"
         );
 
-      if (rawConsignmentId && rawInvoice) {
+      if (safeConsignmentId && safeInvoice) {
         query = query.or(
-          `courier_consignment_id.eq.${rawConsignmentId},courier_invoice.eq.${rawInvoice},order_number.eq.${rawInvoice}`
+          `courier_consignment_id.eq.${safeConsignmentId},courier_invoice.eq.${safeInvoice},order_number.eq.${safeInvoice}`
         );
-      } else if (rawConsignmentId) {
-        query = query.eq("courier_consignment_id", rawConsignmentId);
-      } else if (rawInvoice) {
-        query = query.or(`courier_invoice.eq.${rawInvoice},order_number.eq.${rawInvoice}`);
+      } else if (safeConsignmentId) {
+        query = query.eq("courier_consignment_id", safeConsignmentId);
+      } else if (safeInvoice) {
+        query = query.or(`courier_invoice.eq.${safeInvoice},order_number.eq.${safeInvoice}`);
       }
 
       const { data: ordersList } = await query.limit(1);
@@ -126,7 +148,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const notFoundResult: WebhookResult = {
       success: false,
       status: "order_not_found",
-      reason: `No matching order found for consignment: '${rawConsignmentId}', invoice: '${rawInvoice}'.`,
+      reason: "No matching order found for supplied identifiers.",
     };
 
     await logWebhookExecution({
@@ -139,7 +161,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       payload,
       status: "order_not_found",
       responseData: notFoundResult,
-      errorMessage: notFoundResult.reason,
+      errorMessage: `No matching order found for consignment: '${rawConsignmentId}', invoice: '${rawInvoice}'.`,
     });
 
     return NextResponse.json(notFoundResult, { status: 200 });
@@ -188,13 +210,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             updatePayload.courier_delivery_charge = deliveryCharge;
           }
 
-          await supabaseAdmin
+          await adminClient
             .from("orders")
             .update(updatePayload)
             .eq("id", matchedOrder.id);
 
           // Add timeline event
-          await supabaseAdmin.from("order_events").insert({
+          await adminClient.from("order_events").insert({
             order_id: matchedOrder.id,
             event_type: "courier_status_delivered",
             from_value: matchedOrder.status,
@@ -249,12 +271,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             updatePayload.courier_delivery_charge = deliveryCharge;
           }
 
-          await supabaseAdmin
+          await adminClient
             .from("orders")
             .update(updatePayload)
             .eq("id", matchedOrder.id);
 
-          await supabaseAdmin.from("order_events").insert({
+          await adminClient.from("order_events").insert({
             order_id: matchedOrder.id,
             event_type: "courier_status_partial_delivered",
             from_value: matchedOrder.status,
@@ -264,7 +286,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           // Trigger order status change notification for partial delivery per user specification
-          await supabaseAdmin.from("notifications").insert({
+          await adminClient.from("notifications").insert({
             type: "order_status_changed",
             title: `Order ${matchedOrder.order_number} Partially Delivered`,
             message: `Steadfast marked order as partially delivered${
@@ -332,12 +354,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               (trackingMessage ? `: ${trackingMessage}` : "");
           }
 
-          await supabaseAdmin
+          await adminClient
             .from("orders")
             .update(updatePayload)
             .eq("id", matchedOrder.id);
 
-          await supabaseAdmin.from("order_events").insert({
+          await adminClient.from("order_events").insert({
             order_id: matchedOrder.id,
             event_type: isShipped ? "courier_parcel_returned" : "courier_parcel_cancelled",
             from_value: matchedOrder.status,
@@ -347,7 +369,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           // Trigger order status change notification for courier cancellation / return
-          await supabaseAdmin.from("notifications").insert({
+          await adminClient.from("notifications").insert({
             type: "order_status_changed",
             title: `Order ${matchedOrder.order_number} ${isShipped ? "Returned" : "Cancelled"} by Courier`,
             message: `Order ${matchedOrder.order_number} was marked as ${newStatus} by Steadfast Courier.${
@@ -369,7 +391,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           // Status like 'pending', 'in_transit', etc.
           // Add tracking update event without breaking existing state
           if (trackingMessage) {
-            await supabaseAdmin.from("order_events").insert({
+            await adminClient.from("order_events").insert({
               order_id: matchedOrder.id,
               event_type: "courier_tracking_step",
               from_value: matchedOrder.status,
@@ -391,7 +413,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         const trackingMessage = String(payload.tracking_message || "").trim();
         if (trackingMessage) {
-          await supabaseAdmin.from("order_events").insert({
+          await adminClient.from("order_events").insert({
             order_id: matchedOrder.id,
             event_type: "courier_tracking_step",
             from_value: null,
@@ -411,10 +433,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (!matchedOrder) break;
 
         const changedList = Array.isArray(payload.changed) ? payload.changed : [];
-        const values = payload.values || {};
         const changedDesc = changedList.length > 0 ? changedList.join(", ") : "Parcel details";
 
-        await supabaseAdmin.from("order_events").insert({
+        await adminClient.from("order_events").insert({
           order_id: matchedOrder.id,
           event_type: "courier_consignment_modified",
           from_value: null,
@@ -436,7 +457,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         const reason = String(payload.reason || payload.note || "No reason specified").trim();
 
-        await supabaseAdmin.from("order_events").insert({
+        await adminClient.from("order_events").insert({
           order_id: matchedOrder.id,
           event_type: "courier_return_request",
           from_value: null,
@@ -446,7 +467,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         });
 
         // Trigger high-priority admin alert notification per user specification
-        await supabaseAdmin.from("notifications").insert({
+        await adminClient.from("notifications").insert({
           type: "system_alert",
           title: `Steadfast Return Request: Order ${matchedOrder.order_number}`,
           message: `A return request was raised by Steadfast for Order ${matchedOrder.order_number}. Reason: ${reason}`,
@@ -466,7 +487,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // OTHER EVENTS: return_list_accepted, payment_request, pickup_request, user_update
       // -----------------------------------------------------------------------
       default: {
-        result.message = `Acknowledged notification_type '${notificationType}'.`;
+        result.message = "Webhook notification acknowledged.";
         break;
       }
     }
@@ -474,7 +495,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error(`[Steadfast Webhook] Processing error for event ${notificationType}:`, err);
     result.success = false;
     result.status = "error";
-    result.message = err?.message || "Internal processing error occurred.";
+    result.message = safePublicErrorMessage("Internal processing error occurred.");
 
     await logWebhookExecution({
       idempotencyKey,
@@ -491,7 +512,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // If server fails unexpectedly, return 500 so Steadfast retry schedule takes effect
     return NextResponse.json(
-      { success: false, error: err?.message || "Internal error." },
+      { success: false, error: safePublicErrorMessage("Internal webhook processing error.") },
       { status: 500 }
     );
   }
@@ -528,7 +549,8 @@ async function logWebhookExecution(params: {
   errorMessage?: string;
 }) {
   try {
-    await supabaseAdmin.from("courier_webhook_logs").insert({
+    const adminClient = getSupabaseAdmin();
+    await adminClient.from("courier_webhook_logs").insert({
       idempotency_key: params.idempotencyKey,
       notification_type: params.notificationType,
       consignment_id: params.consignmentId,

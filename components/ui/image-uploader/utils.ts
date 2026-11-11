@@ -1,7 +1,6 @@
 "use client";
 
 import imageCompression from "browser-image-compression";
-import { supabase } from "@/lib/supabase/client";
 import { UploadedImage } from "./types";
 
 /**

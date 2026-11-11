@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { assertStaffRole } from "@/lib/admin-guard";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface RecordPaymentParams {
@@ -28,7 +29,10 @@ export interface RecordRefundParams {
 export async function recordPaymentAction(params: RecordPaymentParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const amount = Number(params.amount);
     if (!amount || amount <= 0) {
@@ -59,7 +63,7 @@ export async function recordPaymentAction(params: RecordPaymentParams) {
       await supabase.from("staff_notes").insert({
         entity_type: "order",
         entity_id: params.orderId,
-        author_id: session.user.id,
+        author_id: getActorUuid(session),
         body: `[Payment Recorded] ৳${amount} via ${params.method || "cash"}: ${params.notes.trim()}`,
       });
     }
@@ -83,7 +87,10 @@ export async function recordPaymentAction(params: RecordPaymentParams) {
 export async function recordRefundAction(params: RecordRefundParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const amount = Number(params.amount);
     if (!amount || amount <= 0) {
@@ -113,7 +120,7 @@ export async function recordRefundAction(params: RecordRefundParams) {
       await supabase.from("staff_notes").insert({
         entity_type: "order",
         entity_id: params.orderId,
-        author_id: session.user.id,
+        author_id: getActorUuid(session),
         body: `[Refund Recorded] ৳${amount}: ${params.reason.trim()}`,
       });
     }

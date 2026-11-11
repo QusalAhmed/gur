@@ -1,8 +1,7 @@
 "use server";
 
 import { cacheLife, cacheTag } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import type { StorefrontProduct } from "@/components/storefront/product-card";
 
@@ -13,8 +12,65 @@ export interface StorefrontDataResult {
   storeSubtitle: string;
 }
 
+export interface PublicLiveStockStatsResult {
+  dailyProductionKg: number | null;
+  simulatedDemandEnabled: boolean | null;
+  simulatedDemandKg: number | null;
+  totalActiveOrdersKg: number;
+  activeOrderCount: number;
+  fetchedAt: number;
+}
+
 function resolveProductImage(storageUrl?: string): string {
   return resolveCdnImageUrl(storageUrl, "/images/products/blackstrap-drum.jpg");
+}
+
+function computeOrderItemWeightKg(item: {
+  quantity?: number | string | null;
+  net_quantity?: number | string | null;
+  net_unit?: string | null;
+  variant_name?: string | null;
+  product_name?: string | null;
+}): number {
+  const qty = Number(item.quantity) || 1;
+
+  if (item.net_quantity != null && Number(item.net_quantity) > 0) {
+    const net = Number(item.net_quantity);
+    const unit = (item.net_unit || "").toLowerCase();
+    if (unit === "g" || unit === "gram" || unit === "grams") return (net / 1000) * qty;
+    if (unit === "t" || unit === "ton" || unit === "tonne") return net * 1000 * qty;
+    return net * qty;
+  }
+
+  const name = `${item.variant_name || ""} ${item.product_name || ""}`.toLowerCase();
+  if (name.includes("500 g") || name.includes("500g") || name.includes("৫০০ গ্রাম")) {
+    return 0.5 * qty;
+  }
+  if (
+    name.includes("1 kg") ||
+    name.includes("1kg") ||
+    name.includes("১ কেজি") ||
+    name.includes("standard pack")
+  ) {
+    return 1 * qty;
+  }
+  if (name.includes("2 kg") || name.includes("2kg") || name.includes("২ কেজি")) {
+    return 2 * qty;
+  }
+  if (name.includes("5 kg") || name.includes("5kg") || name.includes("৫ কেজি")) {
+    return 5 * qty;
+  }
+  if (name.includes("20 l") || name.includes("20l") || name.includes("২০ লিটার")) {
+    return 20 * qty;
+  }
+  if (name.includes("200 l") || name.includes("200l") || name.includes("২০০ লিটার")) {
+    return 200 * qty;
+  }
+  if (name.includes("ton") || name.includes("টন")) {
+    return 1000 * qty;
+  }
+
+  return 1 * qty;
 }
 
 /**
@@ -29,25 +85,31 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     expire: 1800,
   });
 
-  const client = supabaseAdmin || supabase;
+  const client = getSupabaseAdmin();
 
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
-  let storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  const storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
 
   try {
     const { data: settings } = await client
       .from("site_settings")
       .select("key, value")
+      .eq("is_public", true)
       .in("key", ["store.support_phone", "store.name_bn", "store.name"]);
 
     if (settings) {
+      let nameEn = "";
+      let nameBn = "";
       for (const row of settings) {
         const cleanVal = String(row.value || "").replace(/^["']|["']$/g, "").trim();
         if (!cleanVal) continue;
         if (row.key === "store.support_phone") hotline = cleanVal;
-        if (row.key === "store.name_bn" || row.key === "store.name") storeName = cleanVal;
+        if (row.key === "store.name") nameEn = cleanVal;
+        if (row.key === "store.name_bn") nameBn = cleanVal;
       }
+      if (nameBn) storeName = nameBn;
+      else if (nameEn) storeName = nameEn;
     }
   } catch (err) {
     console.warn("Could not fetch site_settings:", err);
@@ -76,7 +138,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     ]);
 
     const comboVariantIds = (varRes.data || [])
-      .filter((v) => v.is_combo)
+      .filter((v) => v.is_combo && v.is_active !== false)
       .map((v) => v.id);
 
     const comboItemsMap = new Map<string, any[]>();
@@ -209,4 +271,97 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     storeName,
     storeSubtitle,
   };
+}
+
+/**
+ * Server Action: Computes aggregated live production capacity and active backlog weight in KG
+ * for the storefront availability banner without exposing individual order rows or PII.
+ */
+export async function getPublicLiveStockStatsAction(): Promise<PublicLiveStockStatsResult> {
+  const fetchedAt = Date.now();
+  try {
+    const client = getSupabaseAdmin();
+    const [settingsRes, ordersRes] = await Promise.all([
+      client
+        .from("site_settings")
+        .select("key, value")
+        .eq("is_public", true)
+        .in("key", [
+          "inventory.daily_production_kg",
+          "inventory.simulated_demand_enabled",
+          "inventory.simulated_demand_kg",
+        ]),
+      client
+        .from("orders")
+        .select(
+          `
+          id,
+          order_items (
+            quantity,
+            net_quantity,
+            net_unit,
+            variant_name,
+            product_name
+          )
+        `
+        )
+        .in("status", ["pending", "confirmed", "processing"]),
+    ]);
+
+    let dailyProductionKg: number | null = null;
+    let simulatedDemandEnabled: boolean | null = null;
+    let simulatedDemandKg: number | null = null;
+
+    for (const row of settingsRes.data || []) {
+      if (row.key === "inventory.daily_production_kg") {
+        const prod = Number(row.value);
+        if (Number.isFinite(prod) && prod > 0) {
+          dailyProductionKg = prod;
+        }
+      } else if (row.key === "inventory.simulated_demand_enabled") {
+        simulatedDemandEnabled =
+          row.value === true ||
+          row.value === "true" ||
+          row.value === 1 ||
+          row.value === "1";
+      } else if (row.key === "inventory.simulated_demand_kg") {
+        const kg = Math.round(Number(row.value) || 0);
+        simulatedDemandKg = Math.max(0, kg);
+      }
+    }
+
+    let totalWeight = 0;
+    let activeOrderCount = 0;
+
+    if (!ordersRes.error && Array.isArray(ordersRes.data)) {
+      for (const order of ordersRes.data) {
+        activeOrderCount++;
+        const items = Array.isArray((order as any).order_items)
+          ? (order as any).order_items
+          : [];
+        for (const item of items) {
+          totalWeight += computeOrderItemWeightKg(item);
+        }
+      }
+    }
+
+    return {
+      dailyProductionKg,
+      simulatedDemandEnabled,
+      simulatedDemandKg,
+      totalActiveOrdersKg: Math.round(totalWeight * 10) / 10,
+      activeOrderCount,
+      fetchedAt,
+    };
+  } catch (err) {
+    console.warn("Failed to compute public live stock stats:", err);
+    return {
+      dailyProductionKg: null,
+      simulatedDemandEnabled: null,
+      simulatedDemandKg: null,
+      totalActiveOrdersKg: 0,
+      activeOrderCount: 0,
+      fetchedAt,
+    };
+  }
 }

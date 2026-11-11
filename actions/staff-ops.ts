@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
-import { AdminRole } from "@/lib/admin-permissions";
+import { AdminRole, canAssignRole } from "@/lib/admin-permissions";
+import { isValidUuid } from "@/lib/security";
 
 export interface StaffDirectoryMember {
   userId: string;
@@ -24,7 +25,7 @@ export async function getStaffMembersAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("staff_members")
@@ -74,21 +75,37 @@ export async function assignStaffRoleAction(params: {
 }): Promise<{ ok: boolean; message?: string }> {
   try {
     const session = await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.userId)) {
+      return { ok: false, message: "Invalid staff user ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
-    // Enforcement: Only an owner can assign 'owner'
-    if (params.role === "owner" && session.role !== "owner") {
+    // Enforcement: Enforce role assignment hierarchy (admins cannot assign owner)
+    if (!canAssignRole(session.role, params.role)) {
       return {
         ok: false,
-        message: "Permission denied: only an existing Owner can assign the 'Owner' role.",
+        message: "Permission denied: your role cannot assign this role.",
       };
     }
 
+    const { data: existingTarget } = await supabase
+      .from("staff_members")
+      .select("role")
+      .eq("user_id", params.userId)
+      .maybeSingle();
+    if (existingTarget?.role === "owner" && session.role !== "owner") {
+      return {
+        ok: false,
+        message: "Permission denied: only an Owner can modify an Owner account.",
+      };
+    }
+
+    const actorUuid = getActorUuid(session);
     const { error } = await supabase.from("staff_members").upsert(
       {
         user_id: params.userId,
         role: params.role,
-        created_by: session.user.id,
+        created_by: actorUuid,
       },
       { onConflict: "user_id" }
     );
@@ -100,7 +117,7 @@ export async function assignStaffRoleAction(params: {
 
     // Log to audit log
     await supabase.from("audit_log").insert({
-      actor_id: session.user.id,
+      actor_id: actorUuid,
       table_name: "staff_members",
       row_id: params.userId,
       action: "UPDATE",
@@ -123,13 +140,28 @@ export async function revokeStaffAccessAction(
 ): Promise<{ ok: boolean; message?: string }> {
   try {
     const session = await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(userId)) {
+      return { ok: false, message: "Invalid staff user ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     // Prevent removing oneself
     if (session.user.id === userId) {
       return {
         ok: false,
         message: "You cannot revoke your own staff access.",
+      };
+    }
+
+    const { data: existingTarget } = await supabase
+      .from("staff_members")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existingTarget?.role === "owner" && session.role !== "owner") {
+      return {
+        ok: false,
+        message: "Permission denied: only an Owner can revoke an Owner account.",
       };
     }
 
@@ -142,7 +174,7 @@ export async function revokeStaffAccessAction(
 
     // Log to audit log
     await supabase.from("audit_log").insert({
-      actor_id: session.user.id,
+      actor_id: getActorUuid(session),
       table_name: "staff_members",
       row_id: userId,
       action: "DELETE",

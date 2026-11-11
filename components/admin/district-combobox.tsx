@@ -18,7 +18,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { DbGeoDistrict, fetchGeoDistricts, fallbackDistricts } from "@/lib/supabase";
+import { DbGeoDistrict, fallbackDistricts } from "@/lib/supabase";
+import { getGeoDistrictsAction } from "@/actions/orders";
 
 export interface DistrictComboboxProps {
   id?: string;
@@ -61,16 +62,18 @@ export function DistrictCombobox({
     }
   }, [externalDistricts]);
 
-  // If no external districts provided, fetch directly from Supabase table geo_districts
+  // If no external districts provided, fetch via admin Server Action
   React.useEffect(() => {
     if (!externalDistricts || externalDistricts.length === 0) {
       let active = true;
-      fetchGeoDistricts().then((data) => {
-        if (active && data && data.length > 0) {
-          setLoadedDistricts(data);
-          setIsDbLoaded(true);
-        }
-      });
+      getGeoDistrictsAction()
+        .then((data) => {
+          if (active && data && data.length > 0) {
+            setLoadedDistricts(data);
+            setIsDbLoaded(true);
+          }
+        })
+        .catch(() => {});
       return () => {
         active = false;
       };

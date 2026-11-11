@@ -17,12 +17,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
-  UiCategoryItem,
-  createCategoryInDb,
-  updateCategoryInDb,
+  type UiCategoryItem,
   uploadCategoryImageToStorage,
   deleteCategoryImageFromStorage,
 } from "@/lib/supabase";
+import {
+  createCategoryAction,
+  updateCategoryAction,
+} from "@/actions/categories";
 import {
   categoryFormSchema,
   categoryNameSchema,
@@ -93,11 +95,13 @@ export function CategoryFormDialog({
   // Mutation for Database Save / Update
   const saveMutation = useMutation({
     mutationFn: async (values: CategoryFormValues) => {
+      const normalizedParentId =
+        values.parentId && values.parentId !== "none" ? values.parentId : null;
       const payload = {
         name: values.name,
         nameBn: values.nameBn || undefined,
         slug: values.slug,
-        parent_id: values.parentId,
+        parent_id: normalizedParentId,
         description: values.description || undefined,
         descriptionBn: values.descriptionBn || undefined,
         image_path: values.imagePath || null,
@@ -108,7 +112,7 @@ export function CategoryFormDialog({
       };
 
       if (isEdit && category) {
-        return await updateCategoryInDb(category.id, {
+        return await updateCategoryAction(category.id, {
           name: payload.name,
           name_bn: payload.nameBn || null,
           slug: payload.slug,
@@ -122,7 +126,7 @@ export function CategoryFormDialog({
           seo_description: payload.seo_description || null,
         });
       } else {
-        return await createCategoryInDb(payload);
+        return await createCategoryAction(payload);
       }
     },
     onSuccess: () => {

@@ -1,6 +1,8 @@
 "use server";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { AdminNotification, NotificationType } from "@/types/notification";
 import { revalidatePath } from "next/cache";
 
@@ -17,12 +19,14 @@ export async function getNotificationsAction(
   limit = 40
 ): Promise<ActionResult<AdminNotification[]>> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const safeLimit = Math.min(200, Math.max(1, Math.floor(Number(limit) || 40)));
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(safeLimit);
 
     if (error) {
       console.error("[getNotificationsAction] error:", error);
@@ -41,6 +45,7 @@ export async function getNotificationsAction(
  */
 export async function getUnreadNotificationsCountAction(): Promise<ActionResult<number>> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
     const supabase = getSupabaseAdmin();
     const { count, error } = await supabase
       .from("notifications")
@@ -64,6 +69,10 @@ export async function markNotificationReadAction(
   id: string
 ): Promise<ActionResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid notification ID" };
+    }
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("notifications")
@@ -86,6 +95,7 @@ export async function markNotificationReadAction(
  */
 export async function markAllNotificationsReadAction(): Promise<ActionResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("notifications")
@@ -110,6 +120,10 @@ export async function deleteNotificationAction(
   id: string
 ): Promise<ActionResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid notification ID" };
+    }
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("notifications")
@@ -132,6 +146,7 @@ export async function deleteNotificationAction(
  */
 export async function clearReadNotificationsAction(): Promise<ActionResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("notifications")
@@ -164,6 +179,7 @@ export async function createNotificationAction({
   data?: Record<string, any>;
 }): Promise<ActionResult<AdminNotification>> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
     const supabase = getSupabaseAdmin();
     const { data: inserted, error } = await supabase
       .from("notifications")

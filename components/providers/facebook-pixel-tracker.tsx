@@ -9,7 +9,12 @@ function FacebookPixelTrackerInner() {
   const lastTrackedPath = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!pathname || pathname.startsWith("/admin")) {
+    if (!pathname) {
+      return;
+    }
+
+    if (pathname.startsWith("/admin")) {
+      lastTrackedPath.current = pathname;
       return;
     }
 
@@ -17,27 +22,44 @@ function FacebookPixelTrackerInner() {
     if (lastTrackedPath.current === pathname) {
       return;
     }
-    lastTrackedPath.current = pathname;
+
+    let cancelled = false;
+    const trackedUrl = typeof window !== "undefined" ? window.location.href : undefined;
 
     const runTracking = () => {
+      if (cancelled || lastTrackedPath.current === pathname) {
+        return;
+      }
+      lastTrackedPath.current = pathname;
+
       const eventId = trackPageView();
       if (eventId) {
         const { fbp, fbc } = getClientFbpAndFbc();
-        const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
         sendCapiClientEvent("PageView", {
           eventId,
-          url: currentUrl,
+          url: trackedUrl,
           fbp,
           fbc,
         });
       }
     };
 
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      (window as any).requestIdleCallback(runTracking, { timeout: 2500 });
-    } else {
-      setTimeout(runTracking, 1000);
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestIdleCallback === "function"
+    ) {
+      const idleId = window.requestIdleCallback(runTracking, { timeout: 2500 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback?.(idleId);
+      };
     }
+
+    const timerId = setTimeout(runTracking, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
   }, [pathname]);
 
   return null;

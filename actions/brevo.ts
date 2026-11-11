@@ -8,6 +8,7 @@ import {
   BrevoSendResult,
 } from "@/lib/brevo";
 import { getOrderAction } from "@/actions/orders";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export interface BrevoStatusResult {
   success: boolean;
@@ -26,6 +27,7 @@ export interface BrevoStatusResult {
  */
 export async function getBrevoStatusAction(): Promise<BrevoStatusResult> {
   try {
+    await assertStaffRole(["owner", "admin"]);
     const config = await getBrevoConfig();
     return {
       success: true,
@@ -60,6 +62,7 @@ export async function testBrevoConnectionAction(
   recipientEmail?: string
 ): Promise<BrevoSendResult> {
   try {
+    await assertStaffRole(["owner", "admin"]);
     return await testBrevoConnection(recipientEmail);
   } catch (err: any) {
     return {
@@ -76,6 +79,7 @@ export async function resendAdminOrderNotificationAction(
   orderIdOrNumber: string
 ): Promise<BrevoSendResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
     const order = await getOrderAction(orderIdOrNumber);
     if (!order) {
       return {

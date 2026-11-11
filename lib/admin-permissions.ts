@@ -1,5 +1,17 @@
 export type AdminRole = "owner" | "admin" | "manager" | "editor" | "support";
 
+const VALID_ADMIN_ROLES: ReadonlySet<AdminRole> = new Set([
+  "owner",
+  "admin",
+  "manager",
+  "editor",
+  "support",
+]);
+
+export function isValidAdminRole(role: unknown): role is AdminRole {
+  return typeof role === "string" && VALID_ADMIN_ROLES.has(role as AdminRole);
+}
+
 export interface RoleCapability {
   canManageOrders: boolean; // orders, shipments, payment entries, notes, RFQs, reviews, messages
   canManageContent: boolean; // products, categories, images, documents, posts, faqs
@@ -118,79 +130,113 @@ export const ROLE_CONFIG: Record<
  * Others cannot assign roles.
  */
 export function canAssignRole(actingRole: AdminRole, targetRole: AdminRole): boolean {
+  if (!isValidAdminRole(actingRole) || !isValidAdminRole(targetRole)) return false;
   if (actingRole === "owner") return true;
   if (actingRole === "admin") return targetRole !== "owner";
   return false;
 }
 
+function matchesRoute(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(prefix + "/");
+}
+
 /**
- * Determines whether a role has access to a specific route path.
+ * Validates that an admin post-login redirect stays within /admin and never loops to /admin/login.
+ */
+export function sanitizeAdminRedirect(nextPath: string | null | undefined): string {
+  if (!nextPath || typeof nextPath !== "string") return "/admin";
+  const trimmed = nextPath.trim();
+  if (!trimmed.startsWith("/admin") || trimmed.startsWith("//") || trimmed.includes("\\")) {
+    return "/admin";
+  }
+  try {
+    const parsed = new URL(trimmed, "http://localhost");
+    if (parsed.origin !== "http://localhost" || !parsed.pathname.startsWith("/admin")) {
+      return "/admin";
+    }
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "") || "/";
+    if (normalizedPath === "/admin/login") return "/admin";
+    return parsed.pathname + parsed.search;
+  } catch {
+    return "/admin";
+  }
+}
+
+/**
+ * Determines whether a role has access to a specific route path (fail-closed).
  */
 export function canRoleAccessPath(role: AdminRole, pathname: string): boolean {
+  if (!isValidAdminRole(role) || typeof pathname !== "string") return false;
+
   // Normalize path
   const path = pathname.split("?")[0].replace(/\/+$/, "") || "/";
 
-  // Login is always open
-  if (path === "/admin/login") return true;
+  if (path.includes("..")) return false;
+
+  // Login and Unauthorized status page are always reachable
+  if (path === "/admin/login" || path === "/admin/unauthorized") return true;
+
+  // Fail closed for non-admin paths
+  if (path !== "/admin" && !path.startsWith("/admin/")) return false;
 
   // Root admin overview is accessible to all staff
   if (path === "/admin") return true;
 
   // Settings, audit, outbox, staff are admin/owner only
   if (
-    path.startsWith("/admin/settings") ||
-    path.startsWith("/admin/audit") ||
-    path.startsWith("/admin/outbox") ||
-    path.startsWith("/admin/staff")
+    matchesRoute(path, "/admin/settings") ||
+    matchesRoute(path, "/admin/audit") ||
+    matchesRoute(path, "/admin/outbox") ||
+    matchesRoute(path, "/admin/staff")
   ) {
     return role === "owner" || role === "admin";
   }
 
-  // Finance / Payments reconciliation: support, manager, admin, owner
-  if (path.startsWith("/admin/payments")) {
-    return role !== "editor";
+  // Shipping configuration & Coupons: manager, admin, owner
+  if (matchesRoute(path, "/admin/shipping") || matchesRoute(path, "/admin/coupons")) {
+    return role === "owner" || role === "admin" || role === "manager";
   }
 
-  // Orders, Incomplete, Shipments, Customers, Quotes (RFQ), Reviews, Messages:
+  // Finance / Analytics / Payments reconciliation / CRM & Operations:
+  // Support, Manager, Admin, Owner
   if (
-    path.startsWith("/admin/orders") ||
-    path.startsWith("/admin/incomplete") ||
-    path.startsWith("/admin/shipments") ||
-    path.startsWith("/admin/customers") ||
-    path.startsWith("/admin/quotes") ||
-    path.startsWith("/admin/reviews") ||
-    path.startsWith("/admin/messages")
+    matchesRoute(path, "/admin/payments") ||
+    matchesRoute(path, "/admin/analytics") ||
+    matchesRoute(path, "/admin/orders") ||
+    matchesRoute(path, "/admin/incomplete") ||
+    matchesRoute(path, "/admin/shipments") ||
+    matchesRoute(path, "/admin/customers") ||
+    matchesRoute(path, "/admin/quotes") ||
+    matchesRoute(path, "/admin/reviews") ||
+    matchesRoute(path, "/admin/messages") ||
+    matchesRoute(path, "/admin/businesses")
   ) {
-    return role !== "editor";
-  }
-
-  // B2B Accounts: manager, admin, owner (support can read, editor cannot)
-  if (path.startsWith("/admin/businesses")) {
     return role !== "editor";
   }
 
   // Inventory, Batches (lots), Warehouses, Suppliers:
-  // All staff can read inventory/lots/ledger; editor can read; support can read; manager+ can manage
+  // All staff can read inventory/lots/ledger; manager+ can manage
   if (
-    path.startsWith("/admin/inventory") ||
-    path.startsWith("/admin/batches") ||
-    path.startsWith("/admin/warehouses") ||
-    path.startsWith("/admin/suppliers")
+    matchesRoute(path, "/admin/inventory") ||
+    matchesRoute(path, "/admin/batches") ||
+    matchesRoute(path, "/admin/warehouses") ||
+    matchesRoute(path, "/admin/suppliers")
   ) {
-    return true; // All staff have at least read access
+    return true;
   }
 
   // Catalog: Products, Combos, Categories, Posts, FAQs
   if (
-    path.startsWith("/admin/products") ||
-    path.startsWith("/admin/combos") ||
-    path.startsWith("/admin/categories") ||
-    path.startsWith("/admin/posts") ||
-    path.startsWith("/admin/faqs")
+    matchesRoute(path, "/admin/products") ||
+    matchesRoute(path, "/admin/combos") ||
+    matchesRoute(path, "/admin/categories") ||
+    matchesRoute(path, "/admin/posts") ||
+    matchesRoute(path, "/admin/faqs")
   ) {
     // Support cannot manage content
     return role !== "support";
   }
 
-  return true;
+  // Unknown admin subpaths fail closed
+  return false;
 }

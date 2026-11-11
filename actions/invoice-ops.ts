@@ -1,8 +1,8 @@
 "use server";
 
-import { supabaseAdmin, isServiceRoleConfigured } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 /**
  * Assigns a sequence-backed invoice number to an order if not yet assigned.
@@ -11,7 +11,10 @@ import { assertStaffRole } from "@/lib/admin-guard";
 export async function assignInvoiceNumberAction(orderId: string) {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, error: "Invalid order ID format." };
+    }
+    const client = getSupabaseAdmin();
 
     const { data, error } = await client.rpc("assign_invoice_number", {
       p_order_id: orderId,

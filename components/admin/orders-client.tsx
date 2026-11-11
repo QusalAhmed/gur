@@ -52,22 +52,6 @@ import {
   XCircle,
 } from "lucide-react";
 import {
-  supabase,
-  fetchGeoDivisionsAndDistricts,
-  fetchGeoDistricts,
-  fetchOrdersFromDb,
-  createOrderInDb,
-  updateOrderInDb,
-  addOrderNoteInDb,
-  updateOrderNoteInDb,
-  deleteOrderNoteInDb,
-  updateCustomerNoteInDb,
-  deleteOrderInDb,
-  recordOrderPaymentInDb,
-  fetchCatalogProductsFromDb,
-  bulkUpdateOrderStatusInDb,
-  bulkAssignCourierInDb,
-  bulkDeleteOrdersInDb,
   DbGeoDivision,
   DbGeoDistrict,
   fallbackDivisions,
@@ -84,6 +68,23 @@ import {
   recreateSteadfastParcelAction,
   type BulkBookSteadfastResult,
 } from "@/actions/steadfast";
+import {
+  getOrdersAction,
+  getOrderAction,
+  updateOrderStatusAction,
+  getGeoDataAction,
+  createAdminOrderAction,
+  updateAdminOrderAction,
+  addOrderNoteAction,
+  updateOrderNoteAction,
+  deleteOrderNoteAction,
+  deleteOrderAction,
+  recordOrderPaymentAction,
+  getCatalogProductsAction,
+  bulkUpdateOrderStatusAction,
+  bulkAssignCourierAction,
+  bulkDeleteOrdersAction,
+} from "@/actions/orders";
 import {
   buildSteadfastPayloadSnapshot,
   detectSteadfastPayloadDiff,
@@ -154,7 +155,6 @@ import {
 } from "@/components/ui/tanstack-form";
 import { cn, formatDate, formatDateTime, sortNotesNewestFirst } from "@/lib/utils";
 import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
-import { getOrdersAction, getOrderAction, updateOrderStatusAction } from "@/actions/orders";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderFormDialog } from "@/components/admin/order-form-dialog";
@@ -626,21 +626,12 @@ export function OrdersClient() {
 
   const { data: catalogProducts = availableCatalogProducts } = useQuery({
     queryKey: ["admin", "catalog-products"],
-    queryFn: fetchCatalogProductsFromDb,
+    queryFn: getCatalogProductsAction,
   });
 
   const { data: geoData } = useQuery({
     queryKey: ["admin", "geo-data"],
-    queryFn: async () => {
-      const [geoAll, dbDistricts] = await Promise.all([
-        fetchGeoDivisionsAndDistricts(),
-        fetchGeoDistricts(),
-      ]);
-      return {
-        divisions: geoAll.divisions && geoAll.divisions.length > 0 ? geoAll.divisions : fallbackDivisions,
-        districts: dbDistricts && dbDistricts.length > 0 ? dbDistricts : fallbackDistricts,
-      };
-    },
+    queryFn: getGeoDataAction,
   });
 
   const geoDivisions = geoData?.divisions || fallbackDivisions;
@@ -655,7 +646,7 @@ export function OrdersClient() {
   // ─── TANSTACK QUERY: MUTATIONS ──────────────────────────────────────────────
 
   const createOrderMutation = useMutation({
-    mutationFn: (newOrder: Order) => createOrderInDb(newOrder),
+    mutationFn: (newOrder: Order) => createAdminOrderAction(newOrder),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       showToast(`Order ${created.id} successfully created and synced to database!`, "success");
@@ -668,7 +659,7 @@ export function OrdersClient() {
   });
 
   const updateOrderMutation = useMutation({
-    mutationFn: (updated: Order) => updateOrderInDb(updated),
+    mutationFn: (updated: Order) => updateAdminOrderAction(updated),
     onSuccess: (updated) => {
       // 1. Immediately update TanStack Query cache so all hooks and tables see fresh data without waiting for network refetch
       queryClient.setQueryData<Order[]>(["admin", "orders"], (old = []) =>
@@ -837,7 +828,7 @@ export function OrdersClient() {
         currentOrder ||
         orders.find((o) => o.id === orderId) ||
         (selectedOrder?.id === orderId ? selectedOrder : undefined);
-      return await addOrderNoteInDb(orderId, note, resolvedOrder);
+      return await addOrderNoteAction(orderId, note, resolvedOrder);
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -873,7 +864,7 @@ export function OrdersClient() {
         currentOrder ||
         orders.find((o) => o.id === orderId) ||
         (selectedOrder?.id === orderId ? selectedOrder : undefined);
-      return await updateOrderNoteInDb(orderId, noteId, text, type, resolvedOrder);
+      return await updateOrderNoteAction(orderId, noteId, text, type, resolvedOrder);
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -907,7 +898,7 @@ export function OrdersClient() {
         currentOrder ||
         orders.find((o) => o.id === orderId) ||
         (selectedOrder?.id === orderId ? selectedOrder : undefined);
-      return await deleteOrderNoteInDb(orderId, noteId, resolvedOrder);
+      return await deleteOrderNoteAction(orderId, noteId, resolvedOrder);
     },
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -929,7 +920,7 @@ export function OrdersClient() {
   });
 
   const deleteOrderMutation = useMutation({
-    mutationFn: (orderId: string) => deleteOrderInDb(orderId),
+    mutationFn: (orderId: string) => deleteOrderAction(orderId),
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       if (selectedOrder?.id === deletedId) {
@@ -972,7 +963,7 @@ export function OrdersClient() {
         }
       }
 
-      return await bulkUpdateOrderStatusInDb(orderIds, targetStatus, batchNote, courierName);
+      return await bulkUpdateOrderStatusAction(orderIds, targetStatus, batchNote, courierName);
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -1042,7 +1033,7 @@ export function OrdersClient() {
       courierName: string;
       batchNote?: string;
     }): Promise<BulkCourierUpdateResult> => {
-      return await bulkAssignCourierInDb(orderIds, courierName, batchNote);
+      return await bulkAssignCourierAction(orderIds, courierName, batchNote);
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -1079,7 +1070,7 @@ export function OrdersClient() {
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (orderIds: string[]): Promise<BulkDeleteResult> => {
-      return await bulkDeleteOrdersInDb(orderIds);
+      return await bulkDeleteOrdersAction(orderIds);
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -1129,7 +1120,7 @@ export function OrdersClient() {
       noteText?: string;
       currentOrder?: Order;
     }) => {
-      return await recordOrderPaymentInDb(
+      return await recordOrderPaymentAction(
         orderId,
         amountPaid,
         paymentStatus,

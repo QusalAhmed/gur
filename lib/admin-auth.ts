@@ -1,4 +1,11 @@
-export type AdminRole = "owner" | "admin" | "manager" | "editor" | "support";
+import {
+  AdminRole,
+  canRoleAccessPath,
+  isValidAdminRole,
+} from "./admin-permissions";
+
+export type { AdminRole };
+export { canRoleAccessPath };
 
 export interface AdminUser {
   id: string;
@@ -21,9 +28,29 @@ export interface SessionPayload {
 
 export const ADMIN_COOKIE_NAME = "gur_admin_session";
 
-const AUTH_SECRET =
-  process.env.ADMIN_AUTH_SECRET ||
-  "gur-molasses-admin-secret-2026-auth-token-secure-key-99214";
+function getAuthSecret(): string {
+  if (typeof window !== "undefined") {
+    throw new Error("SECURITY_ERROR: Session secret cannot be accessed in browser context.");
+  }
+  const secret = process.env.ADMIN_AUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "SECURITY_MISCONFIGURATION: ADMIN_AUTH_SECRET must be set to at least 32 characters."
+    );
+  }
+  return secret;
+}
+
+function constantTimeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  const normalizedA = a.toLowerCase();
+  const normalizedB = b.toLowerCase();
+  for (let i = 0; i < normalizedA.length; i++) {
+    diff |= normalizedA.charCodeAt(i) ^ normalizedB.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 // Base64Url helpers compatible with all environments
 function toBase64Url(str: string): string {
@@ -86,7 +113,7 @@ export async function createSessionToken(
   const encodedPayload = toBase64Url(payloadString);
 
   const enc = new TextEncoder();
-  const key = await getHmacKey(AUTH_SECRET);
+  const key = await getHmacKey(getAuthSecret());
   const signatureBuffer = await globalThis.crypto.subtle.sign(
     "HMAC",
     key,
@@ -110,10 +137,11 @@ export async function verifySessionToken(
   if (parts.length !== 2) return null;
 
   const [encodedPayload, signatureHex] = parts;
+  if (!encodedPayload || !/^[0-9a-f]{64}$/i.test(signatureHex)) return null;
 
   try {
     const enc = new TextEncoder();
-    const key = await getHmacKey(AUTH_SECRET);
+    const key = await getHmacKey(getAuthSecret());
 
     // Recompute signature
     const signatureBuffer = await globalThis.crypto.subtle.sign(
@@ -124,7 +152,7 @@ export async function verifySessionToken(
     const expectedHex = bufferToHex(signatureBuffer);
 
     // Constant-time comparison
-    if (signatureHex !== expectedHex) {
+    if (!constantTimeEqualHex(signatureHex, expectedHex)) {
       return null;
     }
 
@@ -132,11 +160,28 @@ export async function verifySessionToken(
     const payload: SessionPayload = JSON.parse(jsonStr);
 
     const now = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp < now) {
-      return null; // Expired
+    if (
+      !payload ||
+      typeof payload.exp !== "number" ||
+      payload.exp < now ||
+      typeof payload.iat !== "number" ||
+      payload.iat > now + 60
+    ) {
+      return null; // Expired or invalid timestamps
     }
 
-    return payload.user || null;
+    const user = payload.user;
+    if (
+      !user ||
+      typeof user.id !== "string" ||
+      !user.id ||
+      typeof user.email !== "string" ||
+      !isValidAdminRole(user.role)
+    ) {
+      return null;
+    }
+
+    return user;
   } catch {
     return null;
   }
@@ -191,41 +236,3 @@ export const ROLE_CONFIG: Record<
     level: 1,
   },
 };
-
-/**
- * Check if a role can access a specific route
- */
-export function canRoleAccessPath(role: AdminRole, pathname: string): boolean {
-  if (role === "owner" || role === "admin") return true;
-
-  if (role === "manager") {
-    const restricted = ["/admin/staff", "/admin/settings"];
-    return !restricted.some((p) => pathname.startsWith(p));
-  }
-
-  if (role === "editor") {
-    const allowed = [
-      "/admin",
-      "/admin/products",
-      "/admin/categories",
-      "/admin/posts",
-      "/admin/faqs",
-      "/admin/reviews",
-    ];
-    return allowed.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  }
-
-  if (role === "support") {
-    const allowed = [
-      "/admin",
-      "/admin/orders",
-      "/admin/shipments",
-      "/admin/customers",
-      "/admin/messages",
-      "/admin/reviews",
-    ];
-    return allowed.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  }
-
-  return true;
-}

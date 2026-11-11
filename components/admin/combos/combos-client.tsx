@@ -36,7 +36,8 @@ import {
   type ComboItemView,
   type ComboComponentDetail,
 } from "@/actions/combos";
-import { fetchProductsFromDb, type UiProductItem } from "@/lib/supabase";
+import { getAdminProductsAction } from "@/actions/products";
+import { type UiProductItem } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -105,7 +106,7 @@ export function CombosClient() {
   // TanStack Query for Catalog Products (needed by ComboDrawer to pick items)
   const { data: catalogProducts = [] } = useQuery({
     queryKey: ["admin", "products"],
-    queryFn: fetchProductsFromDb,
+    queryFn: getAdminProductsAction,
   });
 
   // Toggle Combo Status Mutation

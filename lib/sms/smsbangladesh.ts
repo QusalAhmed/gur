@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 
 export type OrderSmsStatus = "placed" | "confirmed" | "shipped" | "delivered" | "manual" | "test";
 
@@ -134,8 +135,8 @@ export async function getSmsConfig(): Promise<SmsBangladeshConfig> {
   let templateDelivered = DEFAULT_TEMPLATES.delivered;
 
   try {
-    if (supabaseAdmin) {
-      const { data: rows } = await supabaseAdmin
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: rows } = await supabaseAdmin
         .from("site_settings")
         .select("key, value")
         .in("key", [
@@ -154,60 +155,59 @@ export async function getSmsConfig(): Promise<SmsBangladeshConfig> {
           "notifications.sms_template_delivered",
         ]);
 
-      if (rows && rows.length > 0) {
-        const dict = new Map<string, any>();
-        rows.forEach((r) => dict.set(r.key, r.value));
+    if (rows && rows.length > 0) {
+      const dict = new Map<string, any>();
+      rows.forEach((r) => dict.set(r.key, r.value));
 
-        if (dict.has("notifications.sms_enabled")) {
-          const v = dict.get("notifications.sms_enabled");
-          dbEnabled = typeof v === "boolean" ? v : String(v) !== "false";
-        }
-        if (dict.has("notifications.sms_gateway")) {
-          dbGateway = String(dict.get("notifications.sms_gateway") || "").replace(/^"|"$/g, "").trim() || "smsbangladesh";
-        }
-        if (dict.has("notifications.smsbangladesh_user")) {
-          dbUser = String(dict.get("notifications.smsbangladesh_user") || "").replace(/^"|"$/g, "").trim();
-        }
-        if (dict.has("notifications.smsbangladesh_password")) {
-          dbPass = String(dict.get("notifications.smsbangladesh_password") || "").replace(/^"|"$/g, "").trim();
-        }
-        if (dict.has("notifications.smsbangladesh_from")) {
-          dbSender = String(dict.get("notifications.smsbangladesh_from") || "").replace(/^"|"$/g, "").trim();
-        }
+      if (dict.has("notifications.sms_enabled")) {
+        const v = dict.get("notifications.sms_enabled");
+        dbEnabled = typeof v === "boolean" ? v : String(v) !== "false";
+      }
+      if (dict.has("notifications.sms_gateway")) {
+        dbGateway = String(dict.get("notifications.sms_gateway") || "").replace(/^"|"$/g, "").trim() || "smsbangladesh";
+      }
+      if (dict.has("notifications.smsbangladesh_user")) {
+        dbUser = String(dict.get("notifications.smsbangladesh_user") || "").replace(/^"|"$/g, "").trim();
+      }
+      if (dict.has("notifications.smsbangladesh_password")) {
+        dbPass = String(dict.get("notifications.smsbangladesh_password") || "").replace(/^"|"$/g, "").trim();
+      }
+      if (dict.has("notifications.smsbangladesh_from")) {
+        dbSender = String(dict.get("notifications.smsbangladesh_from") || "").replace(/^"|"$/g, "").trim();
+      }
 
-        if (dict.has("notifications.sms_placed_enabled")) {
-          const v = dict.get("notifications.sms_placed_enabled");
-          togglePlaced = typeof v === "boolean" ? v : String(v) !== "false";
-        }
-        if (dict.has("notifications.sms_confirmed_enabled")) {
-          const v = dict.get("notifications.sms_confirmed_enabled");
-          toggleConfirmed = typeof v === "boolean" ? v : String(v) !== "false";
-        }
-        if (dict.has("notifications.sms_shipped_enabled")) {
-          const v = dict.get("notifications.sms_shipped_enabled");
-          toggleShipped = typeof v === "boolean" ? v : String(v) !== "false";
-        }
-        if (dict.has("notifications.sms_delivered_enabled")) {
-          const v = dict.get("notifications.sms_delivered_enabled");
-          toggleDelivered = typeof v === "boolean" ? v : String(v) !== "false";
-        }
+      if (dict.has("notifications.sms_placed_enabled")) {
+        const v = dict.get("notifications.sms_placed_enabled");
+        togglePlaced = typeof v === "boolean" ? v : String(v) !== "false";
+      }
+      if (dict.has("notifications.sms_confirmed_enabled")) {
+        const v = dict.get("notifications.sms_confirmed_enabled");
+        toggleConfirmed = typeof v === "boolean" ? v : String(v) !== "false";
+      }
+      if (dict.has("notifications.sms_shipped_enabled")) {
+        const v = dict.get("notifications.sms_shipped_enabled");
+        toggleShipped = typeof v === "boolean" ? v : String(v) !== "false";
+      }
+      if (dict.has("notifications.sms_delivered_enabled")) {
+        const v = dict.get("notifications.sms_delivered_enabled");
+        toggleDelivered = typeof v === "boolean" ? v : String(v) !== "false";
+      }
 
-        if (dict.has("notifications.sms_template_placed")) {
-          const t = String(dict.get("notifications.sms_template_placed") || "").replace(/^"|"$/g, "").trim();
-          if (t) templatePlaced = t;
-        }
-        if (dict.has("notifications.sms_template_confirmed")) {
-          const t = String(dict.get("notifications.sms_template_confirmed") || "").replace(/^"|"$/g, "").trim();
-          if (t) templateConfirmed = t;
-        }
-        if (dict.has("notifications.sms_template_shipped")) {
-          const t = String(dict.get("notifications.sms_template_shipped") || "").replace(/^"|"$/g, "").trim();
-          if (t) templateShipped = t;
-        }
-        if (dict.has("notifications.sms_template_delivered")) {
-          const t = String(dict.get("notifications.sms_template_delivered") || "").replace(/^"|"$/g, "").trim();
-          if (t) templateDelivered = t;
-        }
+      if (dict.has("notifications.sms_template_placed")) {
+        const t = String(dict.get("notifications.sms_template_placed") || "").replace(/^"|"$/g, "").trim();
+        if (t) templatePlaced = t;
+      }
+      if (dict.has("notifications.sms_template_confirmed")) {
+        const t = String(dict.get("notifications.sms_template_confirmed") || "").replace(/^"|"$/g, "").trim();
+        if (t) templateConfirmed = t;
+      }
+      if (dict.has("notifications.sms_template_shipped")) {
+        const t = String(dict.get("notifications.sms_template_shipped") || "").replace(/^"|"$/g, "").trim();
+        if (t) templateShipped = t;
+      }
+      if (dict.has("notifications.sms_template_delivered")) {
+        const t = String(dict.get("notifications.sms_template_delivered") || "").replace(/^"|"$/g, "").trim();
+        if (t) templateDelivered = t;
       }
     }
   } catch (err) {
@@ -305,7 +305,7 @@ export async function sendSmsBangladesh(params: {
     };
   }
 
-  const url = new URL("http://panel.smsbangladesh.com/api");
+  const url = new URL("https://panel.smsbangladesh.com/api");
   url.searchParams.set("user", config.user);
   url.searchParams.set("password", config.password);
   if (sender) {
@@ -370,7 +370,7 @@ export async function checkSmsBangladeshBalance(): Promise<SmsBalanceResult> {
     };
   }
 
-  const url = new URL("http://panel.smsbangladesh.com/balance");
+  const url = new URL("https://panel.smsbangladesh.com/balance");
   url.searchParams.set("user", config.user);
   url.searchParams.set("password", config.password);
 
@@ -431,9 +431,7 @@ export async function dispatchOrderStatusSms(
     force = false,
   } = params;
 
-  if (!supabaseAdmin) {
-    console.warn("[dispatchOrderStatusSms] Supabase Admin client unavailable.");
-  }
+  const supabaseAdmin = getSupabaseAdmin();
 
   const config = await getSmsConfig();
 
@@ -457,33 +455,34 @@ export async function dispatchOrderStatusSms(
 
   // 3. Deduplication Check (unless forced)
   let orderRow: any = null;
-  if (supabaseAdmin) {
-    try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
-      let query = supabaseAdmin
-        .from("orders")
-        .select("id, order_number, public_token, attribution");
+  try {
+    const cleanOrderId = sanitizePostgrestFilterTerm(orderId);
+    const cleanOrderNumber = sanitizePostgrestFilterTerm(orderNumber || orderId);
+    let query = supabaseAdmin
+      .from("orders")
+      .select("id, order_number, public_token, attribution");
 
-      if (isUuid) {
-        query = query.or(`id.eq.${orderId},order_number.eq.${orderNumber || orderId}`);
-      } else {
-        query = query.eq("order_number", orderNumber || orderId);
-      }
-
-      const { data } = await query.maybeSingle();
-
-      orderRow = data;
-      const sentAttr = orderRow?.attribution?.sms_sent || {};
-      if (!force && sentAttr[status]) {
-        return {
-          success: true,
-          skipped: true,
-          skipReason: `SMS for status '${status}' was already sent on ${sentAttr[status]}.`,
-        };
-      }
-    } catch (e) {
-      console.warn("[dispatchOrderStatusSms] Error checking attribution deduplication:", e);
+    if (isValidUuid(cleanOrderId) && cleanOrderNumber) {
+      query = query.or(`id.eq.${cleanOrderId},order_number.eq.${cleanOrderNumber}`);
+    } else if (isValidUuid(cleanOrderId)) {
+      query = query.eq("id", cleanOrderId);
+    } else {
+      query = query.eq("order_number", orderNumber || orderId);
     }
+
+    const { data } = await query.maybeSingle();
+
+    orderRow = data;
+    const sentAttr = orderRow?.attribution?.sms_sent || {};
+    if (!force && sentAttr[status]) {
+      return {
+        success: true,
+        skipped: true,
+        skipReason: `SMS for status '${status}' was already sent on ${sentAttr[status]}.`,
+      };
+    }
+  } catch (e) {
+    console.warn("[dispatchOrderStatusSms] Error checking attribution deduplication:", e);
   }
 
   // 4. Render Message from Template

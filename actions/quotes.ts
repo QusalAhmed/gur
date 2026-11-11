@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isValidUuid } from "@/lib/security";
 
 export interface QuoteRequestItem {
   id: string;
@@ -31,7 +32,7 @@ export async function getAdminQuotesAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data: rawQuotes, error } = await supabase
       .from("quote_requests")
@@ -114,19 +115,29 @@ export async function submitQuoteReplyAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid quote request ID" };
+    }
+    const quotedTotal = Number(payload.quotedTotal);
+    if (!Number.isFinite(quotedTotal) || quotedTotal < 0) {
+      return { success: false, error: "Invalid quoted total" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("quote_requests")
       .update({
-        quoted_total: payload.quotedTotal,
-        quote_reply: payload.replyMessage.trim(),
+        quoted_total: quotedTotal,
+        quote_reply: String(payload.replyMessage || "").trim(),
         status: "quoted",
         updated_at: new Date().toISOString(),
       })
       .eq("id", payload.id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
+    }
     revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {
@@ -141,7 +152,10 @@ export async function updateQuoteStatusAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid quote request ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("quote_requests")
@@ -151,7 +165,10 @@ export async function updateQuoteStatusAction(payload: {
       })
       .eq("id", payload.id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
+    }
     revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {
@@ -163,10 +180,16 @@ export async function updateQuoteStatusAction(payload: {
 export async function deleteQuoteRequestAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid quote request ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("quote_requests").delete().eq("id", id);
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      const friendly = mapDatabaseError(error);
+      return { success: false, error: friendly.message };
+    }
     revalidatePath("/admin/quotes");
     return { success: true };
   } catch (err: any) {

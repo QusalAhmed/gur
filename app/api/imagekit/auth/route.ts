@@ -1,35 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { getImageKitServer, isImageKitConfigured } from "@/lib/imagekit/server";
-import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/admin-auth";
+import { getStaffSession } from "@/lib/admin-guard";
+import { ROLE_CAPABILITIES } from "@/lib/admin-permissions";
+import { safePublicErrorMessage } from "@/lib/security";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   await connection();
   try {
-    // 1. Verify admin authentication
-    const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    if (!token) {
+    // 1. Verify authenticated staff member and content management capability
+    const session = await getStaffSession();
+    if (!session) {
       return NextResponse.json(
-        { success: false, error: "Unauthorized: Admin session required" },
+        { success: false, error: "Unauthorized: Staff session required" },
         { status: 401 }
       );
     }
 
-    const adminUser = await verifySessionToken(token);
-    if (!adminUser) {
+    if (!ROLE_CAPABILITIES[session.role]?.canManageContent) {
       return NextResponse.json(
-        { success: false, error: "Unauthorized: Invalid admin session" },
-        { status: 401 }
+        { success: false, error: "Forbidden: Insufficient permissions to upload media" },
+        { status: 403 }
       );
     }
 
-    // 2. Ensure ImageKit credentials are valid
+    // 2. Ensure ImageKit credentials are configured
     if (!isImageKitConfigured()) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "ImageKit is not fully configured. Please set NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY, and NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT in .env",
+          error: "Image media upload service is not configured.",
         },
         { status: 503 }
       );
@@ -39,14 +39,17 @@ export async function GET(req: NextRequest) {
     const ik = getImageKitServer();
     const authParams = ik.getAuthenticationParameters();
 
-    return NextResponse.json({
-      success: true,
-      token: authParams.token,
-      expire: authParams.expire,
-      signature: authParams.signature,
-      publicKey: process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY,
-      urlEndpoint: process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        token: authParams.token,
+        expire: authParams.expire,
+        signature: authParams.signature,
+        publicKey: process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY,
+        urlEndpoint: process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error: any) {
     if (error?.digest === "NEXT_PRERENDER_INTERRUPTED") {
       throw error;
@@ -55,7 +58,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to generate ImageKit auth parameters",
+        error: safePublicErrorMessage("Failed to generate ImageKit auth parameters"),
       },
       { status: 500 }
     );

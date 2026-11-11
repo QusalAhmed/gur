@@ -11,7 +11,9 @@ import {
   SmsSendResult,
   SmsBalanceResult,
 } from "@/lib/sms/smsbangladesh";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { updateSiteSettingsAction } from "@/actions/settings";
 
 export interface SmsLogItem {
@@ -40,8 +42,15 @@ export async function getSmsConfigAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
     const config = await getSmsConfig();
-    return { success: true, config };
+    return {
+      success: true,
+      config: {
+        ...config,
+        password: config.password ? "********" : "",
+      },
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to load SMS configuration." };
   }
@@ -70,6 +79,7 @@ export async function updateSmsConfigAction(payload: {
   };
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin"]);
     const settingsPayload: Record<string, any> = {};
 
     if (payload.enabled !== undefined) {
@@ -129,6 +139,7 @@ export async function updateSmsConfigAction(payload: {
  */
 export async function checkSmsBalanceAction(): Promise<SmsBalanceResult> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
     return await checkSmsBangladeshBalance();
   } catch (err: any) {
     return {
@@ -146,6 +157,8 @@ export async function sendTestSmsAction(
   customMessage?: string
 ): Promise<SmsSendResult> {
   try {
+    await assertStaffRole(["owner", "admin"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const normalizedPhone = normalizeBdPhoneNumber(recipientPhone);
     if (!normalizedPhone) {
       return {
@@ -201,14 +214,14 @@ export async function sendTestSmsAction(
 export async function getOrderSmsHistoryAction(
   orderNumberOrId: string
 ): Promise<{ success: boolean; logs: SmsLogItem[]; error?: string }> {
-  if (!supabaseAdmin) {
-    return { success: false, logs: [], error: "Database client unavailable." };
-  }
-
   try {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      orderNumberOrId
-    );
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const cleanId = (orderNumberOrId || "").trim();
+    if (!cleanId) {
+      return { success: false, logs: [], error: "Order identifier is required." };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
+    const isUuid = isValidUuid(cleanId);
 
     let query = supabaseAdmin
       .from("sms_logs")
@@ -216,9 +229,9 @@ export async function getOrderSmsHistoryAction(
       .order("created_at", { ascending: false });
 
     if (isUuid) {
-      query = query.or(`order_id.eq.${orderNumberOrId},order_number.eq.${orderNumberOrId}`);
+      query = query.or(`order_id.eq.${cleanId},order_number.eq.${cleanId}`);
     } else {
-      query = query.eq("order_number", orderNumberOrId);
+      query = query.eq("order_number", cleanId);
     }
 
     const { data, error } = await query.limit(50);
@@ -248,6 +261,9 @@ export async function sendManualOrderSmsAction(params: {
   customMessage?: string;
 }): Promise<SmsSendResult> {
   try {
+    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabaseAdmin = getSupabaseAdmin();
+    const actorUuid = getActorUuid(session);
     if (params.statusEvent !== "manual") {
       // Use existing template for this status, but force send (bypass deduplication)
       return await dispatchOrderStatusSms({
@@ -304,7 +320,7 @@ export async function sendManualOrderSmsAction(params: {
         created_at: nowIso,
       });
 
-      if (params.orderId) {
+      if (params.orderId && isValidUuid(params.orderId)) {
         await supabaseAdmin.from("order_events").insert({
           order_id: params.orderId,
           event_type: "sms_sent",
@@ -312,7 +328,7 @@ export async function sendManualOrderSmsAction(params: {
           message: sendRes.success
             ? `Manual SMS sent to customer: "${renderedText.slice(0, 80)}..."`
             : `Manual SMS failed: ${sendRes.error || "Gateway error"}`,
-          actor_id: null,
+          actor_id: actorUuid,
         });
       }
     }

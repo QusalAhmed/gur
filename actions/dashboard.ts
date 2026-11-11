@@ -1,6 +1,7 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export interface DashboardStats {
   kpis: {
@@ -73,6 +74,8 @@ export async function getAdminDashboardStatsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();

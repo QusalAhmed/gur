@@ -1,6 +1,8 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 export interface MessageItem {
   id: string;
@@ -20,6 +22,8 @@ export async function getAdminMessagesAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: rawMessages, error } = await supabaseAdmin
       .from("contact_messages")
       .select("id, name, phone, email, subject, message, status, created_at")
@@ -51,6 +55,11 @@ export async function updateMessageStatusAction(payload: {
   status: "new" | "read" | "replied" | "spam";
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid message ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from("contact_messages")
       .update({
@@ -68,6 +77,11 @@ export async function updateMessageStatusAction(payload: {
 
 export async function deleteMessageAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid message ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("contact_messages").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
     return { success: true };

@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { assertStaffRole } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { Database } from "@/types/database.types";
 
@@ -51,7 +52,7 @@ export interface UpdateBatchLabParams {
 export async function createBatchAction(params: CreateBatchParams) {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const rawCode = (params.lotCode || "").trim().toUpperCase();
     if (!/^[A-Z0-9._-]+$/.test(rawCode)) {
@@ -62,8 +63,11 @@ export async function createBatchAction(params: CreateBatchParams) {
       };
     }
 
-    if (!params.productId) {
-      return { ok: false, code: "MISSING_PRODUCT", message: "Please select a product for this lot." };
+    if (!isValidUuid(params.productId)) {
+      return { ok: false, code: "MISSING_PRODUCT", message: "Please select a valid product for this lot." };
+    }
+    if (params.supplierId && !isValidUuid(params.supplierId)) {
+      return { ok: false, code: "INVALID_SUPPLIER", message: "Invalid supplier ID." };
     }
 
     const { data, error } = await supabase
@@ -108,7 +112,10 @@ export async function createBatchAction(params: CreateBatchParams) {
 export async function updateBatchStatusAction(params: UpdateBatchStatusParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.batchId)) {
+      return { ok: false, code: "INVALID_BATCH_ID", message: "Invalid batch ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const updatePayload: {
       status: BatchStatus;
@@ -141,7 +148,7 @@ export async function updateBatchStatusAction(params: UpdateBatchStatusParams) {
       await supabase.from("staff_notes").insert({
         entity_type: "batch",
         entity_id: params.batchId,
-        author_id: session.user.id,
+        author_id: getActorUuid(session),
         body: `Status changed to ${params.status}: ${params.reason.trim()}`,
       });
     }
@@ -162,7 +169,10 @@ export async function updateBatchStatusAction(params: UpdateBatchStatusParams) {
 export async function updateBatchLabResultsAction(params: UpdateBatchLabParams) {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(params.batchId)) {
+      return { ok: false, code: "INVALID_BATCH_ID", message: "Invalid batch ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("batches")

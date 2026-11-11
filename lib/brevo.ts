@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { escapeHtml, sanitizeTelHref } from "@/lib/security";
 
 export interface BrevoRecipient {
   name?: string;
@@ -115,8 +116,8 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
   let fallbackStoreName = "";
 
   try {
-    if (supabaseAdmin) {
-      const { data: rows } = await supabaseAdmin
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: rows } = await supabaseAdmin
         .from("site_settings")
         .select("key, value")
         .in("key", [
@@ -131,40 +132,39 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
           "store.name",
         ]);
 
-      if (rows && rows.length > 0) {
-        for (const row of rows) {
-          const val = row.value;
-          const cleanStr = typeof val === "string" ? val.replace(/^"|"$/g, "").trim() : "";
+    if (rows && rows.length > 0) {
+      for (const row of rows) {
+        const val = row.value;
+        const cleanStr = typeof val === "string" ? val.replace(/^"|"$/g, "").trim() : "";
 
-          switch (row.key) {
-            case "notifications.brevo_enabled":
-              dbEnabled = val === true || val === "true" || val === 1;
-              break;
-            case "notifications.brevo_notify_incomplete":
-              dbNotifyIncomplete = val === true || val === "true" || val === 1;
-              break;
-            case "notifications.brevo_api_key":
-              dbApiKey = cleanStr;
-              break;
-            case "notifications.brevo_admin_email":
-              dbAdminEmail = cleanStr;
-              break;
-            case "notifications.brevo_sender_email":
-              dbSenderEmail = cleanStr;
-              break;
-            case "notifications.brevo_sender_name":
-              dbSenderName = cleanStr;
-              break;
-            case "store.email":
-              fallbackStoreEmail = cleanStr;
-              break;
-            case "store.name_bn":
-              if (!fallbackStoreName) fallbackStoreName = cleanStr;
-              break;
-            case "store.name":
-              if (!fallbackStoreName) fallbackStoreName = cleanStr;
-              break;
-          }
+        switch (row.key) {
+          case "notifications.brevo_enabled":
+            dbEnabled = val === true || val === "true" || val === 1;
+            break;
+          case "notifications.brevo_notify_incomplete":
+            dbNotifyIncomplete = val === true || val === "true" || val === 1;
+            break;
+          case "notifications.brevo_api_key":
+            dbApiKey = cleanStr;
+            break;
+          case "notifications.brevo_admin_email":
+            dbAdminEmail = cleanStr;
+            break;
+          case "notifications.brevo_sender_email":
+            dbSenderEmail = cleanStr;
+            break;
+          case "notifications.brevo_sender_name":
+            dbSenderName = cleanStr;
+            break;
+          case "store.email":
+            fallbackStoreEmail = cleanStr;
+            break;
+          case "store.name_bn":
+            if (!fallbackStoreName) fallbackStoreName = cleanStr;
+            break;
+          case "store.name":
+            if (!fallbackStoreName) fallbackStoreName = cleanStr;
+            break;
         }
       }
     }
@@ -351,8 +351,10 @@ export function renderAdminOrderEmailHtml(
   config: BrevoConfig
 ): string {
   const baseUrl = getBaseAppUrl();
-  const orderAdminUrl = `${baseUrl}/admin/orders?search=${encodeURIComponent(data.orderNumber)}`;
-  const formattedDate = formatDhakaDateTime(data.createdAt);
+  const orderAdminUrl = escapeHtml(
+    `${baseUrl}/admin/orders?search=${encodeURIComponent(data.orderNumber)}`
+  );
+  const formattedDate = escapeHtml(formatDhakaDateTime(data.createdAt));
   const isIncomplete = data.status === "incomplete_order";
 
   const deliveryZoneText =
@@ -375,13 +377,24 @@ export function renderAdminOrderEmailHtml(
 
   const customerName = data.customerName || (isIncomplete ? "ড্রাফট ভিজিটর" : "Customer (গ্রাহক)");
   const cleanPhone = (data.customerPhone || "").trim();
+  const safeTel = sanitizeTelHref(cleanPhone);
+  const safeTelHref = safeTel ? `tel:${escapeHtml(safeTel)}` : "#";
+  const escapedPhone = escapeHtml(cleanPhone);
+  const escapedCustomerName = escapeHtml(customerName);
+  const escapedAddress = escapeHtml(addressText);
+  const escapedDeliveryZone = escapeHtml(deliveryZoneText);
+  const escapedCourierName = data.courierName ? escapeHtml(data.courierName) : "";
+  const escapedCustomerNote = data.customerNote ? escapeHtml(data.customerNote) : "";
+  const escapedOrderNumber = escapeHtml(data.orderNumber);
+  const escapedOrderIdOrNumber = escapeHtml(data.orderId || data.orderNumber);
+  const escapedSenderName = escapeHtml(config.senderName);
   const rawDigits = cleanPhone.replace(/\D/g, "");
   const waNumber = rawDigits.startsWith("880")
     ? rawDigits
     : rawDigits.startsWith("0")
     ? `88${rawDigits}`
     : `880${rawDigits}`;
-  const waLink = `https://wa.me/${waNumber}`;
+  const waLink = `https://wa.me/${encodeURIComponent(waNumber)}`;
 
   // Generate table rows for items
   const itemsHtml = (data.items || [])
@@ -391,26 +404,27 @@ export function renderAdminOrderEmailHtml(
           ? item.lineTotal
           : item.quantity * item.unitPrice;
       const isEven = idx % 2 === 0;
+      const safeQty = Math.max(0, Number(item.quantity) || 0);
       return `
         <tr style="background-color: ${isEven ? "#ffffff" : "#fdf8f4"};">
           <td style="padding: 12px 14px; border-bottom: 1px solid #fed7aa; vertical-align: top;">
             <div style="font-weight: 600; color: #431407; font-size: 14px; line-height: 1.3;">
-              ${item.productName}
+              ${escapeHtml(item.productName)}
             </div>
             ${
               item.variantName
-                ? `<div style="font-size: 12px; color: #9a3412; margin-top: 3px;">প্যাক: ${item.variantName}</div>`
+                ? `<div style="font-size: 12px; color: #9a3412; margin-top: 3px;">প্যাক: ${escapeHtml(item.variantName)}</div>`
                 : ""
             }
           </td>
           <td style="padding: 12px 14px; border-bottom: 1px solid #fed7aa; text-align: center; font-size: 14px; color: #431407; font-weight: 600;">
-            ${item.quantity}
+            ${safeQty}
           </td>
           <td style="padding: 12px 14px; border-bottom: 1px solid #fed7aa; text-align: right; font-size: 13px; color: #78350f;">
-            ${formatCurrency(item.unitPrice)}
+            ${escapeHtml(formatCurrency(item.unitPrice))}
           </td>
           <td style="padding: 12px 14px; border-bottom: 1px solid #fed7aa; text-align: right; font-size: 14px; color: #9a3412; font-weight: 700;">
-            ${formatCurrency(lineTotal)}
+            ${escapeHtml(formatCurrency(lineTotal))}
           </td>
         </tr>
       `;
@@ -443,7 +457,7 @@ export function renderAdminOrderEmailHtml(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${isIncomplete ? "অসম্পূর্ণ অর্ডার (ড্রাফট)" : "নতুন অর্ডার"}: ${data.orderNumber}</title>
+  <title>${isIncomplete ? "অসম্পূর্ণ অর্ডার (ড্রাফট)" : "নতুন অর্ডার"}: ${escapedOrderNumber}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <div style="background-color: #f8fafc; padding: 24px 12px;">
@@ -457,7 +471,7 @@ export function renderAdminOrderEmailHtml(
             ${badgeText}
           </div>
           <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff;">
-            ${config.senderName}
+            ${escapedSenderName}
           </h1>
           <p style="margin: 0; font-size: 14px; color: #fef3c7; opacity: 0.95;">
             ${bannerSubtitle}
@@ -475,7 +489,7 @@ export function renderAdminOrderEmailHtml(
                   ${isIncomplete ? "ড্রাফট অর্ডার নম্বর" : "অর্ডার নম্বর"}
                 </div>
                 <div style="font-size: 18px; font-weight: 800; color: #78350f; font-family: monospace; margin-top: 2px;">
-                  #${data.orderNumber}
+                  #${escapedOrderNumber}
                 </div>
                 <div style="font-size: 12px; color: #b45309; margin-top: 4px;">
                   ${formattedDate} (বাংলাদেশ সময়)
@@ -486,7 +500,7 @@ export function renderAdminOrderEmailHtml(
                   ${isIncomplete ? "কার্ট আইটেম মূল্য" : "সর্বমোট প্রদেয় বিল"}
                 </div>
                 <div style="font-size: 24px; font-weight: 900; color: #9a3412; margin-top: 2px;">
-                  ${formatCurrency(data.grandTotal)}
+                  ${escapeHtml(formatCurrency(data.grandTotal))}
                 </div>
                 ${statusPillHtml}
               </td>
@@ -505,8 +519,8 @@ export function renderAdminOrderEmailHtml(
             💡 এটি একটি অসম্পূর্ণ ড্রাফট লিড — দ্রুত কল করে বা মেসেজ দিয়ে অর্ডার নিশ্চিত করতে পারেন:
           </div>
           <div>
-            <a href="tel:${cleanPhone}" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #0284c7; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);">
-              📞 সরাসরি কল করুন (${cleanPhone})
+            <a href="${safeTelHref}" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #0284c7; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);">
+              📞 সরাসরি কল করুন (${escapedPhone})
             </a>
             <a href="${waLink}" target="_blank" style="display: inline-block; padding: 10px 18px; margin: 4px; background-color: #16a34a; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.25);">
               💬 হোয়াটসঅ্যাপে মেসেজ
@@ -542,7 +556,7 @@ export function renderAdminOrderEmailHtml(
                 গ্রাহকের নাম:
               </td>
               <td style="padding: 12px 16px; font-size: 14px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
-                ${customerName}
+                ${escapedCustomerName}
               </td>
             </tr>
             <tr>
@@ -550,8 +564,8 @@ export function renderAdminOrderEmailHtml(
                 মোবাইল নম্বর:
               </td>
               <td style="padding: 12px 16px; font-size: 15px; font-weight: 800; color: #0284c7; border-bottom: 1px solid #e2e8f0;">
-                <a href="tel:${cleanPhone}" style="color: #0284c7; text-decoration: underline;">
-                  ${cleanPhone}
+                <a href="${safeTelHref}" style="color: #0284c7; text-decoration: underline;">
+                  ${escapedPhone}
                 </a>
                 <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 8px;">(কল করতে চাপুন)</span>
               </td>
@@ -561,7 +575,7 @@ export function renderAdminOrderEmailHtml(
                 ডেলিভারি ঠিকানা:
               </td>
               <td style="padding: 12px 16px; font-size: 13px; color: #1e293b; line-height: 1.4; border-bottom: 1px solid #e2e8f0;">
-                ${addressText}
+                ${escapedAddress}
               </td>
             </tr>
             <tr>
@@ -569,20 +583,20 @@ export function renderAdminOrderEmailHtml(
                 ডেলিভারি এরিয়া / কুরিয়ার:
               </td>
               <td style="padding: 12px 16px; font-size: 13px; color: #1e293b; font-weight: 600;">
-                ${deliveryZoneText} ${data.courierName ? `(${data.courierName})` : ""}
+                ${escapedDeliveryZone} ${escapedCourierName ? `(${escapedCourierName})` : ""}
               </td>
             </tr>
           </table>
 
           ${
-            data.customerNote
+            escapedCustomerNote
               ? `
           <div style="background-color: #fff7ed; border-left: 4px solid #f97316; padding: 12px 16px; border-radius: 4px; margin-bottom: 18px;">
             <div style="font-size: 12px; font-weight: 700; color: #c2410c; text-transform: uppercase;">
               📝 গ্রাহকের বিশেষ নোট / নির্দেশনা:
             </div>
             <div style="font-size: 13px; color: #7c2d12; margin-top: 4px; font-style: italic;">
-              "${data.customerNote}"
+              "${escapedCustomerNote}"
             </div>
           </div>
           `
@@ -593,7 +607,7 @@ export function renderAdminOrderEmailHtml(
             data.hasOtherOrders
               ? `
           <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; border-radius: 4px; margin-bottom: 18px; font-size: 12px; color: #1e40af;">
-            ℹ️ <strong>পূর্ববর্তী কাস্টমার:</strong> এই নম্বরে আগে অন্যান্য অর্ডার রয়েছে (${(data.otherOrderNumbers || []).join(", ")})
+            ℹ️ <strong>পূর্ববর্তী কাস্টমার:</strong> এই নম্বরে আগে অন্যান্য অর্ডার রয়েছে (${(data.otherOrderNumbers || []).map((n) => escapeHtml(n)).join(", ")})
           </div>
           `
               : ""
@@ -622,24 +636,24 @@ export function renderAdminOrderEmailHtml(
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 280px; margin-left: auto; margin-bottom: 18px;">
             <tr>
               <td style="padding: 4px 8px; font-size: 13px; color: #64748b;">সাবটোটাল:</td>
-              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">${formatCurrency(data.subtotal)}</td>
+              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">${escapeHtml(formatCurrency(data.subtotal))}</td>
             </tr>
             <tr>
               <td style="padding: 4px 8px; font-size: 13px; color: #64748b;">ডেলিভারি চার্জ:</td>
-              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">${formatCurrency(data.shippingTotal)}</td>
+              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">${escapeHtml(formatCurrency(data.shippingTotal))}</td>
             </tr>
             ${
               data.discountTotal && data.discountTotal > 0
                 ? `
             <tr>
               <td style="padding: 4px 8px; font-size: 13px; color: #16a34a;">ডিসকাউন্ট:</td>
-              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #16a34a; text-align: right;">-${formatCurrency(data.discountTotal)}</td>
+              <td style="padding: 4px 8px; font-size: 14px; font-weight: 600; color: #16a34a; text-align: right;">-${escapeHtml(formatCurrency(data.discountTotal))}</td>
             </tr>`
                 : ""
             }
             <tr style="border-top: 2px solid #fed7aa;">
               <td style="padding: 8px 8px; font-size: 15px; font-weight: 800; color: #9a3412;">মোট প্রদেয়:</td>
-              <td style="padding: 8px 8px; font-size: 18px; font-weight: 900; color: #9a3412; text-align: right;">${formatCurrency(data.grandTotal)}</td>
+              <td style="padding: 8px 8px; font-size: 18px; font-weight: 900; color: #9a3412; text-align: right;">${escapeHtml(formatCurrency(data.grandTotal))}</td>
             </tr>
           </table>
 
@@ -659,10 +673,10 @@ export function renderAdminOrderEmailHtml(
       <tr>
         <td style="background-color: #f1f5f9; padding: 18px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">
           <div>
-            এই নোটিফিকেশনটি <strong>${config.senderName}</strong> এর Brevo Transactional Email গেটওয়ে দ্বারা স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে।
+            এই নোটিফিকেশনটি <strong>${escapedSenderName}</strong> এর Brevo Transactional Email গেটওয়ে দ্বারা স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে।
           </div>
           <div style="margin-top: 6px; color: #94a3b8; font-size: 11px;">
-            সময়: ${formattedDate} · Order ID: ${data.orderId || data.orderNumber}
+            সময়: ${formattedDate} · Order ID: ${escapedOrderIdOrNumber}
           </div>
         </td>
       </tr>

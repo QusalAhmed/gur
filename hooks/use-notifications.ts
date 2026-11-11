@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase/client";
 import {
   getNotificationsAction,
   markNotificationReadAction,
@@ -20,11 +19,14 @@ export const NOTIFICATIONS_QUERY_KEY = ["admin-notifications"];
 export function useNotifications() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const hasInitializedRef = useRef(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
-  // 1. Fetch notifications
+  // 1. Fetch notifications via Server Action polling
   const {
     data: notifications = [],
     isLoading,
+    isFetched,
     isRefetching,
     refetch,
   } = useQuery({
@@ -36,7 +38,8 @@ export function useNotifications() {
       }
       return res.data || [];
     },
-    staleTime: 1000 * 30, // 30s
+    staleTime: 1000 * 15, // 15s
+    refetchInterval: 15_000,
     refetchOnWindowFocus: true,
   });
 
@@ -45,101 +48,54 @@ export function useNotifications() {
     return notifications.filter((n) => !n.is_read).length;
   }, [notifications]);
 
-  // 2. Realtime WebSocket subscription
+  // 2. Diff newly arrived notifications on poll cycles and trigger toast + audio chime
   useEffect(() => {
-    const channelName = `admin-notifications-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload) => {
-          const newNotif = payload.new as AdminNotification;
+    if (!isFetched || isLoading) return;
 
-          // Optimistically insert to front of list
-          queryClient.setQueryData<AdminNotification[]>(
-            NOTIFICATIONS_QUERY_KEY,
-            (old = []) => [newNotif, ...old.filter((n) => n.id !== newNotif.id)]
-          );
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      seenIdsRef.current = new Set(notifications.map((n) => n.id));
+      return;
+    }
 
-          // Play Web Audio chime
-          playNotificationChime();
+    const unseenUnread = notifications.filter(
+      (n) => !seenIdsRef.current.has(n.id) && !n.is_read
+    );
 
-          // Show interactive Sonner toast
-          toast(newNotif.title, {
-            description: newNotif.message,
-            action: newNotif.data?.link
-              ? {
-                  label: "View",
-                  onClick: () => {
-                    if (typeof window !== "undefined" && (newNotif.data?.order_number || newNotif.data?.order_id)) {
-                      window.dispatchEvent(
-                        new CustomEvent("gur:open-order", {
-                          detail: {
-                            orderNumber: newNotif.data.order_number,
-                            orderId: newNotif.data.order_id,
-                          },
-                        })
-                      );
-                    }
-                    router.push(newNotif.data.link);
-                  },
+    for (const n of notifications) {
+      seenIdsRef.current.add(n.id);
+    }
+
+    if (unseenUnread.length > 0) {
+      playNotificationChime();
+      const newNotif = unseenUnread[0];
+      toast(newNotif.title, {
+        description: newNotif.message,
+        action: newNotif.data?.link
+          ? {
+              label: "View",
+              onClick: () => {
+                if (
+                  typeof window !== "undefined" &&
+                  (newNotif.data?.order_number || newNotif.data?.order_id)
+                ) {
+                  window.dispatchEvent(
+                    new CustomEvent("gur:open-order", {
+                      detail: {
+                        orderNumber: newNotif.data.order_number,
+                        orderId: newNotif.data.order_id,
+                      },
+                    })
+                  );
                 }
-              : undefined,
-            duration: 6000,
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload) => {
-          const updated = payload.new as AdminNotification;
-          queryClient.setQueryData<AdminNotification[]>(
-            NOTIFICATIONS_QUERY_KEY,
-            (old = []) => old.map((n) => (n.id === updated.id ? updated : n))
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload) => {
-          const deletedId = (payload.old as { id: string })?.id;
-          if (deletedId) {
-            queryClient.setQueryData<AdminNotification[]>(
-              NOTIFICATIONS_QUERY_KEY,
-              (old = []) => old.filter((n) => n.id !== deletedId)
-            );
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          console.info("[Notifications] Realtime connected successfully.");
-        } else if (status === "CLOSED") {
-          // Closed normally on unmount
-        } else if (err || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("[Notifications] Realtime subscription status:", status, err?.message || err || "");
-        }
+                router.push(newNotif.data.link);
+              },
+            }
+          : undefined,
+        duration: 6000,
       });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, router]);
+    }
+  }, [notifications, isFetched, isLoading, router]);
 
   // 3. Mark single as read
   const markAsReadMutation = useMutation({

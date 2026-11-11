@@ -1,6 +1,5 @@
 import bizSdk from "facebook-nodejs-business-sdk";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 
 const { FacebookAdsApi, ProductCatalog, ProductItem } = bizSdk;
@@ -558,7 +557,7 @@ export async function syncProductsToMetaCatalog(options?: {
     };
   }
 
-  const client = supabaseAdmin || supabase;
+  const client = getSupabaseAdmin();
 
   // 1. Fetch store settings for Brand Name & Storefront URL
   let brandName = "গ্রামায়ন";

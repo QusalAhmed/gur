@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
@@ -24,7 +24,7 @@ export async function getAdminAuditLogsAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data: rawLogs, error } = await supabase
       .from("audit_log")

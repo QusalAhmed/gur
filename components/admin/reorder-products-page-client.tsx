@@ -22,8 +22,8 @@ import {
   Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { UiProductItem, fetchProductsFromDb } from "@/lib/supabase";
-import { updateProductsSortOrderAction } from "@/actions/products";
+import { type UiProductItem } from "@/lib/supabase";
+import { getAdminProductsAction, updateProductsSortOrderAction } from "@/actions/products";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function ReorderProductsPageClient() {
     isFetching,
   } = useQuery({
     queryKey: ["admin", "products"],
-    queryFn: fetchProductsFromDb,
+    queryFn: getAdminProductsAction,
   });
 
   // Filter to active products, sorted by sortOrder ASC

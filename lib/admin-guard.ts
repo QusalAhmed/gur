@@ -1,8 +1,15 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/admin-auth";
-import { AdminRole, canRoleAccessPath } from "@/lib/admin-permissions";
+import {
+  AdminRole,
+  canRoleAccessPath,
+  isValidAdminRole,
+} from "@/lib/admin-permissions";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface StaffSession {
   user: {
@@ -15,12 +22,25 @@ export interface StaffSession {
 }
 
 /**
+ * Returns the actor UUID for foreign-key columns (audit_log.actor_id, order_events.actor_id, etc.),
+ * coercing synthetic identifiers such as "admin-root" to null.
+ */
+export function getActorUuid(session: StaffSession | null | undefined): string | null {
+  const id = session?.user?.id;
+  if (!id || !UUID_REGEX.test(id)) return null;
+  return id;
+}
+
+/**
  * Returns the current authenticated staff member session or null.
  * Checks both Supabase Auth session (@supabase/ssr cookies) and
- * the Admin Session Token (ADMIN_COOKIE_NAME).
+ * the HMAC-signed Admin Session Token (ADMIN_COOKIE_NAME), validating
+ * active staff membership against staff_members / env root credentials.
  */
 export async function getStaffSession(): Promise<StaffSession | null> {
   try {
+    const adminClient = getSupabaseAdmin();
+
     // 1. Check Supabase Auth session via SSR cookies
     const supabase = await createClient();
     const {
@@ -29,16 +49,14 @@ export async function getStaffSession(): Promise<StaffSession | null> {
     } = await supabase.auth.getUser();
 
     if (!authError && user) {
-      // Query staff_members row
-      const { data: staffMember, error: staffError } = await supabase
+      const { data: staffMember } = await adminClient
         .from("staff_members")
         .select("role")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (staffMember?.role) {
-        // Fetch profile name & avatar
-        const { data: profile } = await supabase
+      if (staffMember?.role && isValidAdminRole(staffMember.role)) {
+        const { data: profile } = await adminClient
           .from("profiles")
           .select("full_name, avatar_path")
           .eq("id", user.id)
@@ -58,38 +76,64 @@ export async function getStaffSession(): Promise<StaffSession | null> {
             name,
             avatarUrl: profile?.avatar_path || user.user_metadata?.avatar_url,
           },
-          role: staffMember.role as AdminRole,
+          role: staffMember.role,
         };
       }
     }
 
-    // 2. Fallback check: ADMIN_COOKIE_NAME session token (for root admin or standalone admin token)
+    // 2. Signed session token (env root owner or persisted staff token)
     const cookieStore = await cookies();
     const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
     if (token) {
       const adminUser = await verifySessionToken(token);
       if (adminUser) {
-        return {
-          user: {
-            id: adminUser.id,
-            email: adminUser.email,
-            name: adminUser.name,
-            avatarUrl: adminUser.avatarUrl,
-          },
-          role: adminUser.role,
-        };
+        if (adminUser.id === "admin-root") {
+          const envAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+          if (
+            !envAdminEmail ||
+            adminUser.email.trim().toLowerCase() !== envAdminEmail ||
+            adminUser.role !== "owner"
+          ) {
+            return null;
+          }
+          return {
+            user: {
+              id: adminUser.id,
+              email: adminUser.email,
+              name: adminUser.name,
+              avatarUrl: adminUser.avatarUrl,
+            },
+            role: "owner",
+          };
+        }
+
+        if (UUID_REGEX.test(adminUser.id)) {
+          const { data: staffMember } = await adminClient
+            .from("staff_members")
+            .select("role")
+            .eq("user_id", adminUser.id)
+            .maybeSingle();
+
+          if (!staffMember?.role || !isValidAdminRole(staffMember.role)) {
+            return null;
+          }
+
+          return {
+            user: {
+              id: adminUser.id,
+              email: adminUser.email,
+              name: adminUser.name,
+              avatarUrl: adminUser.avatarUrl,
+            },
+            role: staffMember.role,
+          };
+        }
       }
     }
 
     return null;
   } catch (err: unknown) {
-    const errorObj = err as { digest?: string };
-    if (
-      errorObj?.digest === "HANGING_PROMISE_REJECTION" ||
-      errorObj?.digest === "DYNAMIC_SERVER_USAGE"
-    ) {
-      throw err;
-    }
+    unstable_rethrow(err);
     console.error("Error verifying staff session:", err);
     return null;
   }

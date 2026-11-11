@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { toZonedTime, format as formatZoned } from "date-fns-tz";
 import { subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
 import { DHAKA_TIMEZONE } from "@/lib/admin-format";
@@ -35,21 +35,8 @@ export interface NeedsAttentionItem {
 }
 
 export async function getAdminOverviewData(fromParam?: string, toParam?: string) {
-  let supabase = supabaseAdmin;
-  try {
-    const supabaseUserClient = await createClient();
-    const {
-      data: { user },
-    } = await supabaseUserClient.auth.getUser();
-
-    // If user has active Supabase Auth session, use it (RLS applies).
-    // Otherwise, use supabaseAdmin (service_role) so standalone admin or root admin sessions load metrics.
-    if (user) {
-      supabase = supabaseUserClient;
-    }
-  } catch {
-    supabase = supabaseAdmin;
-  }
+  await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+  const supabase = getSupabaseAdmin();
 
   // 1. Calculate time windows anchored to Asia/Dhaka
   const nowInDhaka = toZonedTime(new Date(), DHAKA_TIMEZONE);
@@ -132,38 +119,13 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
       .limit(10),
   ]);
 
-  let currentKpisData = kpiCurrentRes.data as unknown as KpiStats | null;
-  let prevKpisData = kpiPrevRes.data as unknown as KpiStats | null;
-  let seriesData = seriesRes.data || [];
-  let topProductsData = topProductsRes.data || [];
-  let statusBreakdownData = statusBreakdownRes.data || [];
-  let sourceBreakdownData = sourceBreakdownRes.data || [];
-  let recentOrdersData = recentOrdersRes.data || [];
-
-  // Fallback to supabaseAdmin if the user client received null/forbidden due to session state
-  if ((!currentKpisData || currentKpisData.orders_count === undefined) && supabase !== supabaseAdmin) {
-    const [fbKpiCurr, fbKpiPrev, fbSeries, fbTop, fbStatus, fbSource, fbRecent] = await Promise.all([
-      supabaseAdmin.rpc("admin_kpis", { p_from: fromIso, p_to: toIso }),
-      supabaseAdmin.rpc("admin_kpis", { p_from: prevFromIso, p_to: prevToIso }),
-      supabaseAdmin.rpc("admin_sales_series", { p_from: fromIso, p_to: toIso, p_bucket: bucket }),
-      supabaseAdmin.rpc("admin_top_products", { p_from: fromIso, p_to: toIso, p_limit: 5 }),
-      supabaseAdmin.rpc("admin_sales_breakdown", { p_from: fromIso, p_to: toIso, p_dimension: "status" }),
-      supabaseAdmin.rpc("admin_sales_breakdown", { p_from: fromIso, p_to: toIso, p_dimension: "utm_source" }),
-      supabaseAdmin
-        .from("orders")
-        .select("id, order_number, created_at, customer_name, customer_phone, grand_total, status, payment_status, fulfillment_status, channel, order_items(id, product_name, quantity, unit_price)")
-        .order("created_at", { ascending: false })
-        .limit(10),
-    ]);
-
-    if (fbKpiCurr.data) currentKpisData = fbKpiCurr.data as unknown as KpiStats;
-    if (fbKpiPrev.data) prevKpisData = fbKpiPrev.data as unknown as KpiStats;
-    if (fbSeries.data && fbSeries.data.length > 0) seriesData = fbSeries.data;
-    if (fbTop.data && fbTop.data.length > 0) topProductsData = fbTop.data;
-    if (fbStatus.data && fbStatus.data.length > 0) statusBreakdownData = fbStatus.data;
-    if (fbSource.data && fbSource.data.length > 0) sourceBreakdownData = fbSource.data;
-    if (fbRecent.data && fbRecent.data.length > 0) recentOrdersData = fbRecent.data;
-  }
+  const currentKpisData = kpiCurrentRes.data as unknown as KpiStats | null;
+  const prevKpisData = kpiPrevRes.data as unknown as KpiStats | null;
+  const seriesData = seriesRes.data || [];
+  const topProductsData = topProductsRes.data || [];
+  const statusBreakdownData = statusBreakdownRes.data || [];
+  const sourceBreakdownData = sourceBreakdownRes.data || [];
+  const recentOrdersData = recentOrdersRes.data || [];
 
   const currentKpis: KpiStats = currentKpisData || {
     orders_count: 0,
@@ -204,18 +166,8 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
   // Build Needs Attention Strip
   const needsAttention: NeedsAttentionItem[] = [];
 
-  let pendingCount = pendingOrdersRes.count || 0;
-  let incompleteCount = incompleteOrdersRes.count || 0;
-
-  // Fallback to service role if counts failed due to session state
-  if (supabase !== supabaseAdmin && (pendingOrdersRes.error || incompleteOrdersRes.error)) {
-    const [fbPending, fbIncomplete] = await Promise.all([
-      supabaseAdmin.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      supabaseAdmin.from("orders").select("id", { count: "exact", head: true }).eq("status", "incomplete_order"),
-    ]);
-    if (fbPending.count != null) pendingCount = fbPending.count;
-    if (fbIncomplete.count != null) incompleteCount = fbIncomplete.count;
-  }
+  const pendingCount = pendingOrdersRes.count || 0;
+  const incompleteCount = incompleteOrdersRes.count || 0;
 
   if (pendingCount > 0) {
     needsAttention.push({

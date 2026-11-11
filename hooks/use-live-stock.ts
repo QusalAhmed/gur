@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { getPublicLiveStockStatsAction } from "@/actions/storefront-products";
 
 export interface StockDayProjection {
   dayIndex: number; // 0 for today, 1 for tomorrow, 2 for day after tomorrow, etc.
@@ -172,7 +172,7 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     setCurrentDate(new Date());
   }, []);
 
-  // Fetch production setting and active orders
+  // Fetch production setting and aggregated active order volume via Server Action
   const fetchData = useCallback(async (isBackground: boolean = false) => {
     if (!isMountedRef.current) return;
     if (isBackground) {
@@ -182,75 +182,39 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
 
     try {
-      // 1. Fetch live production quota and simulated demand settings
-      const { data: settingsData } = await supabase
-        .from("site_settings")
-        .select("key, value")
-        .in("key", [
-          "inventory.daily_production_kg",
-          "inventory.simulated_demand_enabled",
-          "inventory.simulated_demand_kg",
-        ]);
+      const stats = await getPublicLiveStockStatsAction();
+      if (!isMountedRef.current) return;
 
-      if (settingsData && isMountedRef.current) {
-        for (const row of settingsData) {
-          if (row.key === "inventory.daily_production_kg") {
-            const prod = Number(row.value);
-            if (prod > 0) setDailyProductionKg(prod);
-          } else if (row.key === "inventory.simulated_demand_enabled") {
-            setIsSimulatedDemandEnabled(
-              row.value === true ||
-              row.value === "true" ||
-              row.value === 1 ||
-              row.value === "1"
-            );
-          } else if (row.key === "inventory.simulated_demand_kg") {
-            const kg = Math.round(Number(row.value) || 0);
-            setSimulatedDemandKg((prev) => {
-              if (prev !== kg) {
-                setLastStockChangeTimestamp(Date.now());
-              }
-              return kg;
-            });
+      if (stats.dailyProductionKg !== null && stats.dailyProductionKg > 0) {
+        setDailyProductionKg(stats.dailyProductionKg);
+      }
+      if (stats.simulatedDemandEnabled !== null) {
+        setIsSimulatedDemandEnabled(stats.simulatedDemandEnabled);
+      }
+      if (stats.simulatedDemandKg !== null) {
+        const kg = stats.simulatedDemandKg;
+        setSimulatedDemandKg((prev) => {
+          if (prev !== kg) {
+            setLastStockChangeTimestamp(Date.now());
           }
-        }
+          return kg;
+        });
       }
 
-      // 2. Fetch active unfulfilled orders and items
-      const { data: ordersData, error: ordersErr } = await supabase
-        .from("orders")
-        .select(`
-          id,
-          status,
-          order_items (
-            id,
-            quantity,
-            net_quantity,
-            net_unit,
-            variant_name,
-            product_name
-          )
-        `)
-        .in("status", ["pending", "confirmed", "processing"]);
-
-      if (!ordersErr && ordersData && isMountedRef.current) {
-        let totalWeight = 0;
-        let count = 0;
-
-        for (const order of ordersData) {
-          count++;
-          const items = (order as any).order_items || [];
-          for (const item of items) {
-            totalWeight += parseOrderItemWeightKg(item);
-          }
+      setTotalActiveOrdersKg((prev) => {
+        if (prev !== stats.totalActiveOrdersKg) {
+          setLastStockChangeTimestamp(Date.now());
         }
-
-        setTotalActiveOrdersKg(Math.round(totalWeight * 10) / 10);
-        setActiveOrderCount(count);
-        setLastUpdatedAt(new Date());
-      }
+        return stats.totalActiveOrdersKg;
+      });
+      setActiveOrderCount(stats.activeOrderCount);
+      setLastUpdatedAt(new Date(stats.fetchedAt));
+      setIsLiveConnected(true);
     } catch (err) {
       console.warn("Failed to fetch live stock data:", err);
+      if (isMountedRef.current) {
+        setIsLiveConnected(false);
+      }
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -259,50 +223,31 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
   }, []);
 
-  // Initial fetch and Realtime subscription
+  // Initial fetch and polling refresh (no client DB subscriptions)
   useEffect(() => {
     isMountedRef.current = true;
     fetchData(false);
 
-    // Subscribe to real-time changes on both orders and site_settings tables
-    const channel = supabase
-      .channel("storefront-live-stock")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        () => {
-          // Re-calculate instantaneously when real orders are inserted/updated/deleted
-          fetchData(true);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "site_settings",
-        },
-        (payload) => {
-          // Re-calculate instantaneously when production quota or simulated stock changes
-          const key = (payload.new as any)?.key || (payload.old as any)?.key;
-          if (!key || String(key).startsWith("inventory.")) {
-            fetchData(true);
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (isMountedRef.current) {
-          setIsLiveConnected(status === "SUBSCRIBED");
-        }
-      });
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchData(true);
+      }
+    }, 15_000);
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        fetchData(true);
+      }
+    };
+
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
 
     return () => {
       isMountedRef.current = false;
-      supabase.removeChannel(channel);
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
     };
   }, [fetchData]);
 

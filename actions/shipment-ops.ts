@@ -1,9 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isValidUuid } from "@/lib/security";
 
 export interface CreateShipmentLine {
   orderItemId: string;
@@ -27,8 +28,11 @@ export interface CreateShipmentParams {
  */
 export async function createShipmentAction(params: CreateShipmentParams) {
   try {
-    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    if (!isValidUuid(params.orderId)) {
+      return { ok: false, code: "INVALID_INPUT", message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     if (!params.lines || params.lines.length === 0) {
       return { ok: false, code: "NO_LINES", message: "At least one shipment line item is required." };
@@ -121,7 +125,10 @@ export async function updateShipmentStatusAction(
 ) {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(shipmentId)) {
+      return { ok: false, code: "INVALID_INPUT", message: "Invalid shipment ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("shipments")

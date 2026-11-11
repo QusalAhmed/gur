@@ -58,6 +58,7 @@ import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-ord
 import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
+import type { Order } from "@/types/order";
 import {
   trackInitiateCheckout,
   trackAddToCart,
@@ -259,32 +260,54 @@ export function CheckoutSection({
       );
 
       // Pre-seed TanStack Query cache so /order-confirmed/[id] renders immediately with zero network delay
-      if (result.orderId) {
-        queryClient.setQueryData(ORDER_QUERY_KEY(result.orderId), {
-          id: result.orderId,
+      if (result.orderId && result.publicToken) {
+        const customerName = result.customerName || variables.customerName || "";
+        const customerPhone = result.phone || variables.customerPhone;
+        queryClient.setQueryData<Order>(ORDER_QUERY_KEY(result.orderId), {
+          id: result.orderNumber || result.orderId,
           order_number: result.orderNumber,
           status: result.status || "pending",
-          customer: result.customerName || variables.customerName || null,
-          phone: result.phone || variables.customerPhone,
-          grand_total: result.grandTotal,
-          total_price: result.grandTotal,
-          subtotal: result.subtotal,
-          shipping_fee: result.shippingTotal,
+          customer: customerName,
+          phone: customerPhone,
+          recipient_name: customerName,
+          shipping_phone: customerPhone,
+          email: "",
+          payment: "unpaid",
+          fulfillment: "unfulfilled",
+          method: "cod",
+          channel: "web",
+          subtotal: result.subtotal ?? 0,
+          discount_total: 0,
+          shipping_total: result.shippingTotal ?? 0,
+          grand_total: result.grandTotal ?? 0,
+          amount_paid: 0,
+          currency: "BDT",
+          date: new Date().toISOString(),
+          customer_note: variables.customerNote || "",
           address: {
-            address_line1: variables.addressLine || null,
-            district: variables.district || null,
-            division: variables.division || null,
+            division: variables.division || "",
+            district: variables.district || "",
+            address_line: variables.addressLine || "",
+            recipient_name: customerName,
+            phone: customerPhone,
           },
-          items: variables.items?.map((item, idx) => ({
+          items: (variables.items || []).map((item, idx) => ({
             id: `item-${idx}`,
+            sku: item.variantId || `SKU-${idx}`,
+            product_id: item.productId,
+            variant_id: item.variantId,
             product_name: item.productName,
             variant_name: item.variantName,
             quantity: item.quantity,
             unit_price: item.unitPrice,
             line_total: item.quantity * item.unitPrice,
-          })) || [],
-          created_at: new Date().toISOString(),
+          })),
+          notes: [],
+          events: [],
         });
+      }
+
+      if (result.orderId) {
 
         // Reset order form before redirecting to order completion page
         formResetRef.current?.();

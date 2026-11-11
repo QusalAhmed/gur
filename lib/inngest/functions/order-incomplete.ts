@@ -1,6 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { sendAdminOrderNotification } from "@/lib/brevo";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { OrderIncompleteEventData } from "@/lib/inngest/events";
 
 export const orderIncompleteFunction = inngest.createFunction(
@@ -15,6 +15,7 @@ export const orderIncompleteFunction = inngest.createFunction(
     const { orderId, orderNumber } = data;
 
     const result = await step.run("send-incomplete-order-email", async () => {
+      const supabaseAdmin = getSupabaseAdmin();
       // 1. Verify that order has not already been notified
       const { data: orderRow } = await supabaseAdmin
         .from("orders")

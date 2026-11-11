@@ -25,10 +25,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DbProduct,
   deleteProductImageFromStorage,
-  fetchCategoriesList,
-  fetchProductsFromDb,
 } from "@/lib/supabase";
-import { saveProductAction } from "@/actions/products";
+import {
+  saveProductAction,
+  getAdminProductsAction,
+} from "@/actions/products";
+import { fetchCategoriesListAction } from "@/actions/categories";
 import { ImageUploader, UploadedImage } from "@/components/ui/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -263,16 +265,16 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
     }
   };
 
-  // Fetch categories from DB
+  // Fetch categories via Server Action
   const { data: categories = [] } = useQuery({
     queryKey: ["admin", "categories-list"],
-    queryFn: fetchCategoriesList,
+    queryFn: fetchCategoriesListAction,
   });
 
   // Fetch full catalog products to populate combo component selector
   const { data: catalogProducts = [] } = useQuery({
     queryKey: ["admin", "catalog-products-for-combo"],
-    queryFn: fetchProductsFromDb,
+    queryFn: getAdminProductsAction,
   });
 
   const selectableComponentVariants = React.useMemo(() => {

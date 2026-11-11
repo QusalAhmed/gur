@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { inngest } from "@/lib/inngest/client";
 import type { InngestEvents } from "@/lib/inngest/events";
 
@@ -53,6 +53,7 @@ export function calculateBackoffSeconds(retryCount: number): number {
  */
 export async function enqueueOutboxEvent(params: EnqueueOutboxParams): Promise<EnqueueOutboxResult> {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const {
       eventName,
       aggregateType = "order",
@@ -119,6 +120,7 @@ export async function enqueueOutboxEvent(params: EnqueueOutboxParams): Promise<E
  * cron can deliver it later without losing the event or impacting the customer.
  */
 export async function dispatchOutboxEvent(event: OutboxEventRecord): Promise<{ success: boolean; error?: string }> {
+  const supabaseAdmin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
 
   try {
@@ -215,6 +217,7 @@ export async function processPendingOutboxEvents(batchSize: number = 25): Promis
   succeeded: number;
   failed: number;
 }> {
+  const supabaseAdmin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
 
   // Query pending events whose next_retry_at <= now

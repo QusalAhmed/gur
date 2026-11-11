@@ -3,7 +3,7 @@
 import React, { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
   CheckCircle2,
@@ -252,12 +252,16 @@ function OrderConfirmedSkeleton() {
 
 function OrderConfirmedContent() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const orderId = (params?.id || "").trim();
+  const receiptToken = (searchParams?.get("token") || "").trim() || null;
   const [copied, setCopied] = useState(false);
 
-  // TanStack Query to fetch the single order in background using the UUID or order_number
+  // TanStack Query to fetch the single scrubbed order using the secret receipt token
   const { data: order, isLoading } = useOrder(orderId, {
-    enabled: Boolean(orderId),
+    mode: "public",
+    publicToken: receiptToken,
+    enabled: Boolean(orderId && receiptToken),
     refetchInterval: (query) => {
       const currentOrder = query.state.data;
       if (currentOrder && currentOrder.status === "pending") {

@@ -1,7 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { sendBrevoEmail, getBrevoConfig } from "@/lib/brevo";
 import { sendSmsBangladesh } from "@/lib/sms/smsbangladesh";
-import { triggerCapiPurchaseOnOrderConfirmedAction } from "@/actions/facebook-capi";
+import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
 import type {
   NotificationEmailSendEventData,
   NotificationSmsSendEventData,
@@ -55,7 +55,7 @@ export const metaCapiPurchaseFunction = inngest.createFunction(
     const data = event.data as MetaCapiPurchaseEventData;
 
     return await step.run("send-capi-purchase", async () => {
-      return await triggerCapiPurchaseOnOrderConfirmedAction(data.orderIdOrNumber);
+      return await triggerCapiPurchaseInternal(data.orderIdOrNumber);
     });
   }
 );

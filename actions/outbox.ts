@@ -1,6 +1,7 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
 import {
   dispatchOutboxEvent,
   processPendingOutboxEvents,
@@ -32,6 +33,8 @@ export async function getOutboxMetricsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("outbox_events")
       .select("status");
@@ -81,8 +84,10 @@ export async function getOutboxEventsAction(params?: GetOutboxEventsParams): Pro
   error?: string;
 }> {
   try {
-    const limit = params?.limit || 20;
-    const offset = params?.offset || 0;
+    await assertStaffRole(["owner", "admin"]);
+    const supabaseAdmin = getSupabaseAdmin();
+    const limit = Math.min(200, Math.max(1, Number(params?.limit) || 20));
+    const offset = Math.max(0, Number(params?.offset) || 0);
     const status = params?.status || "all";
 
     let query = supabaseAdmin
@@ -125,6 +130,8 @@ export async function retryOutboxEventAction(id: string): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: event, error: fetchErr } = await supabaseAdmin
       .from("outbox_events")
       .select("*")
@@ -155,6 +162,7 @@ export async function drainOutboxQueueAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin"]);
     const stats = await processPendingOutboxEvents(50);
     return { success: true, ...stats };
   } catch (err: unknown) {

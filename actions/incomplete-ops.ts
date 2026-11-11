@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { assertStaffRole } from "@/lib/admin-guard";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
 export interface IncompleteOrderRecord {
@@ -34,7 +35,7 @@ export async function getIncompleteOrdersAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("admin_incomplete_orders")
@@ -83,7 +84,10 @@ export async function convertIncompleteToPendingAction(orderId: string): Promise
 }> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     // Verify order has at least 1 item
     const { count } = await supabase
@@ -116,17 +120,18 @@ export async function convertIncompleteToPendingAction(orderId: string): Promise
     }
 
     // Add note and order event
+    const actorId = getActorUuid(session);
     await Promise.all([
       supabase.from("order_events").insert({
         order_id: orderId,
         event_type: "converted_from_incomplete",
         message: `Converted from abandoned checkout to active order by ${session.user.name}`,
-        actor_id: session.user.id,
+        actor_id: actorId,
       }),
       supabase.from("staff_notes").insert({
         entity_type: "order",
         entity_id: orderId,
-        author_id: session.user.id,
+        author_id: actorId,
         body: `Converted incomplete checkout into pending order by ${session.user.name}`,
       }),
     ]);
@@ -150,7 +155,10 @@ export async function addIncompleteOrderNoteAction(
 ): Promise<{ ok: boolean; message?: string }> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     if (!noteText.trim()) {
       return { ok: false, message: "Note text cannot be empty." };
@@ -159,7 +167,7 @@ export async function addIncompleteOrderNoteAction(
     const { error } = await supabase.from("staff_notes").insert({
       entity_type: "order",
       entity_id: orderId,
-      author_id: session.user.id,
+      author_id: getActorUuid(session),
       body: noteText.trim(),
     });
 
@@ -184,8 +192,11 @@ export async function deleteIncompleteOrderAction(
   orderId: string
 ): Promise<{ ok: boolean; message?: string }> {
   try {
-    await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    await assertStaffRole(["owner", "admin"]);
+    if (!isValidUuid(orderId)) {
+      return { ok: false, message: "Invalid order ID." };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("orders")

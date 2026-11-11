@@ -1,6 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { sanitizePostgrestFilterTerm } from "@/lib/security";
 import { normalizeBDPhone } from "@/lib/admin-format";
 
 export interface QuickSearchResult {
@@ -28,25 +30,31 @@ export interface QuickSearchResult {
 
 export async function searchGlobalAction(query: string): Promise<QuickSearchResult> {
   const empty: QuickSearchResult = { orders: [], products: [], customers: [] };
-  const q = query.trim();
+  const q = sanitizePostgrestFilterTerm(query);
   if (!q || q.length < 2) return empty;
 
   try {
-    const supabase = await createClient();
+    const session = await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const supabase = getSupabaseAdmin();
+    const canViewOrdersAndCustomers = session.role !== "editor";
 
     // 1. Search orders (by order_number or customer_phone or customer_name)
     const normalizedPhone = normalizeBDPhone(q);
-    let ordersQuery = supabase
-      .from("orders")
-      .select("id, order_number, customer_name, customer_phone, grand_total, status")
-      .limit(5);
+    let ordersQuery = null;
+    if (canViewOrdersAndCustomers) {
+      let oq = supabase
+        .from("orders")
+        .select("id, order_number, customer_name, customer_phone, grand_total, status")
+        .limit(5);
 
-    if (normalizedPhone) {
-      ordersQuery = ordersQuery.or(`customer_phone.eq.${normalizedPhone},order_number.ilike.%${q}%`);
-    } else {
-      ordersQuery = ordersQuery.or(
-        `order_number.ilike.%${q}%,customer_name.ilike.%${q}%,customer_phone.ilike.%${q}%`
-      );
+      if (normalizedPhone) {
+        oq = oq.or(`customer_phone.eq.${normalizedPhone},order_number.ilike.%${q}%`);
+      } else {
+        oq = oq.or(
+          `order_number.ilike.%${q}%,customer_name.ilike.%${q}%,customer_phone.ilike.%${q}%`
+        );
+      }
+      ordersQuery = oq;
     }
 
     // 2. Search products (by name, slug)
@@ -57,16 +65,18 @@ export async function searchGlobalAction(query: string): Promise<QuickSearchResu
       .limit(5);
 
     // 3. Search profiles / customers
-    const customersQuery = supabase
-      .from("profiles")
-      .select("id, full_name, phone, account_type")
-      .or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`)
-      .limit(5);
+    const customersQuery = canViewOrdersAndCustomers
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, phone, account_type")
+          .or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`)
+          .limit(5)
+      : null;
 
     const [ordersRes, productsRes, customersRes] = await Promise.all([
-      ordersQuery,
+      ordersQuery ?? Promise.resolve({ data: [] as any[] }),
       productsQuery,
-      customersQuery,
+      customersQuery ?? Promise.resolve({ data: [] as any[] }),
     ]);
 
     return {

@@ -1,49 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_COOKIE_NAME, verifySessionToken, AdminUser } from "@/lib/admin-auth";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { NextResponse, connection } from "next/server";
+import { unstable_rethrow } from "next/navigation";
+import { AdminUser } from "@/lib/admin-auth";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getStaffSession } from "@/lib/admin-guard";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
+  await connection();
   try {
-    const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    let user: AdminUser | null = null;
+    const staffSession = await getStaffSession();
 
-    if (token) {
-      user = await verifySessionToken(token);
+    if (!staffSession) {
+      return NextResponse.json(
+        { success: true, user: null },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
-    if (!user) {
-      // Check Supabase Auth session via SSR cookies
-      const staffSession = await getStaffSession();
-      if (staffSession) {
-        const initials = staffSession.user.name
-          .split(" ")
-          .filter(Boolean)
-          .map((n: string) => n[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase() || "ST";
+    const adminClient = getSupabaseAdmin();
+    const initials =
+      staffSession.user.name
+        .split(" ")
+        .filter(Boolean)
+        .map((n: string) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "ST";
 
-        user = {
-          id: staffSession.user.id,
-          name: staffSession.user.name,
-          email: staffSession.user.email,
-          role: staffSession.role,
-          initials,
-          avatarUrl: staffSession.user.avatarUrl,
-        };
-      }
-    }
-
-    if (!user) {
-      return NextResponse.json({ success: true, user: null });
-    }
+    const user: AdminUser = {
+      id: staffSession.user.id,
+      name: staffSession.user.name,
+      email: staffSession.user.email,
+      role: staffSession.role,
+      initials,
+      avatarUrl: staffSession.user.avatarUrl,
+    };
 
     // Refresh persistent profile photo from DB if available
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
     if (isUuid) {
       try {
-        const { data: profile } = await supabaseAdmin
+        const { data: profile } = await adminClient
           .from("profiles")
           .select("full_name, avatar_path")
           .eq("id", user.id)
@@ -63,7 +59,7 @@ export async function GET(req: NextRequest) {
       }
     } else if (user.id === "admin-root") {
       try {
-        const { data: rootSetting } = await supabaseAdmin
+        const { data: rootSetting } = await adminClient
           .from("site_settings")
           .select("key, value")
           .in("key", ["admin.root_avatar_url", "admin.root_name"]);
@@ -83,16 +79,21 @@ export async function GET(req: NextRequest) {
             }
           }
         }
-      } catch (err) {}
+      } catch {}
     }
 
-    return NextResponse.json({
-      success: true,
-      user,
-    });
-  } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: err?.message || "Failed to retrieve session" },
+      {
+        success: true,
+        user,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (err) {
+    unstable_rethrow(err);
+    console.error("Error in admin session route:", err);
+    return NextResponse.json(
+      { success: false, error: "Failed to retrieve session." },
       { status: 500 }
     );
   }

@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isValidUuid } from "@/lib/security";
 
 export interface ReviewItem {
   id: string;
@@ -36,7 +37,7 @@ export async function getAdminReviewsAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data: rawReviews, error } = await supabase
       .from("product_reviews")
@@ -130,7 +131,10 @@ export async function updateReviewStatusAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid review ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("product_reviews")
@@ -156,7 +160,10 @@ export async function updateReviewStatusAction(payload: {
 export async function deleteReviewAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid review ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("product_reviews").delete().eq("id", id);
     if (error) {

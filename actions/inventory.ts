@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid, clampInt } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { Database } from "@/types/database.types";
 import {
@@ -128,7 +129,7 @@ export async function getAdminInventoryAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data: rawLevels, error } = await supabase
       .from("inventory_levels")
@@ -239,7 +240,7 @@ export async function getAdminBatchesAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     // Query batches and join supplier and product
     const { data: rawBatches, error } = await supabase
@@ -329,7 +330,7 @@ export async function getAdminStockLedgerAction(params?: {
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     let query = supabase
       .from("stock_movements")
@@ -363,7 +364,7 @@ export async function getAdminStockLedgerAction(params?: {
       `
       )
       .order("created_at", { ascending: false })
-      .limit(params?.limit || 100);
+      .limit(clampInt(params?.limit, 100, 1, 500));
 
     if (params?.movementType && params.movementType !== "all") {
       query = query.eq("movement_type", params.movementType as Database["public"]["Enums"]["stock_movement_type"]);
@@ -517,7 +518,7 @@ export async function getAdminWarehousesAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("warehouses")
@@ -559,7 +560,7 @@ export async function createWarehouseAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("warehouses").insert({
       code: payload.code.trim().toUpperCase(),
@@ -579,7 +580,10 @@ export async function createWarehouseAction(payload: {
 export async function deleteWarehouseAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid warehouse ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("warehouses").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
@@ -600,7 +604,7 @@ export async function getAdminSuppliersAction(): Promise<{
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("suppliers")
@@ -642,7 +646,7 @@ export async function createSupplierAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("suppliers").insert({
       name: payload.name.trim(),
@@ -663,7 +667,10 @@ export async function createSupplierAction(payload: {
 export async function deleteSupplierAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid supplier ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) return { success: false, error: error.message };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient, type Query } from "@tanstack/react-query";
-import { getOrderAction } from "@/actions/orders";
+import { getOrderAction, getPublicOrderAction } from "@/actions/orders";
 import {
   placeStorefrontOrderAction,
   syncStorefrontIncompleteOrderAction,
@@ -17,6 +17,8 @@ export const ORDER_QUERY_KEY = (idOrNumber?: string | null) =>
 
 export interface UseOrderOptions {
   enabled?: boolean;
+  mode?: "admin" | "public";
+  publicToken?: string | null;
   initialData?: Order | null;
   staleTime?: number;
   refetchInterval?: number | false | ((query: Query<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>) => number | false | undefined);
@@ -31,12 +33,23 @@ export function useOrder(
   options?: UseOrderOptions
 ) {
   const cleanId = (idOrNumber || "").trim();
-  const isEnabled = Boolean(cleanId && cleanId !== "preview" && (options?.enabled ?? true));
+  const mode = options?.mode ?? "admin";
+  const cleanPublicToken = options?.publicToken?.trim() || null;
+  const isEnabled = Boolean(
+    cleanId &&
+      cleanId !== "preview" &&
+      (mode === "admin" || Boolean(cleanPublicToken)) &&
+      (options?.enabled ?? true)
+  );
 
   return useQuery<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>({
     queryKey: ORDER_QUERY_KEY(cleanId),
     queryFn: async () => {
       if (!cleanId) return null;
+      if (mode === "public") {
+        if (!cleanPublicToken) return null;
+        return await getPublicOrderAction(cleanId, cleanPublicToken);
+      }
       return await getOrderAction(cleanId);
     },
     enabled: isEnabled,

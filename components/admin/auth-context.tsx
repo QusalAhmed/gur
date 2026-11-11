@@ -1,8 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AdminUser, AdminRole } from "@/lib/admin-auth";
+import { sanitizeAdminRedirect } from "@/lib/admin-permissions";
 import { updateAdminProfileAction } from "@/actions/admin-profile";
 
 interface AdminAuthContextType {
@@ -27,32 +28,23 @@ interface AdminAuthContextType {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = "gur_admin_user";
+const LEGACY_LOCAL_STORAGE_KEY = "gur_admin_user";
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Load session from server and synchronize with client state
+  // Load authoritative session from server (no localStorage identity storage)
   const refreshSession = useCallback(async () => {
     try {
-      // 1. Instant check from localStorage for fast initial client paint
       if (typeof window !== "undefined") {
-        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            setUser(parsed);
-          } catch {
-            localStorage.removeItem(LOCAL_STORAGE_KEY);
-          }
-        }
+        localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
       }
 
-      // 2. Authoritative verification against server session
       const res = await fetch("/api/admin/auth/session", {
         method: "GET",
+        cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
       });
 
@@ -71,20 +63,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             }
             return data.user;
           });
-          if (typeof window !== "undefined") {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
-          }
         } else {
           setUser(null);
-          if (typeof window !== "undefined") {
-            localStorage.removeItem(LOCAL_STORAGE_KEY);
-          }
         }
       } else {
         setUser(null);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-        }
       }
     } catch (e) {
       console.warn("Session check error:", e);
@@ -120,21 +103,13 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (res.ok && data.success && data.user) {
           setUser(data.user);
-          if (typeof window !== "undefined") {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data.user));
-          }
 
-          // Determine destination redirect from params or window query string
-          let nextUrl =
+          const rawNext =
             params.redirectTo ||
             (typeof window !== "undefined"
               ? new URLSearchParams(window.location.search).get("next")
-              : null) ||
-            "/admin";
-
-          if (nextUrl.startsWith("/admin/login")) {
-            nextUrl = "/admin";
-          }
+              : null);
+          const nextUrl = sanitizeAdminRedirect(rawNext);
 
           router.push(nextUrl);
           return { success: true, user: data.user };
@@ -159,11 +134,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const updateUser = useCallback((updatedFields: Partial<AdminUser>) => {
     setUser((prev) => {
       if (!prev) return null;
-      const updated = { ...prev, ...updatedFields };
-      if (typeof window !== "undefined") {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
-      }
-      return updated;
+      return { ...prev, ...updatedFields };
     });
   }, []);
 
@@ -173,9 +144,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         const res = await updateAdminProfileAction(params);
         if (res.success && res.user) {
           setUser(res.user);
-          if (typeof window !== "undefined") {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(res.user));
-          }
           return { success: true, user: res.user };
         }
         return { success: false, error: res.error || "Failed to save profile" };
@@ -195,7 +163,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       if (typeof window !== "undefined") {
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
       }
       setIsLoading(false);
       router.push("/admin/login");

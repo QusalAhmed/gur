@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isValidUuid } from "@/lib/security";
 
 export interface CustomerItem {
   id: string;
@@ -47,8 +48,8 @@ export async function getAdminCustomersAction(): Promise<{
   error?: string;
 }> {
   try {
-    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = await createClient();
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabase = getSupabaseAdmin();
 
     const [profilesRes, ordersRes, businessesRes, membersRes] = await Promise.all([
       supabase
@@ -189,7 +190,7 @@ export async function createBusinessAccountAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("business_accounts").insert({
       name: payload.name.trim(),
@@ -224,7 +225,10 @@ export async function updateBusinessStatusAction(payload: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = await createClient();
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid business ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const updateData: any = {
       status: payload.status,
@@ -259,7 +263,10 @@ export async function updateBusinessStatusAction(payload: {
 export async function deleteBusinessAccountAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid business ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("business_accounts").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
@@ -274,7 +281,10 @@ export async function deleteBusinessAccountAction(id: string): Promise<{ success
 export async function deleteCustomerAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin"]);
-    const supabase = await createClient();
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid customer ID" };
+    }
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) return { success: false, error: error.message };

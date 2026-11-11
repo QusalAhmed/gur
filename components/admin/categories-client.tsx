@@ -20,12 +20,12 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
+import { type UiCategoryItem } from "@/lib/supabase";
 import {
-  UiCategoryItem,
-  fetchCategoriesFromDb,
-  updateCategoryInDb,
-  deleteCategorySafe,
-} from "@/lib/supabase";
+  fetchCategoriesAction,
+  updateCategoryAction,
+  deleteCategorySafeAction,
+} from "@/actions/categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,13 +74,13 @@ export function CategoriesClient() {
     refetch,
   } = useQuery({
     queryKey: ["admin", "categories"],
-    queryFn: fetchCategoriesFromDb,
+    queryFn: fetchCategoriesAction,
   });
 
   // Safe Delete Mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await deleteCategorySafe(id);
+      return await deleteCategorySafeAction(id);
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
@@ -105,7 +105,7 @@ export function CategoriesClient() {
   // Status Toggle Mutation
   const statusMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      return await updateCategoryInDb(id, { is_active: isActive });
+      return await updateCategoryAction(id, { is_active: isActive });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
@@ -146,7 +146,7 @@ export function CategoriesClient() {
   ) => {
     try {
       await Promise.all(
-        selected.map((item) => updateCategoryInDb(item.id, { is_active: isActive }))
+        selected.map((item) => updateCategoryAction(item.id, { is_active: isActive }))
       );
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "categories-list"] });
@@ -165,7 +165,7 @@ export function CategoriesClient() {
       let deactivated = 0;
       let deleted = 0;
       for (const item of selected) {
-        const res = await deleteCategorySafe(item.id);
+        const res = await deleteCategorySafeAction(item.id);
         if (res.archived) deactivated++;
         else deleted++;
       }

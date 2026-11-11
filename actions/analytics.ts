@@ -1,6 +1,7 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export type AnalyticsTimeRange = "ytd" | "mtd" | "last30" | "last90";
 
@@ -68,6 +69,8 @@ export async function getAdminAnalyticsAction(
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "support"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const now = new Date();
     let startDate: Date;
 

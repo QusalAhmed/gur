@@ -1,9 +1,9 @@
 "use server";
 
-import { supabaseAdmin, isServiceRoleConfigured } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { assertStaffRole, getStaffSession } from "@/lib/admin-guard";
+import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 
 export type ActionResult<T = any> =
@@ -17,7 +17,10 @@ export type ActionResult<T = any> =
 export async function confirmOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const client = getSupabaseAdmin();
 
     const { data, error } = await client
       .from("orders")
@@ -38,7 +41,7 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
       from_value: "pending",
       to_value: "confirmed",
       message: "Order confirmed by staff",
-      actor_id: session.user.id,
+      actor_id: getActorUuid(session),
     });
 
     revalidatePath("/admin/orders");
@@ -57,7 +60,10 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
 export async function processOrderAction(orderId: string): Promise<ActionResult> {
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const client = getSupabaseAdmin();
 
     const { data, error } = await client
       .from("orders")
@@ -77,7 +83,7 @@ export async function processOrderAction(orderId: string): Promise<ActionResult>
       from_value: "confirmed",
       to_value: "processing",
       message: "Order moved to processing by staff",
-      actor_id: session.user.id,
+      actor_id: getActorUuid(session),
     });
 
     revalidatePath("/admin/orders");
@@ -107,7 +113,10 @@ export async function cancelOrderWithReasonAction(
 
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const client = getSupabaseAdmin();
 
     // Call cancel_order RPC
     const { error: rpcErr } = await client.rpc("cancel_order", {
@@ -125,7 +134,7 @@ export async function cancelOrderWithReasonAction(
       entity_type: "order",
       entity_id: orderId,
       body: `Order cancelled. Reason: ${reason.trim()}`,
-      author_id: session.user.id,
+      author_id: getActorUuid(session),
     });
 
     revalidatePath("/admin/orders");
@@ -151,7 +160,10 @@ export async function addStaffNoteAction(
 
   try {
     const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const client = getSupabaseAdmin();
 
     // 1. Insert into staff_notes table
     const { data, error } = await client
@@ -160,7 +172,7 @@ export async function addStaffNoteAction(
         entity_type: "order",
         entity_id: orderId,
         body: body.trim(),
-        author_id: session.user.id,
+        author_id: getActorUuid(session),
       })
       .select()
       .single();
@@ -210,7 +222,10 @@ export async function setOrderItemsAction(
 ): Promise<ActionResult> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const client = isServiceRoleConfigured() ? supabaseAdmin : await createClient();
+    if (!isValidUuid(orderId)) {
+      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
+    }
+    const client = getSupabaseAdmin();
 
     const { data, error } = await client.rpc("set_order_items", {
       p_order_id: orderId,

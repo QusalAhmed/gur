@@ -20,7 +20,6 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { selectCartItems } from "@/lib/redux/slices/cart-slice";
 import { StorefrontOrderItem } from "@/actions/storefront-order";
 import { toast } from "sonner";
-import { createNotificationAction } from "@/actions/notifications";
 import { setPixelUserPhone } from "@/lib/facebook-pixel";
 import { CopyPhoneButton } from "./copy-phone-button";
 
@@ -119,18 +118,6 @@ export function PhoneHelpForm({
                   duration: 6000,
                 }
               );
-
-              // Notify Admin Center of callback inquiry
-              createNotificationAction({
-                type: "customer_inquiry",
-                title: "Phone Callback Request",
-                message: `Customer ${validLocalPhone} requested phone assistance (Draft: ${res.orderNumber || "New"})`,
-                data: {
-                  phone: validLocalPhone,
-                  order_number: res.orderNumber,
-                  link: res.orderNumber ? `/admin/orders?search=${res.orderNumber}` : "/admin/orders",
-                },
-              }).catch(() => {});
 
               try {
                 sessionStorage.removeItem(DRAFT_ORDER_SESSION_KEY);

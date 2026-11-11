@@ -31,17 +31,16 @@ import { cn } from "@/lib/utils";
 import { ProductVariantsFlow } from "@/components/admin/product-variants-flow";
 import { MetaCatalogManager } from "@/components/admin/meta-catalog-manager";
 import { syncSingleProductToMetaCatalogAction } from "@/actions/meta-catalog";
-import { updateProductStatusAction } from "@/actions/products";
+import {
+  getAdminProductsAction,
+  deleteProductAction,
+  createDraftProductAction,
+  updateProductStatusAction,
+} from "@/actions/products";
+import { fetchCategoriesListAction } from "@/actions/categories";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  UiProductItem,
-  fetchProductsFromDb,
-  fetchCategoriesList,
-  updateProductInDb,
-  deleteProductSafe,
-  createProductInDb,
-} from "@/lib/supabase";
+import { type UiProductItem } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -111,7 +110,7 @@ export function ProductsClient() {
     refetch,
   } = useQuery({
     queryKey: ["admin", "products"],
-    queryFn: fetchProductsFromDb,
+    queryFn: getAdminProductsAction,
   });
 
   // Automatically initialize all product rows with variants as expanded so variants are visible below products
@@ -147,13 +146,17 @@ export function ProductsClient() {
   // TanStack Query for Categories
   const { data: categories = [] } = useQuery({
     queryKey: ["admin", "categories-list"],
-    queryFn: fetchCategoriesList,
+    queryFn: fetchCategoriesListAction,
   });
 
   // Safe Delete Mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await deleteProductSafe(id);
+      const res = await deleteProductAction(id);
+      if (!res.success) {
+        throw new Error(res.error || res.message || "Failed to delete product.");
+      }
+      return res;
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
@@ -203,7 +206,7 @@ export function ProductsClient() {
   const duplicateMutation = useMutation({
     mutationFn: async (item: UiProductItem) => {
       const uniqueSlug = `${item.slug}-copy-${Date.now().toString().slice(-4)}`;
-      return await createProductInDb({
+      return await createDraftProductAction({
         name: `${item.name} (Copy)`,
         nameBn: item.nameBn ? `${item.nameBn} (কপি)` : undefined,
         slug: uniqueSlug,
@@ -298,7 +301,10 @@ export function ProductsClient() {
       let archivedCount = 0;
       let deletedCount = 0;
       for (const item of selected) {
-        const res = await deleteProductSafe(item.id);
+        const res = await deleteProductAction(item.id);
+        if (!res.success) {
+          throw new Error(res.error || res.message || `Failed to delete ${item.name}.`);
+        }
         if (res.archived) archivedCount++;
         else deletedCount++;
       }

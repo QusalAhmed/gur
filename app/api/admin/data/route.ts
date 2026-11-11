@@ -1,15 +1,139 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { NextRequest, NextResponse, connection } from "next/server";
+import { unstable_rethrow } from "next/navigation";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { getStaffSession } from "@/lib/admin-guard";
+import { AdminRole, ROLE_CAPABILITIES } from "@/lib/admin-permissions";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function canAccessEntity(role: AdminRole, entity: string, method: "GET" | "POST" | "PATCH" | "DELETE"): boolean {
+  const caps = ROLE_CAPABILITIES[role];
+  if (!caps) return false;
+
+  if (method === "GET") {
+    switch (entity) {
+      case "dashboard":
+      case "analytics":
+      case "businesses":
+      case "quotes":
+      case "customers":
+      case "reviews":
+      case "messages":
+      case "payments":
+      case "shipments":
+        return caps.canManageOrders;
+      case "inventory":
+      case "batches":
+      case "warehouses":
+      case "suppliers":
+        return caps.canReadInventory;
+      case "coupons":
+        return caps.canManageInventory;
+      case "price-tiers":
+      case "variants":
+      case "product-images":
+        return caps.canManageContent || caps.canManagePricing;
+      case "staff":
+      case "audit-logs":
+        return caps.canManageSettings;
+      default:
+        return false;
+    }
+  }
+
+  if (method === "POST") {
+    switch (entity) {
+      case "coupons":
+      case "suppliers":
+      case "warehouses":
+      case "batches":
+        return caps.canManageInventory;
+      default:
+        return false;
+    }
+  }
+
+  if (method === "PATCH") {
+    switch (entity) {
+      case "businesses":
+        return caps.canManageInventory;
+      case "quotes":
+      case "reviews":
+      case "messages":
+      case "shipments":
+      case "payments":
+        return caps.canManageOrders;
+      case "coupons":
+      case "batches":
+        return caps.canManageInventory;
+      default:
+        return false;
+    }
+  }
+
+  if (method === "DELETE") {
+    switch (entity) {
+      case "coupons":
+      case "suppliers":
+      case "warehouses":
+        return caps.canManageInventory;
+      case "reviews":
+        return caps.canManageOrders;
+      case "staff":
+        return caps.canManageStaff;
+      case "variants":
+      case "price-tiers":
+      case "product-images":
+        return caps.canManageContent;
+      default:
+        return false;
+    }
+  }
+
+  return false;
+}
+
+const ENTITY_ALLOWED_STATUSES: Record<string, ReadonlySet<string>> = {
+  businesses: new Set(["pending", "approved", "suspended", "rejected"]),
+  quotes: new Set(["new", "in_review", "quoted", "accepted", "rejected", "converted", "closed"]),
+  reviews: new Set(["pending", "approved", "rejected", "hidden"]),
+  messages: new Set(["new", "in_progress", "replied", "closed", "spam"]),
+  batches: new Set(["quarantine", "released", "rejected", "expired", "depleted"]),
+  shipments: new Set([
+    "pending",
+    "packed",
+    "handed_over",
+    "in_transit",
+    "out_for_delivery",
+    "delivered",
+    "failed",
+    "returned",
+    "cancelled",
+  ]),
+  payments: new Set(["pending", "authorized", "paid", "failed", "refunded", "cancelled"]),
+};
 
 export async function GET(req: NextRequest) {
+  await connection();
   try {
+    const session = await getStaffSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const entity = searchParams.get("entity");
 
     if (!entity) {
       return NextResponse.json({ success: false, error: "Entity query parameter required" }, { status: 400 });
     }
+
+    if (!canAccessEntity(session.role, entity, "GET")) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     switch (entity) {
       // ─────────────────────────────────────────────────────────────────────────
@@ -669,38 +793,6 @@ export async function GET(req: NextRequest) {
           };
         });
 
-        // If staff table in DB has no rows, provide authoritative default staff representation
-        if (staffList.length === 0) {
-          staffList = [
-            {
-              id: "admin-root",
-              name: "Admin Owner",
-              initials: "AO",
-              email: "owner@molassesstore.com",
-              phone: "+8801700000001",
-              role: "owner",
-              department: "Executive Management",
-              assignedWarehouse: "All Depots (Full Access)",
-              twoFactor: true,
-              status: "active",
-              lastLogin: "Active Now",
-            },
-            {
-              id: "stf-002",
-              name: "Operations Manager",
-              initials: "OM",
-              email: "operations@molassesstore.com",
-              phone: "+8801711902341",
-              role: "manager",
-              department: "Warehouse & Logistics",
-              assignedWarehouse: "WH-DHK-01",
-              twoFactor: true,
-              status: "active",
-              lastLogin: "Today, 10:00 AM",
-            },
-          ];
-        }
-
         return NextResponse.json({ success: true, data: staffList });
       }
 
@@ -907,33 +999,55 @@ export async function GET(req: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ success: false, error: `Unknown entity: ${entity}` }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Unsupported entity" }, { status: 400 });
     }
-  } catch (error: any) {
+  } catch (error) {
+    unstable_rethrow(error);
     console.error("Admin data route error:", error);
-    return NextResponse.json({ success: false, error: error?.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getStaffSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const entity = searchParams.get("entity");
+    if (!entity || !canAccessEntity(session.role, entity, "POST")) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await req.json();
 
     switch (entity) {
       case "coupons": {
         const { code, description, discount_type, value, min_order_amount, max_discount_amount, business_only } = body;
+        if (typeof code !== "string" || !code.trim()) {
+          return NextResponse.json({ success: false, error: "Invalid coupon code" }, { status: 400 });
+        }
+        const parsedValue = Number(value);
+        if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+          return NextResponse.json({ success: false, error: "Invalid discount value" }, { status: 400 });
+        }
+        if (discount_type !== "percentage" && discount_type !== "fixed") {
+          return NextResponse.json({ success: false, error: "Invalid discount type" }, { status: 400 });
+        }
+
         const { data, error } = await supabaseAdmin
           .from("coupons")
           .insert({
             code: code.trim().toUpperCase(),
-            description,
+            description: typeof description === "string" ? description.trim() : "",
             discount_type,
-            value: Number(value),
+            value: parsedValue,
             min_order_amount: Number(min_order_amount) || 0,
             max_discount_amount: max_discount_amount ? Number(max_discount_amount) : null,
-            business_only: !!business_only,
+            business_only: Boolean(business_only),
             is_active: true,
           })
           .select()
@@ -945,14 +1059,17 @@ export async function POST(req: NextRequest) {
 
       case "suppliers": {
         const { name, contact_name, phone, address, notes } = body;
+        if (typeof name !== "string" || !name.trim()) {
+          return NextResponse.json({ success: false, error: "Supplier name required" }, { status: 400 });
+        }
         const { data, error } = await supabaseAdmin
           .from("suppliers")
           .insert({
-            name,
-            contact_name,
-            phone,
-            address,
-            notes,
+            name: name.trim(),
+            contact_name: typeof contact_name === "string" ? contact_name.trim() : null,
+            phone: typeof phone === "string" ? phone.trim() : null,
+            address: typeof address === "string" ? address.trim() : null,
+            notes: typeof notes === "string" ? notes.trim() : null,
             is_active: true,
           })
           .select()
@@ -964,12 +1081,15 @@ export async function POST(req: NextRequest) {
 
       case "warehouses": {
         const { code, name, address } = body;
+        if (typeof code !== "string" || !code.trim() || typeof name !== "string" || !name.trim()) {
+          return NextResponse.json({ success: false, error: "Warehouse code and name required" }, { status: 400 });
+        }
         const { data, error } = await supabaseAdmin
           .from("warehouses")
           .insert({
             code: code.trim().toUpperCase(),
-            name,
-            address,
+            name: name.trim(),
+            address: typeof address === "string" ? address.trim() : null,
             is_active: true,
           })
           .select()
@@ -981,15 +1101,18 @@ export async function POST(req: NextRequest) {
 
       case "batches": {
         const { product_id, lot_code, brix, ph, produced_on, best_before } = body;
+        if (!product_id || !UUID_REGEX.test(String(product_id)) || typeof lot_code !== "string" || !lot_code.trim()) {
+          return NextResponse.json({ success: false, error: "Valid product_id and lot_code required" }, { status: 400 });
+        }
         const { data, error } = await supabaseAdmin
           .from("batches")
           .insert({
             product_id,
-            lot_code,
-            brix: Number(brix),
-            ph: Number(ph),
-            produced_on,
-            best_before,
+            lot_code: lot_code.trim(),
+            brix: Number.isFinite(Number(brix)) ? Number(brix) : null,
+            ph: Number.isFinite(Number(ph)) ? Number(ph) : null,
+            produced_on: produced_on || null,
+            best_before: best_before || null,
             status: "quarantine",
           })
           .select()
@@ -1000,27 +1123,45 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ success: false, error: `Unsupported POST entity: ${entity}` }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Unsupported entity" }, { status: 400 });
     }
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    console.error("Admin data POST error:", err);
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
+    const session = await getStaffSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const entity = searchParams.get("entity");
+    if (!entity || !canAccessEntity(session.role, entity, "PATCH")) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await req.json();
     const { id, ...updates } = body;
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: "ID required for update" }, { status: 400 });
+    if (!id || !UUID_REGEX.test(String(id))) {
+      return NextResponse.json({ success: false, error: "Valid UUID ID required for update" }, { status: 400 });
+    }
+
+    if (entity in ENTITY_ALLOWED_STATUSES && updates.status !== undefined) {
+      if (typeof updates.status !== "string" || !ENTITY_ALLOWED_STATUSES[entity].has(updates.status)) {
+        return NextResponse.json({ success: false, error: "Invalid status value" }, { status: 400 });
+      }
     }
 
     switch (entity) {
       case "businesses": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("business_accounts")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1032,10 +1173,18 @@ export async function PATCH(req: NextRequest) {
 
       case "quotes": {
         const { status, quote_reply, quoted_total } = updates;
-        const payload: any = { updated_at: new Date().toISOString() };
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (status) payload.status = status;
-        if (quote_reply !== undefined) payload.quote_reply = quote_reply;
-        if (quoted_total !== undefined) payload.quoted_total = quoted_total;
+        if (quote_reply !== undefined) {
+          payload.quote_reply = typeof quote_reply === "string" ? quote_reply : null;
+        }
+        if (quoted_total !== undefined) {
+          const parsedTotal = Number(quoted_total);
+          if (!Number.isFinite(parsedTotal) || parsedTotal < 0) {
+            return NextResponse.json({ success: false, error: "Invalid quoted_total" }, { status: 400 });
+          }
+          payload.quoted_total = parsedTotal;
+        }
 
         const { data, error } = await supabaseAdmin
           .from("quote_requests")
@@ -1048,6 +1197,7 @@ export async function PATCH(req: NextRequest) {
 
       case "reviews": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("product_reviews")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1059,6 +1209,7 @@ export async function PATCH(req: NextRequest) {
 
       case "messages": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("contact_messages")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1069,10 +1220,12 @@ export async function PATCH(req: NextRequest) {
       }
 
       case "coupons": {
-        const { is_active } = updates;
+        if (typeof updates.is_active !== "boolean") {
+          return NextResponse.json({ success: false, error: "Boolean is_active required" }, { status: 400 });
+        }
         const { data, error } = await supabaseAdmin
           .from("coupons")
-          .update({ is_active, updated_at: new Date().toISOString() })
+          .update({ is_active: updates.is_active, updated_at: new Date().toISOString() })
           .eq("id", id)
           .select();
         if (error) throw error;
@@ -1081,6 +1234,7 @@ export async function PATCH(req: NextRequest) {
 
       case "batches": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("batches")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1092,6 +1246,7 @@ export async function PATCH(req: NextRequest) {
 
       case "shipments": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("shipments")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1103,6 +1258,7 @@ export async function PATCH(req: NextRequest) {
 
       case "payments": {
         const { status } = updates;
+        if (!status) return NextResponse.json({ success: false, error: "Status required" }, { status: 400 });
         const { data, error } = await supabaseAdmin
           .from("payments")
           .update({ status, updated_at: new Date().toISOString() })
@@ -1113,22 +1269,34 @@ export async function PATCH(req: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ success: false, error: `Unsupported PATCH entity: ${entity}` }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Unsupported entity" }, { status: 400 });
     }
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    console.error("Admin data PATCH error:", err);
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getStaffSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const entity = searchParams.get("entity");
     const id = searchParams.get("id");
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: "ID parameter required" }, { status: 400 });
+    if (!entity || !canAccessEntity(session.role, entity, "DELETE")) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
     }
+
+    if (!id || !UUID_REGEX.test(id)) {
+      return NextResponse.json({ success: false, error: "Valid UUID ID parameter required" }, { status: 400 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     switch (entity) {
       case "coupons": {
@@ -1180,9 +1348,10 @@ export async function DELETE(req: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ success: false, error: `Unsupported DELETE entity: ${entity}` }, { status: 400 });
+        return NextResponse.json({ success: false, error: "Unsupported entity" }, { status: 400 });
     }
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    console.error("Admin data DELETE error:", err);
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

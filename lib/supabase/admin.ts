@@ -1,5 +1,4 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseClient } from "./client";
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hcfuqyidcxsqyjzmwxiw.supabase.co";
@@ -13,19 +12,20 @@ export function isServiceRoleConfigured(): boolean {
 }
 
 export function getSupabaseAdmin(): SupabaseClient {
-  // In browser context, always reuse the singleton client to prevent multiple GoTrueClient instances
   if (typeof window !== "undefined") {
-    return getSupabaseClient();
+    throw new Error("SECURITY_ERROR: getSupabaseAdmin() cannot be invoked in browser context.");
   }
 
   if (adminClient) return adminClient;
 
   const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "";
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+
+  if (!serviceKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is not configured. Refusing to fall back to anonymous client."
+    );
+  }
 
   adminClient = createClient(supabaseUrl, serviceKey, {
     auth: {

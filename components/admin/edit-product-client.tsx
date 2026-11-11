@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, RefreshCw, AlertCircle, Package } from "lucide-react";
-import { fetchProductDetailById } from "@/lib/supabase";
+import { getAdminProductByIdAction } from "@/actions/products";
 import { ProductForm } from "@/components/admin/product-form";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +23,7 @@ export function EditProductClient({ id }: EditProductClientProps) {
     refetch,
   } = useQuery({
     queryKey: ["admin", "product", id],
-    queryFn: () => fetchProductDetailById(id),
+    queryFn: () => getAdminProductByIdAction(id),
   });
 
   if (isLoading) {

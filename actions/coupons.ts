@@ -1,6 +1,8 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 export interface CouponItem {
   id: string;
@@ -35,6 +37,8 @@ export async function getAdminCouponsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const [couponsRes, redemptionsRes] = await Promise.all([
       supabaseAdmin
         .from("coupons")
@@ -153,6 +157,8 @@ export async function createCouponAction(payload: {
   endsAt?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("coupons").insert({
       code: payload.code.trim().toUpperCase(),
       description: payload.description?.trim() || null,
@@ -178,6 +184,11 @@ export async function toggleCouponActiveAction(payload: {
   isActive: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid coupon ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from("coupons")
       .update({ is_active: payload.isActive, updated_at: new Date().toISOString() })
@@ -192,6 +203,11 @@ export async function toggleCouponActiveAction(payload: {
 
 export async function deleteCouponAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid coupon ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("coupons").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
     return { success: true };

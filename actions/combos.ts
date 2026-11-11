@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 
 export interface ComboComponentDetail {
   id: string;
@@ -72,7 +72,8 @@ export interface SaveComboInput {
  * physical warehouse stock, and cross-combo usage mappings.
  */
 export async function fetchCombosListAction(): Promise<ComboItemView[]> {
-  const client = supabaseAdmin || supabase;
+  await assertStaffRole(["owner", "admin", "manager", "editor"]);
+  const client = getSupabaseAdmin();
 
   try {
     // 1. Fetch default warehouse id
@@ -348,17 +349,26 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
 }> {
   let demotedVariantIds: string[] = [];
   let createdVariantId: string | null = null;
-  let client: typeof supabaseAdmin | typeof supabase | null = null;
+  let client: ReturnType<typeof getSupabaseAdmin> | null = null;
 
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor"]);
-    client = supabaseAdmin || supabase;
+    client = getSupabaseAdmin();
     const now = new Date().toISOString();
     if (!input.name.trim()) {
       return { success: false, error: "Combo name is required." };
     }
+    if (input.comboProductId && !isValidUuid(input.comboProductId)) {
+      return { success: false, error: "Invalid combo product ID." };
+    }
+    if (input.comboVariantId && !isValidUuid(input.comboVariantId)) {
+      return { success: false, error: "Invalid combo variant ID." };
+    }
     if (!input.components || input.components.length === 0) {
       return { success: false, error: "A combo must contain at least one product component." };
+    }
+    if (input.components.some((c) => !isValidUuid(c.componentVariantId))) {
+      return { success: false, error: "Invalid component variant ID." };
     }
 
     // Validate components before any product or variant writes
@@ -460,7 +470,7 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     const skuCode = `CMB-${cleanSlug.toUpperCase().slice(0, 8)}-${Date.now().toString().slice(-4)}`;
 
     if (variantId) {
-      const { error: vErr } = await client
+      let varUpdate = client
         .from("product_variants")
         .update({
           name: input.name.trim(),
@@ -472,6 +482,10 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
           updated_at: now,
         })
         .eq("id", variantId);
+      if (productId) {
+        varUpdate = varUpdate.eq("product_id", productId);
+      }
+      const { error: vErr } = await varUpdate;
 
       if (vErr) throw new Error(vErr.message);
     } else {
@@ -644,7 +658,7 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
     return { success: true, comboId: productId };
   } catch (err: any) {
     console.error("saveComboAction error:", err);
-    const rollbackClient = client || supabaseAdmin || supabase;
+    const rollbackClient = client || getSupabaseAdmin();
     // Delete partially created variant on rollback before restoring demoted defaults
     if (createdVariantId) {
       const { error: delVarErr } = await rollbackClient
@@ -678,7 +692,10 @@ export async function toggleComboStatusAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor"]);
-    const client = supabaseAdmin || supabase;
+    if (!isValidUuid(productId)) {
+      return { success: false, error: "Invalid product ID." };
+    }
+    const client = getSupabaseAdmin();
     // 1. Verify this product actually has a confirmed combo variant and check for regular variants
     const { data: allVariants, error: checkErr } = await client
       .from("product_variants")
@@ -746,7 +763,10 @@ export async function deleteComboAction(
 ): Promise<{ success: boolean; archived?: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor"]);
-    const client = supabaseAdmin || supabase;
+    if (!isValidUuid(productId)) {
+      return { success: false, error: "Invalid product ID." };
+    }
+    const client = getSupabaseAdmin();
     // 1. Restrict delete action to confirmed combo products only
     const { data: allVariants, error: checkErr } = await client
       .from("product_variants")
@@ -863,8 +883,6 @@ export async function deleteComboAction(
     revalidateTag("storefront-products", "max");
 
     return { success: true, archived: false };
-
-    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

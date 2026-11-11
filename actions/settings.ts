@@ -1,9 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { ADMIN_COOKIE_NAME, verifySessionToken, canRoleAccessPath } from "@/lib/admin-auth";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
 
 export interface SiteSettingsMap {
   // Store Profile
@@ -42,8 +41,20 @@ export interface SiteSettingsMap {
   "inventory.simulated_demand_last_reset_date"?: string;
 
   // SMS & Notifications
+  "notifications.sms_enabled"?: boolean;
   "notifications.sms_gateway"?: string;
   "notifications.sms_sender_id"?: string;
+  "notifications.smsbangladesh_user"?: string;
+  "notifications.smsbangladesh_password"?: string;
+  "notifications.smsbangladesh_from"?: string;
+  "notifications.sms_placed_enabled"?: boolean;
+  "notifications.sms_confirmed_enabled"?: boolean;
+  "notifications.sms_shipped_enabled"?: boolean;
+  "notifications.sms_delivered_enabled"?: boolean;
+  "notifications.sms_template_placed"?: string;
+  "notifications.sms_template_confirmed"?: string;
+  "notifications.sms_template_shipped"?: string;
+  "notifications.sms_template_delivered"?: string;
   "notifications.smtp_server"?: string;
   "notifications.brevo_enabled"?: boolean;
   "notifications.brevo_notify_incomplete"?: boolean;
@@ -67,44 +78,94 @@ export interface SaveSettingsResult {
   error?: string;
 }
 
+const SECRET_SETTING_KEYS = new Set([
+  "notifications.brevo_api_key",
+  "notifications.smsbangladesh_password",
+]);
+
+function isSecretSettingKey(key: string): boolean {
+  return (
+    SECRET_SETTING_KEYS.has(key) ||
+    /(?:api_key|secret|password|token)/i.test(key)
+  );
+}
+
+function isMaskedSecretPlaceholder(val: unknown): boolean {
+  if (typeof val !== "string") return false;
+  const trimmed = val.trim();
+  return trimmed === "" || /^[•*]+$/.test(trimmed);
+}
+
+const PUBLIC_SETTING_KEYS = new Set([
+  "store.name",
+  "store.name_bn",
+  "store.currency",
+  "store.support_phone",
+  "store.whatsapp",
+  "store.email",
+  "store.address",
+  "store.timezone",
+  "store.language",
+  "store.logo_url",
+  "store.favicon_url",
+  "checkout.cod_enabled",
+  "checkout.guest_checkout_enabled",
+  "inventory.daily_production_kg",
+  "inventory.simulated_demand_enabled",
+  "inventory.simulated_demand_kg",
+]);
+
+const ALLOWED_SETTING_KEYS = new Set([
+  ...PUBLIC_SETTING_KEYS,
+  "orders.number_prefix",
+  "orders.unpaid_online_expiry_minutes",
+  "orders.auto_cancel_cod_hours",
+  "orders.allow_backorders",
+  "inventory.low_stock_threshold_bulk",
+  "inventory.low_stock_threshold_retail",
+  "inventory.simulated_demand_min_kg",
+  "inventory.simulated_demand_max_kg",
+  "inventory.simulated_demand_max_cap_kg",
+  "inventory.simulated_demand_interval_mins",
+  "inventory.simulated_demand_last_reset_date",
+  "notifications.sms_enabled",
+  "notifications.sms_gateway",
+  "notifications.sms_sender_id",
+  "notifications.smsbangladesh_user",
+  "notifications.smsbangladesh_password",
+  "notifications.smsbangladesh_from",
+  "notifications.sms_placed_enabled",
+  "notifications.sms_confirmed_enabled",
+  "notifications.sms_shipped_enabled",
+  "notifications.sms_delivered_enabled",
+  "notifications.sms_template_placed",
+  "notifications.sms_template_confirmed",
+  "notifications.sms_template_shipped",
+  "notifications.sms_template_delivered",
+  "notifications.smtp_server",
+  "notifications.brevo_enabled",
+  "notifications.brevo_notify_incomplete",
+  "notifications.brevo_api_key",
+  "notifications.brevo_admin_email",
+  "notifications.brevo_sender_email",
+  "notifications.brevo_sender_name",
+]);
+
 /**
  * Verifies that the caller has admin permissions to view or update site settings.
  */
 async function verifyAdminAuth(): Promise<{ authorized: boolean; reason?: string }> {
   try {
-    const { getStaffSession } = await import("@/lib/admin-guard");
-    const session = await getStaffSession();
-    if (session && (session.role === "owner" || session.role === "admin")) {
-      return { authorized: true };
-    }
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-
-    if (!token) {
-      if (process.env.NODE_ENV === "development") {
-        return { authorized: true };
-      }
-      return { authorized: false, reason: "Missing authentication session" };
-    }
-
-    const user = await verifySessionToken(token);
-    if (!user) {
-      return { authorized: false, reason: "Invalid or expired session token" };
-    }
-
-    if (!canRoleAccessPath(user.role, "/admin/settings")) {
-      return { authorized: false, reason: `Role '${user.role}' is not authorized to manage settings` };
-    }
-
+    await assertStaffRole(["owner", "admin"]);
     return { authorized: true };
   } catch (err: any) {
-    return { authorized: false, reason: err?.message || "Auth verification failure" };
+    return { authorized: false, reason: err?.message || "Unauthorized access to site settings" };
   }
 }
 
 /**
  * Loads all site settings from public.site_settings using the Supabase admin client.
+ * Masks secret credentials before returning to the client UI.
  */
 export async function getSiteSettingsAction(): Promise<GetSettingsResult> {
   const auth = await verifyAdminAuth();
@@ -117,6 +178,7 @@ export async function getSiteSettingsAction(): Promise<GetSettingsResult> {
   }
 
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("site_settings")
       .select("key, value, description, is_public, updated_at");
@@ -129,7 +191,11 @@ export async function getSiteSettingsAction(): Promise<GetSettingsResult> {
     const settingsMap: SiteSettingsMap = {};
     if (data) {
       for (const row of data) {
-        settingsMap[row.key] = row.value;
+        if (isSecretSettingKey(row.key)) {
+          settingsMap[row.key] = row.value ? "********" : "";
+        } else {
+          settingsMap[row.key] = row.value;
+        }
       }
     }
 
@@ -159,46 +225,40 @@ export async function updateSiteSettingsAction(
   }
 
   try {
-    const entries = Object.entries(settings);
+    const entries = Object.entries(settings || {}).filter(([key]) =>
+      ALLOWED_SETTING_KEYS.has(key)
+    );
     if (entries.length === 0) {
       return { success: true, message: "No changes to save" };
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
     const now = new Date().toISOString();
 
-    const publicKeys = new Set([
-      "store.name",
-      "store.name_bn",
-      "store.currency",
-      "store.support_phone",
-      "store.whatsapp",
-      "store.email",
-      "store.address",
-      "store.timezone",
-      "store.language",
-      "store.logo_url",
-      "store.favicon_url",
-      "checkout.cod_enabled",
-      "checkout.guest_checkout_enabled",
-      "inventory.daily_production_kg",
-      "inventory.simulated_demand_enabled",
-      "inventory.simulated_demand_kg",
-    ]);
+    const updates = entries
+      .filter(([key, value]) => {
+        if (isSecretSettingKey(key) && isMaskedSecretPlaceholder(value)) {
+          return false;
+        }
+        return value !== undefined;
+      })
+      .map(([key, value]) =>
+        supabaseAdmin
+          .from("site_settings")
+          .upsert(
+            {
+              key,
+              value,
+              updated_at: now,
+              ...(PUBLIC_SETTING_KEYS.has(key) ? { is_public: true } : {}),
+            },
+            { onConflict: "key" }
+          )
+      );
 
-    // Perform upserts for each setting key
-    const updates = entries.map(([key, value]) =>
-      supabaseAdmin
-        .from("site_settings")
-        .upsert(
-          {
-            key,
-            value,
-            updated_at: now,
-            ...(publicKeys.has(key) ? { is_public: true } : {}),
-          },
-          { onConflict: "key" }
-        )
-    );
+    if (updates.length === 0) {
+      return { success: true, message: "No changes to save" };
+    }
 
     const results = await Promise.all(updates);
     const failed = results.find((r) => r.error);
@@ -244,6 +304,7 @@ export async function updateSiteSettingsAction(
  */
 export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>> {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("site_settings")
       .select("key, value")
@@ -255,13 +316,19 @@ export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>>
 
     const map: Partial<SiteSettingsMap> = {};
     for (const row of data) {
-      map[row.key as keyof SiteSettingsMap] = row.value;
+      if (!isSecretSettingKey(row.key)) {
+        map[row.key as keyof SiteSettingsMap] = row.value;
+      }
     }
     return map;
   } catch (err) {
     console.error("Error fetching public site settings:", err);
     return {};
   }
+}
+
+export async function getPublicSiteSettingsAction(): Promise<Partial<SiteSettingsMap>> {
+  return getPublicSiteSettings();
 }
 
 /**
@@ -277,6 +344,7 @@ export async function resetSimulatedStockAction(): Promise<SaveSettingsResult> {
   }
 
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const now = new Date().toISOString();
     const { error } = await supabaseAdmin
       .from("site_settings")

@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { normalizeBDPhone } from "@/lib/admin-format";
 
@@ -88,7 +89,7 @@ export async function searchInquiryByRefCodeAction(
     }
     const escapedRef = cleanRef.replace(/[%_*?\\]/g, "\\$&");
 
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
     const { data: inquiry, error } = await supabase
       .from("storefront_inquiries")
       .select("ref_code, channel, customer_phone, fbp, fbc, client_ip, meta_tracking, created_at")
@@ -140,10 +141,18 @@ export async function searchCustomerByPhoneAction(
 ): Promise<{ ok: boolean; data?: CustomerLookupResult | null; message?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
-    const normalized = normalizeBDPhone(rawPhone);
-    const cleanDigits = rawPhone.replace(/[^0-9]/g, "");
+    const normalized = sanitizePostgrestFilterTerm(normalizeBDPhone(rawPhone));
+    const cleanDigits = sanitizePostgrestFilterTerm(rawPhone.replace(/[^0-9]/g, ""));
+    if (!normalized && !cleanDigits) {
+      return { ok: true, data: null };
+    }
+
+    const orClauses = [
+      ...(normalized ? [`phone.eq.${normalized}`] : []),
+      ...(cleanDigits ? [`phone.ilike.%${cleanDigits}%`] : []),
+    ];
 
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -162,7 +171,7 @@ export async function searchCustomerByPhoneAction(
         )
       `
       )
-      .or(`phone.eq.${normalized},phone.ilike.%${cleanDigits}%`)
+      .or(orClauses.join(","))
       .limit(1)
       .maybeSingle();
 
@@ -227,10 +236,25 @@ export async function createManualOrderAction(params: CreateManualOrderParams): 
 }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     if (!params.items || params.items.length === 0) {
       return { ok: false, message: "An order must contain at least one item." };
+    }
+    if (!isValidUuid(params.shippingMethodId)) {
+      return { ok: false, message: "Invalid shipping method ID." };
+    }
+    if (params.userId && !isValidUuid(params.userId)) {
+      return { ok: false, message: "Invalid user ID." };
+    }
+    if (params.businessId && !isValidUuid(params.businessId)) {
+      return { ok: false, message: "Invalid business ID." };
+    }
+    if (params.quoteRequestId && !isValidUuid(params.quoteRequestId)) {
+      return { ok: false, message: "Invalid quote request ID." };
+    }
+    if (params.items.some((i) => !isValidUuid(i.variantId))) {
+      return { ok: false, message: "Invalid item variant ID." };
     }
 
     if (!params.shippingAddress.districtId) {

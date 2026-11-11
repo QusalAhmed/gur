@@ -1,6 +1,8 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { revalidatePath } from "next/cache";
 
 export interface FaqItem {
@@ -19,6 +21,8 @@ export async function getAdminFaqsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: rawFaqs, error } = await supabaseAdmin
       .from("faqs")
       .select("id, question, question_bn, answer, topic, sort_order, is_active")
@@ -51,6 +55,8 @@ export async function createFaqAction(payload: {
   displayOrder?: number;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("faqs").insert({
       question: payload.question,
       question_bn: payload.questionBn || null,
@@ -70,6 +76,11 @@ export async function createFaqAction(payload: {
 
 export async function deleteFaqAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid FAQ ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("faqs").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
     revalidatePath("/admin/faqs");

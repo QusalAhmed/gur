@@ -1,8 +1,14 @@
 "use server";
 
 import { revalidatePath, revalidateTag, updateTag } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
+import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import type { DbProduct } from "@/lib/supabase/types";
+import type { UiProductItem, UiProductVariantItem } from "@/lib/supabase/api";
+
+export type { UiProductItem, UiProductVariantItem };
 
 export interface SaveProductVariantInput {
   id?: string;
@@ -87,10 +93,23 @@ export interface DeleteProductResult {
  * and revalidates Next.js cached pages.
  */
 export async function saveProductAction(params: SaveProductInput): Promise<SaveProductResult> {
-  const client = supabaseAdmin || supabase;
-
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const client = getSupabaseAdmin();
+
     // 1. Validation
+    if (params.productId && !isValidUuid(params.productId)) {
+      return { success: false, error: "Invalid product ID." };
+    }
+    if (params.product.category_id && !isValidUuid(params.product.category_id)) {
+      return { success: false, error: "Invalid category ID." };
+    }
+    if ((params.deletedVariantIds || []).some((id) => !isValidUuid(id))) {
+      return { success: false, error: "Invalid deleted variant ID." };
+    }
+    if ((params.deletedImageIds || []).some((id) => !isValidUuid(id))) {
+      return { success: false, error: "Invalid deleted image ID." };
+    }
     if (!params.product.name?.trim()) {
       return { success: false, error: "Product name is required." };
     }
@@ -103,11 +122,20 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
 
     // Validate combo variants across params.variants before step 1 writes anything
     for (const v of params.variants) {
+      if (v.id && !isValidUuid(v.id)) {
+        return { success: false, error: `Invalid variant ID for "${v.name}".` };
+      }
       if (v.is_combo) {
         if (!v.combo_items || v.combo_items.length === 0) {
           return {
             success: false,
             error: `Combo variant "${v.name}" must have at least one component.`,
+          };
+        }
+        if (v.combo_items.some((ci) => !isValidUuid(ci.component_variant_id))) {
+          return {
+            success: false,
+            error: `Combo variant "${v.name}" contains an invalid component variant ID.`,
           };
         }
         const compIds = v.combo_items.map((ci) => ci.component_variant_id);
@@ -228,19 +256,22 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
           await client
             .from("product_variants")
             .update({ is_active: false, updated_at: now })
-            .eq("id", varId);
+            .eq("id", varId)
+            .eq("product_id", productId);
         } else {
           const { error: delErr } = await client
             .from("product_variants")
             .delete()
-            .eq("id", varId);
+            .eq("id", varId)
+            .eq("product_id", productId);
 
           if (delErr) {
             console.warn("Could not delete variant row, deactivating instead:", delErr.message);
             await client
               .from("product_variants")
               .update({ is_active: false, updated_at: now })
-              .eq("id", varId);
+              .eq("id", varId)
+              .eq("product_id", productId);
           }
         }
       }
@@ -251,7 +282,8 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       await client
         .from("product_images")
         .delete()
-        .in("id", params.deletedImageIds);
+        .in("id", params.deletedImageIds)
+        .eq("product_id", productId);
     }
 
     // 4. Default warehouse lookup for stock status trigger synchronization
@@ -335,7 +367,8 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
         const { error: vUpdateErr } = await client
           .from("product_variants")
           .update(variantPayload)
-          .eq("id", variantId);
+          .eq("id", variantId)
+          .eq("product_id", productId);
 
         if (vUpdateErr) {
           console.error("Error updating variant:", vUpdateErr);
@@ -554,11 +587,12 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
           sort_order: img.sort_order ?? i,
         };
 
-        if (img.id && !img.id.startsWith("local-") && !img.id.startsWith("gallery-")) {
+        if (img.id && isValidUuid(img.id)) {
           const { error: imgUpdateErr } = await client
             .from("product_images")
             .update(imagePayload)
-            .eq("id", img.id);
+            .eq("id", img.id)
+            .eq("product_id", productId);
 
           if (imgUpdateErr) {
             console.error("Error updating image:", imgUpdateErr);
@@ -611,9 +645,12 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
  * Server Action: Safely archives or deletes a product from the database.
  */
 export async function deleteProductAction(id: string): Promise<DeleteProductResult> {
-  const client = supabaseAdmin || supabase;
-
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!isValidUuid(id)) {
+      return { success: false, archived: false, message: "Invalid product ID.", error: "Invalid product ID." };
+    }
+    const client = getSupabaseAdmin();
     const { count: batchCount } = await client
       .from("batches")
       .select("id", { count: "exact", head: true })
@@ -694,8 +731,12 @@ export async function updateProductStatusAction(
   id: string,
   status: "active" | "draft" | "archived"
 ): Promise<{ success: boolean; error?: string }> {
-  const client = supabaseAdmin || supabase;
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid product ID." };
+    }
+    const client = getSupabaseAdmin();
     const { error } = await client
       .from("products")
       .update({
@@ -727,12 +768,15 @@ export async function updateProductStatusAction(
 export async function updateProductsSortOrderAction(
   orderedIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
-  const client = supabaseAdmin || supabase;
-  if (!orderedIds || orderedIds.length === 0) {
-    return { success: false, error: "No product IDs provided." };
-  }
-
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!orderedIds || orderedIds.length === 0) {
+      return { success: false, error: "No product IDs provided." };
+    }
+    if (orderedIds.some((id) => !isValidUuid(id))) {
+      return { success: false, error: "Invalid product ID in sort list." };
+    }
+    const client = getSupabaseAdmin();
     const { error } = await client.rpc("reorder_products", {
       p_ordered_ids: orderedIds,
     });
@@ -790,7 +834,9 @@ export async function getAdminVariantsAction(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: rawVariants, error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const client = getSupabaseAdmin();
+    const { data: rawVariants, error } = await client
       .from("product_variants")
       .select(
         `
@@ -807,7 +853,7 @@ export async function getAdminVariantsAction(): Promise<{
         stock_status,
         is_active,
         products:product_id (name),
-        inventory_levels:inventory_levels (quantity_on_hand)
+        inventory_levels:inventory_levels (on_hand)
       `
       )
       .order("created_at", { ascending: false });
@@ -818,7 +864,7 @@ export async function getAdminVariantsAction(): Promise<{
       const prodName = v.products?.name || "Product";
       const stockLevels = Array.isArray(v.inventory_levels) ? v.inventory_levels : [];
       const totalQty = stockLevels.reduce(
-        (acc: number, cur: any) => acc + Number(cur.quantity_on_hand || 0),
+        (acc: number, cur: any) => acc + Number(cur.on_hand || 0),
         0
       );
 
@@ -869,7 +915,9 @@ export async function getAdminPriceTiersAction(): Promise<{
   error?: string;
 }> {
   try {
-    const { data: rawTiers, error } = await supabaseAdmin
+    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+    const client = getSupabaseAdmin();
+    const { data: rawTiers, error } = await client
       .from("price_tiers")
       .select(
         `
@@ -916,3 +964,286 @@ export async function getAdminPriceTiersAction(): Promise<{
 }
 
 
+export async function getAdminProductsAction(): Promise<UiProductItem[]> {
+  await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+  const client = getSupabaseAdmin();
+
+  const { data: productsData, error: prodErr } = await client
+    .from("products")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (prodErr) {
+    throw new Error(prodErr.message || "Failed to fetch products.");
+  }
+  if (!productsData || productsData.length === 0) {
+    return [];
+  }
+
+  const { data: catData } = await client.from("categories").select("id, name");
+  const categoryMap = new Map<string, string>();
+  if (catData) {
+    catData.forEach((c) => categoryMap.set(c.id, c.name));
+  }
+
+  const { data: variantsData } = await client
+    .from("product_variants")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  const variantListMap = new Map<string, UiProductVariantItem[]>();
+  const variantCountMap = new Map<
+    string,
+    { count: number; minPrice: number; maxPrice: number; stock: string }
+  >();
+
+  if (variantsData) {
+    for (const v of variantsData) {
+      const item: UiProductVariantItem = {
+        id: v.id,
+        productId: v.product_id,
+        sku: v.sku,
+        barcode: v.barcode || null,
+        name: v.name,
+        nameBn: v.name_bn || null,
+        packType: v.pack_type || "jar",
+        netQuantity: Number(v.net_quantity) || 0,
+        netUnit: v.net_unit || "kg",
+        weightGrams: v.weight_grams ? Number(v.weight_grams) : undefined,
+        price: Number(v.price) || 0,
+        compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
+        stockStatus: (v.stock_status as UiProductVariantItem["stockStatus"]) || "in_stock",
+        isActive: v.is_active ?? true,
+        isDefault: Boolean(v.is_default),
+        isCombo: Boolean(v.is_combo),
+      };
+
+      const existing = variantListMap.get(v.product_id) || [];
+      existing.push(item);
+      variantListMap.set(v.product_id, existing);
+
+      const priceNum = Number(v.price) || 0;
+      const cur = variantCountMap.get(v.product_id) || {
+        count: 0,
+        minPrice: priceNum,
+        maxPrice: priceNum,
+        stock: v.stock_status || "in_stock",
+      };
+      cur.count += 1;
+      if (cur.count === 1) {
+        cur.minPrice = priceNum;
+        cur.maxPrice = priceNum;
+      } else {
+        if (priceNum < cur.minPrice) cur.minPrice = priceNum;
+        if (priceNum > cur.maxPrice) cur.maxPrice = priceNum;
+      }
+      if (v.stock_status === "out_of_stock" && cur.stock === "in_stock") {
+        cur.stock = "out_of_stock";
+      }
+      variantCountMap.set(v.product_id, cur);
+    }
+  }
+
+  const { data: imagesData } = await client
+    .from("product_images")
+    .select("id, product_id, storage_path, is_primary, sort_order")
+    .order("sort_order", { ascending: true });
+
+  const imageMap = new Map<string, string>();
+  if (imagesData) {
+    for (const img of imagesData) {
+      if (!imageMap.has(img.product_id) || img.is_primary) {
+        const pubUrl = resolveCdnImageUrl(img.storage_path);
+        if (pubUrl) {
+          imageMap.set(img.product_id, pubUrl);
+        }
+      }
+    }
+  }
+
+  return productsData.map((p) => {
+    const vInfo = variantCountMap.get(p.id) || {
+      count: 0,
+      minPrice: 0,
+      maxPrice: 0,
+      stock: "in_stock",
+    };
+    return {
+      id: p.id,
+      name: p.name,
+      nameBn: p.name_bn || "",
+      slug: p.slug,
+      category: (p.category_id && categoryMap.get(p.category_id)) || "General Molasses",
+      categoryId: p.category_id,
+      status: p.status as "active" | "draft" | "archived",
+      variants: vInfo.count,
+      variantList: variantListMap.get(p.id) || [],
+      stock: (vInfo.stock as UiProductItem["stock"]) || "in_stock",
+      rating: Number(p.rating_avg) || 0,
+      reviews: p.rating_count || 0,
+      featured: Boolean(p.is_featured),
+      sortOrder: typeof p.sort_order === "number" ? p.sort_order : 0,
+      basePrice: vInfo.minPrice || 0,
+      maxPrice: vInfo.maxPrice || vInfo.minPrice || 0,
+      imageUrl: imageMap.get(p.id) || null,
+      grade: p.grade || null,
+      createdAt: p.created_at,
+    };
+  });
+}
+
+export async function getAdminProductByIdAction(id: string): Promise<DbProduct | null> {
+  await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
+  if (!isValidUuid(id)) {
+    return null;
+  }
+
+  const client = getSupabaseAdmin();
+  const { data: product, error: prodErr } = await client
+    .from("products")
+    .select("*, category:categories(*)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (prodErr || !product) {
+    return null;
+  }
+
+  const { data: variants } = await client
+    .from("product_variants")
+    .select("*")
+    .eq("product_id", id)
+    .order("sort_order", { ascending: true });
+
+  const variantList = variants || [];
+  const comboVariantIds = variantList.filter((v) => v.is_combo).map((v) => v.id);
+  const comboMap = new Map<string, any[]>();
+
+  if (comboVariantIds.length > 0) {
+    const { data: comboRows, error: comboErr } = await client
+      .from("combo_items")
+      .select("*, component:product_variants!combo_items_component_variant_id_fkey(*, product:products(name, name_bn))")
+      .in("combo_variant_id", comboVariantIds)
+      .order("sort_order", { ascending: true });
+
+    if (comboErr) {
+      throw new Error(`Failed to fetch combo recipe items: ${comboErr.message}`);
+    }
+
+    if (comboRows) {
+      for (const row of comboRows as any[]) {
+        const list = comboMap.get(row.combo_variant_id) || [];
+        list.push({
+          id: row.id,
+          component_variant_id: row.component_variant_id,
+          quantity: Number(row.quantity) || 1,
+          sort_order: row.sort_order,
+          product_name: row.component?.product?.name,
+          product_name_bn: row.component?.product?.name_bn,
+          variant_name: row.component?.name,
+          variant_name_bn: row.component?.name_bn,
+          unit_price: Number(row.component?.price) || 0,
+          weight_grams: row.component?.weight_grams ? Number(row.component.weight_grams) : undefined,
+          pack_type: row.component?.pack_type,
+        });
+        comboMap.set(row.combo_variant_id, list);
+      }
+    }
+  }
+
+  const enhancedVariants = variantList.map((v) => ({
+    ...v,
+    is_combo: Boolean(v.is_combo),
+    combo_items: comboMap.get(v.id) || [],
+  }));
+
+  const { data: images } = await client
+    .from("product_images")
+    .select("*")
+    .eq("product_id", id)
+    .order("sort_order", { ascending: true });
+
+  const mappedImages = (images || []).map((img) => ({
+    ...img,
+    public_url: resolveCdnImageUrl(img.storage_path),
+  }));
+
+  return {
+    ...product,
+    variants: enhancedVariants,
+    images: mappedImages,
+  } as unknown as DbProduct;
+}
+
+export async function createDraftProductAction(payload: {
+  name: string;
+  nameBn?: string;
+  slug: string;
+  category_id?: string | null;
+  status?: "draft" | "active" | "archived";
+  summary?: string | null;
+  summaryBn?: string | null;
+  description?: string | null;
+  descriptionBn?: string | null;
+  grade?: string | null;
+  origin?: string | null;
+  ingredients?: string | null;
+  storage_instructions?: string | null;
+  shelf_life_days?: number | null;
+  tax_rate?: number;
+  is_featured?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  sort_order?: number;
+}): Promise<any> {
+  await assertStaffRole(["owner", "admin", "manager", "editor"]);
+  if (!payload.name?.trim() || !payload.slug?.trim()) {
+    throw new Error("Product name and slug are required.");
+  }
+  if (payload.category_id && !isValidUuid(payload.category_id)) {
+    throw new Error("Invalid category ID.");
+  }
+
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from("products")
+    .insert([
+      {
+        name: payload.name.trim(),
+        name_bn: payload.nameBn?.trim() || null,
+        slug: payload.slug.trim(),
+        category_id: payload.category_id || null,
+        status: payload.status || "draft",
+        summary: payload.summary || null,
+        summary_bn: payload.summaryBn || null,
+        description: payload.description || null,
+        description_bn: payload.descriptionBn || null,
+        grade: payload.grade || null,
+        origin: payload.origin || null,
+        ingredients: payload.ingredients || null,
+        storage_instructions: payload.storage_instructions || null,
+        shelf_life_days: payload.shelf_life_days || null,
+        tax_rate: payload.tax_rate ?? 0,
+        is_featured: payload.is_featured ?? false,
+        seo_title: payload.seo_title || null,
+        seo_description: payload.seo_description || null,
+        sort_order: payload.sort_order ?? 0,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message || "Failed to create product.");
+  }
+
+  try {
+    revalidatePath("/admin/products");
+  } catch {
+    // Ignore outside request lifecycle
+  }
+
+  return data;
+}

@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { getImageKitServer, isImageKitConfigured } from "@/lib/imagekit/server";
-import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/admin-auth";
+import { getStaffSession } from "@/lib/admin-guard";
+import { ROLE_CAPABILITIES } from "@/lib/admin-permissions";
+import { clampInt, safePublicErrorMessage, sanitizeImageKitFolder } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   await connection();
   try {
-    // 1. Verify admin session
-    const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    if (!token) {
+    // 1. Verify authenticated staff member and content management capability
+    const session = await getStaffSession();
+    if (!session) {
       return NextResponse.json(
-        { success: false, error: "Unauthorized: Admin session required" },
+        { success: false, error: "Unauthorized: Staff session required" },
         { status: 401 }
       );
     }
 
-    const adminUser = await verifySessionToken(token);
-    if (!adminUser) {
+    if (!ROLE_CAPABILITIES[session.role]?.canManageContent) {
       return NextResponse.json(
-        { success: false, error: "Unauthorized: Invalid admin session" },
-        { status: 401 }
+        { success: false, error: "Forbidden: Insufficient permissions to browse media" },
+        { status: 403 }
       );
     }
 
@@ -27,8 +28,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "ImageKit is not fully configured. Please set NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY, and NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT in .env",
+          error: "Image media storage service is not configured.",
           files: [],
         },
         { status: 503 }
@@ -36,19 +36,19 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const folder = searchParams.get("folder") || "/";
+    const rawFolder = searchParams.get("folder");
+    const normalizedPath = sanitizeImageKitFolder(rawFolder);
+    if (normalizedPath === null) {
+      return NextResponse.json(
+        { success: false, error: "Invalid folder path", files: [] },
+        { status: 400 }
+      );
+    }
+
     const searchQuery = searchParams.get("search") || "";
-    const limit = Math.min(Number(searchParams.get("limit")) || 100, 200);
+    const limit = clampInt(searchParams.get("limit"), 100, 1, 200);
 
     const ik = getImageKitServer();
-
-    // Prepare path filter: ensure leading slash if specified
-    const normalizedPath =
-      folder === "all" || folder === "/" || !folder
-        ? "/"
-        : folder.startsWith("/")
-        ? folder
-        : `/${folder}`;
 
     const listOptions: Record<string, unknown> = {
       fileType: "image",
@@ -60,8 +60,9 @@ export async function GET(req: NextRequest) {
       listOptions.path = normalizedPath;
     }
 
-    if (searchQuery.trim()) {
-      listOptions.searchQuery = `name : "${searchQuery.trim().replace(/"/g, "")}"`;
+    const cleanSearch = searchQuery.trim().replace(/["\\\x00-\x1f\x7f]/g, "").slice(0, 100);
+    if (cleanSearch) {
+      listOptions.searchQuery = `name : "${cleanSearch}"`;
     }
 
     const files = await ik.listFiles(listOptions as any);
@@ -79,12 +80,15 @@ export async function GET(req: NextRequest) {
       updatedAt: file.updatedAt,
     }));
 
-    return NextResponse.json({
-      success: true,
-      folder: normalizedPath,
-      count: formattedAssets.length,
-      files: formattedAssets,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        folder: normalizedPath,
+        count: formattedAssets.length,
+        files: formattedAssets,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error: any) {
     if (error?.digest === "NEXT_PRERENDER_INTERRUPTED") {
       throw error;
@@ -93,7 +97,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to list files from ImageKit",
+        error: safePublicErrorMessage("Failed to list files from ImageKit"),
         files: [],
       },
       { status: 500 }

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getMetaSdkConfig,
   resolvePublicImageUrl,
@@ -24,7 +23,7 @@ function escapeXml(unsafe: unknown): string {
  */
 export async function GET() {
   const config = getMetaSdkConfig();
-  const client = supabaseAdmin || supabase;
+  const client = getSupabaseAdmin();
   const siteUrl = config.siteUrl;
 
   let storeName = "গ্রামায়ন";
@@ -59,7 +58,8 @@ export async function GET() {
     .order("sort_order", { ascending: true });
 
   if (dbErr || !dbProducts) {
-    return new NextResponse(`Error loading products: ${dbErr?.message || "Not found"}`, {
+    console.error("[Catalog Feed API] Failed to load products:", dbErr);
+    return new NextResponse("Error loading catalog feed", {
       status: 500,
       headers: { "Content-Type": "text/plain" },
     });
@@ -119,6 +119,11 @@ export async function GET() {
 
     // Export each active variant as its own catalog item with g:item_group_id = prod.id
     for (const variant of activeVariants) {
+      const variantPrice = Number(variant.price) || 0;
+      if (!Number.isFinite(variantPrice) || variantPrice <= 0) {
+        continue;
+      }
+
       const rawVarName = (variant.name_bn || variant.name || "").trim();
       const hasDistinctVariantName =
         rawVarName &&
@@ -129,7 +134,6 @@ export async function GET() {
         ? `${productTitle} (${rawVarName})`
         : productTitle;
 
-      const variantPrice = Number(variant.price) || 0;
       const variantComparePrice = Number(variant.compare_at_price) || 0;
       const variantAvailability =
         variant.stock_status === "out_of_stock" ? "out of stock" : "in stock";

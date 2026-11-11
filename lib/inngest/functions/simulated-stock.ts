@@ -1,5 +1,5 @@
 import { inngest } from "@/lib/inngest/client";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Helper to inspect the current date, hour, and minute in Asia/Dhaka.
@@ -61,6 +61,7 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
   },
   async ({ step }) => {
     const evalResult = await step.run("evaluate-and-adjust-simulated-stock", async () => {
+      const supabaseAdmin = getSupabaseAdmin();
       const now = new Date();
       const { hour: dhakaHour, minute: dhakaMinute, dateStr: dhakaDateStr } =
         getDhakaTimeParts(now);

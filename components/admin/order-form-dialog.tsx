@@ -35,10 +35,12 @@ import {
 import {
   DbGeoDivision,
   DbGeoDistrict,
-  updateOrderNoteInDb,
-  deleteOrderNoteInDb,
-  addOrderNoteInDb,
 } from "@/lib/supabase";
+import {
+  updateOrderNoteAction,
+  deleteOrderNoteAction,
+  addOrderNoteAction,
+} from "@/actions/orders";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { Button } from "@/components/ui/button";
@@ -376,7 +378,7 @@ export function OrderFormDialog({
 
     if (mode === "edit" && order?.id) {
       try {
-        await addOrderNoteInDb(order.id, newNote, order);
+        await addOrderNoteAction(order.id, newNote, order);
         if (showToast) showToast("Note added and synced to order.", "success");
       } catch (err: any) {
         console.warn("Could not immediately persist note:", err);
@@ -418,7 +420,7 @@ export function OrderFormDialog({
 
       if (mode === "edit" && order?.id) {
         try {
-          await updateOrderNoteInDb(order.id, noteId, text, typeToSave, order);
+          await updateOrderNoteAction(order.id, noteId, text, typeToSave, order);
           if (showToast) showToast("Note updated successfully.", "success");
         } catch (err: any) {
           console.warn("Could not immediately sync note update to DB:", err);
@@ -455,7 +457,7 @@ export function OrderFormDialog({
 
     if (mode === "edit" && order?.id) {
       try {
-        await deleteOrderNoteInDb(order.id, noteId, order);
+        await deleteOrderNoteAction(order.id, noteId, order);
         if (showToast) showToast("Note deleted successfully.", "success");
       } catch (err: any) {
         console.warn("Could not immediately sync note deletion:", err);

@@ -1,3 +1,5 @@
+import { sanitizeCsvCell } from "@/lib/security";
+
 /**
  * Helper to export any array of records to a CSV file download
  */
@@ -19,17 +21,18 @@ export function exportToCSV<T extends Record<string, any>>(
   const rows = data.map((row) =>
     keys
       .map((key) => {
-        let val = row[key];
-        if (val === null || val === undefined) val = "";
-        if (typeof val === "object") val = JSON.stringify(val);
+        const sanitized = sanitizeCsvCell(row[key]);
         // Escape quotes
-        const strVal = String(val).replace(/"/g, '""');
+        const strVal = sanitized.replace(/"/g, '""');
         return `"${strVal}"`;
       })
       .join(",")
   );
 
-  const csvContent = [headers.map((h) => `"${h}"`).join(","), ...rows].join("\r\n");
+  const csvContent = [
+    headers.map((h) => `"${sanitizeCsvCell(h).replace(/"/g, '""')}"`).join(","),
+    ...rows,
+  ].join("\r\n");
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

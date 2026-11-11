@@ -1,6 +1,8 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { revalidatePath } from "next/cache";
 
 export interface PostItem {
@@ -22,6 +24,8 @@ export async function getAdminPostsAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: rawPosts, error } = await supabaseAdmin
       .from("posts")
       .select("id, title, title_bn, slug, tags, status, published_at, author_name, created_at")
@@ -54,6 +58,11 @@ export async function updatePostStatusAction(payload: {
   status: "published" | "draft" | "archived";
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!isValidUuid(payload.id)) {
+      return { success: false, error: "Invalid post ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const updateData: any = {
       status: payload.status,
       updated_at: new Date().toISOString(),
@@ -77,6 +86,11 @@ export async function updatePostStatusAction(payload: {
 
 export async function deletePostAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!isValidUuid(id)) {
+      return { success: false, error: "Invalid post ID" };
+    }
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("posts").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
     revalidatePath("/admin/posts");

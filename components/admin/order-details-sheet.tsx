@@ -99,7 +99,7 @@ import {
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
 import { OrderSmsDialog } from "@/components/admin/order-sms-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
-import { updateOrderInDb } from "@/lib/supabase/api";
+import { updateAdminOrderAction } from "@/actions/orders";
 import { useOrder } from "@/hooks/use-order";
 import {
   getOtherOrderInsight,
@@ -310,7 +310,7 @@ export function OrderDetailsSheet({
       const res = await bookSteadfastParcelAction(order);
       if (res.success && res.consignment) {
         const c = res.consignment;
-        const updated = await updateOrderInDb({
+        const updated = await updateAdminOrderAction({
           ...order,
           courier_name: "Steadfast Courier",
           courier_consignment_id: String(c.consignment_id),

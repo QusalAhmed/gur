@@ -1,6 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { dispatchOrderStatusSms } from "@/lib/sms/smsbangladesh";
-import { triggerCapiPurchaseOnOrderConfirmedAction } from "@/actions/facebook-capi";
+import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
 import type { OrderStatusUpdatedEventData } from "@/lib/inngest/events";
 
 export const orderStatusUpdatedFunction = inngest.createFunction(
@@ -61,7 +61,7 @@ export const orderStatusUpdatedFunction = inngest.createFunction(
     ) {
       capiResult = await step.run("trigger-meta-capi-purchase", async () => {
         try {
-          return await triggerCapiPurchaseOnOrderConfirmedAction(orderNumber || orderId);
+          return await triggerCapiPurchaseInternal(orderNumber || orderId);
         } catch (err: unknown) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           console.warn("[Inngest] Meta CAPI Purchase trigger error:", errorMessage);

@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertStaffRole } from "@/lib/admin-guard";
+import { isValidUuid } from "@/lib/security";
 import { getImageKitServer, isImageKitConfigured } from "@/lib/imagekit/server";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 
@@ -42,6 +44,8 @@ export async function fetchProductImagesAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("product_images")
       .select(`
@@ -93,6 +97,8 @@ export async function fetchProductImagesAction(): Promise<{
  */
 export async function fetchProductsForImageAssignmentAction(): Promise<ProductOption[]> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("products")
       .select("id, name, name_bn, slug")
@@ -124,10 +130,12 @@ export async function setPrimaryProductImageAction(payload: {
   productId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const { imageId, productId } = payload;
-    if (!imageId || !productId) {
-      return { success: false, error: "Missing imageId or productId" };
+    if (!isValidUuid(imageId) || !isValidUuid(productId)) {
+      return { success: false, error: "Invalid imageId or productId" };
     }
+    const supabaseAdmin = getSupabaseAdmin();
 
     // 1. Clear previous primary flag for this product
     const { error: resetError } = await supabaseAdmin
@@ -170,10 +178,12 @@ export async function updateProductImageAltTextAction(payload: {
   altTextBn?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const { imageId, altText, altTextBn } = payload;
-    if (!imageId) {
-      return { success: false, error: "Image ID required" };
+    if (!isValidUuid(imageId)) {
+      return { success: false, error: "Valid image ID required" };
     }
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { error } = await supabaseAdmin
       .from("product_images")
@@ -205,10 +215,12 @@ export async function deleteProductImageAction(payload: {
   productId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const { imageId, productId } = payload;
-    if (!imageId) {
-      return { success: false, error: "Image ID required" };
+    if (!isValidUuid(imageId) || (productId && !isValidUuid(productId))) {
+      return { success: false, error: "Valid image ID required" };
     }
+    const supabaseAdmin = getSupabaseAdmin();
 
     // Check if this image was primary
     const { data: targetImg } = await supabaseAdmin
@@ -271,10 +283,12 @@ export async function assignNewProductImagesAction(payload: {
   }>;
 }): Promise<{ success: boolean; count: number; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const { productId, images } = payload;
-    if (!productId || !images || images.length === 0) {
-      return { success: false, count: 0, error: "Product ID and at least one image are required." };
+    if (!isValidUuid(productId) || !images || images.length === 0) {
+      return { success: false, count: 0, error: "Valid Product ID and at least one image are required." };
     }
+    const supabaseAdmin = getSupabaseAdmin();
 
     // Check if the product already has any images or an existing primary image
     const { data: existingImages } = await supabaseAdmin
@@ -357,10 +371,12 @@ export async function fetchImageKitMediaAction(): Promise<{
   error?: string;
 }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     if (!isImageKitConfigured()) {
       return { success: false, files: [], error: "ImageKit credentials are not configured in .env" };
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
     const ik = getImageKitServer();
     const [rawFiles, dbImagesRes] = await Promise.all([
       ik.listFiles({ limit: 100, sort: "DESC_CREATED" } as any),
@@ -427,9 +443,10 @@ export async function fetchImageKitMediaAction(): Promise<{
  */
 export async function deleteImageKitFileAction(fileId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!fileId) return { success: false, error: "Missing fileId" };
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
+    if (!fileId || !fileId.trim()) return { success: false, error: "Missing fileId" };
     const ik = getImageKitServer();
-    await ik.deleteFile(fileId);
+    await ik.deleteFile(fileId.trim());
     revalidatePath("/admin/products/images");
     return { success: true };
   } catch (err: any) {
@@ -448,10 +465,12 @@ export async function linkImageKitFileToProductAction(payload: {
   isPrimary?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    await assertStaffRole(["owner", "admin", "manager", "editor"]);
     const { productId, url, altText, isPrimary } = payload;
-    if (!productId || !url) {
-      return { success: false, error: "Product ID and Image URL are required" };
+    if (!isValidUuid(productId) || !url) {
+      return { success: false, error: "Valid Product ID and Image URL are required" };
     }
+    const supabaseAdmin = getSupabaseAdmin();
 
     if (isPrimary) {
       await supabaseAdmin

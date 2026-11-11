@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 
-export function BrandFavicon() {
+function BrandFaviconInner() {
   const { faviconUrl } = useSiteSettings();
 
   React.useEffect(() => {
@@ -19,5 +19,13 @@ export function BrandFavicon() {
   }, [faviconUrl]);
 
   return null;
+}
+
+export function BrandFavicon() {
+  return (
+    <React.Suspense fallback={null}>
+      <BrandFaviconInner />
+    </React.Suspense>
+  );
 }
 
