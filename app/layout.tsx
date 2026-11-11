@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
+import { getSiteUrl } from "@/lib/site-url";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +32,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: {
     default: "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses",
     template: "%s | খেজুরের খাটি গুড়",

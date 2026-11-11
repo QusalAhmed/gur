@@ -1,6 +1,7 @@
 import bizSdk from "facebook-nodejs-business-sdk";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import { getSiteUrl } from "@/lib/site-url";
 
 const { FacebookAdsApi, ProductCatalog, ProductItem } = bizSdk;
 
@@ -110,9 +111,7 @@ export function getMetaSdkConfig(): MetaSdkConfig {
     process.env.FACEBOOK_PIXEL_ID ||
     null;
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://gur-shop.com");
+  const siteUrl = getSiteUrl();
 
   const missing: string[] = [];
   if (!catalogId) missing.push("META_CATALOG_ID");

@@ -1,1 +1,1 @@
-export { default, instant } from "@/app/products/page";
+export { default, metadata, instant } from "@/app/products/page";

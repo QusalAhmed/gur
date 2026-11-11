@@ -50,9 +50,10 @@ const accessToken =
   process.env.FACEBOOK_ACCESS_TOKEN ||
   process.env.FACEBOOK_CAPI_ACCESS_TOKEN;
 
-const siteUrl =
+const siteUrl = (
   process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://gur-shop.com");
+  "https://khatikhejurgur.shop"
+).replace(/\/+$/, "");
 
 console.log("\x1b[34m%s\x1b[0m", "==================================================");
 console.log("\x1b[34m%s\x1b[0m", "     Meta Business SDK - Catalog Integration      ");

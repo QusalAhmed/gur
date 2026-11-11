@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { escapeHtml, sanitizeTelHref } from "@/lib/security";
+import { getSiteUrl } from "@/lib/site-url";
 
 export interface BrevoRecipient {
   name?: string;
@@ -316,13 +317,7 @@ export async function sendBrevoEmail(
 }
 
 function getBaseAppUrl(): string {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/\/+$/, "")}`;
-  }
-  return "http://localhost:3000";
+  return getSiteUrl();
 }
 
 function formatCurrency(amount: number): string {

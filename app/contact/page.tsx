@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   title: "যোগাযোগ ও সরাসরি অর্ডার",
   description:
     "গাছিদের খাঁটি খেজুরের গুড় কিনতে বা যেকোনো তথ্যে সরাসরি ফোন, হোয়াটসঅ্যাপ বা মেসেঞ্জারে আমাদের সাথে যোগাযোগ করুন। বাঘা, রাজশাহী।",
+  alternates: {
+    canonical: "/contact",
+  },
 };
 
 export default async function ContactPage() {

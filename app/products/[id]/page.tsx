@@ -28,6 +28,9 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
         description:
           storefrontData.storeSubtitle ||
           "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।",
+        alternates: {
+          canonical: `/products/${encodeURIComponent(id)}`,
+        },
       };
     }
 
@@ -52,13 +55,18 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
       storefrontData.storeSubtitle ||
       "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।";
     const image = product.image;
+    const canonicalPath = `/products/${encodeURIComponent(product.slug || product.id)}`;
 
     return {
       title,
       description,
+      alternates: {
+        canonical: canonicalPath,
+      },
       openGraph: {
         title,
         description,
+        url: canonicalPath,
         type: "website",
         images: image
           ? [

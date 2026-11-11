@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getSiteUrl } from "@/lib/site-url";
 import {
   ArrowLeft,
   Save,
@@ -126,7 +127,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
   const [activeTab, setActiveTab] = React.useState("general");
   const { storeName, currency, currencySymbol } = useSiteSettings();
-  const siteOrigin = typeof window !== "undefined" ? window.location.origin : "https://gur.com.bd";
+  const siteOrigin = typeof window !== "undefined" ? window.location.origin : getSiteUrl();
 
   // General Form State
   const [name, setName] = React.useState(initialData?.name || "");

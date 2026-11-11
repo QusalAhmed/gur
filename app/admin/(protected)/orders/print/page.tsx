@@ -29,6 +29,7 @@ import { Order } from "@/types/order";
 import { getOrdersByIdsAction, markOrdersAsPrintedAction } from "@/actions/orders";
 import { assignInvoiceNumberAction } from "@/actions/invoice-ops";
 import { useSiteSettings } from "@/hooks/use-site-settings";
+import { getSiteUrl } from "@/lib/site-url";
 
 type PaperFormat = "2inch" | "58mm" | "a4";
 
@@ -41,10 +42,7 @@ interface StoreConfig {
   logoUrl?: string;
 }
 
-const DEFAULT_SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  "https://gur.com.bd"
-).replace(/\/+$/, "");
+const DEFAULT_SITE_URL = getSiteUrl();
 
 const DEFAULT_STORE: StoreConfig = {
   name: "খেজুরের খাটি গুড়",

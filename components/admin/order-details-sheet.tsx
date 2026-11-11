@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { getSiteUrl } from "@/lib/site-url";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -404,7 +405,7 @@ export function OrderDetailsSheet({
     } else if (clean.startsWith("+88")) {
       clean = clean.replace("+", "");
     }
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://gur-phi.vercel.app";
+    const origin = typeof window !== "undefined" ? window.location.origin : getSiteUrl();
     const orderNum = order?.order_number || order?.id || "";
     const tokenParam = order?.public_token ? `?token=${order.public_token}` : "";
     const confirmationLink = `${origin}/order-confirmed/${orderNum}${tokenParam}`;

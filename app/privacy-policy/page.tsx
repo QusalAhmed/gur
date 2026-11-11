@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   title: "গোপনীয়তা নীতি (Privacy Policy)",
   description:
     "আমাদের প্ল্যাটফর্মে গ্রাহকদের ব্যক্তিগত তথ্যের সর্বোচ্চ নিরাপত্তা ও গোপনীয়তা রক্ষা আমাদের প্রধান অগ্রাধিকার। জানুন আমাদের প্রাইভেসি পলিসি।",
+  alternates: {
+    canonical: "/privacy-policy",
+  },
 };
 
 export default async function PrivacyPolicyPage() {

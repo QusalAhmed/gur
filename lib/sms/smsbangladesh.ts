@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
+import { normalizeSiteUrl } from "@/lib/site-url";
 
 export type OrderSmsStatus = "placed" | "confirmed" | "shipped" | "delivered" | "manual" | "test";
 
@@ -486,11 +487,9 @@ export async function dispatchOrderStatusSms(
   }
 
   // 4. Render Message from Template
-  const baseUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://gur-phi.vercel.app"
-  ).replace(/\/$/, "");
+  const baseUrl = normalizeSiteUrl(
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL
+  );
   const tokenParam = orderRow?.public_token ? `?token=${orderRow.public_token}` : "";
   const confirmationUrl = `${baseUrl}/order-confirmed/${orderNumber || orderId}${tokenParam}`;
 
