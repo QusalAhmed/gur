@@ -83,7 +83,7 @@ export function ProductShowcase({
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
 
-  const { isTourActiveRef } = useStorefrontIntro({
+  const { isTourActive, isTourActiveRef } = useStorefrontIntro({
     lang,
     activeSectionIndex,
     productsStartIndex,
@@ -607,6 +607,7 @@ export function ProductShowcase({
               totalProducts={products.length}
               lang={lang}
               isActive={activeSectionIndex === productsStartIndex + idx}
+              pauseViewTracking={isTourActive}
               priority={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
               initialVariantId={idx === 0 ? initialVariantId : undefined}
             />

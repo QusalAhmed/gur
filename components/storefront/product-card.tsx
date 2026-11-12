@@ -84,6 +84,7 @@ interface ProductCardProps {
   totalProducts: number;
   lang: StorefrontLang;
   isActive?: boolean;
+  pauseViewTracking?: boolean;
   priority?: boolean;
   initialVariantId?: string;
 }
@@ -94,6 +95,7 @@ export function ProductCard({
   totalProducts,
   lang,
   isActive,
+  pauseViewTracking = false,
   priority = false,
   initialVariantId,
 }: ProductCardProps) {
@@ -160,42 +162,85 @@ export function ProductCard({
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Facebook Pixel ViewContent: fire when user dwells on a product card for > 5 seconds
+  // Facebook Pixel ViewContent: fire when user genuinely dwells on a visible product card
+  // for > 5 seconds (paused while an onboarding tour is active or the tab is hidden).
   // Deduplicated per variant in Redux so it does not fire repeatedly in the same session.
   useEffect(() => {
-    if (hasFiredVariantView) return;
+    if (hasFiredVariantView || pauseViewTracking) return;
 
-    let timer: NodeJS.Timeout | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isIntersectingEnough = false;
+
+    const clearDwellTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const fireViewContent = () => {
+      dispatch(recordProductView(product.id));
+      dispatch(recordVariantView(selectedVariant.id));
+      const eventId = trackViewContent({
+        productId: product.id,
+        variantId: selectedVariant.id,
+        productName: product.name,
+        price: Number(selectedVariant.price) || 0,
+        currency: "BDT",
+      });
+      const { fbp, fbc } = getClientFbpAndFbc();
+      sendCapiClientEvent("ViewContent", {
+        eventId,
+        productId: product.id,
+        variantId: selectedVariant.id,
+        productName: product.name,
+        price: Number(selectedVariant.price) || 0,
+        currency: "BDT",
+        url: typeof window !== "undefined" ? window.location.href : undefined,
+        fbp,
+        fbc,
+      });
+    };
+
+    const startDwellTimerIfVisible = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) {
+        clearDwellTimer();
+        return;
+      }
+      if (timer !== null) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState !== "visible"
+        ) {
+          return;
+        }
+        fireViewContent();
+      }, 5000);
+    };
 
     // Fast path: if active state is explicitly supplied by ProductShowcase scroll tracker
     if (typeof isActive === "boolean") {
-      if (isActive) {
-        timer = setTimeout(() => {
-          dispatch(recordProductView(product.id));
-          dispatch(recordVariantView(selectedVariant.id));
-          const eventId = trackViewContent({
-            productId: product.id,
-            variantId: selectedVariant.id,
-            productName: product.name,
-            price: Number(selectedVariant.price) || 0,
-            currency: "BDT",
-          });
-          const { fbp, fbc } = getClientFbpAndFbc();
-          sendCapiClientEvent("ViewContent", {
-            eventId,
-            productId: product.id,
-            variantId: selectedVariant.id,
-            productName: product.name,
-            price: Number(selectedVariant.price) || 0,
-            currency: "BDT",
-            url: typeof window !== "undefined" ? window.location.href : undefined,
-            fbp,
-            fbc,
-          });
-        }, 5000);
-      }
+      if (!isActive) return;
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "visible") {
+          startDwellTimerIfVisible();
+        } else {
+          clearDwellTimer();
+        }
+      };
+
+      startDwellTimerIfVisible();
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
       return () => {
-        if (timer) clearTimeout(timer);
+        clearDwellTimer();
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
       };
     }
 
@@ -203,56 +248,46 @@ export function ProductCard({
     const el = cardRef.current;
     if (!el) return;
 
+    const handleVisibilityChange = () => {
+      if (isIntersectingEnough && document.visibilityState === "visible") {
+        startDwellTimerIfVisible();
+      } else {
+        clearDwellTimer();
+      }
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
-          if (!timer) {
-            timer = setTimeout(() => {
-              dispatch(recordProductView(product.id));
-              dispatch(recordVariantView(selectedVariant.id));
-              const eventId = trackViewContent({
-                productId: product.id,
-                variantId: selectedVariant.id,
-                productName: product.name,
-                price: Number(selectedVariant.price) || 0,
-                currency: "BDT",
-              });
-              const { fbp, fbc } = getClientFbpAndFbc();
-              sendCapiClientEvent("ViewContent", {
-                eventId,
-                productId: product.id,
-                variantId: selectedVariant.id,
-                productName: product.name,
-                price: Number(selectedVariant.price) || 0,
-                currency: "BDT",
-                url: typeof window !== "undefined" ? window.location.href : undefined,
-                fbp,
-                fbc,
-              });
-              timer = null;
-            }, 5000);
-          }
+        isIntersectingEnough =
+          entry.isIntersecting && entry.intersectionRatio >= 0.25;
+        if (isIntersectingEnough) {
+          startDwellTimerIfVisible();
         } else {
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
+          clearDwellTimer();
         }
       },
       { threshold: [0, 0.25, 0.5, 0.75, 1] }
     );
 
     observer.observe(el);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       observer.disconnect();
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearDwellTimer();
     };
-  }, [isActive, hasFiredVariantView, product.id, product.name, selectedVariant.id, selectedVariant.price, dispatch]);
+  }, [
+    isActive,
+    hasFiredVariantView,
+    pauseViewTracking,
+    product.id,
+    product.name,
+    selectedVariant.id,
+    selectedVariant.price,
+    dispatch,
+  ]);
 
   // Check how many units of this variant are in the Redux cart (defaults to 0)
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { StorefrontLang } from "@/lib/storefront-i18n";
 import {
   INTRO_BUTTON_LABELS,
@@ -43,6 +43,15 @@ export function useStorefrontIntro({
   hasCartItems,
   containerRef,
 }: UseStorefrontIntroProps) {
+  const [isTourActive, setIsTourActive] = useState(false);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const isTourActiveRef = useRef(false);
   const activeTourRef = useRef<{
     exit: (force?: boolean) => Promise<unknown>;
@@ -146,6 +155,7 @@ export function useStorefrontIntro({
             const tourToClose = activeTourRef.current;
             activeTourRef.current = null;
             isTourActiveRef.current = false;
+            setIsTourActive(false);
             tourToClose.exit(true).catch(() => {});
           }
         }
@@ -188,9 +198,17 @@ export function useStorefrontIntro({
       clearPlusAdvanceTimer();
       if (activeTourRef.current) {
         programmaticExitRef.current = true;
-        activeTourRef.current.exit(true).catch(() => {});
+        const tourToClose = activeTourRef.current;
         activeTourRef.current = null;
         isTourActiveRef.current = false;
+        tourToClose
+          .exit(true)
+          .catch(() => {})
+          .finally(() => {
+            if (isMountedRef.current && !isTourActiveRef.current) {
+              setIsTourActive(false);
+            }
+          });
       }
       return;
     }
@@ -499,6 +517,9 @@ export function useStorefrontIntro({
           activeTourRef.current = null;
         }
         isTourActiveRef.current = false;
+        if (isMountedRef.current) {
+          setIsTourActive(false);
+        }
         if (!programmaticExitRef.current) {
           markKindSeen(kind);
         }
@@ -518,6 +539,7 @@ export function useStorefrontIntro({
 
       activeTourRef.current = tour;
       isTourActiveRef.current = true;
+      setIsTourActive(true);
 
       try {
         await tour.start();
@@ -536,6 +558,9 @@ export function useStorefrontIntro({
           activeTourRef.current = null;
         }
         isTourActiveRef.current = false;
+        if (isMountedRef.current) {
+          setIsTourActive(false);
+        }
       }
     };
 
@@ -584,9 +609,17 @@ export function useStorefrontIntro({
       resizeCleanup = null;
       if (activeTourRef.current) {
         programmaticExitRef.current = true;
-        activeTourRef.current.exit(true).catch(() => {});
+        const tourToClose = activeTourRef.current;
         activeTourRef.current = null;
         isTourActiveRef.current = false;
+        tourToClose
+          .exit(true)
+          .catch(() => {})
+          .finally(() => {
+            if (isMountedRef.current && !isTourActiveRef.current) {
+              setIsTourActive(false);
+            }
+          });
       }
     };
   }, [
@@ -601,5 +634,5 @@ export function useStorefrontIntro({
     clearPlusAdvanceTimer,
   ]);
 
-  return { isTourActiveRef };
+  return { isTourActive, isTourActiveRef };
 }
