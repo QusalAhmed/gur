@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
-import { buildBreadcrumbJsonLd, getCachedSeoSettings } from "@/lib/seo-settings";
+import {
+  buildBreadcrumbJsonLd,
+  buildPageSeoMetadata,
+  getCachedSeoSettings,
+} from "@/lib/seo-settings";
 
 export const instant = false;
 
@@ -25,39 +29,23 @@ export async function generateMetadata(): Promise<Metadata> {
   const seo = await getCachedSeoSettings();
   const title = seo.privacyTitle;
   const description = seo.privacyDescription;
-  const ogImages = seo.ogImageUrl
-    ? [{ url: seo.ogImageUrl, width: 1200, height: 630, alt: title }]
-    : undefined;
 
-  return {
+  return buildPageSeoMetadata(seo, {
     title,
+    ogTitle: title,
     description,
-    alternates: {
-      canonical: "/privacy-policy",
-    },
-    openGraph: {
-      title,
-      description,
-      url: `${seo.siteUrl}/privacy-policy`,
-      type: "website",
-      ...(ogImages ? { images: ogImages } : {}),
-    },
-    twitter: {
-      card: ogImages ? "summary_large_image" : "summary",
-      title,
-      description,
-      ...(ogImages ? { images: [seo.ogImageUrl] } : {}),
-    },
-  };
+    canonicalPath: "/privacy-policy",
+    url: `${seo.siteUrl}/privacy-policy`,
+  });
 }
 
 export default async function PrivacyPolicyPage() {
   const [seo, storefrontData] = await Promise.all([
     getCachedSeoSettings(),
     getStorefrontProductsAction().catch(() => ({
-      hotline: "01843557389",
-      storeName: "খেজুরের খাঁটি গুড়",
-      storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+      hotline: "",
+      storeName: "",
+      storeSubtitle: "",
       products: [],
     })),
   ]);

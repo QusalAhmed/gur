@@ -97,6 +97,11 @@ export function SeoSettingsTab({
   storeName,
   storeNameBn,
 }: SeoSettingsTabProps) {
+  const ogImageValue = React.useMemo(
+    () => (state.seoOgImageUrl ? [state.seoOgImageUrl] : []),
+    [state.seoOgImageUrl]
+  );
+
   const previewOrigin =
     state.seoSiteUrl.trim().replace(/\/+$/, "") || getSiteUrl();
   const previewTitle =
@@ -180,10 +185,11 @@ export function SeoSettingsTab({
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">
+              <label htmlFor="seo-site-url" className="text-xs font-semibold">
                 Canonical Site URL (Domain)
               </label>
               <Input
+                id="seo-site-url"
                 value={state.seoSiteUrl}
                 onChange={(e) => onChange("seoSiteUrl", e.target.value)}
                 placeholder={getSiteUrl()}
@@ -195,10 +201,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">
+              <label htmlFor="seo-store-subtitle" className="text-xs font-semibold">
                 Store Subtitle / Tagline
               </label>
               <Input
+                id="seo-store-subtitle"
                 value={state.storeSubtitle}
                 onChange={(e) => onChange("storeSubtitle", e.target.value)}
                 placeholder="গাছিদের তৈরি তাজা ও নির্ভেজাল ঐতিহ্যবাহী গুড়"
@@ -212,10 +219,13 @@ export function SeoSettingsTab({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold">Default Meta Title</label>
+                <label htmlFor="seo-default-title" className="text-xs font-semibold">
+                  Default Meta Title
+                </label>
                 <LengthBadge length={state.seoDefaultTitle.length} idealMax={60} />
               </div>
               <Input
+                id="seo-default-title"
                 value={state.seoDefaultTitle}
                 onChange={(e) => onChange("seoDefaultTitle", e.target.value)}
                 placeholder="খেজুরের খাঁটি গুড় | Pure Date Palm Molasses"
@@ -223,8 +233,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Page Title Template</label>
+              <label htmlFor="seo-title-template" className="text-xs font-semibold">
+                Page Title Template
+              </label>
               <Input
+                id="seo-title-template"
                 value={state.seoTitleTemplate}
                 onChange={(e) => onChange("seoTitleTemplate", e.target.value)}
                 placeholder="%s | খেজুরের খাঁটি গুড়"
@@ -237,13 +250,16 @@ export function SeoSettingsTab({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold">Default Meta Description</label>
+              <label htmlFor="seo-default-description" className="text-xs font-semibold">
+                Default Meta Description
+              </label>
               <LengthBadge
                 length={state.seoDefaultDescription.length}
                 idealMax={160}
               />
             </div>
             <Textarea
+              id="seo-default-description"
               value={state.seoDefaultDescription}
               onChange={(e) => onChange("seoDefaultDescription", e.target.value)}
               rows={2}
@@ -252,10 +268,11 @@ export function SeoSettingsTab({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold">
+            <label htmlFor="seo-keywords" className="text-xs font-semibold">
               Meta Keywords (comma-separated)
             </label>
             <Input
+              id="seo-keywords"
               value={state.seoKeywords}
               onChange={(e) => onChange("seoKeywords", e.target.value)}
               placeholder="খেজুরের গুড়, পাটালি গুড়, ঝোলা গুড়, নলেন গুড়, pure date palm jaggery, Rajshahi gur"
@@ -278,14 +295,31 @@ export function SeoSettingsTab({
         <CardContent className="space-y-4">
           <div className="grid gap-6 sm:grid-cols-2 items-start">
             <div className="space-y-2">
-              <label className="text-xs font-semibold block">
+              <span className="text-xs font-semibold block">
                 Default Open Graph Share Image (1200×630 recommended)
-              </label>
+              </span>
               <ImageUploader
-                value={state.seoOgImageUrl ? [state.seoOgImageUrl] : []}
+                value={ogImageValue}
                 onChange={(items) => {
+                  if (items.length === 0) {
+                    onChange("seoOgImageUrl", "");
+                    return;
+                  }
                   const first = items[0];
-                  onChange("seoOgImageUrl", first?.url || first?.path || "");
+                  if (!first) return;
+                  if (
+                    first.status === "uploading" ||
+                    first.status === "compressing" ||
+                    first.status === "hashing" ||
+                    first.status === "error"
+                  ) {
+                    return;
+                  }
+                  const candidate = (first.url || first.path || "").trim();
+                  if (!candidate || candidate.startsWith("blob:")) {
+                    return;
+                  }
+                  onChange("seoOgImageUrl", candidate);
                 }}
                 onRemove={() => onChange("seoOgImageUrl", "")}
                 multiple={false}
@@ -297,10 +331,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">
+              <label htmlFor="seo-twitter-handle" className="text-xs font-semibold">
                 Twitter / X Handle (Optional)
               </label>
               <Input
+                id="seo-twitter-handle"
                 value={state.seoTwitterHandle}
                 onChange={(e) => onChange("seoTwitterHandle", e.target.value)}
                 placeholder="@yourbrand"
@@ -337,10 +372,13 @@ export function SeoSettingsTab({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Custom Title (leave blank to use Default Meta Title)</label>
+                  <label htmlFor="seo-home-title" className="text-[11px] font-medium">
+                    Custom Title (leave blank to use Default Meta Title)
+                  </label>
                   <LengthBadge length={state.seoHomeTitle.length} idealMax={60} />
                 </div>
                 <Input
+                  id="seo-home-title"
                   value={state.seoHomeTitle}
                   onChange={(e) => onChange("seoHomeTitle", e.target.value)}
                   placeholder="Optional custom homepage title"
@@ -349,10 +387,13 @@ export function SeoSettingsTab({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Custom Description</label>
+                  <label htmlFor="seo-home-description" className="text-[11px] font-medium">
+                    Custom Description
+                  </label>
                   <LengthBadge length={state.seoHomeDescription.length} idealMax={160} />
                 </div>
                 <Input
+                  id="seo-home-description"
                   value={state.seoHomeDescription}
                   onChange={(e) => onChange("seoHomeDescription", e.target.value)}
                   placeholder="Optional custom homepage description"
@@ -373,10 +414,13 @@ export function SeoSettingsTab({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Catalog Title</label>
+                  <label htmlFor="seo-products-title" className="text-[11px] font-medium">
+                    Catalog Title
+                  </label>
                   <LengthBadge length={state.seoProductsTitle.length} idealMax={60} />
                 </div>
                 <Input
+                  id="seo-products-title"
                   value={state.seoProductsTitle}
                   onChange={(e) => onChange("seoProductsTitle", e.target.value)}
                   placeholder="সকল খাঁটি গুড়ের পণ্যসমূহ"
@@ -385,10 +429,13 @@ export function SeoSettingsTab({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Catalog Description</label>
+                  <label htmlFor="seo-products-description" className="text-[11px] font-medium">
+                    Catalog Description
+                  </label>
                   <LengthBadge length={state.seoProductsDescription.length} idealMax={160} />
                 </div>
                 <Input
+                  id="seo-products-description"
                   value={state.seoProductsDescription}
                   onChange={(e) => onChange("seoProductsDescription", e.target.value)}
                   placeholder="আসল ঝোলা গুড়, দানাদার পাটালি ও নলেন গুড়ের সংগ্রহ..."
@@ -409,10 +456,13 @@ export function SeoSettingsTab({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Contact Title</label>
+                  <label htmlFor="seo-contact-title" className="text-[11px] font-medium">
+                    Contact Title
+                  </label>
                   <LengthBadge length={state.seoContactTitle.length} idealMax={60} />
                 </div>
                 <Input
+                  id="seo-contact-title"
                   value={state.seoContactTitle}
                   onChange={(e) => onChange("seoContactTitle", e.target.value)}
                   placeholder="যোগাযোগ ও সরাসরি অর্ডার"
@@ -421,10 +471,13 @@ export function SeoSettingsTab({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Contact Description</label>
+                  <label htmlFor="seo-contact-description" className="text-[11px] font-medium">
+                    Contact Description
+                  </label>
                   <LengthBadge length={state.seoContactDescription.length} idealMax={160} />
                 </div>
                 <Input
+                  id="seo-contact-description"
                   value={state.seoContactDescription}
                   onChange={(e) => onChange("seoContactDescription", e.target.value)}
                   placeholder="সরাসরি ফোন, হোয়াটসঅ্যাপ বা মেসেঞ্জারে যোগাযোগ করুন..."
@@ -445,10 +498,13 @@ export function SeoSettingsTab({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Privacy Title</label>
+                  <label htmlFor="seo-privacy-title" className="text-[11px] font-medium">
+                    Privacy Title
+                  </label>
                   <LengthBadge length={state.seoPrivacyTitle.length} idealMax={60} />
                 </div>
                 <Input
+                  id="seo-privacy-title"
                   value={state.seoPrivacyTitle}
                   onChange={(e) => onChange("seoPrivacyTitle", e.target.value)}
                   placeholder="গোপনীয়তা নীতি (Privacy Policy)"
@@ -457,10 +513,13 @@ export function SeoSettingsTab({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium">Privacy Description</label>
+                  <label htmlFor="seo-privacy-description" className="text-[11px] font-medium">
+                    Privacy Description
+                  </label>
                   <LengthBadge length={state.seoPrivacyDescription.length} idealMax={160} />
                 </div>
                 <Input
+                  id="seo-privacy-description"
                   value={state.seoPrivacyDescription}
                   onChange={(e) => onChange("seoPrivacyDescription", e.target.value)}
                   placeholder="আমাদের প্ল্যাটফর্মে গ্রাহকদের ব্যক্তিগত তথ্যের সুরক্ষা..."
@@ -486,12 +545,14 @@ export function SeoSettingsTab({
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Schema.org Business Type</label>
+              <label htmlFor="seo-business-type" className="text-xs font-semibold">
+                Schema.org Business Type
+              </label>
               <Select
                 value={state.seoBusinessType}
                 onValueChange={(val) => onChange("seoBusinessType", val || "Store")}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="seo-business-type" className="w-full">
                   <SelectValue placeholder="Select schema type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -504,8 +565,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Facebook Page URL</label>
+              <label htmlFor="seo-facebook-url" className="text-xs font-semibold">
+                Facebook Page URL
+              </label>
               <Input
+                id="seo-facebook-url"
                 value={state.seoFacebookUrl}
                 onChange={(e) => onChange("seoFacebookUrl", e.target.value)}
                 placeholder="https://facebook.com/yourpage"
@@ -516,8 +580,11 @@ export function SeoSettingsTab({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Instagram Profile URL</label>
+              <label htmlFor="seo-instagram-url" className="text-xs font-semibold">
+                Instagram Profile URL
+              </label>
               <Input
+                id="seo-instagram-url"
                 value={state.seoInstagramUrl}
                 onChange={(e) => onChange("seoInstagramUrl", e.target.value)}
                 placeholder="https://instagram.com/yourhandle"
@@ -526,8 +593,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">YouTube Channel URL</label>
+              <label htmlFor="seo-youtube-url" className="text-xs font-semibold">
+                YouTube Channel URL
+              </label>
               <Input
+                id="seo-youtube-url"
                 value={state.seoYoutubeUrl}
                 onChange={(e) => onChange("seoYoutubeUrl", e.target.value)}
                 placeholder="https://youtube.com/@yourchannel"
@@ -537,10 +607,11 @@ export function SeoSettingsTab({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold">
+            <label htmlFor="seo-business-description" className="text-xs font-semibold">
               Business Schema Description (Optional)
             </label>
             <Textarea
+              id="seo-business-description"
               value={state.seoBusinessDescription}
               onChange={(e) => onChange("seoBusinessDescription", e.target.value)}
               rows={2}
@@ -564,10 +635,11 @@ export function SeoSettingsTab({
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">
+              <label htmlFor="seo-google-verification" className="text-xs font-semibold">
                 Google Search Console Verification Code
               </label>
               <Input
+                id="seo-google-verification"
                 value={state.seoGoogleVerification}
                 onChange={(e) => onChange("seoGoogleVerification", e.target.value)}
                 placeholder="e.g. abc123XYZ... (meta content token)"
@@ -579,10 +651,11 @@ export function SeoSettingsTab({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">
+              <label htmlFor="seo-ga4-measurement-id" className="text-xs font-semibold">
                 Google Analytics 4 (GA4) Measurement ID
               </label>
               <Input
+                id="seo-ga4-measurement-id"
                 value={state.seoGa4MeasurementId}
                 onChange={(e) => onChange("seoGa4MeasurementId", e.target.value)}
                 placeholder="e.g. G-XXXXXXXXXX"
@@ -634,7 +707,7 @@ export function SeoSettingsTab({
                 )}
               </label>
               <p className="text-xs text-muted-foreground">
-                Keep enabled for live production stores. Turning this off sets <code>noindex, nofollow</code> meta tags and blocks crawlers in <code>robots.txt</code>.
+                Keep enabled for live production stores. Turning this off emits <code>noindex, nofollow</code> meta tags while keeping public pages crawlable so search engines can process the <code>noindex</code> directive.
               </p>
             </div>
           </div>

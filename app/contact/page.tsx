@@ -21,6 +21,7 @@ import { getStorefrontProductsAction } from "@/actions/storefront-products";
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
+  buildPageSeoMetadata,
   getCachedSeoSettings,
 } from "@/lib/seo-settings";
 
@@ -30,39 +31,23 @@ export async function generateMetadata(): Promise<Metadata> {
   const seo = await getCachedSeoSettings();
   const title = seo.contactTitle;
   const description = seo.contactDescription;
-  const ogImages = seo.ogImageUrl
-    ? [{ url: seo.ogImageUrl, width: 1200, height: 630, alt: title }]
-    : undefined;
 
-  return {
+  return buildPageSeoMetadata(seo, {
     title,
+    ogTitle: title,
     description,
-    alternates: {
-      canonical: "/contact",
-    },
-    openGraph: {
-      title,
-      description,
-      url: `${seo.siteUrl}/contact`,
-      type: "website",
-      ...(ogImages ? { images: ogImages } : {}),
-    },
-    twitter: {
-      card: ogImages ? "summary_large_image" : "summary",
-      title,
-      description,
-      ...(ogImages ? { images: [seo.ogImageUrl] } : {}),
-    },
-  };
+    canonicalPath: "/contact",
+    url: `${seo.siteUrl}/contact`,
+  });
 }
 
 export default async function ContactPage() {
   const [seo, storefrontData] = await Promise.all([
     getCachedSeoSettings(),
     getStorefrontProductsAction().catch(() => ({
-      hotline: "01843557389",
-      storeName: "খেজুরের খাঁটি গুড়",
-      storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+      hotline: "",
+      storeName: "",
+      storeSubtitle: "",
       products: [],
     })),
   ]);

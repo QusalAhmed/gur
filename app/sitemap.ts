@@ -5,6 +5,9 @@ import { getCachedSeoSettings } from "@/lib/seo-settings";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const seo = await getCachedSeoSettings();
+  if (seo.isFallback) {
+    return [];
+  }
   const siteUrl = seo.siteUrl;
   const products = await getSitemapProducts(siteUrl);
 

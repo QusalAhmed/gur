@@ -58,6 +58,7 @@ describe("robots and sitemap generation", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
     process.env.NEXT_PUBLIC_SITE_URL = "https://khatikhejurgur.shop/";
   });
 
@@ -70,8 +71,12 @@ describe("robots and sitemap generation", () => {
   });
 
   it("generates robots.txt disallowing private routes and linking sitemap.xml", async () => {
-    mockGetSupabaseAdmin.mockImplementation(() => {
-      throw new Error("Skip DB for default check");
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
     });
     const { default: robots } = await import("@/app/robots");
     const result = await robots();
@@ -84,7 +89,7 @@ describe("robots and sitemap generation", () => {
     });
   });
 
-  it("blocks all crawling in robots.txt when seo.allow_indexing is false", async () => {
+  it("keeps public HTML pages crawlable in robots.txt when seo.allow_indexing is false so noindex can be read", async () => {
     mockGetSupabaseAdmin.mockReturnValue({
       from: () => ({
         select: () => ({
@@ -106,8 +111,95 @@ describe("robots and sitemap generation", () => {
     expect(result.sitemap).toBe("https://custom-gur.example/sitemap.xml");
     expect(result.rules).toEqual({
       userAgent: "*",
-      disallow: "/",
+      allow: "/",
+      disallow: ["/admin", "/api/", "/order-confirmed/"],
     });
+  });
+
+  it("prefers configured store.name_bn, then store.name, before defaults and preserves last-known settings on query failure", async () => {
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () =>
+            Promise.resolve({
+              data: [
+                { key: "store.name", value: "Artisan Gur Co." },
+                { key: "seo.allow_indexing", value: false },
+                { key: "seo.site_url", value: "https://custom-gur.example" },
+                { key: "seo.google_verification", value: "verify-123" },
+              ],
+              error: null,
+            }),
+        }),
+      }),
+    });
+
+    const { getCachedSeoSettings } = await import("@/lib/seo-settings");
+    const first = await getCachedSeoSettings();
+    expect(first.storeName).toBe("Artisan Gur Co.");
+    expect(first.allowIndexing).toBe(false);
+    expect(first.siteUrl).toBe("https://custom-gur.example");
+    expect(first.googleVerification).toBe("verify-123");
+
+    // Subsequent DB failure should reuse last-known settings rather than permissive defaults
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () =>
+            Promise.resolve({
+              data: null,
+              error: { message: "connection timeout" },
+            }),
+        }),
+      }),
+    });
+
+    const fallback = await getCachedSeoSettings();
+    expect(fallback.allowIndexing).toBe(false);
+    expect(fallback.siteUrl).toBe("https://custom-gur.example");
+    expect(fallback.googleVerification).toBe("verify-123");
+  });
+
+  it("returns a safe non-indexable fallback on cold-start query failure without poisoning later loads", async () => {
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () =>
+            Promise.resolve({
+              data: null,
+              error: { message: "db error" },
+            }),
+        }),
+      }),
+    });
+
+    const { getCachedSeoSettings } = await import("@/lib/seo-settings");
+    const coldFallback = await getCachedSeoSettings();
+    expect(coldFallback.allowIndexing).toBe(false);
+    expect(coldFallback.isFallback).toBe(true);
+    expect(coldFallback.googleVerification).toBe("");
+    expect(coldFallback.ga4MeasurementId).toBe("");
+
+    // Once DB recovers, subsequent call must load real settings instead of sticking on cold fallback
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () =>
+            Promise.resolve({
+              data: [
+                { key: "seo.site_url", value: "https://recovered-gur.example" },
+                { key: "seo.allow_indexing", value: true },
+              ],
+              error: null,
+            }),
+        }),
+      }),
+    });
+
+    const recovered = await getCachedSeoSettings();
+    expect(recovered.allowIndexing).toBe(true);
+    expect(recovered.isFallback).toBe(false);
+    expect(recovered.siteUrl).toBe("https://recovered-gur.example");
   });
 
   it("includes only active products with valid variants and deduplicated images in sitemap", async () => {
@@ -211,7 +303,7 @@ describe("robots and sitemap generation", () => {
     expect(homeEntry?.lastModified).toBe("2026-11-11T12:00:00.000Z");
   });
 
-  it("keeps static routes when Supabase query fails", async () => {
+  it("withholds sitemap when SEO settings fail on cold start", async () => {
     mockGetSupabaseAdmin.mockImplementation(() => {
       throw new Error("DB offline");
     });
@@ -219,11 +311,35 @@ describe("robots and sitemap generation", () => {
     const { default: sitemap } = await import("@/app/sitemap");
     const entries = await sitemap();
 
+    expect(entries).toEqual([]);
+  });
+
+  it("keeps static routes on canonical origin when product query fails after SEO settings succeed", async () => {
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: (table: string) => {
+        if (table === "site_settings") {
+          return {
+            select: () => ({
+              eq: () =>
+                Promise.resolve({
+                  data: [{ key: "seo.site_url", value: "https://custom-gur.example" }],
+                  error: null,
+                }),
+            }),
+          };
+        }
+        throw new Error("Products table offline");
+      },
+    });
+
+    const { default: sitemap } = await import("@/app/sitemap");
+    const entries = await sitemap();
+
     expect(entries.map((e) => e.url)).toEqual([
-      "https://khatikhejurgur.shop",
-      "https://khatikhejurgur.shop/products",
-      "https://khatikhejurgur.shop/contact",
-      "https://khatikhejurgur.shop/privacy-policy",
+      "https://custom-gur.example",
+      "https://custom-gur.example/products",
+      "https://custom-gur.example/contact",
+      "https://custom-gur.example/privacy-policy",
     ]);
   });
 });

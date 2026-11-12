@@ -4,6 +4,7 @@ import { Product, ProductLoading } from "@/components/storefront/product";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
 import {
   buildBreadcrumbJsonLd,
+  buildPageSeoMetadata,
   buildProductJsonLd,
   getCachedSeoSettings,
 } from "@/lib/seo-settings";
@@ -69,35 +70,23 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
     const image = product.image || seo.ogImageUrl;
     const canonicalPath = `/products/${encodeURIComponent(product.slug || product.id)}`;
 
-    return {
+    return buildPageSeoMetadata(seo, {
       title: resolvedTitle.includes("|") ? { absolute: resolvedTitle } : resolvedTitle,
+      ogTitle,
       description,
-      alternates: {
-        canonical: canonicalPath,
-      },
-      openGraph: {
-        title: ogTitle,
-        description,
-        url: canonicalPath,
-        type: "website",
-        images: image
-          ? [
-              {
-                url: image,
-                width: 1000,
-                height: 750,
-                alt: hasDistinctVariantName ? `${baseName} (${variantName})` : baseName,
-              },
-            ]
-          : [],
-      },
-      twitter: {
-        card: image ? "summary_large_image" : "summary",
-        title: ogTitle,
-        description,
-        images: image ? [image] : [],
-      },
-    };
+      canonicalPath,
+      url: canonicalPath,
+      images: image
+        ? [
+            {
+              url: image,
+              width: 1000,
+              height: 750,
+              alt: hasDistinctVariantName ? `${baseName} (${variantName})` : baseName,
+            },
+          ]
+        : [],
+    });
   } catch {
     return {
       title: seo.storeName,

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cacheLife, cacheTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
@@ -43,6 +44,7 @@ export interface ResolvedSeoSettings {
   googleVerification: string;
   ga4MeasurementId: string;
   allowIndexing: boolean;
+  isFallback?: boolean;
 }
 
 const DEFAULT_STORE_NAME_BN = "খেজুরের খাঁটি গুড়";
@@ -116,44 +118,29 @@ export function sanitizeGa4Id(raw: string): string {
   return /^(G|GT)-[A-Z0-9]{4,20}$/.test(trimmed) ? trimmed : "";
 }
 
-/**
- * Cached loader for public SEO & store branding settings from Supabase `site_settings`.
- * Invalidated immediately when admin saves `/admin/settings` via `revalidateTag("site-settings")`.
- */
-export async function getCachedSeoSettings(): Promise<ResolvedSeoSettings> {
-  "use cache";
-  cacheTag("site-settings", "storefront-products");
-  cacheLife({
-    stale: 300,
-    revalidate: 300,
-    expire: 3600,
-  });
+let lastKnownSeoSettings: ResolvedSeoSettings | null = null;
 
-  const rawMap = new Map<string, unknown>();
+interface ResolveSeoSettingsOptions {
+  allowIndexingDefault?: boolean;
+  isFallback?: boolean;
+}
 
-  try {
-    const client = getSupabaseAdmin();
-    const { data, error } = await client
-      .from("site_settings")
-      .select("key, value")
-      .eq("is_public", true);
-
-    if (!error && data) {
-      for (const row of data) {
-        rawMap.set(row.key, row.value);
-      }
-    }
-  } catch (err) {
-    console.warn("[SEO Settings] Failed to fetch from Supabase, using defaults:", err);
-  }
+function resolveSeoSettingsFromMap(
+  rawMap: Map<string, unknown>,
+  options: ResolveSeoSettingsOptions = {}
+): ResolvedSeoSettings {
+  const { allowIndexingDefault = true, isFallback = false } = options;
 
   const envSiteUrl = getSiteUrl();
   const dbSiteUrl = cleanString(rawMap.get("seo.site_url"));
   const siteUrl = dbSiteUrl ? normalizeSiteUrl(dbSiteUrl) : envSiteUrl;
 
-  const storeNameEn = cleanString(rawMap.get("store.name")) || DEFAULT_STORE_NAME_EN;
-  const storeNameBn = cleanString(rawMap.get("store.name_bn")) || DEFAULT_STORE_NAME_BN;
-  const storeName = storeNameBn || storeNameEn;
+  const configuredStoreNameEn = cleanString(rawMap.get("store.name"));
+  const configuredStoreNameBn = cleanString(rawMap.get("store.name_bn"));
+  const storeName =
+    configuredStoreNameBn || configuredStoreNameEn || DEFAULT_STORE_NAME_BN;
+  const storeNameEn = configuredStoreNameEn || DEFAULT_STORE_NAME_EN;
+  const storeNameBn = configuredStoreNameBn || DEFAULT_STORE_NAME_BN;
   const storeSubtitle = cleanString(rawMap.get("store.subtitle")) || DEFAULT_STORE_SUBTITLE;
 
   const supportPhone = cleanString(rawMap.get("store.support_phone")) || "01843557389";
@@ -225,7 +212,134 @@ export async function getCachedSeoSettings(): Promise<ResolvedSeoSettings> {
     youtubeUrl: sanitizeHttpUrl(cleanString(rawMap.get("seo.youtube_url"))),
     googleVerification: cleanString(rawMap.get("seo.google_verification")),
     ga4MeasurementId: sanitizeGa4Id(cleanString(rawMap.get("seo.ga4_measurement_id"))),
-    allowIndexing: cleanBoolean(rawMap.get("seo.allow_indexing"), true),
+    allowIndexing: cleanBoolean(rawMap.get("seo.allow_indexing"), allowIndexingDefault),
+    isFallback,
+  };
+}
+
+/**
+ * Cached DB loader for public SEO & store branding settings.
+ * Throws on query failure so Next.js `"use cache"` never caches degraded defaults.
+ */
+async function fetchCachedSeoSettings(): Promise<ResolvedSeoSettings> {
+  "use cache";
+  cacheTag("site-settings", "storefront-products");
+  cacheLife({
+    stale: 300,
+    revalidate: 300,
+    expire: 3600,
+  });
+
+  const rawMap = new Map<string, unknown>();
+
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from("site_settings")
+    .select("key, value")
+    .eq("is_public", true);
+
+  if (error) {
+    throw new Error(`[SEO Settings] Supabase query failed: ${error.message}`);
+  }
+
+  if (data) {
+    for (const row of data) {
+      rawMap.set(row.key, row.value);
+    }
+  }
+
+  return resolveSeoSettingsFromMap(rawMap);
+}
+
+/**
+ * Loads cached public SEO settings. Reuses last-known settings if Supabase fails
+ * after a prior successful load; on cold-start failure returns a safe non-indexable
+ * fallback (`allowIndexing: false`, `isFallback: true`) without blocking public-page metadata.
+ */
+export async function getCachedSeoSettings(): Promise<ResolvedSeoSettings> {
+  try {
+    const resolved = await fetchCachedSeoSettings();
+    lastKnownSeoSettings = resolved;
+    return resolved;
+  } catch (err) {
+    if (lastKnownSeoSettings) {
+      console.warn(
+        "[SEO Settings] Failed to fetch from Supabase, reusing last-known settings:",
+        err
+      );
+      return lastKnownSeoSettings;
+    }
+    console.warn(
+      "[SEO Settings] Cold-start query failed, returning safe non-indexable fallback:",
+      err
+    );
+    return resolveSeoSettingsFromMap(new Map(), {
+      allowIndexingDefault: false,
+      isFallback: true,
+    });
+  }
+}
+
+export interface BuildPageSeoMetadataOptions {
+  title?: Metadata["title"];
+  ogTitle: string;
+  description: string;
+  canonicalPath: string;
+  url: string;
+  images?: Array<{
+    url: string;
+    width?: number;
+    height?: number;
+    alt?: string;
+  }>;
+}
+
+/**
+ * Builds page-level Metadata while preserving site-wide Open Graph locale,
+ * siteName, and Twitter site handle from layout settings.
+ */
+export function buildPageSeoMetadata(
+  seo: ResolvedSeoSettings,
+  options: BuildPageSeoMetadataOptions
+): Metadata {
+  const images =
+    options.images !== undefined
+      ? options.images
+      : seo.ogImageUrl
+        ? [
+            {
+              url: seo.ogImageUrl,
+              width: 1200,
+              height: 630,
+              alt: options.ogTitle,
+            },
+          ]
+        : undefined;
+
+  const hasImages = Boolean(images && images.length > 0);
+
+  return {
+    ...(options.title !== undefined ? { title: options.title } : {}),
+    description: options.description,
+    alternates: {
+      canonical: options.canonicalPath,
+    },
+    openGraph: {
+      type: "website",
+      locale: "bn_BD",
+      siteName: seo.storeName,
+      title: options.ogTitle,
+      description: options.description,
+      url: options.url,
+      ...(images ? { images } : {}),
+    },
+    twitter: {
+      card: hasImages ? "summary_large_image" : "summary",
+      title: options.ogTitle,
+      description: options.description,
+      ...(seo.twitterHandle ? { site: seo.twitterHandle } : {}),
+      ...(hasImages && images ? { images: images.map((img) => img.url) } : {}),
+    },
   };
 }
 
