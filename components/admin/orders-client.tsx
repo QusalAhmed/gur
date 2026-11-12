@@ -3633,6 +3633,13 @@ export function OrdersClient() {
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                   {/* Channel filter */}
                   <Select
+                    items={{
+                      all: "All Channels",
+                      web: "Web Store",
+                      phone: "Phone Call",
+                      whatsapp: "WhatsApp",
+                      admin: "Admin Manual",
+                    }}
                     value={channelFilter}
                     onValueChange={(val) => {
                       if (!val) return;
@@ -3655,6 +3662,13 @@ export function OrdersClient() {
 
                   {/* Payment filter */}
                   <Select
+                    items={{
+                      all: "All Payments",
+                      unpaid: "Unpaid",
+                      partially_paid: "Partially Paid",
+                      paid: "Paid",
+                      refunded: "Refunded",
+                    }}
                     value={paymentFilter}
                     onValueChange={(val) => {
                       if (!val) return;
