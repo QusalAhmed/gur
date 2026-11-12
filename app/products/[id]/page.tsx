@@ -2,6 +2,11 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Product, ProductLoading } from "@/components/storefront/product";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import {
+  buildBreadcrumbJsonLd,
+  buildProductJsonLd,
+  getCachedSeoSettings,
+} from "@/lib/seo-settings";
 
 export const instant = false;
 
@@ -16,6 +21,8 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
   const rawVariantId =
     typeof sp?.variant === "string" ? sp.variant : typeof sp?.v === "string" ? sp.v : undefined;
 
+  const seo = await getCachedSeoSettings();
+
   try {
     const storefrontData = await getStorefrontProductsAction();
     const product = storefrontData.products.find(
@@ -24,10 +31,9 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
 
     if (!product) {
       return {
-        title: storefrontData.storeName || "খেজুরের খাঁটি গুড়",
+        title: storefrontData.storeName || seo.storeName,
         description:
-          storefrontData.storeSubtitle ||
-          "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।",
+          storefrontData.storeSubtitle || seo.defaultDescription,
         alternates: {
           canonical: `/products/${encodeURIComponent(id)}`,
         },
@@ -45,26 +51,32 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
       variantName.toLowerCase() !== baseName.toLowerCase() &&
       variantName.toLowerCase() !== (product.name || "").toLowerCase();
 
-    const title = hasDistinctVariantName
-      ? `${baseName} (${variantName}) | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`
-      : `${baseName} | ${storefrontData.storeName || "খেজুরের খাঁটি গুড়"}`;
+    const customSeoTitle = product.seoTitle?.trim();
+    const fallbackTitlePart = hasDistinctVariantName
+      ? `${baseName} (${variantName})`
+      : baseName;
+    const resolvedTitle = customSeoTitle || fallbackTitlePart;
+    const ogTitle = resolvedTitle.includes("|")
+      ? resolvedTitle
+      : `${resolvedTitle} | ${storefrontData.storeName || seo.storeName}`;
 
     const description =
+      product.seoDescription?.trim() ||
       product.summaryBn ||
       product.summary ||
       storefrontData.storeSubtitle ||
-      "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।";
-    const image = product.image;
+      seo.defaultDescription;
+    const image = product.image || seo.ogImageUrl;
     const canonicalPath = `/products/${encodeURIComponent(product.slug || product.id)}`;
 
     return {
-      title,
+      title: resolvedTitle.includes("|") ? { absolute: resolvedTitle } : resolvedTitle,
       description,
       alternates: {
         canonical: canonicalPath,
       },
       openGraph: {
-        title,
+        title: ogTitle,
         description,
         url: canonicalPath,
         type: "website",
@@ -80,17 +92,65 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
           : [],
       },
       twitter: {
-        card: "summary_large_image",
-        title,
+        card: image ? "summary_large_image" : "summary",
+        title: ogTitle,
         description,
         images: image ? [image] : [],
       },
     };
   } catch {
     return {
-      title: "খেজুরের খাঁটি গুড়",
-      description: "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।",
+      title: seo.storeName,
+      description: seo.defaultDescription,
     };
+  }
+}
+
+async function ProductStructuredData({
+  id,
+  variantId,
+}: {
+  id: string;
+  variantId?: string;
+}) {
+  try {
+    const [seo, storefrontData] = await Promise.all([
+      getCachedSeoSettings(),
+      getStorefrontProductsAction(),
+    ]);
+    const product = storefrontData.products.find(
+      (p) => p.slug === id || p.id === id
+    );
+    if (!product) return null;
+
+    const productJsonLd = buildProductJsonLd(seo, product, variantId);
+    const breadcrumbJsonLd = buildBreadcrumbJsonLd(seo.siteUrl, [
+      { name: "হোম", path: "/" },
+      { name: "পণ্যসমূহ", path: "/products" },
+      {
+        name: product.nameBn || product.name,
+        path: `/products/${encodeURIComponent(product.slug || product.id)}`,
+      },
+    ]);
+
+    return (
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(productJsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
+      </>
+    );
+  } catch {
+    return null;
   }
 }
 
@@ -101,13 +161,18 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     typeof sp?.variant === "string" ? sp.variant : typeof sp?.v === "string" ? sp.v : undefined;
 
   return (
-    <Suspense fallback={<ProductLoading />}>
-      <Product
-        featuredIdentifier={id}
-        initialVariantId={initialVariantId}
-        autoScrollToProduct={true}
-      />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <ProductStructuredData id={id} variantId={initialVariantId} />
+      </Suspense>
+      <Suspense fallback={<ProductLoading />}>
+        <Product
+          featuredIdentifier={id}
+          initialVariantId={initialVariantId}
+          autoScrollToProduct={true}
+        />
+      </Suspense>
+    </>
   );
 }
 

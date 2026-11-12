@@ -70,14 +70,43 @@ describe("robots and sitemap generation", () => {
   });
 
   it("generates robots.txt disallowing private routes and linking sitemap.xml", async () => {
+    mockGetSupabaseAdmin.mockImplementation(() => {
+      throw new Error("Skip DB for default check");
+    });
     const { default: robots } = await import("@/app/robots");
-    const result = robots();
+    const result = await robots();
 
     expect(result.sitemap).toBe("https://khatikhejurgur.shop/sitemap.xml");
     expect(result.rules).toEqual({
       userAgent: "*",
       allow: "/",
       disallow: ["/admin", "/api/", "/order-confirmed/"],
+    });
+  });
+
+  it("blocks all crawling in robots.txt when seo.allow_indexing is false", async () => {
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () =>
+            Promise.resolve({
+              data: [
+                { key: "seo.allow_indexing", value: false },
+                { key: "seo.site_url", value: "https://custom-gur.example" },
+              ],
+              error: null,
+            }),
+        }),
+      }),
+    });
+
+    const { default: robots } = await import("@/app/robots");
+    const result = await robots();
+
+    expect(result.sitemap).toBe("https://custom-gur.example/sitemap.xml");
+    expect(result.rules).toEqual({
+      userAgent: "*",
+      disallow: "/",
     });
   });
 

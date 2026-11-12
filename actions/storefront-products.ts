@@ -89,14 +89,14 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
 
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
-  const storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  let storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
 
   try {
     const { data: settings } = await client
       .from("site_settings")
       .select("key, value")
       .eq("is_public", true)
-      .in("key", ["store.support_phone", "store.name_bn", "store.name"]);
+      .in("key", ["store.support_phone", "store.name_bn", "store.name", "store.subtitle"]);
 
     if (settings) {
       let nameEn = "";
@@ -107,6 +107,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         if (row.key === "store.support_phone") hotline = cleanVal;
         if (row.key === "store.name") nameEn = cleanVal;
         if (row.key === "store.name_bn") nameBn = cleanVal;
+        if (row.key === "store.subtitle") storeSubtitle = cleanVal;
       }
       if (nameBn) storeName = nameBn;
       else if (nameEn) storeName = nameEn;
@@ -121,7 +122,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const [prodRes, varRes, imgRes] = await Promise.all([
       client
         .from("products")
-        .select("id, slug, name, name_bn, summary, summary_bn, origin, rating_avg, rating_count, sort_order")
+        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order")
         .eq("status", "active")
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -251,6 +252,8 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
             nameBn: p.name_bn || p.name,
             summary: p.summary,
             summaryBn: p.summary_bn,
+            seoTitle: (p as any).seo_title || null,
+            seoDescription: (p as any).seo_description || null,
             image: primaryImg,
             images: resolvedImgs,
             origin: p.origin,

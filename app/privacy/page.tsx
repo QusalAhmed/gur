@@ -1,1 +1,1 @@
-export { default, metadata, instant } from "@/app/privacy-policy/page";
+export { default, generateMetadata, instant } from "@/app/privacy-policy/page";

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 
@@ -8,6 +8,7 @@ export interface SiteSettingsMap {
   // Store Profile
   "store.name"?: string;
   "store.name_bn"?: string;
+  "store.subtitle"?: string;
   "store.currency"?: string;
   "store.support_phone"?: string;
   "store.whatsapp"?: string;
@@ -17,6 +18,31 @@ export interface SiteSettingsMap {
   "store.language"?: string;
   "store.logo_url"?: string;
   "store.favicon_url"?: string;
+
+  // SEO & Social Metadata
+  "seo.site_url"?: string;
+  "seo.default_title"?: string;
+  "seo.title_template"?: string;
+  "seo.default_description"?: string;
+  "seo.keywords"?: string;
+  "seo.og_image_url"?: string;
+  "seo.twitter_handle"?: string;
+  "seo.home_title"?: string;
+  "seo.home_description"?: string;
+  "seo.products_title"?: string;
+  "seo.products_description"?: string;
+  "seo.contact_title"?: string;
+  "seo.contact_description"?: string;
+  "seo.privacy_title"?: string;
+  "seo.privacy_description"?: string;
+  "seo.business_type"?: string;
+  "seo.business_description"?: string;
+  "seo.facebook_url"?: string;
+  "seo.instagram_url"?: string;
+  "seo.youtube_url"?: string;
+  "seo.google_verification"?: string;
+  "seo.ga4_measurement_id"?: string;
+  "seo.allow_indexing"?: boolean;
 
   // Checkout & Orders
   "checkout.cod_enabled"?: boolean;
@@ -99,6 +125,7 @@ function isMaskedSecretPlaceholder(val: unknown): boolean {
 const PUBLIC_SETTING_KEYS = new Set([
   "store.name",
   "store.name_bn",
+  "store.subtitle",
   "store.currency",
   "store.support_phone",
   "store.whatsapp",
@@ -108,6 +135,29 @@ const PUBLIC_SETTING_KEYS = new Set([
   "store.language",
   "store.logo_url",
   "store.favicon_url",
+  "seo.site_url",
+  "seo.default_title",
+  "seo.title_template",
+  "seo.default_description",
+  "seo.keywords",
+  "seo.og_image_url",
+  "seo.twitter_handle",
+  "seo.home_title",
+  "seo.home_description",
+  "seo.products_title",
+  "seo.products_description",
+  "seo.contact_title",
+  "seo.contact_description",
+  "seo.privacy_title",
+  "seo.privacy_description",
+  "seo.business_type",
+  "seo.business_description",
+  "seo.facebook_url",
+  "seo.instagram_url",
+  "seo.youtube_url",
+  "seo.google_verification",
+  "seo.ga4_measurement_id",
+  "seo.allow_indexing",
   "checkout.cod_enabled",
   "checkout.guest_checkout_enabled",
   "inventory.daily_production_kg",
@@ -268,9 +318,16 @@ export async function updateSiteSettingsAction(
       return { success: false, error: failed.error.message };
     }
 
-    // Revalidate paths that consume site settings
+    // Revalidate paths and caches that consume site settings
+    revalidateTag("site-settings", "max");
+    revalidateTag("storefront-products", "max");
     revalidatePath("/admin/settings");
     revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath("/contact");
+    revalidatePath("/privacy-policy");
+    revalidatePath("/robots.txt");
+    revalidatePath("/sitemap.xml");
 
     // If simulated demand settings were updated, notify Inngest to dynamically adapt immediately
     const hasSimulatedDemandChange = entries.some(([key]) =>

@@ -17,32 +17,67 @@ import {
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import { buildBreadcrumbJsonLd, getCachedSeoSettings } from "@/lib/seo-settings";
 
 export const instant = false;
 
-export const metadata: Metadata = {
-  title: "গোপনীয়তা নীতি (Privacy Policy)",
-  description:
-    "আমাদের প্ল্যাটফর্মে গ্রাহকদের ব্যক্তিগত তথ্যের সর্বোচ্চ নিরাপত্তা ও গোপনীয়তা রক্ষা আমাদের প্রধান অগ্রাধিকার। জানুন আমাদের প্রাইভেসি পলিসি।",
-  alternates: {
-    canonical: "/privacy-policy",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getCachedSeoSettings();
+  const title = seo.privacyTitle;
+  const description = seo.privacyDescription;
+  const ogImages = seo.ogImageUrl
+    ? [{ url: seo.ogImageUrl, width: 1200, height: 630, alt: title }]
+    : undefined;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: "/privacy-policy",
+    },
+    openGraph: {
+      title,
+      description,
+      url: `${seo.siteUrl}/privacy-policy`,
+      type: "website",
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: ogImages ? "summary_large_image" : "summary",
+      title,
+      description,
+      ...(ogImages ? { images: [seo.ogImageUrl] } : {}),
+    },
+  };
+}
 
 export default async function PrivacyPolicyPage() {
-  const storefrontData = await getStorefrontProductsAction().catch(() => ({
-    hotline: "01843557389",
-    storeName: "খেজুরের খাঁটি গুড়",
-    storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
-    products: [],
-  }));
+  const [seo, storefrontData] = await Promise.all([
+    getCachedSeoSettings(),
+    getStorefrontProductsAction().catch(() => ({
+      hotline: "01843557389",
+      storeName: "খেজুরের খাঁটি গুড়",
+      storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+      products: [],
+    })),
+  ]);
 
-  const hotline = storefrontData.hotline || "01843557389";
-  const storeName = storefrontData.storeName || "খেজুরের খাঁটি গুড়";
+  const hotline = storefrontData.hotline || seo.supportPhone || "01843557389";
+  const storeName = storefrontData.storeName || seo.storeName || "খেজুরের খাঁটি গুড়";
   const rawPhone = hotline.replace(/[^0-9]/g, "");
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(seo.siteUrl, [
+    { name: "হোম", path: "/" },
+    { name: "গোপনীয়তা নীতি", path: "/privacy-policy" },
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       {/* Top Header */}
       <StoreHeader storeName={storeName} hotline={hotline} />
 

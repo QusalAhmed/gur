@@ -67,6 +67,8 @@ export interface StorefrontProduct {
   nameBn?: string;
   summary?: string;
   summaryBn?: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   image: string;
   images?: string[];
   category?: string;

@@ -1,8 +1,18 @@
 import type { MetadataRoute } from "next";
-import { getSiteUrl } from "@/lib/site-url";
+import { getCachedSeoSettings } from "@/lib/seo-settings";
 
-export default function robots(): MetadataRoute.Robots {
-  const siteUrl = getSiteUrl();
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const seo = await getCachedSeoSettings();
+
+  if (!seo.allowIndexing) {
+    return {
+      rules: {
+        userAgent: "*",
+        disallow: "/",
+      },
+      sitemap: `${seo.siteUrl}/sitemap.xml`,
+    };
+  }
 
   return {
     rules: {
@@ -10,6 +20,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/admin", "/api/", "/order-confirmed/"],
     },
-    sitemap: `${siteUrl}/sitemap.xml`,
+    sitemap: `${seo.siteUrl}/sitemap.xml`,
   };
 }

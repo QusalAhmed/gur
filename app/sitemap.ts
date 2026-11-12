@@ -1,9 +1,11 @@
 import type { MetadataRoute } from "next";
-import { escapeSitemapXmlUrl, getSiteUrl } from "@/lib/site-url";
+import { escapeSitemapXmlUrl } from "@/lib/site-url";
 import { getSitemapProducts } from "@/lib/sitemap-data";
+import { getCachedSeoSettings } from "@/lib/seo-settings";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const siteUrl = getSiteUrl();
+  const seo = await getCachedSeoSettings();
+  const siteUrl = seo.siteUrl;
   const products = await getSitemapProducts(siteUrl);
 
   const latestCatalogTimestamp = products.reduce<string | undefined>((latest, product) => {

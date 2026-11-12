@@ -175,6 +175,9 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "blob:",
       "https://images.unsplash.com",
       "https://ik.imagekit.io",
+      "https://www.google-analytics.com",
+      "https://*.google-analytics.com",
+      "https://www.googletagmanager.com",
       ...(safePixelId ? ["https://www.facebook.com"] : []),
       "https://*.supabase.co",
       ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
@@ -191,6 +194,11 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "wss://*.supabase.co",
       "https://upload.imagekit.io",
       "https://ik.imagekit.io",
+      "https://www.google-analytics.com",
+      "https://*.google-analytics.com",
+      "https://analytics.google.com",
+      "https://*.analytics.googletagmanager.com",
+      "https://www.googletagmanager.com",
       ...metaConnectOrigins,
       ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
         ? [`https://${imagekitHost}`]
@@ -204,6 +212,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "'self'",
     "'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
+    "https://www.googletagmanager.com",
     ...(safePixelId ? ["https://connect.facebook.net"] : []),
   ];
 

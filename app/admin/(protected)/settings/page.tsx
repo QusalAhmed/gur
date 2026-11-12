@@ -55,6 +55,10 @@ import { testBrevoConnectionAction } from "@/actions/brevo";
 import { checkSmsBalanceAction, sendTestSmsAction } from "@/actions/sms";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
 import { OutboxMonitor } from "@/components/admin/outbox-monitor";
+import {
+  SeoSettingsTab,
+  type SeoSettingsFormState,
+} from "@/components/admin/seo-settings-tab";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -127,6 +131,48 @@ export default function SettingsPage() {
   const [brevoSenderEmail, setBrevoSenderEmail] = React.useState("");
   const [brevoSenderName, setBrevoSenderName] = React.useState("খেজুরের খাঁটি গুড়");
   const [testingBrevo, setTestingBrevo] = React.useState(false);
+
+  // SEO & Social State
+  const [seoState, setSeoState] = React.useState<SeoSettingsFormState>({
+    storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+    seoSiteUrl: "",
+    seoDefaultTitle: "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses",
+    seoTitleTemplate: "%s | খেজুরের খাটি গুড়",
+    seoDefaultDescription:
+      "Pure sugarcane and date palm molasses (ঝোলা গুড়, পাটালি গুড়) manufacturing, retail, and B2B wholesale distribution platform in Bangladesh.",
+    seoKeywords: "",
+    seoOgImageUrl: "",
+    seoTwitterHandle: "",
+    seoHomeTitle: "",
+    seoHomeDescription: "",
+    seoProductsTitle: "সকল খাঁটি গুড়ের পণ্যসমূহ",
+    seoProductsDescription:
+      "বাঘা, রাজশাহীর আসল ঝোলা গুড়, দানাদার পাটালি ও নলেন গুড়ের সংগ্রহ। ১০০% খাঁটি ও ক্যাশ অন ডেলিভারিতে অর্ডার করুন।",
+    seoContactTitle: "যোগাযোগ ও সরাসরি অর্ডার",
+    seoContactDescription:
+      "গাছিদের খাঁটি খেজুরের গুড় কিনতে বা যেকোনো তথ্যে সরাসরি ফোন, হোয়াটসঅ্যাপ বা মেসেঞ্জারে আমাদের সাথে যোগাযোগ করুন। বাঘা, রাজশাহী।",
+    seoPrivacyTitle: "গোপনীয়তা নীতি (Privacy Policy)",
+    seoPrivacyDescription:
+      "আমাদের প্ল্যাটফর্মে গ্রাহকদের ব্যক্তিগত তথ্যের সর্বোচ্চ নিরাপত্তা ও গোপনীয়তা রক্ষা আমাদের প্রধান অগ্রাধিকার। জানুন আমাদের প্রাইভেসি পলিসি।",
+    seoBusinessType: "Store",
+    seoBusinessDescription: "",
+    seoFacebookUrl: "",
+    seoInstagramUrl: "",
+    seoYoutubeUrl: "",
+    seoGoogleVerification: "",
+    seoGa4MeasurementId: "",
+    seoAllowIndexing: true,
+  });
+
+  const handleSeoChange = React.useCallback(
+    <K extends keyof SeoSettingsFormState>(
+      key: K,
+      value: SeoSettingsFormState[K]
+    ) => {
+      setSeoState((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
 
   // UI State
   const [loading, setLoading] = React.useState(true);
@@ -258,6 +304,50 @@ export default function SettingsPage() {
           setBrevoSenderName(String(data["notifications.brevo_sender_name"]).replace(/^"|"$/g, ""));
         }
 
+        // SEO & Social Settings
+        const readStr = (k: string) =>
+          data[k] !== undefined && data[k] !== null
+            ? String(data[k]).replace(/^"|"$/g, "")
+            : undefined;
+        setSeoState((prev) => ({
+          ...prev,
+          storeSubtitle: readStr("store.subtitle") ?? prev.storeSubtitle,
+          seoSiteUrl: readStr("seo.site_url") ?? prev.seoSiteUrl,
+          seoDefaultTitle: readStr("seo.default_title") ?? prev.seoDefaultTitle,
+          seoTitleTemplate: readStr("seo.title_template") ?? prev.seoTitleTemplate,
+          seoDefaultDescription:
+            readStr("seo.default_description") ?? prev.seoDefaultDescription,
+          seoKeywords: readStr("seo.keywords") ?? prev.seoKeywords,
+          seoOgImageUrl: readStr("seo.og_image_url") ?? prev.seoOgImageUrl,
+          seoTwitterHandle: readStr("seo.twitter_handle") ?? prev.seoTwitterHandle,
+          seoHomeTitle: readStr("seo.home_title") ?? prev.seoHomeTitle,
+          seoHomeDescription:
+            readStr("seo.home_description") ?? prev.seoHomeDescription,
+          seoProductsTitle: readStr("seo.products_title") ?? prev.seoProductsTitle,
+          seoProductsDescription:
+            readStr("seo.products_description") ?? prev.seoProductsDescription,
+          seoContactTitle: readStr("seo.contact_title") ?? prev.seoContactTitle,
+          seoContactDescription:
+            readStr("seo.contact_description") ?? prev.seoContactDescription,
+          seoPrivacyTitle: readStr("seo.privacy_title") ?? prev.seoPrivacyTitle,
+          seoPrivacyDescription:
+            readStr("seo.privacy_description") ?? prev.seoPrivacyDescription,
+          seoBusinessType: readStr("seo.business_type") || prev.seoBusinessType,
+          seoBusinessDescription:
+            readStr("seo.business_description") ?? prev.seoBusinessDescription,
+          seoFacebookUrl: readStr("seo.facebook_url") ?? prev.seoFacebookUrl,
+          seoInstagramUrl: readStr("seo.instagram_url") ?? prev.seoInstagramUrl,
+          seoYoutubeUrl: readStr("seo.youtube_url") ?? prev.seoYoutubeUrl,
+          seoGoogleVerification:
+            readStr("seo.google_verification") ?? prev.seoGoogleVerification,
+          seoGa4MeasurementId:
+            readStr("seo.ga4_measurement_id") ?? prev.seoGa4MeasurementId,
+          seoAllowIndexing:
+            typeof data["seo.allow_indexing"] === "boolean"
+              ? data["seo.allow_indexing"]
+              : prev.seoAllowIndexing,
+        }));
+
         setIsDbConnected(true);
       } else {
         setIsDbConnected(false);
@@ -323,6 +413,31 @@ export default function SettingsPage() {
         "notifications.brevo_admin_email": brevoAdminEmail.trim(),
         "notifications.brevo_sender_email": brevoSenderEmail.trim(),
         "notifications.brevo_sender_name": brevoSenderName.trim(),
+        // SEO & Social
+        "store.subtitle": seoState.storeSubtitle.trim(),
+        "seo.site_url": seoState.seoSiteUrl.trim(),
+        "seo.default_title": seoState.seoDefaultTitle.trim(),
+        "seo.title_template": seoState.seoTitleTemplate.trim(),
+        "seo.default_description": seoState.seoDefaultDescription.trim(),
+        "seo.keywords": seoState.seoKeywords.trim(),
+        "seo.og_image_url": seoState.seoOgImageUrl.trim(),
+        "seo.twitter_handle": seoState.seoTwitterHandle.trim(),
+        "seo.home_title": seoState.seoHomeTitle.trim(),
+        "seo.home_description": seoState.seoHomeDescription.trim(),
+        "seo.products_title": seoState.seoProductsTitle.trim(),
+        "seo.products_description": seoState.seoProductsDescription.trim(),
+        "seo.contact_title": seoState.seoContactTitle.trim(),
+        "seo.contact_description": seoState.seoContactDescription.trim(),
+        "seo.privacy_title": seoState.seoPrivacyTitle.trim(),
+        "seo.privacy_description": seoState.seoPrivacyDescription.trim(),
+        "seo.business_type": seoState.seoBusinessType.trim() || "Store",
+        "seo.business_description": seoState.seoBusinessDescription.trim(),
+        "seo.facebook_url": seoState.seoFacebookUrl.trim(),
+        "seo.instagram_url": seoState.seoInstagramUrl.trim(),
+        "seo.youtube_url": seoState.seoYoutubeUrl.trim(),
+        "seo.google_verification": seoState.seoGoogleVerification.trim(),
+        "seo.ga4_measurement_id": seoState.seoGa4MeasurementId.trim().toUpperCase(),
+        "seo.allow_indexing": seoState.seoAllowIndexing,
       };
 
       const res = await updateSiteSettingsAction(payload);
@@ -505,10 +620,11 @@ export default function SettingsPage() {
         transition={{ delay: 0.1 }}
       >
         <Tabs defaultValue="general">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[500px] mb-6">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-[640px] mb-6 h-auto sm:h-9">
             <TabsTrigger value="general">Store Profile</TabsTrigger>
-            <TabsTrigger value="inventory">Orders & Stock</TabsTrigger>
-            <TabsTrigger value="notifications">SMS & Outbox</TabsTrigger>
+            <TabsTrigger value="inventory">Orders &amp; Stock</TabsTrigger>
+            <TabsTrigger value="notifications">SMS &amp; Outbox</TabsTrigger>
+            <TabsTrigger value="seo">SEO &amp; Social</TabsTrigger>
           </TabsList>
 
           {/* Store Profile Tab */}
@@ -1495,6 +1611,16 @@ export default function SettingsPage() {
 
             {/* Transactional Outbox & Inngest Background Jobs Monitor */}
             <OutboxMonitor />
+          </TabsContent>
+
+          {/* SEO & Social Tab */}
+          <TabsContent value="seo" className="space-y-6">
+            <SeoSettingsTab
+              state={seoState}
+              onChange={handleSeoChange}
+              storeName={storeName}
+              storeNameBn={storeNameBn}
+            />
           </TabsContent>
         </Tabs>
       </motion.div>

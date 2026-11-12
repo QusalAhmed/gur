@@ -18,29 +18,85 @@ import { StoreHeader } from "@/components/storefront/store-header";
 import { PhoneHelpForm } from "@/components/storefront/phone-help-form";
 import { CopyPhoneButton } from "@/components/storefront/copy-phone-button";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import {
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  getCachedSeoSettings,
+} from "@/lib/seo-settings";
 
 export const instant = false;
 
-export const metadata: Metadata = {
-  title: "যোগাযোগ ও সরাসরি অর্ডার",
-  description:
-    "গাছিদের খাঁটি খেজুরের গুড় কিনতে বা যেকোনো তথ্যে সরাসরি ফোন, হোয়াটসঅ্যাপ বা মেসেঞ্জারে আমাদের সাথে যোগাযোগ করুন। বাঘা, রাজশাহী।",
-  alternates: {
-    canonical: "/contact",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getCachedSeoSettings();
+  const title = seo.contactTitle;
+  const description = seo.contactDescription;
+  const ogImages = seo.ogImageUrl
+    ? [{ url: seo.ogImageUrl, width: 1200, height: 630, alt: title }]
+    : undefined;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: "/contact",
+    },
+    openGraph: {
+      title,
+      description,
+      url: `${seo.siteUrl}/contact`,
+      type: "website",
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: ogImages ? "summary_large_image" : "summary",
+      title,
+      description,
+      ...(ogImages ? { images: [seo.ogImageUrl] } : {}),
+    },
+  };
+}
 
 export default async function ContactPage() {
-  const storefrontData = await getStorefrontProductsAction().catch(() => ({
-    hotline: "01843557389",
-    storeName: "খেজুরের খাঁটি গুড়",
-    storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
-    products: [],
-  }));
+  const [seo, storefrontData] = await Promise.all([
+    getCachedSeoSettings(),
+    getStorefrontProductsAction().catch(() => ({
+      hotline: "01843557389",
+      storeName: "খেজুরের খাঁটি গুড়",
+      storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+      products: [],
+    })),
+  ]);
 
-  const hotline = storefrontData.hotline || "01843557389";
-  const storeName = storefrontData.storeName || "খেজুরের খাঁটি গুড়";
+  const hotline = storefrontData.hotline || seo.supportPhone || "01843557389";
+  const storeName = storefrontData.storeName || seo.storeName || "খেজুরের খাঁটি গুড়";
   const rawPhone = hotline.replace(/[^0-9]/g, "");
+
+  const contactFaqs = [
+    {
+      question: "আমি কীভাবে নিশ্চিত হব যে গুড় খাঁটি?",
+      answer:
+        "আমাদের গুড় সরাসরি বাঘা, রাজশাহীর বিশ্বস্ত গাছিদের দ্বারা রস সংগ্রহ করে কোনো ধরনের চিনি, হাইড্রোজ বা কৃত্রিম রং না মিশিয়ে তৈরি। ডেলিভারিম্যান পার্সেল নিয়ে এলে আপনি নিজে দেখে, ঘ্রাণ নিয়ে ও স্বাদ পরীক্ষা করে শতভাগ নিশ্চিত হয়ে মূল্য পরিশোধ করতে পারবেন।",
+    },
+    {
+      question: "ডেলিভারি পেতে কতদিন সময় লাগবে?",
+      answer:
+        "ঢাকার ভেতরের ঠিকানায় সাধারণত ১ থেকে ২ দিনের মধ্যে এবং ঢাকার বাইরের জেলাগুলোতে ২ থেকে ৩ দিনের মধ্যে কুরিয়ারের মাধ্যমে সুরক্ষিতভাবে হোম ডেলিভারি পৌঁছে দেওয়া হয়।",
+    },
+    {
+      question: "অগ্রিম কোনো টাকা দিতে হবে কি?",
+      answer:
+        "না, কোনো ধরনের অগ্রিম পেমেন্টের প্রয়োজন নেই। আমাদের প্রতিটি অর্ডারে ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে। পণ্য হাতে পেয়ে সম্পূর্ণ দেখে মূল্য পরিশোধ করবেন।",
+    },
+    {
+      question: "পাইকারি বা বড় অর্ডারের সুবিধা আছে কি?",
+      answer: `হ্যাঁ, বিয়ে, পারিবারিক অনুষ্ঠান বা ব্যবসায়িক উদ্দেশ্যে বড় পরিমাণে খাঁটি ঝোলা বা পাটালি গুড়ের জন্য আমাদের হটলাইন নম্বরে (${hotline}) সরাসরি কল করে বিশেষ পাইকারি মূল্য জেনে নিতে পারেন।`,
+    },
+  ];
+  const faqJsonLd = buildFaqPageJsonLd(contactFaqs);
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(seo.siteUrl, [
+    { name: "হোম", path: "/" },
+    { name: "যোগাযোগ", path: "/contact" },
+  ]);
 
   const intlPhone = rawPhone.startsWith("88")
     ? rawPhone
@@ -50,6 +106,18 @@ export default async function ContactPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       {/* Top Header */}
       <StoreHeader storeName={storeName} hotline={hotline} />
 

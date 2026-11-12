@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Hind_Siliguri } from "next/font/google";
 import Script from "next/script";
@@ -8,7 +9,8 @@ import { Toaster } from "sonner";
 import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
-import { getSiteUrl } from "@/lib/site-url";
+import { getCachedSeoSettings } from "@/lib/seo-settings";
+import { SeoGlobalScripts } from "@/components/seo-global-scripts";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,15 +33,45 @@ export const viewport: Viewport = {
   themeColor: "#451a03",
 };
 
-export const metadata: Metadata = {
-  metadataBase: new URL(getSiteUrl()),
-  title: {
-    default: "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses",
-    template: "%s | খেজুরের খাটি গুড়",
-  },
-  description:
-    "Pure sugarcane and date palm molasses (ঝোলা গুড়, পাটালি গুড়) manufacturing, retail, and B2B wholesale distribution platform in Bangladesh.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = await getCachedSeoSettings();
+  const ogImages = seo.ogImageUrl
+    ? [{ url: seo.ogImageUrl, width: 1200, height: 630, alt: seo.storeName }]
+    : undefined;
+
+  return {
+    metadataBase: new URL(seo.siteUrl),
+    title: {
+      default: seo.defaultTitle,
+      template: seo.titleTemplate,
+    },
+    description: seo.defaultDescription,
+    ...(seo.keywords.length > 0 ? { keywords: seo.keywords } : {}),
+    robots: {
+      index: seo.allowIndexing,
+      follow: seo.allowIndexing,
+    },
+    ...(seo.googleVerification
+      ? { verification: { google: seo.googleVerification } }
+      : {}),
+    openGraph: {
+      type: "website",
+      locale: "bn_BD",
+      siteName: seo.storeName,
+      title: seo.defaultTitle,
+      description: seo.defaultDescription,
+      url: seo.siteUrl,
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: ogImages ? "summary_large_image" : "summary",
+      title: seo.defaultTitle,
+      description: seo.defaultDescription,
+      ...(seo.twitterHandle ? { site: seo.twitterHandle } : {}),
+      ...(ogImages ? { images: [seo.ogImageUrl] } : {}),
+    },
+  };
+}
 
 export default function RootLayout({
   children,
@@ -57,6 +89,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">
+        <Suspense fallback={null}>
+          <SeoGlobalScripts />
+        </Suspense>
         {safeFbPixelId && (
           <>
             <Script
