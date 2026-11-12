@@ -357,71 +357,6 @@ describe("Combo Status Toggle for Mixed vs Pure Combo Products", () => {
   });
 });
 
-describe("Storefront Pending Order Exists Privacy & Status Distinction", () => {
-  function handleStorefrontRpcResponse(
-    rpcData: {
-      success: boolean;
-      pending_order_exists?: boolean;
-      order_id?: string;
-      order_number?: string;
-      phone?: string;
-    },
-    normalizedPhone: string,
-    targetStatus: "incomplete_order" | "pending" = "pending"
-  ) {
-    if (rpcData.pending_order_exists) {
-      if (targetStatus === "incomplete_order") {
-        return {
-          success: true,
-          status: "incomplete_order" as const,
-          phone: rpcData.phone || normalizedPhone,
-        };
-      }
-      return {
-        success: false,
-        error: "এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।",
-      };
-    }
-    return {
-      success: true,
-      orderId: rpcData.order_id,
-      orderNumber: rpcData.order_number,
-      status: "pending" as const,
-      phone: rpcData.phone || normalizedPhone,
-    };
-  }
-
-  it("returns privacy-safe incomplete_order status without orderId for draft autosaves", () => {
-    const res = handleStorefrontRpcResponse(
-      {
-        success: true,
-        pending_order_exists: true,
-        phone: "+8801712345678",
-      },
-      "+8801712345678",
-      "incomplete_order"
-    );
-    expect(res.success).toBe(true);
-    expect((res as any).status).toBe("incomplete_order");
-    expect((res as any).orderId).toBeUndefined();
-    expect((res as any).orderNumber).toBeUndefined();
-  });
-
-  it("returns error for explicit checkout when pending_order_exists is true without owned order ID", () => {
-    const res = handleStorefrontRpcResponse(
-      {
-        success: true,
-        pending_order_exists: true,
-        phone: "+8801712345678",
-      },
-      "+8801712345678",
-      "pending"
-    );
-    expect(res.success).toBe(false);
-    expect((res as any).error).toBe("এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।");
-  });
-});
-
 describe("Facebook CAPI Purchase Event ID Selection", () => {
   function resolvePurchaseEventId(
     metaTracking: {
@@ -1358,7 +1293,7 @@ describe("sendCapiContactAction - Session Authorization Decisions", () => {
   });
 });
 
-describe("placeStorefrontOrderAction - Storefront Checkout Pending Order Decisions", () => {
+describe("placeStorefrontOrderAction - Multiple Orders Per Phone & Owned Order Updates", () => {
   beforeEach(() => {
     mockState.mockOrders = [];
     mockState.mockInquiries = [];
@@ -1369,7 +1304,7 @@ describe("placeStorefrontOrderAction - Storefront Checkout Pending Order Decisio
 
   const validUuid = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d";
 
-  it("returns unchanged pending order details with saved delivery zone without mutating", async () => {
+  it("allows placing a new pending order when another pending order exists for the same phone number", async () => {
     mockState.mockOrders = [
       {
         id: validUuid,
@@ -1388,11 +1323,68 @@ describe("placeStorefrontOrderAction - Storefront Checkout Pending Order Decisio
       },
     ];
 
-    // Caller requests "inside_dhaka"
+    const result = await placeStorefrontOrderAction({
+      customerPhone: "01712345678",
+      customerName: "Karim Uddin Second Order",
+      deliveryZone: "inside_dhaka",
+      status: "pending",
+      items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 2, unitPrice: 300 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.orderId).toBe("new-generated-order-id");
+    expect(result.orderId).not.toBe(validUuid);
+    expect(result.status).toBe("pending");
+    expect(result.grandTotal).toBe(670);
+  });
+
+  it("allows creating a new incomplete_order draft when another pending order exists for the same phone number", async () => {
+    mockState.mockOrders = [
+      {
+        id: validUuid,
+        customer_phone: "+8801712345678",
+        order_number: "GUR-2611-0001",
+        public_token: "tok-pending-abc",
+        status: "pending",
+      },
+    ];
+
+    const result = await placeStorefrontOrderAction({
+      customerPhone: "01712345678",
+      customerName: "Draft Buyer",
+      deliveryZone: "inside_dhaka",
+      status: "incomplete_order",
+      items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 1, unitPrice: 500 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.orderId).toBe("new-generated-order-id");
+    expect(result.status).toBe("incomplete_order");
+  });
+
+  it("updates an owned pending order when matching orderId and status='pending' are passed", async () => {
+    mockState.mockOrders = [
+      {
+        id: validUuid,
+        customer_phone: "+8801712345678",
+        order_number: "GUR-2611-0001",
+        public_token: "tok-pending-abc",
+        status: "pending",
+        customer_name: "Karim Uddin",
+        shipping_address: {
+          zone: "outside_dhaka",
+          address_line: "Chittagong",
+        },
+        shipping_total: 130,
+        subtotal: 1000,
+        grand_total: 1130,
+      },
+    ];
+
     const result = await placeStorefrontOrderAction({
       orderId: validUuid,
       customerPhone: "01712345678",
-      customerName: "Attempted Name Overwrite",
+      customerName: "Karim Updated",
       deliveryZone: "inside_dhaka",
       status: "pending",
       items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 5, unitPrice: 200 }],
@@ -1403,14 +1395,14 @@ describe("placeStorefrontOrderAction - Storefront Checkout Pending Order Decisio
     expect(result.orderNumber).toBe("GUR-2611-0001");
     expect(result.publicToken).toBe("tok-pending-abc");
     expect(result.status).toBe("pending");
-    expect(result.grandTotal).toBe(1130);
-    expect(result.shippingTotal).toBe(130);
-    expect(result.customerName).toBe("Karim Uddin");
-    // Returns order's saved delivery zone, NOT the requested one
-    expect(result.deliveryZone).toBe("outside_dhaka");
+    expect(result.customerName).toBe("Karim Updated");
+    expect(result.subtotal).toBe(1000);
+    expect(result.shippingTotal).toBe(70);
+    expect(result.grandTotal).toBe(1070);
+    expect(result.deliveryZone).toBe("inside_dhaka");
   });
 
-  it("returns undefined deliveryZone when order has no saved zone", async () => {
+  it("does not downgrade an owned pending order when a late incomplete_order autosave arrives", async () => {
     mockState.mockOrders = [
       {
         id: validUuid,
@@ -1420,23 +1412,29 @@ describe("placeStorefrontOrderAction - Storefront Checkout Pending Order Decisio
         status: "pending",
         customer_name: "Rahim Ali",
         shipping_address: {
+          zone: "outside_dhaka",
           address_line: "Old Dhaka",
         },
-        shipping_total: 70,
+        shipping_total: 130,
         subtotal: 500,
-        grand_total: 570,
+        grand_total: 630,
       },
     ];
 
     const result = await placeStorefrontOrderAction({
       orderId: validUuid,
       customerPhone: "01712345678",
-      deliveryZone: "outside_dhaka",
-      status: "pending",
+      customerName: "Late Draft Overwrite",
+      deliveryZone: "inside_dhaka",
+      status: "incomplete_order",
     });
 
     expect(result.success).toBe(true);
-    expect(result.deliveryZone).toBeUndefined();
+    expect(result.orderId).toBe(validUuid);
+    expect(result.status).toBe("pending");
+    expect(result.customerName).toBe("Rahim Ali");
+    expect(result.grandTotal).toBe(630);
+    expect(result.deliveryZone).toBe("outside_dhaka");
   });
 });
 

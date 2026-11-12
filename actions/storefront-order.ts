@@ -314,7 +314,7 @@ async function withPhoneLock<T>(phone: string, fn: () => Promise<T>): Promise<T>
  * Places or updates a storefront order with high performance and zero race conditions.
  * - If status is "incomplete_order": records/updates an abandoned lead in real time.
  * - If status is "pending": finalizes the customer order.
- * - Avoids duplicate orders through server-side per-phone serialization and atomic database triggers.
+ * - Allows customers to place multiple orders with the same phone number, and updates an existing draft/pending order when an owned orderId is provided.
  */
 export async function placeStorefrontOrderAction(
   payload: StorefrontOrderPayload
@@ -461,22 +461,6 @@ export async function placeStorefrontOrderAction(
         const { data: rpcData, error: rpcErr } = await client.rpc("process_storefront_order", rpcPayload);
 
         if (!rpcErr && rpcData?.success) {
-          // If phone-based deduplication matched an existing pending order without an owned order ID:
-          // Preserve the successful draft response for autosaves, but return an error for explicit checkout.
-          if (rpcData.pending_order_exists) {
-            if (targetStatus === "incomplete_order") {
-              return {
-                success: true,
-                status: "incomplete_order",
-                phone: rpcData.phone || normalizedPhone,
-              };
-            }
-            return {
-              success: false,
-              error: "এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।",
-            };
-          }
-
           // Persist meta_tracking in order's attribution for delayed CAPI purchase upon admin confirmation
           let currentAttr: Record<string, any> = {};
           let resolvedPublicToken: string | undefined = rpcData.public_token || undefined;
@@ -652,7 +636,25 @@ export async function placeStorefrontOrderAction(
             .maybeSingle();
 
           if (foundById) {
+            existingOrder = foundById;
+            if (foundById.status === "pending") wasPending = true;
+            if (foundById.status === "incomplete_order") wasIncomplete = true;
+          }
+        }
+      } else {
+        // targetStatus === "incomplete_order"
+        // Require established ownership proof (validatedOrderId) before reading or updating an existing draft
+        if (validatedOrderId) {
+          const { data: foundById } = await client
+            .from("orders")
+            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
+            .eq("id", validatedOrderId)
+            .eq("customer_phone", normalizedPhone)
+            .maybeSingle();
+
+          if (foundById) {
             if (foundById.status === "pending") {
+              // Do not allow background draft autosave to downgrade or mutate an already-submitted pending order
               const shippingAddr =
                 typeof foundById.shipping_address === "object" && foundById.shipping_address !== null
                   ? (foundById.shipping_address as Record<string, any>)
@@ -691,59 +693,8 @@ export async function placeStorefrontOrderAction(
             if (foundById.status === "incomplete_order") wasIncomplete = true;
           }
         }
-
-        // Deduplication safeguard: If no validated orderId matched and targetStatus is pending,
-        // check if a pending order exists for this phone number.
-        // Reject with error without mutating or exposing the existing pending order.
-        if (!existingOrder) {
-          const { data: phonePending } = await client
-            .from("orders")
-            .select("id, status")
-            .eq("customer_phone", normalizedPhone)
-            .eq("status", "pending")
-            .limit(1)
-            .maybeSingle();
-
-          if (phonePending) {
-            return {
-              success: false,
-              error: "এই মোবাইল নম্বর দিয়ে ইতিমধ্যেই একটি অর্ডার প্রক্রিয়াধীন রয়েছে।",
-            };
-          }
-        }
-      } else {
-        // targetStatus === "incomplete_order"
-        // Require established ownership proof (validatedOrderId) before reading or updating an existing draft
-        if (validatedOrderId) {
-          const { data: foundById } = await client
-            .from("orders")
-            .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-            .eq("id", validatedOrderId)
-            .eq("customer_phone", normalizedPhone)
-            .maybeSingle();
-
-          if (foundById) {
-            existingOrder = foundById;
-          }
-        }
         // If not matched by validatedOrderId, do not select an existing draft by phone alone;
-        // a separate order will be created instead to preserve privacy and prevent draft hijacking.
-      }
-
-      // Explicit orderId check if not yet matched
-      if (!existingOrder && validatedOrderId) {
-        const { data: foundById } = await client
-          .from("orders")
-          .select("id, order_number, public_token, status, customer_name, customer_note, shipping_address, shipping_method_name, shipping_total, subtotal, grand_total")
-            .eq("id", validatedOrderId)
-            .eq("customer_phone", normalizedPhone)
-          .maybeSingle();
-
-        if (foundById) {
-          existingOrder = foundById;
-          if (existingOrder.status === "pending") wasPending = true;
-          if (existingOrder.status === "incomplete_order") wasIncomplete = true;
-        }
+        // a separate order will be created instead to preserve privacy and allow multiple orders per phone.
       }
 
       // Rule 3: If found order is already confirmed/shipped/delivered/etc., do not overwrite it. Treat as fresh order.
@@ -825,13 +776,22 @@ export async function placeStorefrontOrderAction(
         : 0;
 
       // Mathematical consistency for Postgres check constraint orders_totals_consistent
-      const cleanSubtotal = Math.max(0, Math.round(rawSubtotal * 100) / 100);
-      const cleanShippingTotal = Math.max(0, Math.round(resolvedShippingFee * 100) / 100);
+      const cleanSubtotal = existingOrder && !hasItems
+        ? Math.max(0, Math.round((Number(existingOrder.subtotal) || 0) * 100) / 100)
+        : Math.max(0, Math.round(rawSubtotal * 100) / 100);
+      const cleanShippingTotal = existingOrder && !hasItems
+        ? Math.max(0, Math.round((Number(existingOrder.shipping_total) || 0) * 100) / 100)
+        : Math.max(0, Math.round(resolvedShippingFee * 100) / 100);
       const cleanDiscountTotal = 0;
       const cleanTaxTotal = 0;
-      const cleanGrandTotal = Math.round(
-        (cleanSubtotal - cleanDiscountTotal + cleanShippingTotal + cleanTaxTotal) * 100
-      ) / 100;
+      const cleanGrandTotal = existingOrder && !hasItems
+        ? Math.max(0, Math.round((Number(existingOrder.grand_total) || 0) * 100) / 100)
+        : Math.round(
+            (cleanSubtotal - cleanDiscountTotal + cleanShippingTotal + cleanTaxTotal) * 100
+          ) / 100;
+
+      const resolvedZone =
+        payload.deliveryZone || existingShippingAddress?.zone || existingShippingAddress?.delivery_zone || undefined;
 
       const shippingAddress: Record<string, any> = {
         phone: normalizedPhone,
@@ -839,6 +799,7 @@ export async function placeStorefrontOrderAction(
         address_line: resolvedAddressLine || "",
         district: resolvedDistrict,
         division: resolvedDivision,
+        ...(resolvedZone ? { zone: resolvedZone } : {}),
       };
 
       let orderDbId: string;
