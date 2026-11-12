@@ -28,6 +28,7 @@ import {
   LogOut,
   Gift,
   ArrowUpDown,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useAdminBadgeCounts } from "@/hooks/use-admin-badge-counts";
@@ -148,6 +149,12 @@ const navGroups: NavGroup[] = [
         titleBn: "পণ্য তালিকা",
         href: "/admin/products",
         icon: Package,
+      },
+      {
+        title: "Product Images",
+        titleBn: "পণ্যের ছবি ও মিডিয়া",
+        href: "/admin/products/images",
+        icon: ImageIcon,
       },
       {
         title: "Product Ordering",
@@ -391,9 +398,10 @@ export function AdminSidebar() {
                       isActive = !hasSpecificSidebarMatch;
                     }
 
-                    // Explicit safeguard: when on /admin/products/reorder, do not highlight /admin/products or /admin/orders
+                    // Explicit safeguard: when on /admin/products/reorder or /admin/products/images, do not highlight /admin/products or /admin/orders
                     if (
-                      pathname.startsWith("/admin/products/reorder") &&
+                      (pathname.startsWith("/admin/products/reorder") ||
+                        pathname.startsWith("/admin/products/images")) &&
                       (itemPath === "/admin/products" || itemPath === "/admin/orders")
                     ) {
                       isActive = false;

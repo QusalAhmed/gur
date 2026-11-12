@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Minus, Sparkles, Check, ChevronDown, Award, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   addToCart,
@@ -490,9 +490,9 @@ export function ProductCard({
                 <span>
                   {t.productCounter}{" "}
                   <span className="font-bold">
-                    {lang === "bn" ? toBnNumber(index + 1) : index + 1}
+                    {index + 1}
                   </span>{" "}
-                  / {lang === "bn" ? toBnNumber(totalProducts) : totalProducts}
+                  / {totalProducts}
                 </span>
               </div>
 
@@ -586,7 +586,7 @@ export function ProductCard({
                 <div className="flex items-center gap-1 font-black text-xs sm:text-sm">
                   <SlidingNumber
                     value={displayUnit}
-                    isBengali={lang === "bn"}
+                    isBengali={false}
                     className="font-mono font-black"
                   />
                   <span className="text-[11px] sm:text-xs font-bold text-emerald-100">
@@ -614,9 +614,9 @@ export function ProductCard({
                 <span>
                   {t.productCounter}{" "}
                   <span className="font-bold">
-                    {lang === "bn" ? toBnNumber(index + 1) : index + 1}
+                    {index + 1}
                   </span>{" "}
-                  / {lang === "bn" ? toBnNumber(totalProducts) : totalProducts}
+                  / {totalProducts}
                 </span>
               </div>
 
@@ -718,7 +718,7 @@ export function ProductCard({
                         </span>
                       </div>
                       <span className="text-amber-800 dark:text-amber-300 font-extrabold text-xs shrink-0 ml-1">
-                        ×{lang === "bn" ? toBnNumber(ci.quantity) : ci.quantity}
+                        ×{ci.quantity}
                       </span>
                     </div>
                   ))}
@@ -784,7 +784,7 @@ export function ProductCard({
                       {formatStorePrice(unitPrice * displayUnit, lang)}
                     </span>
                     <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                      ({lang === "bn" ? `${toBnNumber(displayUnit)}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
+                      ({lang === "bn" ? `${displayUnit}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
                     </span>
                   </motion.div>
                 )}
@@ -892,7 +892,7 @@ export function ProductCard({
                             transition={{ duration: 0.6, ease: "easeOut" }}
                             className="absolute -top-3 font-mono font-black text-xs sm:text-sm text-amber-200 pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
                           >
-                            +{lang === "bn" ? "১" : "1"}
+                            +1
                           </motion.span>
                         )}
 
@@ -914,7 +914,7 @@ export function ProductCard({
                         >
                           <SlidingNumber
                             value={displayUnit}
-                            isBengali={lang === "bn"}
+                            isBengali={false}
                             className="text-2xl sm:text-3xl font-black font-mono tracking-tight flex items-center justify-center"
                           />
                         </motion.div>
@@ -952,7 +952,7 @@ export function ProductCard({
                       type="button"
                       suppressHydrationWarning
                       onClick={() => handlePresetClick(preset)}
-                      aria-label={lang === "bn" ? `${toBnNumber(preset)}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
+                      aria-label={lang === "bn" ? `${preset}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
                       aria-pressed={displayUnit === preset}
                       className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${
                         displayUnit === preset
@@ -960,7 +960,7 @@ export function ProductCard({
                           : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
                       }`}
                     >
-                      {lang === "bn" ? `${toBnNumber(preset)}টি` : preset}
+                      {lang === "bn" ? `${preset}টি` : preset}
                     </button>
                   ))}
                 </div>

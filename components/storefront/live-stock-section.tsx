@@ -16,7 +16,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { useLiveStock, StockDayProjection } from "@/hooks/use-live-stock";
-import { StorefrontLang, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang } from "@/lib/storefront-i18n";
 
 interface LiveStockSectionProps {
   lang?: StorefrontLang;
@@ -260,7 +260,7 @@ export function LiveStockSection({
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
-              {isBn ? toBnNumber(0) : "0"}
+              0
             </span>
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
               {isBn ? "কেজি (বুকড)" : "KG (Sold Out)"}
@@ -281,7 +281,7 @@ export function LiveStockSection({
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-lg sm:text-xl font-black text-amber-900 dark:text-amber-100 font-mono">
-              {isBn ? toBnNumber(dailyProductionKg) : dailyProductionKg}
+              {dailyProductionKg}
             </span>
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
               {isBn ? "কেজি / দিন" : "KG / day"}
@@ -333,7 +333,7 @@ export function LiveStockSection({
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
                       {isBn
-                        ? `${toBnNumber(nextAvailableDay.availableKg)} কেজি বাকি`
+                        ? `${nextAvailableDay.availableKg} কেজি বাকি`
                         : `${nextAvailableDay.availableKg} KG Open`}
                     </span>
                   </div>
@@ -478,7 +478,7 @@ function TimelineDayCard({
                 : "bg-amber-200 dark:bg-amber-950 text-amber-800 dark:text-amber-300"
             }`}
           >
-            {isBn ? toBnNumber(idx + 1) : idx + 1}
+            {idx + 1}
           </div>
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -519,7 +519,7 @@ function TimelineDayCard({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold bg-emerald-600 text-white shadow-xs">
               <CheckCircle2 className="w-3 h-3" />
               {isBn
-                ? `${toBnNumber(proj.availableKg)} কেজি পাওয়া যাবে`
+                ? `${proj.availableKg} কেজি পাওয়া যাবে`
                 : `${proj.availableKg} KG Available`}
             </span>
           ) : (
@@ -561,7 +561,7 @@ function TimelineDayCard({
             <span>
               {isBn ? "বুকড: " : "Booked: "}
               <strong className="text-stone-700 dark:text-stone-300">
-                {isBn ? toBnNumber(proj.bookedKg) : proj.bookedKg} {isBn ? "কেজি" : "KG"}
+                {proj.bookedKg} {isBn ? "কেজি" : "KG"}
               </strong>
             </span>
             <span>
@@ -573,7 +573,7 @@ function TimelineDayCard({
                     : "text-rose-600 dark:text-rose-400 font-bold"
                 }
               >
-                {isBn ? toBnNumber(proj.availableKg) : proj.availableKg} {isBn ? "কেজি" : "KG"}
+                {proj.availableKg} {isBn ? "কেজি" : "KG"}
               </strong>
             </span>
           </div>
@@ -590,17 +590,17 @@ function TimelineDayCard({
           )
         ) : isAvailable ? (
           isBn ? (
-            `${proj.dayNameBn} (${proj.dateFormattedBn})-এর উৎপাদন ক্ষমতা ${toBnNumber(proj.capacityKg)} কেজি থেকে বর্তমান অর্ডার বাদ দিয়ে ${toBnNumber(proj.availableKg)} কেজি উন্মুক্ত আছে।`
+            `${proj.dayNameBn} (${proj.dateFormattedBn})-এর উৎপাদন ক্ষমতা ${proj.capacityKg} কেজি থেকে বর্তমান অর্ডার বাদ দিয়ে ${proj.availableKg} কেজি উন্মুক্ত আছে।`
           ) : (
             `For ${proj.dayNameEn} (${proj.dateFormattedEn}), ${proj.availableKg} KG remains open out of ${proj.capacityKg} KG daily yield after existing orders.`
           )
         ) : (
           isBn ? (
             proj.dayIndex === 1
-              ? `আগামীকালের (${proj.dateFormattedBn}) পুরো ${toBnNumber(proj.capacityKg)} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
+              ? `আগামীকালের (${proj.dateFormattedBn}) পুরো ${proj.capacityKg} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
               : proj.dayIndex === 2
-              ? `পরশুর (${proj.dateFormattedBn}) পুরো ${toBnNumber(proj.capacityKg)} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
-              : `${proj.dateFormattedBn} তারিখের পুরো ${toBnNumber(proj.capacityKg)} কেজি উৎপাদন পূর্ববর্তী অর্ডারে সম্পূর্ণ বুকড।`
+              ? `পরশুর (${proj.dateFormattedBn}) পুরো ${proj.capacityKg} কেজি বর্তমান অর্ডারে বুক হয়ে গেছে।`
+              : `${proj.dateFormattedBn} তারিখের পুরো ${proj.capacityKg} কেজি উৎপাদন পূর্ববর্তী অর্ডারে সম্পূর্ণ বুকড।`
           ) : (
             proj.dayIndex === 1
               ? `Tomorrow's (${proj.dateFormattedEn}) entire ${proj.capacityKg} KG batch is booked by prior orders.`

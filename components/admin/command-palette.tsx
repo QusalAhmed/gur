@@ -20,6 +20,7 @@ import {
   Bell,
   PlusCircle,
   FileQuestion,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -86,6 +87,7 @@ export function CommandPalette({
     { label: "Inventory Levels / স্টক তালিকা", path: "/admin/inventory", icon: Package },
     { label: "Lots & Batches / গুড়ের লট", path: "/admin/batches", icon: Layers },
     { label: "Products / ক্যাটালগ", path: "/admin/products", icon: Package },
+    { label: "Product Images & Media / পণ্যের ছবি", path: "/admin/products/images", icon: ImageIcon },
     { label: "Categories / ক্যাটাগরি", path: "/admin/categories", icon: Layers },
     { label: "Customers CRM / গ্রাহক", path: "/admin/customers", icon: Users },
     { label: "B2B Accounts / পাইকারি গ্রাহক", path: "/admin/businesses", icon: Building2 },

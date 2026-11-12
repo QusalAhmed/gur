@@ -38,7 +38,6 @@ import {
   StorefrontLang,
   STOREFRONT_TEXT,
   formatStorePrice,
-  toBnNumber,
 } from "@/lib/storefront-i18n";
 import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useAppDispatch, useAppSelector, useAppStore } from "@/lib/redux/hooks";
@@ -454,7 +453,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                   </button>
 
                   <div className="min-w-[28px] text-center font-mono font-black text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center justify-center px-1">
-                    <SlidingNumber value={item.quantity} isBengali={lang === "bn"} />
+                    <SlidingNumber value={item.quantity} isBengali={false} />
                   </div>
 
                   <button
@@ -502,7 +501,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
         const item = info.row.original;
         const total = item.quantity * item.unitPrice;
         const formattedUnit = formatStorePrice(item.unitPrice, lang);
-        const formattedQty = lang === "bn" ? toBnNumber(item.quantity) : item.quantity;
+        const formattedQty = item.quantity;
         return (
           <div className="text-right py-2.5 pl-2">
             <span className="block font-mono text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
@@ -671,7 +670,7 @@ return (
                   </h3>
                 </div>
                 <span className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-bold">
-                  {lang === "bn" ? `${toBnNumber(displayCartItems.length)} পদের গুড়` : `${displayCartItems.length} products`}
+                  {lang === "bn" ? `${displayCartItems.length} পদের গুড়` : `${displayCartItems.length} products`}
                 </span>
               </div>
 

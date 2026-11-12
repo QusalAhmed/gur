@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ChevronDown } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
 import dynamic from "next/dynamic";
@@ -371,7 +371,7 @@ export function ProductShowcase({
             <span>{t.navCheckout}</span>
             {displayCartQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
-                {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
+                {displayCartQuantity}
               </span>
             )}
           </button>
@@ -386,13 +386,13 @@ export function ProductShowcase({
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
-            aria-label={lang === "bn" ? `কার্ট খুলুন, ${toBnNumber(displayCartQuantity)}টি পণ্য রয়েছে` : `Open cart, ${displayCartQuantity} items`}
+            aria-label={lang === "bn" ? `কার্ট খুলুন, ${displayCartQuantity}টি পণ্য রয়েছে` : `Open cart, ${displayCartQuantity} items`}
           >
             <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.cartTitle}</span>
             {displayCartQuantity > 0 && (
               <span className="bg-amber-600 text-white text-[11px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
-                {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
+                {displayCartQuantity}
               </span>
             )}
             {displayCartSubtotal > 0 && (

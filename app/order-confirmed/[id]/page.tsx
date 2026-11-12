@@ -640,7 +640,7 @@ function OrderConfirmedContent() {
                       <span>অর্ডারের সারসংক্ষেপ</span>
                     </div>
                     <span className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-bold">
-                      {toBnNumber(order.items.length)} পদের গুড়
+                      {order.items.length} পদের গুড়
                     </span>
                   </div>
 
@@ -705,7 +705,7 @@ function OrderConfirmedContent() {
                                       <span className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700 font-bold text-[11px]">
                                         <span>পরিমাণ:</span>
                                         <span className="font-mono font-black text-amber-950 dark:text-amber-200">
-                                          {toBnNumber(item.quantity)}
+                                          {item.quantity}
                                         </span>
                                         <span className="text-[10px] text-stone-500 font-normal">প্যাক</span>
                                       </span>
@@ -720,10 +720,10 @@ function OrderConfirmedContent() {
                                   {formatStorePrice(total, "bn")}
                                 </span>
                                 <span className="block font-mono text-[10.5px] font-bold text-stone-600 dark:text-stone-300 mt-0.5">
-                                  {toBnNumber(item.quantity)} প্যাক
+                                  {item.quantity} প্যাক
                                 </span>
                                 <span className="block font-mono text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
-                                  ({formatStorePrice(item.unit_price, "bn")} × {toBnNumber(item.quantity)})
+                                  ({formatStorePrice(item.unit_price, "bn")} × {item.quantity})
                                 </span>
                               </td>
                             </motion.tr>

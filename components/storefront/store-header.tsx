@@ -8,7 +8,6 @@ import {
   selectCartTotalQuantity,
   openCart,
 } from "@/lib/redux/slices/cart-slice";
-import { toBnNumber } from "@/lib/storefront-i18n";
 import { CartSheet } from "./cart-sheet";
 import { trackContact } from "@/lib/facebook-pixel";
 
@@ -118,7 +117,7 @@ export function StoreHeader({
             <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
             {displayCartQuantity > 0 && (
               <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900">
-                {toBnNumber(displayCartQuantity)}
+                {displayCartQuantity}
               </span>
             )}
           </button>

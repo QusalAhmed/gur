@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartItems,
@@ -93,7 +93,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                     {t.cartTitle}
                   </h2>
                   <p className="text-xs text-stone-600 dark:text-stone-400">
-                    {lang === "bn" ? toBnNumber(totalQuantity) : totalQuantity} {t.itemsCount}
+                    {totalQuantity} {t.itemsCount}
                   </p>
                 </div>
               </div>
@@ -199,7 +199,7 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
                               <span className="w-7 text-center font-bold text-xs text-amber-950 dark:text-amber-100">
-                                {lang === "bn" ? toBnNumber(item.quantity) : item.quantity}
+                                {item.quantity}
                               </span>
                               <button
                                 type="button"

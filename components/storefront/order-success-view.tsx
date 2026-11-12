@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { CheckCircle2, Phone, MessageSquare, ArrowRight, ShieldCheck, FileText } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 
 interface OrderSuccessViewProps {
   orderId?: string;
@@ -87,7 +87,7 @@ export function OrderSuccessView({
         <div className="flex justify-between items-center text-xs sm:text-base text-stone-600 dark:text-stone-400">
           <span>{lang === "bn" ? "মোবাইল নম্বর:" : "Phone:"}</span>
           <span className="font-mono font-semibold text-stone-900 dark:text-stone-100">
-            {lang === "bn" ? toBnNumber(phone) : phone}
+            {phone}
           </span>
         </div>
         <div className="flex justify-between items-center text-xs sm:text-base text-stone-600 dark:text-stone-400">

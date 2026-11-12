@@ -8,10 +8,8 @@ export function toBnNumber(num: number | string): string {
 }
 
 export function formatStorePrice(amount: number, lang: StorefrontLang = "bn"): string {
-  if (lang === "bn") {
-    return `৳ ${toBnNumber(Math.round(amount))}`;
-  }
-  return `৳ ${Math.round(amount).toLocaleString()}`;
+  void lang;
+  return `৳ ${Math.round(amount).toLocaleString("en-US")}`;
 }
 
 export const STOREFRONT_TEXT = {
@@ -183,13 +181,13 @@ export const STOREFRONT_TEXT = {
     introPillar3Desc: "ভোরবেলার কুয়াশাভেজা তাজা রসের অতুলনীয় প্রাকৃতিক সুবাস ও খাঁটি দানাদার টেক্সচার।",
     introPillar4Title: "সারা দেশে ক্যাশ অন ডেলিভারি",
     introPillar4Desc: "কোনো অগ্রিম টাকা নেই। কুরিয়ারে হাতে পেয়ে গুড় দেখে ও ঘ্রাণ নিয়ে মূল্য পরিশোধ করুন।",
-    introStat1Number: "২০+",
+    introStat1Number: "20+",
     introStat1Label: "বছরের পারিবারিক ঐতিহ্য",
-    introStat2Number: "৫,০০০+",
+    introStat2Number: "5,000+",
     introStat2Label: "সন্তুষ্ট পরিবারের বিশ্বস্ততা",
-    introStat3Number: "১০০%",
+    introStat3Number: "100%",
     introStat3Label: "খাঁটিত্ব ও গুণমানের নিশ্চয়তা",
-    introStat4Number: "৬৪",
+    introStat4Number: "64",
     introStat4Label: "জেলায় দ্রুত হোম ডেলিভারি",
     introHeritageHeading: "আমাদের ঐতিহ্য ও উৎপত্তি",
     introHeritageText:

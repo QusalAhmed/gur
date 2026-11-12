@@ -3,7 +3,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { Phone, ShoppingBag, Globe, Sparkles } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, toBnNumber } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
@@ -111,7 +111,7 @@ export function MobileDock({
           }}
           className="relative inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all touch-manipulation shrink-0"
           suppressHydrationWarning
-          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${toBnNumber(displayCartQuantity)}টি পণ্য` : `Cart & Order, ${displayCartQuantity} items`}
+          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${displayCartQuantity}টি পণ্য` : `Cart & Order, ${displayCartQuantity} items`}
         >
           <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
           {displayCartQuantity > 0 && (
@@ -120,7 +120,7 @@ export function MobileDock({
               animate={{ scale: 1 }}
               className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900"
             >
-              {lang === "bn" ? toBnNumber(displayCartQuantity) : displayCartQuantity}
+              {displayCartQuantity}
             </motion.span>
           )}
         </motion.button>
