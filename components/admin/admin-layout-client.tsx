@@ -10,6 +10,12 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AdminAuthProvider } from "@/components/admin/auth-context";
+import { useAdminRealtime } from "@/hooks/use-admin-realtime";
+
+function AdminRealtimeBridge({ enabled }: { enabled: boolean }) {
+  useAdminRealtime(enabled);
+  return null;
+}
 
 export function AdminLayoutClient({
   children,
@@ -22,6 +28,7 @@ export function AdminLayoutClient({
   return (
     <TooltipProvider>
       <AdminAuthProvider>
+        <AdminRealtimeBridge enabled={!isBareLayout} />
         {isBareLayout ? (
           children
         ) : (

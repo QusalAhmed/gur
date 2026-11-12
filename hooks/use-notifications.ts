@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAdminRealtimeConnected } from "@/hooks/use-admin-realtime";
 import {
   getNotificationsAction,
   markNotificationReadAction,
@@ -19,10 +20,11 @@ export const NOTIFICATIONS_QUERY_KEY = ["admin-notifications"];
 export function useNotifications() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const realtimeConnected = useAdminRealtimeConnected();
   const hasInitializedRef = useRef(false);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
-  // 1. Fetch notifications via Server Action polling
+  // 1. Fetch initial notifications once; Supabase Realtime invalidates on DB changes
   const {
     data: notifications = [],
     isLoading,
@@ -38,9 +40,9 @@ export function useNotifications() {
       }
       return res.data || [];
     },
-    staleTime: 1000 * 15, // 15s
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
+    staleTime: realtimeConnected ? Infinity : 60_000,
+    refetchInterval: realtimeConnected ? false : 60_000,
+    refetchOnWindowFocus: false,
   });
 
   // Calculate unread count

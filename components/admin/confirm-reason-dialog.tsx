@@ -2,13 +2,13 @@
 
 import * as React from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog as Dialog,
+  ResponsiveDialogContent as DialogContent,
+  ResponsiveDialogDescription as DialogDescription,
+  ResponsiveDialogFooter as DialogFooter,
+  ResponsiveDialogHeader as DialogHeader,
+  ResponsiveDialogTitle as DialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -28,8 +28,17 @@ export interface ConfirmReasonDialogProps {
   onConfirm: (reason: string) => Promise<void> | void;
 }
 
-export function ConfirmReasonDialog({
-  open,
+export function ConfirmReasonDialog(props: ConfirmReasonDialogProps) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        {props.open && <ConfirmReasonBody key="active" {...props} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmReasonBody({
   onOpenChange,
   title,
   description,
@@ -45,14 +54,6 @@ export function ConfirmReasonDialog({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (open) {
-      setReason("");
-      setError(null);
-      setIsSubmitting(false);
-    }
-  }, [open]);
-
   const handleConfirm = async () => {
     if (required && !reason.trim()) {
       setError("Please provide a reason before proceeding.");
@@ -64,71 +65,69 @@ export function ConfirmReasonDialog({
       setError(null);
       await onConfirm(reason.trim());
       onOpenChange(false);
-    } catch (err: any) {
-      setError(err?.message || "Failed to complete action.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px]">
-        <DialogHeader>
-          <div className="flex items-center gap-2 text-destructive">
-            {variant === "destructive" && <AlertTriangle className="h-5 w-5 shrink-0" />}
-            <DialogTitle className="text-foreground">{title}</DialogTitle>
-          </div>
-          <DialogDescription className="pt-1 text-sm">{description}</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-2 py-2">
-          <Label htmlFor="action-reason" className="text-xs font-medium">
-            {reasonLabel} {required && <span className="text-destructive">*</span>}
-          </Label>
-          <Textarea
-            id="action-reason"
-            rows={3}
-            placeholder={reasonPlaceholder}
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-              if (error) setError(null);
-            }}
-            className="text-sm resize-none"
-            disabled={isSubmitting}
-          />
-          {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+    <>
+      <DialogHeader>
+        <div className="flex items-center gap-2 text-destructive">
+          {variant === "destructive" && <AlertTriangle className="h-5 w-5 shrink-0" />}
+          <DialogTitle className="text-foreground">{title}</DialogTitle>
         </div>
+        <DialogDescription className="pt-1 text-sm">{description}</DialogDescription>
+      </DialogHeader>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={variant}
-            size="sm"
-            onClick={handleConfirm}
-            disabled={isSubmitting || (required && !reason.trim())}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              confirmLabel
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="space-y-2 py-2">
+        <Label htmlFor="action-reason" className="text-xs font-medium">
+          {reasonLabel} {required && <span className="text-destructive">*</span>}
+        </Label>
+        <Textarea
+          id="action-reason"
+          rows={3}
+          placeholder={reasonPlaceholder}
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            if (error) setError(null);
+          }}
+          className="text-sm resize-none"
+          disabled={isSubmitting}
+        />
+        {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+      </div>
+
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onOpenChange(false)}
+          disabled={isSubmitting}
+        >
+          {cancelLabel}
+        </Button>
+        <Button
+          type="button"
+          variant={variant}
+          size="sm"
+          onClick={handleConfirm}
+          disabled={isSubmitting || (required && !reason.trim())}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            confirmLabel
+          )}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

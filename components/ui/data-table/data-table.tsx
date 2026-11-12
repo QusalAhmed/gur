@@ -95,9 +95,9 @@ export function DataTable<TData, TValue>({
   onRowClick,
   renderSubRow,
   isRowExpanded,
-  getRowId = (row: any, index: number) =>
-    row && typeof row === "object" && "id" in row && row.id != null
-      ? String(row.id)
+  getRowId = (row: TData, index: number) =>
+    row && typeof row === "object" && "id" in row && (row as { id?: unknown }).id != null
+      ? String((row as { id?: unknown }).id)
       : String(index),
   className,
   cellClassName,
@@ -286,7 +286,7 @@ export function DataTable<TData, TValue>({
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {enableColumnVisibility && <DataTableViewOptions table={table} />}
           {toolbarSuffix}
         </div>
