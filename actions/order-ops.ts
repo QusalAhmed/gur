@@ -103,11 +103,12 @@ export async function cancelOrderWithReasonAction(
   orderId: string,
   reason: string
 ): Promise<ActionResult> {
-  if (!reason || !reason.trim()) {
+  const cleanReason = (reason || "").trim();
+  if (cleanReason.length < 3) {
     return {
       ok: false,
-      code: "REASON_REQUIRED",
-      message: "A cancellation reason is required.",
+      code: "CANCEL_REASON_REQUIRED",
+      message: "A cancellation reason is required (minimum 3 characters).",
     };
   }
 
@@ -118,10 +119,24 @@ export async function cancelOrderWithReasonAction(
     }
     const client = getSupabaseAdmin();
 
+    const { data: ord } = await client
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (ord && (ord.status === "shipped" || ord.status === "delivered")) {
+      return {
+        ok: false,
+        code: "ORDER_NOT_CANCELLABLE",
+        message: `Orders already ${ord.status} cannot be cancelled. Use 'Returned' if the product was returned.`,
+      };
+    }
+
     // Call cancel_order RPC
     const { error: rpcErr } = await client.rpc("cancel_order", {
       p_order_id: orderId,
-      p_reason: reason.trim(),
+      p_reason: cleanReason,
     });
 
     if (rpcErr) {
@@ -133,7 +148,7 @@ export async function cancelOrderWithReasonAction(
     await client.from("staff_notes").insert({
       entity_type: "order",
       entity_id: orderId,
-      body: `Order cancelled. Reason: ${reason.trim()}`,
+      body: `Order cancelled. Reason: ${cleanReason}`,
       author_id: getActorUuid(session),
     });
 

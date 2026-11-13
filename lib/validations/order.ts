@@ -280,11 +280,14 @@ export function isFieldRequiredForStatus(
   fieldName: "phone" | "customer" | "items" | "channel" | "method" | "division" | "district" | "address_line" | "shipping_total" | "courier_name" | "cancel_reason",
   status: string
 ): boolean {
+  if (status === "cancelled") {
+    return fieldName === "cancel_reason";
+  }
   if (fieldName === "phone") return true;
   if (status === "incomplete_order" || status === "pending") {
     return false;
   }
-  if (status === "cancelled" || status === "returned") {
+  if (status === "returned") {
     return fieldName === "cancel_reason";
   }
   if (
@@ -352,7 +355,7 @@ export const orderFormSchema = z
       data.status === "partially_delivered";
 
     // Validate phone number based on status
-    if (data.status === "incomplete_order") {
+    if (data.status === "incomplete_order" || data.status === "cancelled") {
       if (data.phone && !BD_PHONE_REGEX.test(data.phone)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -391,7 +394,7 @@ export const orderFormSchema = z
     }
 
     // Validate different shipping recipient details if toggle is enabled
-    if (data.different_shipping_recipient) {
+    if (data.different_shipping_recipient && data.status !== "cancelled") {
       const cleanShipPhone = (data.shipping_phone || "").replace(/[\s-]/g, "");
       if (!cleanShipPhone) {
         ctx.addIssue({

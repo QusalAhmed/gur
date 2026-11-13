@@ -60,6 +60,9 @@ export function clampInt(
   min: number,
   max: number
 ): number {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+    return fallback;
+  }
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(num)));

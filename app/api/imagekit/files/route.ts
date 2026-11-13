@@ -46,28 +46,42 @@ export async function GET(req: NextRequest) {
     }
 
     const searchQuery = searchParams.get("search") || "";
-    const limit = clampInt(searchParams.get("limit"), 100, 1, 200);
+    const limit = clampInt(searchParams.get("limit"), 500, 1, 1000);
 
     const ik = getImageKitServer();
 
+    // Fetch images from ImageKit sorted by creation time without path constraint,
+    // enabling comprehensive recursive folder and subfolder matching.
     const listOptions: Record<string, unknown> = {
       fileType: "image",
       limit,
       sort: "DESC_CREATED",
     };
 
-    if (normalizedPath !== "/") {
-      listOptions.path = normalizedPath;
-    }
-
-    const cleanSearch = searchQuery.trim().replace(/["\\\x00-\x1f\x7f]/g, "").slice(0, 100);
-    if (cleanSearch) {
-      listOptions.searchQuery = `name : "${cleanSearch}"`;
-    }
-
     const files = await ik.listFiles(listOptions as any);
+    const rawList = Array.isArray(files) ? files : [];
 
-    const formattedAssets = (Array.isArray(files) ? files : []).map((file: any) => ({
+    // Filter recursively by folder path prefix if folder is specified and not root ("/")
+    const folderFiltered =
+      normalizedPath === "/"
+        ? rawList
+        : rawList.filter((file: any) => {
+            const filePath = typeof file?.filePath === "string" ? file.filePath : "";
+            const prefix = normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`;
+            return filePath === normalizedPath || filePath.startsWith(prefix);
+          });
+
+    // Substring filename and path search filter
+    const cleanSearch = searchQuery.trim().replace(/["\\\x00-\x1f\x7f]/g, "").slice(0, 100).toLowerCase();
+    const searchFiltered = cleanSearch
+      ? folderFiltered.filter((file: any) => {
+          const name = typeof file?.name === "string" ? file.name.toLowerCase() : "";
+          const filePath = typeof file?.filePath === "string" ? file.filePath.toLowerCase() : "";
+          return name.includes(cleanSearch) || filePath.includes(cleanSearch);
+        })
+      : folderFiltered;
+
+    const formattedAssets = searchFiltered.map((file: any) => ({
       id: file.fileId,
       name: file.name,
       path: file.filePath,

@@ -469,4 +469,15 @@ export function resolveOtherOrdersForDisplay(
   return finalUnique;
 }
 
+export const ORDER_CANCELLATION_REASONS = [
+  "Customer Changed Mind",
+  "Duplicate / Test Order",
+  "Customer Unreachable",
+  "Out of Stock",
+  "Customer Refused COD / Price",
+  "Other (Custom)",
+] as const;
+
+export type OrderCancellationReason = (typeof ORDER_CANCELLATION_REASONS)[number];
+
 

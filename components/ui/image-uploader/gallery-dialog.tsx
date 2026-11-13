@@ -31,13 +31,6 @@ interface GalleryDialogProps {
   defaultFolder?: string;
 }
 
-function resolveInitialFolder(f?: string): string {
-  if (!f || f === "all") return "all";
-  if (f.startsWith("categories")) return "categories";
-  if (f.startsWith("products")) return "products";
-  return "all";
-}
-
 export function GalleryDialog({
   open,
   onOpenChange,
@@ -50,7 +43,7 @@ export function GalleryDialog({
   const [assets, setAssets] = React.useState<GalleryAsset[]>([]);
   const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [activeFolder, setActiveFolder] = React.useState<string>(() => resolveInitialFolder(defaultFolder));
+  const [activeFolder, setActiveFolder] = React.useState<string>("all");
 
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
@@ -91,8 +84,9 @@ export function GalleryDialog({
         }
 
         const items: GalleryAsset[] = (data.files || []).map((file: any) => ({
+          id: file.id,
           name: file.name,
-          path: file.publicUrl, // Store full ImageKit CDN URL as path
+          path: file.path || file.publicUrl,
           publicUrl: file.publicUrl,
           size: file.size,
           createdAt: file.createdAt,
@@ -138,24 +132,25 @@ export function GalleryDialog({
   };
 
   const toggleSelect = (asset: GalleryAsset) => {
+    const key = asset.publicUrl || asset.path;
     setSelectedPaths((prev) => {
       const next = new Set(prev);
       if (multiple) {
-        if (next.has(asset.path)) {
-          next.delete(asset.path);
+        if (next.has(key)) {
+          next.delete(key);
         } else {
-          next.add(asset.path);
+          next.add(key);
         }
       } else {
         next.clear();
-        next.add(asset.path);
+        next.add(key);
       }
       return next;
     });
   };
 
   const handleConfirm = () => {
-    const chosenAssets = assets.filter((a) => selectedPaths.has(a.path));
+    const chosenAssets = assets.filter((a) => selectedPaths.has(a.publicUrl) || selectedPaths.has(a.path));
     const items: UploadedImage[] = chosenAssets.map((asset, idx) => ({
       id: `gallery-${Date.now()}-${idx}`,
       url: asset.publicUrl,
@@ -275,10 +270,10 @@ export function GalleryDialog({
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
               {filteredAssets.map((asset) => {
-                const isSelected = selectedPaths.has(asset.path);
+                const isSelected = selectedPaths.has(asset.publicUrl) || selectedPaths.has(asset.path);
                 return (
                   <div
-                    key={asset.path}
+                    key={asset.id || asset.publicUrl || asset.path}
                     onClick={() => toggleSelect(asset)}
                     onDoubleClick={() => {
                       if (!multiple) {

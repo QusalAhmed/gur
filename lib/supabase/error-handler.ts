@@ -467,18 +467,7 @@ export function validateOrderStatusTransition(
     return { valid: true };
   }
 
-  // 2. Division and district are mandatory to change order status
-  const trimmedDivision = (division || "").trim();
-  const trimmedDistrict = (district || "").trim();
-  if (!trimmedDivision || !trimmedDistrict) {
-    return {
-      valid: false,
-      code: "GEO_LOCATION_REQUIRED",
-      reason: "Delivery division and district are required before changing order status.",
-    };
-  }
-
-  // 3. Already final
+  // 2. Already final
   if (normalizedCurrent === "cancelled" || normalizedCurrent === "returned") {
     return {
       valid: false,
@@ -487,7 +476,7 @@ export function validateOrderStatusTransition(
     };
   }
 
-  // 3. Cancelled validation
+  // 3. Cancelled validation - Cancellation reason is the ONLY required parameter
   if (normalizedTarget === "cancelled") {
     if (normalizedCurrent === "shipped" || normalizedCurrent === "delivered") {
       return {
@@ -496,17 +485,26 @@ export function validateOrderStatusTransition(
         reason: `Orders already ${normalizedCurrent} cannot be cancelled. Use 'Returned' if the product was returned.`,
       };
     }
-    if (cancelReason !== undefined && cancelReason !== null) {
-      const trimmedReason = cancelReason.trim();
-      if (trimmedReason.length < 3) {
-        return {
-          valid: false,
-          code: "CANCEL_REASON_REQUIRED",
-          reason: "Cancellation reason is required (minimum 3 characters).",
-        };
-      }
+    const trimmedReason = (cancelReason || "").trim();
+    if (trimmedReason.length < 3) {
+      return {
+        valid: false,
+        code: "CANCEL_REASON_REQUIRED",
+        reason: "Cancellation reason is required (minimum 3 characters).",
+      };
     }
     return { valid: true };
+  }
+
+  // 4. Division and district are mandatory to change order status
+  const trimmedDivision = (division || "").trim();
+  const trimmedDistrict = (district || "").trim();
+  if (!trimmedDivision || !trimmedDistrict) {
+    return {
+      valid: false,
+      code: "GEO_LOCATION_REQUIRED",
+      reason: "Delivery division and district are required before changing order status.",
+    };
   }
 
   // 4. Returned validation

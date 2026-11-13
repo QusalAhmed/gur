@@ -986,7 +986,7 @@ async function updateOrderStatusWithSession(
       dbRow?.shipping_address?.district ||
       ""
     ).trim();
-    if (!orderDivision || !orderDistrict) {
+    if (newStatus !== "cancelled" && (!orderDivision || !orderDistrict)) {
       return {
         success: false,
         error: `Cannot change status for Order ${resolvedOrder.order_number || orderId}: Delivery division and district are required before changing order status.`,
@@ -1074,7 +1074,7 @@ async function updateOrderStatusWithSession(
     }
 
     if (newStatus === "cancelled") {
-      if (cancelReason) updatePayload.cancel_reason = cancelReason;
+      updatePayload.cancel_reason = cancelReason?.trim() || "";
       updatePayload.cancelled_at = nowIso;
     } else if (newStatus === "confirmed") {
       updatePayload.confirmed_at = nowIso;
