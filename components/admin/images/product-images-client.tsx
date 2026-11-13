@@ -344,7 +344,7 @@ export function ProductImagesClient() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/80 pb-5"
       >
         <div className="flex items-center gap-3.5">
-          <Link href="/admin/products">
+          <Link href="/products">
             <Button
               variant="outline"
               size="icon"

@@ -140,25 +140,71 @@ function matchesRoute(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix + "/");
 }
 
+export const KNOWN_ADMIN_SECTIONS: ReadonlySet<string> = new Set([
+  "login",
+  "unauthorized",
+  "orders",
+  "products",
+  "inventory",
+  "batches",
+  "warehouses",
+  "suppliers",
+  "customers",
+  "combos",
+  "categories",
+  "businesses",
+  "quotes",
+  "reviews",
+  "messages",
+  "payments",
+  "settings",
+  "shipping",
+  "coupons",
+  "staff",
+  "audit",
+  "outbox",
+  "analytics",
+  "incomplete",
+  "shipments",
+  "posts",
+  "faqs",
+]);
+
 /**
- * Validates that an admin post-login redirect stays within /admin and never loops to /admin/login.
+ * Validates that an admin post-login redirect stays on safe local paths and never loops to login.
  */
-export function sanitizeAdminRedirect(nextPath: string | null | undefined): string {
-  if (!nextPath || typeof nextPath !== "string") return "/admin";
+export function sanitizeAdminRedirect(nextPath: string | null | undefined, fallback = "/admin"): string {
+  if (!nextPath || typeof nextPath !== "string") return fallback;
   const trimmed = nextPath.trim();
-  if (!trimmed.startsWith("/admin") || trimmed.startsWith("//") || trimmed.includes("\\")) {
-    return "/admin";
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.includes("\\") ||
+    trimmed.includes(":")
+  ) {
+    return fallback;
   }
+
+  const firstSegment = trimmed.split("/")[1]?.split("?")[0]?.toLowerCase();
+  const isAllowedAdminPath =
+    trimmed.startsWith("/admin") ||
+    trimmed === "/" ||
+    (firstSegment ? KNOWN_ADMIN_SECTIONS.has(firstSegment) : false);
+
+  if (!isAllowedAdminPath) {
+    return fallback;
+  }
+
   try {
     const parsed = new URL(trimmed, "http://localhost");
-    if (parsed.origin !== "http://localhost" || !parsed.pathname.startsWith("/admin")) {
-      return "/admin";
+    if (parsed.origin !== "http://localhost") {
+      return fallback;
     }
     const normalizedPath = parsed.pathname.replace(/\/+$/, "") || "/";
-    if (normalizedPath === "/admin/login") return "/admin";
+    if (normalizedPath === "/admin/login" || normalizedPath === "/login") return fallback;
     return parsed.pathname + parsed.search;
   } catch {
-    return "/admin";
+    return fallback;
   }
 }
 

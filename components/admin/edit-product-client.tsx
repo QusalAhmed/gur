@@ -72,7 +72,7 @@ export function EditProductClient({ id }: EditProductClientProps) {
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
           <Button variant="outline" asChild size="sm">
-            <Link href="/admin/products">
+            <Link href="/products">
               <ArrowLeft className="h-4 w-4 mr-2" /> Back to Products
             </Link>
           </Button>

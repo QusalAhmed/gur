@@ -166,7 +166,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
       }
       setIsLoading(false);
-      router.push("/admin/login");
+      const isSubdomain =
+        typeof window !== "undefined" &&
+        (window.location.hostname.startsWith("admin.") ||
+          window.location.hostname === "admin.khatikhejurgur.shop");
+      router.push(isSubdomain ? "/login" : "/admin/login");
     }
   }, [router]);
 

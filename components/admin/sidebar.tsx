@@ -280,6 +280,13 @@ function useMounted() {
   );
 }
 
+function toCleanPath(href: string): string {
+  if (href === "/admin") return "/";
+  if (href.startsWith("/admin?")) return href.replace(/^\/admin/, "");
+  if (href.startsWith("/admin/")) return href.replace(/^\/admin/, "");
+  return href;
+}
+
 export function AdminSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -324,7 +331,7 @@ export function AdminSidebar() {
       {/* Brand Header */}
       <SidebarHeader className="border-b border-border/60 px-4 py-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2.5">
         <Link
-          href="/admin"
+          href={toCleanPath("/admin")}
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
           title={brandName}
         >
@@ -375,33 +382,36 @@ export function AdminSidebar() {
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const [itemPath, itemQuery] = item.href.split("?");
+                  const normalizedPathname = pathname.startsWith("/admin")
+                    ? pathname
+                    : `/admin${pathname === "/" ? "" : pathname}`;
 
                   let isActive = false;
                   if (item.href === "/admin") {
-                    isActive = pathname === "/admin";
+                    isActive = normalizedPathname === "/admin";
                   } else if (itemQuery) {
                     const itemParams = new URLSearchParams(itemQuery);
-                    const matchesPath = pathname === itemPath;
+                    const matchesPath = normalizedPathname === itemPath;
                     const matchesParams = Array.from(itemParams.entries()).every(
                       ([k, v]) => searchParams?.get(k) === v
                     );
                     isActive = matchesPath && matchesParams;
                   } else {
-                    if (pathname === itemPath) {
+                    if (normalizedPathname === itemPath) {
                       const hasStatusIncomplete =
-                        pathname === "/admin/orders" &&
+                        normalizedPathname === "/admin/orders" &&
                         searchParams?.get("status") === "incomplete_order";
                       isActive = !hasStatusIncomplete;
-                    } else if (pathname.startsWith(itemPath + "/")) {
+                    } else if (normalizedPathname.startsWith(itemPath + "/")) {
                       // Only treat parent item as active if there is no other specific sidebar item matching pathname
-                      const hasSpecificSidebarMatch = allItemPaths.has(pathname);
+                      const hasSpecificSidebarMatch = allItemPaths.has(normalizedPathname);
                       isActive = !hasSpecificSidebarMatch;
                     }
 
                     // Explicit safeguard: when on /admin/products/reorder or /admin/products/images, do not highlight /admin/products or /admin/orders
                     if (
-                      (pathname.startsWith("/admin/products/reorder") ||
-                        pathname.startsWith("/admin/products/images")) &&
+                      (normalizedPathname.startsWith("/admin/products/reorder") ||
+                        normalizedPathname.startsWith("/admin/products/images")) &&
                       (itemPath === "/admin/products" || itemPath === "/admin/orders")
                     ) {
                       isActive = false;
@@ -440,7 +450,7 @@ export function AdminSidebar() {
                         )}
                       >
                         <Link
-                          href={item.href}
+                          href={toCleanPath(item.href)}
                           className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center"
                         >
                           <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:gap-0 min-w-0">

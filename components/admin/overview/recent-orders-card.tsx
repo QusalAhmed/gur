@@ -94,13 +94,13 @@ export function RecentOrdersCard({ orders }: RecentOrdersCardProps) {
         </div>
         <div className="flex items-center gap-2">
           <Button asChild size="sm" variant="outline" className="h-7 text-xs gap-1 border-border/80">
-            <Link href="/admin/orders?create=true">
+            <Link href="/orders?create=true">
               <Plus className="h-3.5 w-3.5" />
               New Order
             </Link>
           </Button>
           <Button asChild size="sm" variant="ghost" className="h-7 text-xs gap-1 text-amber-600 dark:text-amber-400">
-            <Link href="/admin/orders">
+            <Link href="/orders">
               View all
               <ArrowUpRight className="h-3 w-3" />
             </Link>
@@ -119,7 +119,7 @@ export function RecentOrdersCard({ orders }: RecentOrdersCardProps) {
               Orders placed on the storefront or via phone will appear here.
             </p>
             <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs">
-              <Link href="/admin/orders?create=true">
+              <Link href="/orders?create=true">
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Place First Order
               </Link>

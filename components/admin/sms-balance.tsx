@@ -221,7 +221,7 @@ export function AdminSmsBalance() {
         {/* Action Links */}
         <div className="grid grid-cols-2 gap-2 pt-1 border-t">
           <Link
-            href="/admin/settings"
+            href="/settings"
             className="inline-flex items-center justify-center gap-1.5 h-7 px-2 rounded-md border text-[11px] font-medium hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <Settings className="h-3 w-3" />

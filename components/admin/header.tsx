@@ -54,9 +54,9 @@ function useMounted() {
 
 function getBreadcrumb(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
-  if (segments.length <= 1) return "Overview";
-  return segments
-    .slice(1)
+  const relevantSegments = segments[0] === "admin" ? segments.slice(1) : segments;
+  if (relevantSegments.length === 0) return "Overview";
+  return relevantSegments
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " "))
     .join(" › ");
 }

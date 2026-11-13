@@ -834,7 +834,7 @@ export function ProductsClient() {
             asChild
             className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs h-8 text-xs cursor-pointer"
           >
-            <Link href="/admin/products/new">
+            <Link href="/products/new">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               Add Product
             </Link>

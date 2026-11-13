@@ -560,7 +560,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
             asChild
             className="h-9 w-9 rounded-lg hover:bg-muted"
           >
-            <Link href="/admin/products" title="Back to products list">
+            <Link href="/products" title="Back to products list">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -598,7 +598,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild className="h-9">
-            <Link href="/admin/products">Cancel</Link>
+            <Link href="/products">Cancel</Link>
           </Button>
 
           {status !== "active" && (

@@ -24,13 +24,13 @@ export default function UnauthorizedPage() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
             <Button asChild variant="default" className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white">
-              <Link href="/admin">
+              <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Dashboard
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/admin/login">
+              <Link href="/login">
                 <LogOut className="mr-2 h-4 w-4" />
                 Switch Account
               </Link>

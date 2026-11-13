@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -32,10 +31,6 @@ import { useAdminAuth } from "@/components/admin/auth-context";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 
 function AdminLoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextUrl = searchParams.get("next") || "/admin";
-
   const { login } = useAdminAuth();
   const { storeName, storeNameBn, email: storeEmail, logoUrl } = useSiteSettings();
   const [mounted, setMounted] = useState(false);

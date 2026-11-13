@@ -25,7 +25,7 @@ export function TopProductsCard({ products }: TopProductsCardProps) {
           <CardDescription className="text-xs">Highest revenue molasses by sales volume</CardDescription>
         </div>
         <Link
-          href="/admin/products"
+          href="/products"
           className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 flex items-center gap-0.5 font-medium"
         >
           View all

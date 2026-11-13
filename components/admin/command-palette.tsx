@@ -75,7 +75,8 @@ export function CommandPalette({
   const handleSelect = (url: string) => {
     onOpenChange(false);
     setQuery("");
-    router.push(url);
+    const cleanUrl = url === "/admin" ? "/" : url.startsWith("/admin/") ? url.replace(/^\/admin/, "") : url;
+    router.push(cleanUrl);
   };
 
   const navItems = [

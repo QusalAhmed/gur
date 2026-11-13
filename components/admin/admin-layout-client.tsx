@@ -23,7 +23,11 @@ export function AdminLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isBareLayout = pathname === "/admin/login" || pathname === "/admin/orders/print";
+  const isBareLayout =
+    pathname === "/login" ||
+    pathname === "/admin/login" ||
+    pathname === "/orders/print" ||
+    pathname === "/admin/orders/print";
 
   return (
     <TooltipProvider>

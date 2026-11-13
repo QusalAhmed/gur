@@ -89,7 +89,7 @@ export function KpiCards({ kpis, deltas }: KpiCardsProps) {
       title: "Low Stock Alert",
       titleBn: "কম স্টক সতর্কবার্তা",
       value: kpis.low_stock_count.toString(),
-      href: "/admin/inventory?filter=low_stock",
+      href: "/inventory?filter=low_stock",
       icon: AlertTriangle,
       iconColor:
         kpis.low_stock_count > 0

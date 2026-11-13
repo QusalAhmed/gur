@@ -270,7 +270,7 @@ export function OrderDetailView({
       <div className="sticky top-14 z-20 -mx-3 sm:-mx-4 px-3 sm:px-4 py-2.5 bg-background/95 backdrop-blur-md border-b border-border/80 flex flex-wrap items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
-            <Link href="/admin/orders">
+            <Link href="/orders">
               <ArrowLeft className="mr-1 h-3.5 w-3.5" />
               Orders
             </Link>
