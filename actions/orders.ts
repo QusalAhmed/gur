@@ -38,6 +38,9 @@ import {
   type SteadfastConsignmentResult,
 } from "@/lib/steadfast";
 import { enqueueAndDispatch } from "@/lib/outbox";
+import { toZonedTime } from "date-fns-tz";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { DHAKA_TIMEZONE } from "@/lib/admin-format";
 import type { DbGeoDivision, DbGeoDistrict } from "@/lib/supabase/types";
 import type {
   CatalogProduct,
@@ -431,8 +434,27 @@ export async function getOrdersAction(
   const sortByInput = (params.sortBy || "placed_at").trim();
   const sortColumn = VALID_SORT_COLUMNS[sortByInput] || "placed_at";
   const isAscending = params.sortOrder === "asc";
-  const startDate = (params.startDate || params.from || "").trim();
-  const endDate = (params.endDate || params.to || "").trim();
+
+  const rawStart = (params.startDate || params.from || "").trim();
+  const rawEnd = (params.endDate || params.to || "").trim();
+  const isAllTime = rawStart.toLowerCase() === "all" || rawEnd.toLowerCase() === "all";
+
+  let startDate = "";
+  let endDate = "";
+
+  if (isAllTime) {
+    startDate = "";
+    endDate = "";
+  } else if (rawStart || rawEnd) {
+    startDate = rawStart;
+    endDate = rawEnd;
+  } else {
+    // Default to Last 30 Days (Asia/Dhaka timezone)
+    const nowDhaka = toZonedTime(new Date(), DHAKA_TIMEZONE);
+    const thirtyDaysAgo = startOfDay(subDays(nowDhaka, 29));
+    startDate = format(thirtyDaysAgo, "yyyy-MM-dd");
+    endDate = format(endOfDay(nowDhaka), "yyyy-MM-dd");
+  }
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;

@@ -218,8 +218,25 @@ describe("Customer Flow & Decoupled Customer Management (Approach B)", () => {
     expect(orderQueryCalls.statsLte[0]).toEqual(["placed_at", "2026-11-10T23:59:59.999+06:00"]);
   });
 
-  it("getOrdersAction without date range does not apply date filters (All Time)", async () => {
+  it("getOrdersAction without date range defaults to Last 30 Days", async () => {
     const result = await getOrdersAction({});
+
+    expect(result).toBeDefined();
+    // Should have applied 30-day start and end bounds
+    expect(orderQueryCalls.mainGte).toHaveLength(1);
+    expect(orderQueryCalls.mainGte[0][0]).toBe("placed_at");
+    expect(orderQueryCalls.mainGte[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00\+06:00$/);
+
+    expect(orderQueryCalls.mainLte).toHaveLength(1);
+    expect(orderQueryCalls.mainLte[0][0]).toBe("placed_at");
+    expect(orderQueryCalls.mainLte[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}T23:59:59\.999\+06:00$/);
+
+    expect(orderQueryCalls.statsGte).toHaveLength(1);
+    expect(orderQueryCalls.statsLte).toHaveLength(1);
+  });
+
+  it("getOrdersAction with explicit 'all' does not apply date filters (All Time)", async () => {
+    const result = await getOrdersAction({ from: "all" });
 
     expect(result).toBeDefined();
     expect(orderQueryCalls.mainGte).toHaveLength(0);

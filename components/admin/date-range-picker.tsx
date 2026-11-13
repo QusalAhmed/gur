@@ -36,13 +36,17 @@ export function DateRangePicker({
   const defaultFrom = format(startOfDay(subDays(nowInDhaka, 29)), "yyyy-MM-dd");
   const defaultTo = format(endOfDay(nowInDhaka), "yyyy-MM-dd");
 
-  const [customStart, setCustomStart] = React.useState(currentFrom || defaultFrom);
-  const [customEnd, setCustomEnd] = React.useState(currentTo || defaultTo);
+  const [customStart, setCustomStart] = React.useState(
+    currentFrom && currentFrom !== "all" ? currentFrom : defaultFrom
+  );
+  const [customEnd, setCustomEnd] = React.useState(
+    currentTo && currentTo !== "all" ? currentTo : defaultTo
+  );
 
   // Sync state if URL changes externally
   React.useEffect(() => {
-    if (currentFrom) setCustomStart(currentFrom);
-    if (currentTo) setCustomEnd(currentTo);
+    if (currentFrom && currentFrom !== "all") setCustomStart(currentFrom);
+    if (currentTo && currentTo !== "all") setCustomEnd(currentTo);
   }, [currentFrom, currentTo]);
 
   // Determine active preset
@@ -55,7 +59,9 @@ export function DateRangePicker({
   let activePreset: DateRangePreset = "custom";
 
   if (!currentFrom && !currentTo) {
-    activePreset = allowAllTime ? "all" : "30d";
+    activePreset = "30d";
+  } else if (currentFrom === "all" || currentTo === "all") {
+    activePreset = "all";
   } else if (currentFrom === todayStr && currentTo === todayStr) {
     activePreset = "today";
   } else if (currentFrom === yesterdayStr && currentTo === yesterdayStr) {
@@ -86,7 +92,7 @@ export function DateRangePicker({
   const handleSelectPreset = (preset: DateRangePreset) => {
     const today = format(nowInDhaka, "yyyy-MM-dd");
     if (preset === "all") {
-      applyRange(null, null);
+      applyRange("all", "all");
     } else if (preset === "today") {
       applyRange(today, today);
     } else if (preset === "yesterday") {
@@ -94,7 +100,8 @@ export function DateRangePicker({
     } else if (preset === "7d") {
       applyRange(sevenDaysAgoStr, today);
     } else if (preset === "30d") {
-      applyRange(thirtyDaysAgoStr, today);
+      // 30d is the default: clearing from and to resets back to default Last 30 Days cleanly
+      applyRange(null, null);
     } else if (preset === "this_month") {
       applyRange(startOfMonthStr, today);
     }
@@ -112,14 +119,14 @@ export function DateRangePicker({
   };
 
   // Label display
-  let displayLabel = allowAllTime ? "All Time" : "Last 30 Days";
+  let displayLabel = "Last 30 Days";
   if (activePreset === "all") displayLabel = "All Time";
   else if (activePreset === "today") displayLabel = "Today";
   else if (activePreset === "yesterday") displayLabel = "Yesterday";
   else if (activePreset === "7d") displayLabel = "Last 7 Days";
   else if (activePreset === "30d") displayLabel = "Last 30 Days";
   else if (activePreset === "this_month") displayLabel = "This Month";
-  else if (currentFrom && currentTo) {
+  else if (currentFrom && currentTo && currentFrom !== "all") {
     displayLabel = currentFrom === currentTo ? currentFrom : `${currentFrom} - ${currentTo}`;
   }
 
