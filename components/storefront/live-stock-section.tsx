@@ -28,8 +28,7 @@ export function LiveStockSection({
   onScrollToProducts,
 }: LiveStockSectionProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const isInView = useInView(sectionRef, { amount: 0.15, once: false });
-  const hasTriggeredInitialViewSync = useRef<boolean>(false);
+  const isInView = useInView(sectionRef, { amount: 0.15, once: true });
 
   const {
     todayStockKg,
@@ -46,14 +45,6 @@ export function LiveStockSection({
   } = useLiveStock(50);
 
   const isBn = lang === "bn";
-
-  // Trigger a fresh database fetch as soon as the section scrolls into view
-  useEffect(() => {
-    if (isInView && !hasTriggeredInitialViewSync.current) {
-      hasTriggeredInitialViewSync.current = true;
-      refresh();
-    }
-  }, [isInView, refresh]);
 
   return (
     <section

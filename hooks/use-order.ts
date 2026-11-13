@@ -22,6 +22,7 @@ export interface UseOrderOptions {
   initialData?: Order | null;
   staleTime?: number;
   refetchInterval?: number | false | ((query: Query<Order | null, Error, Order | null, ReturnType<typeof ORDER_QUERY_KEY>>) => number | false | undefined);
+  refetchOnWindowFocus?: boolean;
 }
 
 /**
@@ -56,6 +57,7 @@ export function useOrder(
     initialData: options?.initialData ?? undefined,
     staleTime: options?.staleTime ?? 1000 * 30, // 30 seconds default fresh cache
     refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
   });
 }
 

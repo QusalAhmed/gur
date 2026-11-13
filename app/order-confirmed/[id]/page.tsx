@@ -262,13 +262,9 @@ function OrderConfirmedContent() {
     mode: "public",
     publicToken: receiptToken,
     enabled: Boolean(orderId && receiptToken),
-    refetchInterval: (query) => {
-      const currentOrder = query.state.data;
-      if (currentOrder && currentOrder.status === "pending") {
-        return 4000;
-      }
-      return false;
-    },
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const handleCopyOrderNumber = () => {

@@ -57,6 +57,7 @@ import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-ord
 import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
+import { LiveStockSection } from "./live-stock-section";
 import type { Order } from "@/types/order";
 import {
   trackInitiateCheckout,
@@ -1129,6 +1130,14 @@ return (
             </form.Subscribe>
           </form>
         </div>
+      </div>
+
+      {/* Live Stock & Future Production Availability Section */}
+      <div className="mt-6 sm:mt-8">
+        <LiveStockSection
+          lang={lang}
+          onScrollToProducts={onScrollToProducts}
+        />
       </div>
     </div>
 

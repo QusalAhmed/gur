@@ -223,31 +223,13 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
   }, []);
 
-  // Initial fetch and polling refresh (no client DB subscriptions)
+  // Initial fetch on mount (no continuous polling or focus refetching)
   useEffect(() => {
     isMountedRef.current = true;
     fetchData(false);
 
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetchData(true);
-      }
-    }, 15_000);
-
-    const handleVisibilityOrFocus = () => {
-      if (document.visibilityState === "visible") {
-        fetchData(true);
-      }
-    };
-
-    window.addEventListener("focus", handleVisibilityOrFocus);
-    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
-
     return () => {
       isMountedRef.current = false;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", handleVisibilityOrFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
     };
   }, [fetchData]);
 
@@ -364,6 +346,10 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     return { projections: list, nextAvailableDay: nextAvailable };
   }, [dailyProductionKg, totalActiveOrdersKg, simulatedDemandKg, isSimulatedDemandEnabled, currentDate]);
 
+  const refresh = useCallback(async () => {
+    await fetchData(true);
+  }, [fetchData]);
+
   return {
     todayStockKg: 0, // Current stock is ALWAYS 0
     dailyProductionKg,
@@ -378,7 +364,7 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     isLiveConnected,
     isRefetching,
     lastUpdatedAt,
-    refresh: () => fetchData(true),
+    refresh,
   };
 }
 
