@@ -716,6 +716,7 @@ export async function placeStorefrontOrderAction(
           const insight = getOtherOrderInsight(o.status);
           return {
             ...o,
+            order_number: o.order_number || o.id,
             note: insight.note,
             detail_summary: `other order: ${insight.statusText}, note: ${insight.note}`,
           };

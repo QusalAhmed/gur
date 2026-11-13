@@ -171,7 +171,7 @@ import {
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
-import { getOtherOrderInsight, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
+import { getOtherOrderInsight, resolveOtherOrdersForDisplay, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
 export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
 
 const availableCatalogProducts: CatalogProduct[] = [
@@ -2368,50 +2368,8 @@ export function OrdersClient() {
           const order = row.original;
           const itemCount = (order.items || []).length;
 
-          // Find other orders with the same phone number
-          const digits = (order.phone || order.shipping_phone || "").replace(/\D/g, "");
-          const phoneKey = digits.length >= 10 ? digits.slice(-10) : digits;
-          const matchedByPhone = phoneKey ? phoneToOrdersMap.get(phoneKey) || [] : [];
-          const otherOrders = matchedByPhone.filter((o) => o.id !== order.id && o.order_number !== order.id);
-
-          // Check attribution.other_orders or attribution.other_order_numbers for any historical references
-          const attrOrders: any[] = Array.isArray(order.attribution?.other_orders)
-            ? (order.attribution.other_orders as any[]).filter(
-                (o: any) => o.id !== order.id && o.order_number !== order.id
-              )
-            : [];
-          const attrNumbers: string[] = Array.isArray(order.attribution?.other_order_numbers)
-            ? (order.attribution.other_order_numbers as string[]).filter(
-                (num: string) => num !== order.id && num !== order.order_number
-              )
-            : [];
-
-          const displayOtherOrders = [...otherOrders];
-          for (const ao of attrOrders) {
-            const num = ao.order_number || ao.id;
-            if (num && !displayOtherOrders.some((o) => o.id === num || o.order_number === num || o.id === ao.id)) {
-              displayOtherOrders.push({
-                id: num,
-                order_number: num,
-                status: ao.status || "pending",
-                date: ao.placed_at || ao.created_at || "",
-                customer: order.customer,
-                phone: order.phone,
-              } as Order);
-            }
-          }
-          for (const num of attrNumbers) {
-            if (!displayOtherOrders.some((o) => o.id === num || o.order_number === num)) {
-              displayOtherOrders.push({
-                id: num,
-                order_number: num,
-                status: "pending",
-                date: "",
-                customer: order.customer,
-                phone: order.phone,
-              } as Order);
-            }
-          }
+          // Find distinct other orders with deduplication between UUID and order ID
+          const displayOtherOrders = resolveOtherOrdersForDisplay(order, orders);
 
           return (
             <div className="space-y-1.5 min-w-[145px] max-w-[270px]" onClick={(e) => e.stopPropagation()}>
@@ -2454,7 +2412,14 @@ export function OrdersClient() {
                   </div>
                   <div className="space-y-1">
                     {displayOtherOrders.slice(0, 3).map((other) => {
-                      const fullOrder = orders.find((o) => o.id === other.id || o.order_number === other.id) || other;
+                      const fullOrder =
+                        orders.find(
+                          (o) =>
+                            o.id === other.id ||
+                            o.order_number === other.id ||
+                            (other.order_number && (o.id === other.order_number || o.order_number === other.order_number)) ||
+                            (other.uuid && (o.uuid === other.uuid || o.db_id === other.uuid || o.id === other.uuid))
+                        ) || other;
                       const insight = getOtherOrderInsight(fullOrder.status);
 
                       return (

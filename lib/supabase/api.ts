@@ -386,7 +386,9 @@ export function formatDbOrderRecord(data: any): Order {
   const recipName = data.shipping_address?.recipient_name || data.customer_name || "";
 
   return {
-    id: data.order_number,
+    id: data.order_number || data.id,
+    uuid: data.id,
+    db_id: data.id,
     order_number: data.order_number || data.id,
     customer: data.customer_name || "",
     phone: custPhone,

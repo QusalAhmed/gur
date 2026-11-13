@@ -104,6 +104,7 @@ import { updateAdminOrderAction } from "@/actions/orders";
 import { useOrder } from "@/hooks/use-order";
 import {
   getOtherOrderInsight,
+  resolveOtherOrdersForDisplay,
   type Order,
   type OrderItem,
   type OrderNote,
@@ -217,44 +218,9 @@ export function OrderDetailsSheet({
   const [isSmsModalOpen, setIsSmsModalOpen] = React.useState(false);
   const [steadfastError, setSteadfastError] = React.useState<string | null>(null);
 
-  // Check for other orders with the same customer phone
+  // Check for other orders with the same customer phone with deduplication
   const otherOrdersForSheet = React.useMemo(() => {
-    if (!order) return [];
-    const digits = (order.phone || order.shipping_phone || "").replace(/\D/g, "");
-    const phoneKey = digits.length >= 10 ? digits.slice(-10) : digits;
-    if (!phoneKey) return [];
-
-    const found: Order[] = [];
-    if (ordersList) {
-      for (const o of ordersList) {
-        if (o.id === order.id || o.order_number === order.id) continue;
-        const oDigits = (o.phone || o.shipping_phone || "").replace(/\D/g, "");
-        const oKey = oDigits.length >= 10 ? oDigits.slice(-10) : oDigits;
-        if (oKey === phoneKey) {
-          found.push(o);
-        }
-      }
-    }
-    // Also include any historical references from attribution.other_orders
-    const attrOrders: any[] = Array.isArray(order.attribution?.other_orders)
-      ? (order.attribution.other_orders as any[]).filter(
-          (ao: any) => ao.id !== order.id && ao.order_number !== order.id
-        )
-      : [];
-    for (const ao of attrOrders) {
-      const num = ao.order_number || ao.id;
-      if (num && !found.some((o) => o.id === num || o.order_number === num || o.id === ao.id)) {
-        found.push({
-          id: num,
-          order_number: num,
-          status: ao.status || "pending",
-          date: ao.placed_at || ao.created_at || "",
-          customer: order.customer,
-          phone: order.phone,
-        } as Order);
-      }
-    }
-    return found;
+    return resolveOtherOrdersForDisplay(order, ordersList);
   }, [order, ordersList]);
 
   const payloadSnapshot = React.useMemo(() => {

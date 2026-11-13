@@ -1168,7 +1168,7 @@ async function updateOrderStatusWithSession(
             resolvedOrder.customer || resolvedOrder.address?.recipient_name,
           grandTotal: resolvedOrder.grand_total,
           courierName:
-            courierName || resolvedOrder.courier_name || "Steadfast Courier",
+            courierName || resolvedOrder.courier_name || undefined,
           trackingCode,
           trackingUrl,
           triggerMetaCapi: true,

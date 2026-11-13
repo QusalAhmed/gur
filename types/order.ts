@@ -62,6 +62,8 @@ export interface OrderEvent {
 
 export interface Order {
   id: string;
+  uuid?: string;
+  db_id?: string;
   order_number?: string;
   customer: string;
   phone: string;
@@ -205,4 +207,266 @@ export function getOtherOrderInsight(status: string | undefined | null): OtherOr
       };
   }
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isOrderUuid(val: unknown): val is string {
+  return typeof val === "string" && UUID_REGEX.test(val.trim());
+}
+
+/**
+ * Deduplicates and resolves all other orders associated with a customer phone.
+ * Reconciles in-memory loaded orders, attribution.other_orders (which may contain UUIDs or order numbers),
+ * and attribution.other_order_numbers (which contain human-friendly order IDs).
+ *
+ * Guarantees:
+ * 1. Current order is never shown as its own "other order".
+ * 2. An order is never shown twice (e.g. once with UUID and once with order_number).
+ * 3. Human-readable order numbers (e.g. MOL-2611-01008) are prioritized over raw UUIDs.
+ * 4. Insight statuses, grand totals, and notes are preserved.
+ */
+export function resolveOtherOrdersForDisplay(
+  order: Partial<Order> | null | undefined,
+  ordersList?: Order[] | null
+): Order[] {
+  if (!order) return [];
+
+  // Normalize target order identity
+  const currentId = order.id ? String(order.id).trim() : "";
+  const currentNum = order.order_number ? String(order.order_number).trim() : "";
+  const currentUuid =
+    (order.uuid && String(order.uuid).trim()) ||
+    (order.db_id && String(order.db_id).trim()) ||
+    (isOrderUuid(currentId) ? currentId : "");
+
+  // Current phone normalization (last 10 digits)
+  const rawPhone = (order.phone || order.shipping_phone || order.address?.phone || "").replace(/\D/g, "");
+  const currentPhoneKey = rawPhone.length >= 10 ? rawPhone.slice(-10) : rawPhone;
+
+  const result: Order[] = [];
+
+  const isCurrentOrder = (
+    candidateId?: string | null,
+    candidateNum?: string | null,
+    candidateUuid?: string | null
+  ) => {
+    const cId = candidateId ? String(candidateId).trim() : "";
+    const cNum = candidateNum ? String(candidateNum).trim() : "";
+    const cUuid = candidateUuid ? String(candidateUuid).trim() : "";
+
+    if (currentId && (cId === currentId || cNum === currentId || cUuid === currentId)) return true;
+    if (currentNum && (cId === currentNum || cNum === currentNum || cUuid === currentNum)) return true;
+    if (currentUuid && (cId === currentUuid || cNum === currentUuid || cUuid === currentUuid)) return true;
+    return false;
+  };
+
+  const findExistingIndex = (
+    cId?: string | null,
+    cNum?: string | null,
+    cUuid?: string | null
+  ): number => {
+    const cIdStr = cId ? String(cId).trim() : "";
+    const cNumStr = cNum ? String(cNum).trim() : "";
+    const cUuidStr = cUuid ? String(cUuid).trim() : "";
+
+    return result.findIndex((item) => {
+      const itemId = item.id ? String(item.id).trim() : "";
+      const itemNum = item.order_number ? String(item.order_number).trim() : "";
+      const itemUuid = (item.uuid || item.db_id || (isOrderUuid(itemId) ? itemId : "")).trim();
+
+      if (cIdStr && (itemId === cIdStr || itemNum === cIdStr || itemUuid === cIdStr)) return true;
+      if (cNumStr && (itemId === cNumStr || itemNum === cNumStr || itemUuid === cNumStr)) return true;
+      if (cUuidStr && (itemId === cUuidStr || itemNum === cUuidStr || itemUuid === cUuidStr)) return true;
+      return false;
+    });
+  };
+
+  // 1. Gather other orders matching the same customer phone in loadedOrders
+  if (currentPhoneKey && ordersList && Array.isArray(ordersList)) {
+    for (const o of ordersList) {
+      const oId = String(o.id || "").trim();
+      const oNum = String(o.order_number || oId).trim();
+      const oUuid = (o.uuid || o.db_id || (isOrderUuid(oId) ? oId : "")).trim();
+
+      if (isCurrentOrder(oId, oNum, oUuid)) continue;
+
+      const oRawPhone = (o.phone || o.shipping_phone || o.address?.phone || "").replace(/\D/g, "");
+      const oPhoneKey = oRawPhone.length >= 10 ? oRawPhone.slice(-10) : oRawPhone;
+
+      if (oPhoneKey && oPhoneKey === currentPhoneKey) {
+        if (findExistingIndex(oId, oNum, oUuid) === -1) {
+          result.push({
+            ...o,
+            id: oNum || oId,
+            order_number: oNum || oId,
+            uuid: oUuid || undefined,
+            db_id: oUuid || undefined,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Parse attribution historical snapshots
+  const attrOrders: any[] = Array.isArray(order.attribution?.other_orders)
+    ? order.attribution.other_orders
+    : [];
+  const attrNumbers: string[] = Array.isArray(order.attribution?.other_order_numbers)
+    ? order.attribution.other_order_numbers
+    : [];
+
+  // 3. Process each historical order in attrOrders
+  attrOrders.forEach((ao: any, idx: number) => {
+    if (!ao || typeof ao !== "object") return;
+
+    const rawAoId = String(ao.id || "").trim();
+    const rawAoNum = String(ao.order_number || "").trim();
+    const aoIsUuid = isOrderUuid(rawAoId);
+
+    // Correlate human-readable order number:
+    // a) ao.order_number if explicitly present
+    // b) match against loaded orders by UUID
+    // c) match by array index with attrNumbers (constructed in lockstep query)
+    // d) fallback to ao.id if not a UUID
+    let resolvedOrderNumber: string | undefined = rawAoNum || undefined;
+
+    if (!resolvedOrderNumber && aoIsUuid && ordersList && Array.isArray(ordersList)) {
+      const found = ordersList.find(
+        (o) => (o.uuid && o.uuid === rawAoId) || (o.db_id && o.db_id === rawAoId) || o.id === rawAoId
+      );
+      if (found) {
+        resolvedOrderNumber = found.order_number || found.id;
+      }
+    }
+
+    if (!resolvedOrderNumber && attrNumbers[idx] && !isOrderUuid(attrNumbers[idx])) {
+      resolvedOrderNumber = String(attrNumbers[idx]).trim();
+    }
+
+    if (!resolvedOrderNumber && !aoIsUuid && rawAoId) {
+      resolvedOrderNumber = rawAoId;
+    }
+
+    const resolvedUuid: string | undefined =
+      aoIsUuid ? rawAoId : (order.uuid || order.db_id || undefined);
+
+    if (isCurrentOrder(rawAoId, resolvedOrderNumber, resolvedUuid)) return;
+
+    const existingIdx = findExistingIndex(rawAoId, resolvedOrderNumber, resolvedUuid);
+
+    if (existingIdx !== -1) {
+      const existing = result[existingIdx];
+      if (resolvedOrderNumber && isOrderUuid(existing.id)) {
+        existing.id = resolvedOrderNumber;
+        existing.order_number = resolvedOrderNumber;
+      }
+      if (resolvedUuid && !existing.uuid) {
+        existing.uuid = resolvedUuid;
+        existing.db_id = resolvedUuid;
+      }
+      if (ao.status && (!existing.status || existing.status === "pending")) {
+        existing.status = ao.status;
+      }
+      if (ao.placed_at || ao.created_at) {
+        existing.date = existing.date || ao.placed_at || ao.created_at;
+      }
+      if (ao.grand_total !== undefined && !existing.grand_total) {
+        existing.grand_total = Number(ao.grand_total);
+      }
+    } else {
+      const displayId = resolvedOrderNumber || rawAoId;
+      result.push({
+        id: displayId,
+        order_number: resolvedOrderNumber || displayId,
+        uuid: resolvedUuid,
+        db_id: resolvedUuid,
+        status: ao.status || "pending",
+        date: ao.placed_at || ao.created_at || "",
+        customer: order.customer || "",
+        phone: order.phone || "",
+        grand_total: Number(ao.grand_total) || 0,
+      } as Order);
+    }
+  });
+
+  // 4. Process attrNumbers to catch any order numbers not in attrOrders
+  attrNumbers.forEach((rawNum: string, idx: number) => {
+    const num = String(rawNum || "").trim();
+    if (!num) return;
+
+    if (isCurrentOrder(num, num)) return;
+
+    const existingIdx = findExistingIndex(num, num);
+    if (existingIdx !== -1) {
+      const existing = result[existingIdx];
+      if (isOrderUuid(existing.id) && !isOrderUuid(num)) {
+        existing.id = num;
+        existing.order_number = num;
+      }
+      return;
+    }
+
+    // Check if an existing entry was created from attrOrders[idx] where order_number was missing
+    if (attrOrders[idx] && isOrderUuid(attrOrders[idx].id)) {
+      const uuidIdx = findExistingIndex(attrOrders[idx].id);
+      if (uuidIdx !== -1) {
+        const existing = result[uuidIdx];
+        existing.id = num;
+        existing.order_number = num;
+        return;
+      }
+    }
+
+    result.push({
+      id: num,
+      order_number: num,
+      status: "pending",
+      date: "",
+      customer: order.customer || "",
+      phone: order.phone || "",
+    } as Order);
+  });
+
+  // 5. Final deduplication pass to ensure absolute uniqueness
+  const finalUnique: Order[] = [];
+  for (const item of result) {
+    const itemId = String(item.id || "").trim();
+    const itemNum = String(item.order_number || itemId).trim();
+    const itemUuid = (item.uuid || item.db_id || (isOrderUuid(itemId) ? itemId : "")).trim();
+
+    const dupIdx = finalUnique.findIndex((existing) => {
+      const exId = String(existing.id || "").trim();
+      const exNum = String(existing.order_number || exId).trim();
+      const exUuid = (existing.uuid || existing.db_id || (isOrderUuid(exId) ? exId : "")).trim();
+
+      if (itemId && (exId === itemId || exNum === itemId || exUuid === itemId)) return true;
+      if (itemNum && (exId === itemNum || exNum === itemNum || exUuid === itemNum)) return true;
+      if (itemUuid && (exId === itemUuid || exNum === itemUuid || exUuid === itemUuid)) return true;
+      return false;
+    });
+
+    if (dupIdx === -1) {
+      finalUnique.push(item);
+    } else {
+      const existing = finalUnique[dupIdx];
+      if (isOrderUuid(existing.id) && !isOrderUuid(itemId)) {
+        existing.id = itemId;
+        existing.order_number = itemNum || itemId;
+      }
+      if (itemUuid && !existing.uuid) {
+        existing.uuid = itemUuid;
+        existing.db_id = itemUuid;
+      }
+      if (item.status && (!existing.status || existing.status === "pending")) {
+        existing.status = item.status;
+      }
+      if (item.date && !existing.date) {
+        existing.date = item.date;
+      }
+    }
+  }
+
+  return finalUnique;
+}
+
 
