@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   Plus,
   Search,
-  Download,
   Eye,
   MoreHorizontal,
   Edit,
@@ -104,6 +103,7 @@ import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-d
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { useBatchSteadfastDeliveryRecords } from "@/hooks/use-steadfast-delivery-record";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
+import { DateRangePicker } from "@/components/admin/date-range-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -312,6 +312,8 @@ export function OrdersClient() {
   const paymentParam = searchParams?.get("payment") || "all";
   const sortByParam = searchParams?.get("sortBy") || "placed_at";
   const sortOrderParam = searchParams?.get("sortOrder") === "asc" ? "asc" : "desc";
+  const fromParam = searchParams?.get("from") || "";
+  const toParam = searchParams?.get("to") || "";
 
   const [page, setPage] = React.useState<number>(pageParam);
   const [pageSize, setPageSize] = React.useState<number>(pageSizeParam);
@@ -343,6 +345,8 @@ export function OrdersClient() {
       search?: string;
       sortBy?: string;
       sortOrder?: "asc" | "desc";
+      from?: string | null;
+      to?: string | null;
     }) => {
       const params = new URLSearchParams(searchParams?.toString() || "");
 
@@ -380,6 +384,15 @@ export function OrdersClient() {
       } else {
         params.delete("sortBy");
         params.delete("sortOrder");
+      }
+
+      if (updates.from !== undefined) {
+        if (updates.from) params.set("from", updates.from);
+        else params.delete("from");
+      }
+      if (updates.to !== undefined) {
+        if (updates.to) params.set("to", updates.to);
+        else params.delete("to");
       }
 
       const queryString = params.toString();
@@ -458,6 +471,8 @@ export function OrdersClient() {
         search: debouncedSearch,
         sortBy: activeSortBy,
         sortOrder: activeSortOrder,
+        from: fromParam || undefined,
+        to: toParam || undefined,
       },
     ],
     queryFn: () =>
@@ -470,6 +485,8 @@ export function OrdersClient() {
         search: debouncedSearch,
         sortBy: activeSortBy,
         sortOrder: activeSortOrder,
+        startDate: fromParam || undefined,
+        endDate: toParam || undefined,
       }),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -519,6 +536,8 @@ export function OrdersClient() {
             search: debouncedSearch,
             sortBy: activeSortBy,
             sortOrder: activeSortOrder,
+            from: fromParam || undefined,
+            to: toParam || undefined,
           },
         ],
         queryFn: () =>
@@ -531,6 +550,8 @@ export function OrdersClient() {
             search: debouncedSearch,
             sortBy: activeSortBy,
             sortOrder: activeSortOrder,
+            startDate: fromParam || undefined,
+            endDate: toParam || undefined,
           }),
       });
     }
@@ -549,6 +570,8 @@ export function OrdersClient() {
             search: debouncedSearch,
             sortBy: activeSortBy,
             sortOrder: activeSortOrder,
+            from: fromParam || undefined,
+            to: toParam || undefined,
           },
         ],
         queryFn: () =>
@@ -561,6 +584,8 @@ export function OrdersClient() {
             search: debouncedSearch,
             sortBy: activeSortBy,
             sortOrder: activeSortOrder,
+            startDate: fromParam || undefined,
+            endDate: toParam || undefined,
           }),
       });
     }
@@ -575,6 +600,8 @@ export function OrdersClient() {
     debouncedSearch,
     activeSortBy,
     activeSortOrder,
+    fromParam,
+    toParam,
     queryClient,
   ]);
 
@@ -2221,76 +2248,6 @@ export function OrdersClient() {
     deleteOrderMutation.mutate(deletingOrder.id);
   };
 
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = [
-      "Order ID",
-      "Customer",
-      "Phone",
-      "Alternative Phone",
-      "Recipient Name",
-      "Shipping Phone",
-      "District",
-      "Address",
-      "Items Count",
-      "Products",
-      "Status",
-      "Payment",
-      "Method",
-      "Channel",
-      "Courier",
-      "Grand Total (BDT)",
-      "Amount Paid",
-      "Due Balance",
-      "Date & Time",
-      "Customer Note (for seller)",
-      "Delivery Notes (for delivery man)",
-      "Packaging Notes (for packaging)",
-      "Internal Staff Notes",
-    ];
-    const rows = filteredOrders.map((o) => {
-      const delivNotes = (o.notes || []).filter((n) => n.type === "delivery").map((n) => n.text).join(" | ");
-      const packNotes = (o.notes || []).filter((n) => n.type === "packaging").map((n) => n.text).join(" | ");
-      const staffNotes = (o.notes || []).filter((n) => n.type === "internal").map((n) => n.text).join(" | ");
-      const recipientName = o.address?.recipient_name || o.recipient_name || o.customer || "";
-      const shippingPhone = o.address?.phone || o.shipping_phone || o.phone || "";
-      return [
-        o.id,
-        `"${o.customer || ""}"`,
-        `"${o.phone || ""}"`,
-        `"${o.alternative_phone || ""}"`,
-        `"${recipientName.replace(/"/g, '""')}"`,
-        `"${shippingPhone}"`,
-        `"${o.address?.district || ""}"`,
-        `"${(o.address?.address_line || "").replace(/"/g, '""')}"`,
-        (o.items || []).length,
-        `"${(o.items || []).map((i) => `${i.quantity}x ${i.product_name}`).join("; ")}"`,
-        o.status,
-        o.payment,
-        o.method,
-        o.channel,
-        `"${o.courier_name || "Unassigned"}"`,
-        o.grand_total,
-        o.amount_paid,
-        Math.max(0, o.grand_total - o.amount_paid),
-        formatDateTime(o.date),
-        `"${(o.customer_note || "").replace(/"/g, '""')}"`,
-        `"${delivNotes.replace(/"/g, '""')}"`,
-        `"${packNotes.replace(/"/g, '""')}"`,
-        `"${staffNotes.replace(/"/g, '""')}"`,
-      ];
-    });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `gur_orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast(`Exported ${filteredOrders.length} orders to CSV`, "info");
-  };
-
   const channelBadgeColors: Record<string, string> = {
     web: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
     phone: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800",
@@ -3290,6 +3247,7 @@ export function OrdersClient() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <DateRangePicker allowAllTime={true} />
           <Button
             variant="outline"
             size="sm"
@@ -3300,10 +3258,6 @@ export function OrdersClient() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isOrdersFetching ? "animate-spin" : ""}`} />
             Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportCSV} className="cursor-pointer">
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
           </Button>
           <Button
             id="btn-open-create-order-dialog"
@@ -3654,7 +3608,7 @@ export function OrdersClient() {
                     </SelectContent>
                   </Select>
 
-                  {(searchQuery || channelFilter !== "all" || paymentFilter !== "all" || selectedTab !== "all") && (
+                  {(searchQuery || channelFilter !== "all" || paymentFilter !== "all" || selectedTab !== "all" || fromParam || toParam) && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -3666,7 +3620,7 @@ export function OrdersClient() {
                         setPaymentFilter("all");
                         setSelectedTab("all");
                         setPage(1);
-                        updateUrl({ search: "", channel: "all", payment: "all", status: "all", page: 1 });
+                        updateUrl({ search: "", channel: "all", payment: "all", status: "all", from: null, to: null, page: 1 });
                       }}
                       className="h-9 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
                     >

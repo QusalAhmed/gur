@@ -273,9 +273,25 @@ export interface DbOrderEvent {
   created_at: string;
 }
 
+export interface DbCustomer {
+  id: string;
+  user_id?: string | null;
+  phone: string;
+  full_name?: string | null;
+  email?: string | null;
+  default_address?: Record<string, any> | null;
+  notes?: string | null;
+  total_orders: number;
+  total_spent: number;
+  last_order_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DbOrder {
   id: string;
   order_number: string;
+  customer_id?: string | null;
   user_id?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;

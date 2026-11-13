@@ -49,6 +49,7 @@ export interface StorefrontOrderResult {
   orderId?: string;
   orderNumber?: string;
   publicToken?: string;
+  customerId?: string;
   status?: "incomplete_order" | "pending";
   grandTotal?: number;
   subtotal?: number;
@@ -575,6 +576,7 @@ export async function placeStorefrontOrderAction(
             orderId: rpcData.order_id,
             orderNumber: rpcData.order_number,
             publicToken: resolvedPublicToken,
+            customerId: rpcData.customer_id || undefined,
             status: rpcData.status,
             grandTotal: Number(rpcData.grand_total) || 0,
             subtotal: Number(rpcData.subtotal) || 0,

@@ -56,6 +56,10 @@ export interface GetOrdersParams {
   search?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  startDate?: string;
+  endDate?: string;
+  from?: string;
+  to?: string;
 }
 
 export interface StatusCounts {
@@ -427,6 +431,8 @@ export async function getOrdersAction(
   const sortByInput = (params.sortBy || "placed_at").trim();
   const sortColumn = VALID_SORT_COLUMNS[sortByInput] || "placed_at";
   const isAscending = params.sortOrder === "asc";
+  const startDate = (params.startDate || params.from || "").trim();
+  const endDate = (params.endDate || params.to || "").trim();
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -446,6 +452,16 @@ export async function getOrdersAction(
 
     if (payment && payment !== "all") {
       q = q.eq("payment_status", payment);
+    }
+
+    if (startDate) {
+      const startIso = startDate.includes("T") ? startDate : `${startDate}T00:00:00+06:00`;
+      q = q.gte("placed_at", startIso);
+    }
+
+    if (endDate) {
+      const endIso = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999+06:00`;
+      q = q.lte("placed_at", endIso);
     }
 
     if (cleanSearch) {
@@ -506,7 +522,18 @@ export async function getOrdersAction(
       }
       return res;
     }),
-    client.from("orders").select("status, grand_total"),
+    (() => {
+      let sq = client.from("orders").select("status, grand_total");
+      if (startDate) {
+        const startIso = startDate.includes("T") ? startDate : `${startDate}T00:00:00+06:00`;
+        sq = sq.gte("placed_at", startIso);
+      }
+      if (endDate) {
+        const endIso = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999+06:00`;
+        sq = sq.lte("placed_at", endIso);
+      }
+      return sq;
+    })(),
   ]);
 
   let rawOrders: any[] = [];

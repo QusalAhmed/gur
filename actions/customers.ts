@@ -51,17 +51,12 @@ export async function getAdminCustomersAction(): Promise<{
     await assertStaffRole(["owner", "admin", "manager", "support"]);
     const supabase = getSupabaseAdmin();
 
-    const [profilesRes, ordersRes, businessesRes, membersRes] = await Promise.all([
+    const [customersRes, businessesRes, membersRes] = await Promise.all([
       supabase
-        .from("profiles")
-        .select("id, full_name, phone, account_type, created_at")
+        .from("customers")
+        .select("id, full_name, phone, email, total_orders, total_spent, last_order_at, user_id, created_at")
         .order("created_at", { ascending: false })
-        .limit(200),
-
-      supabase
-        .from("orders")
-        .select("id, user_id, customer_phone, grand_total, status, placed_at")
-        .order("placed_at", { ascending: false }),
+        .limit(500),
 
       supabase
         .from("business_accounts")
@@ -88,49 +83,22 @@ export async function getAdminCustomersAction(): Promise<{
       supabase.from("business_members").select("business_id, user_id"),
     ]);
 
-    const rawProfiles = profilesRes.data || [];
-    const rawOrders = ordersRes.data || [];
+    const rawCustomers = customersRes.data || [];
     const rawBusinesses = businessesRes.data || [];
     const rawMembers = membersRes.data || [];
 
-    // Aggregate orders per customer (by user_id or phone)
-    const userOrderStats = new Map<string, { count: number; spent: number; lastOrder: string }>();
-
-    rawOrders.forEach((o) => {
-      const keys = [o.user_id, o.customer_phone].filter(Boolean) as string[];
-      keys.forEach((k) => {
-        const existing = userOrderStats.get(k) || { count: 0, spent: 0, lastOrder: "" };
-        existing.count += 1;
-        if (o.status !== "cancelled" && o.status !== "returned") {
-          existing.spent += Number(o.grand_total || 0);
-        }
-        if (!existing.lastOrder || new Date(o.placed_at) > new Date(existing.lastOrder)) {
-          existing.lastOrder = o.placed_at;
-        }
-        userOrderStats.set(k, existing);
-      });
-    });
-
-    const customers: CustomerItem[] = rawProfiles.map((p) => {
-      const stats = userOrderStats.get(p.id) || (p.phone ? userOrderStats.get(p.phone) : null) || {
-        count: 0,
-        spent: 0,
-        lastOrder: "",
-      };
-
-      return {
-        id: p.id,
-        name: p.full_name || "Anonymous Customer",
-        email: "",
-        phone: p.phone || "N/A",
-        type: p.account_type === "business" ? "business" : "individual",
-        orders: stats.count,
-        spent: `৳ ${stats.spent.toLocaleString("en-BD")}`,
-        spentNumeric: stats.spent,
-        joined: p.created_at,
-        lastOrder: stats.lastOrder || p.created_at,
-      };
-    });
+    const customers: CustomerItem[] = rawCustomers.map((c) => ({
+      id: c.id,
+      name: c.full_name || "Customer",
+      email: c.email || "",
+      phone: c.phone || "N/A",
+      type: "individual",
+      orders: c.total_orders || 0,
+      spent: `৳ ${Number(c.total_spent || 0).toLocaleString("en-BD")}`,
+      spentNumeric: Number(c.total_spent || 0),
+      joined: c.created_at,
+      lastOrder: c.last_order_at || c.created_at,
+    }));
 
     // Count members per business
     const memberCounts = new Map<string, number>();
@@ -286,7 +254,7 @@ export async function deleteCustomerAction(id: string): Promise<{ success: boole
     }
     const supabase = getSupabaseAdmin();
 
-    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    const { error } = await supabase.from("customers").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
 
     revalidatePath("/admin/customers");

@@ -181,6 +181,36 @@ export async function searchCustomerByPhoneAction(
     }
 
     if (!profile) {
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("id, full_name, phone, email, default_address")
+        .or(orClauses.join(","))
+        .limit(1)
+        .maybeSingle();
+
+      if (customer) {
+        const addr = (customer.default_address as Record<string, any>) || {};
+        return {
+          ok: true,
+          data: {
+            id: customer.id,
+            name: customer.full_name || "",
+            phone: customer.phone || "",
+            email: customer.email || null,
+            businessId: null,
+            businessName: null,
+            address: addr.address_line
+              ? {
+                  districtId: null,
+                  upazila: null,
+                  addressLine: addr.address_line,
+                  postalCode: null,
+                }
+              : null,
+          },
+        };
+      }
+
       return { ok: true, data: null };
     }
 

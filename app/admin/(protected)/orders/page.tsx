@@ -32,6 +32,8 @@ async function OrdersDataLoader({ searchParams }: OrdersPageProps) {
   const search = typeof resolvedSearchParams?.search === "string" ? resolvedSearchParams.search : "";
   const sortBy = typeof resolvedSearchParams?.sortBy === "string" ? resolvedSearchParams.sortBy : "placed_at";
   const sortOrder = resolvedSearchParams?.sortOrder === "asc" ? "asc" : "desc";
+  const fromDate = typeof resolvedSearchParams?.from === "string" ? resolvedSearchParams.from : undefined;
+  const toDate = typeof resolvedSearchParams?.to === "string" ? resolvedSearchParams.to : undefined;
 
   const queryClient = getQueryClient();
 
@@ -50,6 +52,8 @@ async function OrdersDataLoader({ searchParams }: OrdersPageProps) {
           search,
           sortBy,
           sortOrder,
+          from: fromDate,
+          to: toDate,
         },
       ],
       queryFn: () =>
@@ -62,6 +66,8 @@ async function OrdersDataLoader({ searchParams }: OrdersPageProps) {
           search,
           sortBy,
           sortOrder,
+          startDate: fromDate,
+          endDate: toDate,
         }),
     }),
     queryClient.prefetchQuery({
