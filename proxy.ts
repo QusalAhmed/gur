@@ -12,6 +12,36 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const KNOWN_ADMIN_SECTIONS = new Set([
+  "login",
+  "unauthorized",
+  "orders",
+  "products",
+  "inventory",
+  "batches",
+  "warehouses",
+  "suppliers",
+  "customers",
+  "combos",
+  "categories",
+  "businesses",
+  "quotes",
+  "reviews",
+  "messages",
+  "payments",
+  "settings",
+  "shipping",
+  "coupons",
+  "staff",
+  "audit",
+  "outbox",
+  "analytics",
+  "incomplete",
+  "shipments",
+  "posts",
+  "faqs",
+]);
+
 async function resolveVerifiedStaffRole(request: NextRequest): Promise<AdminRole | null> {
   let adminClient;
   try {
@@ -101,8 +131,58 @@ async function resolveVerifiedStaffRole(request: NextRequest): Promise<AdminRole
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const host = request.headers.get("host")?.toLowerCase() || "";
+  const hostname = host.split(":")[0];
 
-  // Allow Admin Auth endpoints (/api/admin/auth/*)
+  const isAdminSubdomain =
+    hostname === "admin.khatikhejurgur.shop" ||
+    hostname.startsWith("admin.");
+
+  const isMainStorefront =
+    hostname === "khatikhejurgur.shop" ||
+    hostname === "www.khatikhejurgur.shop";
+
+  // 1. If accessing /admin on the main production domain, redirect permanently (308) to admin subdomain
+  if (isMainStorefront && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
+    const adminUrl = new URL(pathname + (search || ""), "https://admin.khatikhejurgur.shop");
+    return NextResponse.redirect(adminUrl, { status: 308 });
+  }
+
+  // 2. Subdomain routing for admin.khatikhejurgur.shop (or local admin.localhost)
+  if (isAdminSubdomain) {
+    // A) Root "/" on admin subdomain redirects to "/admin"
+    if (pathname === "/") {
+      const targetUrl = new URL("/admin", request.url);
+      return NextResponse.redirect(targetUrl);
+    }
+
+    // B) Known shorthand admin paths (e.g. /login, /orders, /products, etc.) redirect to /admin/*
+    const firstSegment = pathname.split("/")[1]?.toLowerCase();
+    if (firstSegment && KNOWN_ADMIN_SECTIONS.has(firstSegment)) {
+      const targetUrl = new URL(`/admin${pathname}${search || ""}`, request.url);
+      return NextResponse.redirect(targetUrl);
+    }
+
+    // C) Customer storefront routes on the admin subdomain redirect to the main storefront
+    if (!pathname.startsWith("/admin") && !pathname.startsWith("/api")) {
+      const targetOrigin = hostname.endsWith("khatikhejurgur.shop")
+        ? "https://khatikhejurgur.shop"
+        : `http://${host.replace(/^admin\./, "")}`;
+      const storefrontUrl = new URL(pathname + (search || ""), targetOrigin);
+      return NextResponse.redirect(storefrontUrl);
+    }
+  }
+
+  // 3. Early pass-through for public storefront routes:
+  // Avoid running admin staff role lookups & database queries on public routes
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isAdminApi = pathname.startsWith("/api/admin");
+
+  if (!isAdminPath && !isAdminApi) {
+    return NextResponse.next();
+  }
+
+  // 4. Allow Admin Auth endpoints (/api/admin/auth/*)
   if (pathname.startsWith("/api/admin/auth")) {
     const res = NextResponse.next();
     res.headers.set("Cache-Control", "no-store");
@@ -112,7 +192,7 @@ export async function proxy(request: NextRequest) {
   const staffRole = await resolveVerifiedStaffRole(request);
   const isAuthenticated = staffRole !== null;
 
-  // 1. If visiting /admin/login while authenticated as verified staff, redirect safely
+  // 5. If visiting /admin/login while authenticated as verified staff, redirect safely
   if (pathname === "/admin/login") {
     if (isAuthenticated) {
       const next = sanitizeAdminRedirect(request.nextUrl.searchParams.get("next"));
@@ -125,14 +205,14 @@ export async function proxy(request: NextRequest) {
     return res;
   }
 
-  // 2. Allow /admin/unauthorized without triggering redirect loops
+  // 6. Allow /admin/unauthorized without triggering redirect loops
   if (pathname === "/admin/unauthorized") {
     const res = NextResponse.next();
     res.headers.set("Cache-Control", "no-store");
     return res;
   }
 
-  // 3. Protect Admin API routes (/api/admin/*)
+  // 7. Protect Admin API routes (/api/admin/*)
   if (pathname.startsWith("/api/admin")) {
     if (!isAuthenticated) {
       return NextResponse.json(
@@ -145,7 +225,7 @@ export async function proxy(request: NextRequest) {
     return res;
   }
 
-  // 4. Protect all other Admin routes (/admin, /admin/orders, etc.)
+  // 8. Protect all other Admin routes (/admin, /admin/orders, etc.)
   if (pathname.startsWith("/admin")) {
     if (!staffRole) {
       const loginUrl = new URL("/admin/login", request.url);
@@ -173,5 +253,14 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - static image/font assets
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
