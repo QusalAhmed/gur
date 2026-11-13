@@ -171,7 +171,7 @@ import {
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
-import { getOtherOrderInsight, resolveOtherOrdersForDisplay, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
+import { getOtherOrderInsight, resolveOtherOrdersForDisplay, ORDER_CANCELLATION_REASONS, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
 export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
 
 const availableCatalogProducts: CatalogProduct[] = [
@@ -4066,9 +4066,41 @@ export function OrdersClient() {
             {/* If Cancelled or Returned, require reason */}
             {(newStatus === "cancelled" || newStatus === "returned") && (
               <div className="space-y-1.5 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">
-                <Label htmlFor="cancel_reason" className="text-rose-900 dark:text-rose-200">
-                  Reason for {newStatus === "returned" ? "Return" : "Cancellation"}
+                <Label htmlFor="cancel_reason" className="text-rose-900 dark:text-rose-200 font-medium text-xs">
+                  Reason for {newStatus === "returned" ? "Return" : "Cancellation"}{" "}
+                  <span className="text-destructive font-bold">*</span>
                 </Label>
+
+                {newStatus === "cancelled" && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5 pb-1">
+                    {ORDER_CANCELLATION_REASONS.map((preset) => {
+                      const isSelected = cancelReason === preset;
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            if (preset === "Other (Custom)") {
+                              if (ORDER_CANCELLATION_REASONS.includes(cancelReason as any)) {
+                                setCancelReason("");
+                              }
+                            } else {
+                              setCancelReason(preset);
+                            }
+                          }}
+                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:border-rose-700 font-medium shadow-xs"
+                              : "bg-background hover:bg-muted text-muted-foreground border-border/80"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <Textarea
                   id="cancel_reason"
                   value={cancelReason}
@@ -4177,10 +4209,16 @@ export function OrdersClient() {
             </Button>
             <Button
               onClick={handleSaveStatus}
-              disabled={updateStatusMutation.isPending || isMissingLocation}
+              disabled={
+                updateStatusMutation.isPending ||
+                (newStatus !== "cancelled" && isMissingLocation) ||
+                (newStatus === "cancelled" && (!cancelReason || cancelReason.trim().length < 3))
+              }
               title={
-                isMissingLocation
+                newStatus !== "cancelled" && isMissingLocation
                   ? "Cannot change status: Delivery division and district are required."
+                  : newStatus === "cancelled" && (!cancelReason || cancelReason.trim().length < 3)
+                  ? "Cancellation reason is required (minimum 3 characters)."
                   : undefined
               }
               className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5231,6 +5269,35 @@ export function OrdersClient() {
                   <XCircle className="h-3.5 w-3.5 text-rose-600" />
                   Cancellation Reason (Required, min 3 chars) *:
                 </label>
+
+                <div className="flex flex-wrap gap-1.5 pt-0.5 pb-1">
+                  {ORDER_CANCELLATION_REASONS.map((preset) => {
+                    const isSelected = bulkStatusNote === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          if (preset === "Other (Custom)") {
+                            if (ORDER_CANCELLATION_REASONS.includes(bulkStatusNote as any)) {
+                              setBulkStatusNote("");
+                            }
+                          } else {
+                            setBulkStatusNote(preset);
+                          }
+                        }}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:border-rose-700 font-medium shadow-xs"
+                            : "bg-background hover:bg-muted text-muted-foreground border-border/80"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <Textarea
                   value={bulkStatusNote}
                   onChange={(e) => setBulkStatusNote(e.target.value)}

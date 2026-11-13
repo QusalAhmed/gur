@@ -73,7 +73,7 @@ import {
 } from "@/components/ui/tanstack-form";
 import { cn, formatDateTime, extractRefToken } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
-import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct } from "@/types/order";
+import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct, ORDER_CANCELLATION_REASONS } from "@/types/order";
 import {
   orderFormSchema,
   orderCustomerSchema,
@@ -2117,6 +2117,37 @@ export function OrderFormDialog({
                               >
                                 Reason for {status === "returned" ? "Return" : "Cancellation"}
                               </FormFieldLabel>
+
+                              {status === "cancelled" && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5 pb-1">
+                                  {ORDER_CANCELLATION_REASONS.map((preset) => {
+                                    const isSelected = field.state.value === preset;
+                                    return (
+                                      <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => {
+                                          if (preset === "Other (Custom)") {
+                                            if (ORDER_CANCELLATION_REASONS.includes(field.state.value as any)) {
+                                              field.handleChange("");
+                                            }
+                                          } else {
+                                            field.handleChange(preset);
+                                          }
+                                        }}
+                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                                          isSelected
+                                            ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:border-rose-700 font-medium shadow-xs"
+                                            : "bg-background hover:bg-muted text-muted-foreground border-border/80"
+                                        }`}
+                                      >
+                                        {preset}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
                               <Textarea
                                 id="order_form_cancel_reason"
                                 placeholder={

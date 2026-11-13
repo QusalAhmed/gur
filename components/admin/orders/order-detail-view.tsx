@@ -54,6 +54,7 @@ import {
   addStaffNoteAction,
 } from "@/actions/order-ops";
 import { updateShipmentStatusAction } from "@/actions/shipment-ops";
+import { ORDER_CANCELLATION_REASONS } from "@/types/order";
 import { cn } from "@/lib/utils";
 
 interface OrderDetailViewProps {
@@ -852,6 +853,7 @@ export function OrderDetailView({
         description="Cancelling an order cannot be undone. Any stock reservations will be returned to inventory."
         confirmLabel="Cancel Order"
         variant="destructive"
+        presetReasons={ORDER_CANCELLATION_REASONS}
         onConfirm={handleCancel}
       />
     </div>

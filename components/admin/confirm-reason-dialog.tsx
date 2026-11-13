@@ -21,6 +21,8 @@ export interface ConfirmReasonDialogProps {
   description: string;
   reasonLabel?: string;
   reasonPlaceholder?: string;
+  presetReasons?: readonly string[] | string[];
+  minChars?: number;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "destructive" | "default";
@@ -44,6 +46,8 @@ function ConfirmReasonBody({
   description,
   reasonLabel = "Reason / কারণ",
   reasonPlaceholder = "Please provide the reason for this action...",
+  presetReasons,
+  minChars = 3,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   variant = "destructive",
@@ -54,9 +58,11 @@ function ConfirmReasonBody({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const minRequiredLength = required ? minChars : 0;
+
   const handleConfirm = async () => {
-    if (required && !reason.trim()) {
-      setError("Please provide a reason before proceeding.");
+    if (required && reason.trim().length < minRequiredLength) {
+      setError(`Please provide a reason (minimum ${minRequiredLength} characters) before proceeding.`);
       return;
     }
 
@@ -86,6 +92,38 @@ function ConfirmReasonBody({
         <Label htmlFor="action-reason" className="text-xs font-medium">
           {reasonLabel} {required && <span className="text-destructive">*</span>}
         </Label>
+
+        {presetReasons && presetReasons.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-0.5 pb-1">
+            {presetReasons.map((preset) => {
+              const isSelected = reason === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    if (preset === "Other (Custom)") {
+                      if (presetReasons.includes(reason)) {
+                        setReason("");
+                      }
+                    } else {
+                      setReason(preset);
+                    }
+                    if (error) setError(null);
+                  }}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:border-rose-700 font-medium shadow-xs"
+                      : "bg-muted/50 hover:bg-muted text-muted-foreground border-border/80"
+                  }`}
+                >
+                  {preset}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <Textarea
           id="action-reason"
           rows={3}
@@ -116,7 +154,7 @@ function ConfirmReasonBody({
           variant={variant}
           size="sm"
           onClick={handleConfirm}
-          disabled={isSubmitting || (required && !reason.trim())}
+          disabled={isSubmitting || (required && reason.trim().length < minRequiredLength)}
         >
           {isSubmitting ? (
             <>
