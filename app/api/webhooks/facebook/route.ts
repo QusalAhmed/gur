@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { timingSafeTokenEqual } from "@/lib/server-security";
 
-export const dynamic = "force-dynamic";
-
 /**
  * Meta Webhook verification handshake (GET)
  * Meta will send hub.mode, hub.verify_token, and hub.challenge
