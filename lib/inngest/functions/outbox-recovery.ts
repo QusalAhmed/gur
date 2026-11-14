@@ -2,7 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { processPendingOutboxEvents } from "@/lib/outbox";
 
 /**
- * Scheduled cron job that sweeps the transactional outbox every 2 minutes.
+ * Scheduled cron job that sweeps the transactional outbox every 6 hours.
  * Guarantees delivery even if Inngest or network was temporarily offline during order creation.
  */
 export const outboxRecoveryCronFunction = inngest.createFunction(
@@ -10,7 +10,7 @@ export const outboxRecoveryCronFunction = inngest.createFunction(
     id: "outbox-recovery-cron",
     name: "Transactional Outbox Recovery Sweeper",
     retries: 2,
-    triggers: [{ cron: "*/2 * * * *" }],
+    triggers: [{ cron: "0 */6 * * *" }],
   },
   async ({ step }) => {
     return await step.run("recover-pending-outbox-events", async () => {
