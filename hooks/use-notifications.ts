@@ -77,6 +77,12 @@ export function useNotifications() {
           ? {
               label: "View",
               onClick: () => {
+                const link = newNotif.data?.link;
+                if (!link) return;
+                if (link.startsWith("http://") || link.startsWith("https://")) {
+                  window.open(link, "_blank", "noopener,noreferrer");
+                  return;
+                }
                 if (
                   typeof window !== "undefined" &&
                   (newNotif.data?.order_number || newNotif.data?.order_id)
@@ -90,7 +96,7 @@ export function useNotifications() {
                     })
                   );
                 }
-                router.push(newNotif.data.link);
+                router.push(link);
               },
             }
           : undefined,

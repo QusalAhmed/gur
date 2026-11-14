@@ -72,6 +72,9 @@ function getNotificationIcon(type: NotificationType, data?: Record<string, any>)
     case "low_stock":
       return <AlertTriangle className="h-4 w-4 text-amber-500" />;
     case "customer_inquiry":
+      if (data?.platform === "facebook") {
+        return <MessageSquare className="h-4 w-4 text-sky-500" />;
+      }
       return <MessageSquare className="h-4 w-4 text-purple-500" />;
     case "system_alert":
     default:
@@ -122,6 +125,10 @@ export function AdminNotificationsPopover() {
 
     if (targetLink) {
       setOpen(false);
+      if (targetLink.startsWith("http://") || targetLink.startsWith("https://")) {
+        window.open(targetLink, "_blank", "noopener,noreferrer");
+        return;
+      }
       // Dispatch in-page event so OrdersClient opens the order sheet immediately if already on /admin/orders
       if (typeof window !== "undefined" && (n.data?.order_number || n.data?.order_id)) {
         window.dispatchEvent(
