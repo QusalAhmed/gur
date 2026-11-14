@@ -24,8 +24,12 @@ let mockMembersTable: any[] = [];
 let orderQueryCalls = {
   mainGte: [] as any[],
   mainLte: [] as any[],
+  mainOr: [] as any[],
+  mainEq: [] as any[],
   statsGte: [] as any[],
   statsLte: [] as any[],
+  statsOr: [] as any[],
+  statsEq: [] as any[],
 };
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -107,12 +111,23 @@ vi.mock("@/lib/supabase/admin", () => ({
                   orderQueryCalls.statsLte.push(args);
                   return filterObj;
                 }),
+                or: vi.fn().mockImplementation((...args) => {
+                  orderQueryCalls.statsOr.push(args);
+                  return filterObj;
+                }),
+                eq: vi.fn().mockImplementation((...args) => {
+                  orderQueryCalls.statsEq.push(args);
+                  return filterObj;
+                }),
                 then: (fn: any) => Promise.resolve({ data: [], error: null }).then(fn),
               };
               return filterObj;
             }
             const queryObj: any = {
-              eq: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockImplementation((...args) => {
+                orderQueryCalls.mainEq.push(args);
+                return queryObj;
+              }),
               gte: vi.fn().mockImplementation((...args) => {
                 orderQueryCalls.mainGte.push(args);
                 return queryObj;
@@ -121,7 +136,10 @@ vi.mock("@/lib/supabase/admin", () => ({
                 orderQueryCalls.mainLte.push(args);
                 return queryObj;
               }),
-              or: vi.fn().mockReturnThis(),
+              or: vi.fn().mockImplementation((...args) => {
+                orderQueryCalls.mainOr.push(args);
+                return queryObj;
+              }),
               order: vi.fn().mockReturnThis(),
               range: vi.fn().mockResolvedValue({ data: [], count: 0, error: null }),
             };
@@ -142,8 +160,12 @@ describe("Customer Flow & Decoupled Customer Management (Approach B)", () => {
     orderQueryCalls = {
       mainGte: [],
       mainLte: [],
+      mainOr: [],
+      mainEq: [],
       statsGte: [],
       statsLte: [],
+      statsOr: [],
+      statsEq: [],
     };
     mockCustomersTable = [
       {
@@ -243,5 +265,63 @@ describe("Customer Flow & Decoupled Customer Management (Approach B)", () => {
     expect(orderQueryCalls.mainLte).toHaveLength(0);
     expect(orderQueryCalls.statsGte).toHaveLength(0);
     expect(orderQueryCalls.statsLte).toHaveLength(0);
+  });
+
+  it("getOrdersAction while searching ignores date range (even when from/to are passed)", async () => {
+    const result = await getOrdersAction({
+      search: "01712345678",
+      from: "2026-11-01",
+      to: "2026-11-10",
+    });
+
+    expect(result).toBeDefined();
+    // Date bounds must NOT be applied to either main query or stats query when searching
+    expect(orderQueryCalls.mainGte).toHaveLength(0);
+    expect(orderQueryCalls.mainLte).toHaveLength(0);
+    expect(orderQueryCalls.statsGte).toHaveLength(0);
+    expect(orderQueryCalls.statsLte).toHaveLength(0);
+
+    // Main query and stats query must have applied the search filter across fields
+    expect(orderQueryCalls.mainOr).toHaveLength(1);
+    expect(orderQueryCalls.mainOr[0][0]).toContain("customer_phone.ilike.%01712345678%");
+    expect(orderQueryCalls.statsOr).toHaveLength(1);
+    expect(orderQueryCalls.statsOr[0][0]).toContain("customer_phone.ilike.%01712345678%");
+  });
+
+  it("getOrdersAction while searching without date range ignores default 30-day bounds", async () => {
+    const result = await getOrdersAction({
+      search: "ORD-9999",
+    });
+
+    expect(result).toBeDefined();
+    expect(orderQueryCalls.mainGte).toHaveLength(0);
+    expect(orderQueryCalls.mainLte).toHaveLength(0);
+    expect(orderQueryCalls.statsGte).toHaveLength(0);
+    expect(orderQueryCalls.statsLte).toHaveLength(0);
+    expect(orderQueryCalls.mainOr).toHaveLength(1);
+    expect(orderQueryCalls.mainOr[0][0]).toContain("order_number.ilike.%ORD-9999%");
+  });
+
+  it("getOrdersAction while searching retains status, channel, and payment filters", async () => {
+    const result = await getOrdersAction({
+      search: "Tariqul",
+      status: "confirmed",
+      channel: "pos",
+      payment: "paid",
+      from: "2026-10-01",
+      to: "2026-10-15",
+    });
+
+    expect(result).toBeDefined();
+    // Date bounds ignored
+    expect(orderQueryCalls.mainGte).toHaveLength(0);
+    expect(orderQueryCalls.mainLte).toHaveLength(0);
+
+    // Filters still applied
+    expect(orderQueryCalls.mainEq).toContainEqual(["status", "confirmed"]);
+    expect(orderQueryCalls.mainEq).toContainEqual(["channel", "pos"]);
+    expect(orderQueryCalls.mainEq).toContainEqual(["payment_status", "paid"]);
+    expect(orderQueryCalls.statsEq).toContainEqual(["channel", "pos"]);
+    expect(orderQueryCalls.statsEq).toContainEqual(["payment_status", "paid"]);
   });
 });

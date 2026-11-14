@@ -438,11 +438,13 @@ export async function getOrdersAction(
   const rawStart = (params.startDate || params.from || "").trim();
   const rawEnd = (params.endDate || params.to || "").trim();
   const isAllTime = rawStart.toLowerCase() === "all" || rawEnd.toLowerCase() === "all";
+  const isSearching = Boolean(cleanSearch);
 
   let startDate = "";
   let endDate = "";
 
-  if (isAllTime) {
+  // When searching, ignore date range bounds completely to search all-time records
+  if (isSearching || isAllTime) {
     startDate = "";
     endDate = "";
   } else if (rawStart || rawEnd) {
@@ -546,13 +548,25 @@ export async function getOrdersAction(
     }),
     (() => {
       let sq = client.from("orders").select("status, grand_total");
-      if (startDate) {
-        const startIso = startDate.includes("T") ? startDate : `${startDate}T00:00:00+06:00`;
-        sq = sq.gte("placed_at", startIso);
-      }
-      if (endDate) {
-        const endIso = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999+06:00`;
-        sq = sq.lte("placed_at", endIso);
+      if (cleanSearch) {
+        sq = sq.or(
+          `order_number.ilike.%${cleanSearch}%,customer_name.ilike.%${cleanSearch}%,customer_phone.ilike.%${cleanSearch}%,customer_alternative_phone.ilike.%${cleanSearch}%,shipping_phone.ilike.%${cleanSearch}%,customer_note.ilike.%${cleanSearch}%,shipping_method_name.ilike.%${cleanSearch}%`
+        );
+        if (channel && channel !== "all") {
+          sq = sq.eq("channel", channel);
+        }
+        if (payment && payment !== "all") {
+          sq = sq.eq("payment_status", payment);
+        }
+      } else {
+        if (startDate) {
+          const startIso = startDate.includes("T") ? startDate : `${startDate}T00:00:00+06:00`;
+          sq = sq.gte("placed_at", startIso);
+        }
+        if (endDate) {
+          const endIso = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999+06:00`;
+          sq = sq.lte("placed_at", endIso);
+        }
       }
       return sq;
     })(),

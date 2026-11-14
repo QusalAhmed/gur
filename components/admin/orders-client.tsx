@@ -408,20 +408,36 @@ export function OrdersClient() {
     [searchParams, page, pageSize, selectedTab, channelFilter, paymentFilter, debouncedSearch, sorting, router]
   );
 
-  // Debounce search query by 300ms ONLY when user is actively typing
-  React.useEffect(() => {
-    if (!isUserTypingRef.current) return;
+  const searchTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-    const timer = setTimeout(() => {
+  // Commit search query to state and URL only when user stops typing or presses Enter
+  const commitSearch = React.useCallback(
+    (queryToCommit: string) => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
+      }
       isUserTypingRef.current = false;
-      const trimmed = searchQuery.trim();
+      const trimmed = queryToCommit.trim();
       setDebouncedSearch(trimmed);
       setPage(1);
       updateUrl({ search: trimmed, page: 1 });
-    }, 300);
+    },
+    [updateUrl]
+  );
 
-    return () => clearTimeout(timer);
-  }, [searchQuery, updateUrl]);
+  const commitSearchRef = React.useRef(commitSearch);
+  React.useEffect(() => {
+    commitSearchRef.current = commitSearch;
+  }, [commitSearch]);
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, []);
 
   // Sync state when URL searchParams change externally (notifications, direct links, back/forward)
   React.useEffect(() => {
@@ -3507,11 +3523,11 @@ export function OrdersClient() {
             isLoading={isOrdersLoading && orders.length === 0}
             isFetching={isOrdersFetching}
             loadingMessage={
-              searchQuery !== debouncedSearch || searchQuery
-                ? "Searching orders..."
-                : isOrdersFetching
-                  ? "Updating orders..."
-                  : "Loading orders..."
+              isOrdersFetching
+                ? debouncedSearch
+                  ? "Searching orders..."
+                  : "Updating orders..."
+                : "Loading orders..."
             }
             toolbarPrefix={
               <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap w-full">
@@ -3520,25 +3536,36 @@ export function OrdersClient() {
                   <Input
                     value={searchQuery}
                     onChange={(e) => {
+                      const val = e.target.value;
                       isUserTypingRef.current = true;
-                      setSearchQuery(e.target.value);
+                      setSearchQuery(val);
+
+                      if (searchTimerRef.current) {
+                        clearTimeout(searchTimerRef.current);
+                      }
+                      searchTimerRef.current = setTimeout(() => {
+                        commitSearchRef.current(val);
+                      }, 500);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitSearchRef.current(searchQuery);
+                      }
                     }}
                     placeholder="Search by order ID, customer name, phone, address..."
                     className="pl-8 pr-14 h-9 text-xs w-full bg-background"
                   />
                   <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5">
-                    {(isOrdersFetching || searchQuery !== debouncedSearch) && (
+                    {isOrdersFetching && (
                       <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400" />
                     )}
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={() => {
-                          isUserTypingRef.current = false;
                           setSearchQuery("");
-                          setDebouncedSearch("");
-                          setPage(1);
-                          updateUrl({ search: "", page: 1 });
+                          commitSearchRef.current("");
                         }}
                         className="text-muted-foreground hover:text-foreground cursor-pointer"
                         title="Clear search"
@@ -3548,6 +3575,17 @@ export function OrdersClient() {
                     )}
                   </div>
                 </div>
+
+                {Boolean(debouncedSearch.trim()) && (
+                  <Badge
+                    variant="outline"
+                    className="h-7 px-2.5 text-[11px] font-medium gap-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25 shrink-0 select-none animate-in fade-in duration-200"
+                    title="Date range filter is bypassed while searching (all-time records)"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                    All-time
+                  </Badge>
+                )}
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                   {/* Channel filter */}
@@ -3613,6 +3651,10 @@ export function OrdersClient() {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
+                        if (searchTimerRef.current) {
+                          clearTimeout(searchTimerRef.current);
+                          searchTimerRef.current = null;
+                        }
                         isUserTypingRef.current = false;
                         setSearchQuery("");
                         setDebouncedSearch("");
