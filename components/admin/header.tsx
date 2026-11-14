@@ -42,6 +42,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { ROLE_CONFIG } from "@/lib/admin-permissions";
+import { AdminLoadingBar } from "@/components/admin/admin-loading-bar";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -117,7 +118,7 @@ export function AdminHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/80 bg-background/90 px-3 sm:px-4 backdrop-blur-md">
+      <header className="sticky top-0 z-30 relative flex h-14 shrink-0 items-center gap-2 border-b border-border/80 bg-background/90 px-3 sm:px-4 backdrop-blur-md">
         <SbTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-1 h-4 hidden sm:block" />
 
@@ -241,6 +242,9 @@ export function AdminHeader() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Attached Loading Animation Bar */}
+        <AdminLoadingBar />
       </header>
 
       {/* Global Command Palette Dialog */}
