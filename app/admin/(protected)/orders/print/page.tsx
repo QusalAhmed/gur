@@ -128,6 +128,95 @@ function resolveItemBanglaVariant(it: any): string {
   return vname;
 }
 
+const BN_TO_EN_DIGITS: Record<string, string> = {
+  "০": "0",
+  "১": "1",
+  "২": "2",
+  "৩": "3",
+  "৪": "4",
+  "৫": "5",
+  "৬": "6",
+  "৭": "7",
+  "৮": "8",
+  "৯": "9",
+};
+
+function normalizeBengaliDigits(text = ""): string {
+  return text.replace(/[০-৯]/g, (d) => BN_TO_EN_DIGITS[d] ?? d);
+}
+
+function parseWeightFromText(rawText = ""): number | null {
+  if (!rawText || typeof rawText !== "string") return null;
+  const text = normalizeBengaliDigits(rawText.toLowerCase());
+
+  // 1. Matches like 0.5 kg, 1kg, 2.5 kg, 1 কেজি, 2 কিলো
+  const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
+  if (kgMatch) return parseFloat(kgMatch[1]);
+
+  // 2. Matches like 500g, 250 gm, 200 g, 500 গ্রাম, 200গ্রা
+  const gMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:gm|gms|gram|grams|g|গ্রাম|গ্রা)(?![a-z])/i);
+  if (gMatch) return parseFloat(gMatch[1]) / 1000;
+
+  // 3. Matches like 1L, 1.5 ltr, 1 liter, 1 লিটার
+  const lMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:liter|liters|ltr|l|লিটার)/i);
+  if (lMatch) return parseFloat(lMatch[1]);
+
+  // 4. Matches like 500ml, 250 ml, 250 মিলি
+  const mlMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:ml|মিলি)/i);
+  if (mlMatch) return parseFloat(mlMatch[1]) / 1000;
+
+  return null;
+}
+
+export function resolveOrderTotalWeightKg(order: Order): number | null {
+  if (typeof order.total_weight_kg === "number" && order.total_weight_kg > 0) {
+    return order.total_weight_kg;
+  }
+
+  // Fallback calculation across items
+  if (!order.items || !Array.isArray(order.items) || order.items.length === 0) {
+    return null;
+  }
+
+  let totalKg = 0;
+  for (const item of order.items) {
+    const qty = Number(item.quantity) || 1;
+    // Check if combo with components
+    if (Array.isArray(item.combo_components) && item.combo_components.length > 0) {
+      for (const comp of item.combo_components) {
+        const compQty = (Number(comp.quantity) || 1) * qty;
+        if (comp.weight_grams && comp.weight_grams > 0) {
+          totalKg += (comp.weight_grams / 1000) * compQty;
+        } else {
+          const parsed = parseWeightFromText(comp.variant_name || "") ?? parseWeightFromText(comp.product_name || "");
+          if (parsed && parsed > 0) {
+            totalKg += parsed * compQty;
+          }
+        }
+      }
+    } else {
+      if (item.weight_grams && item.weight_grams > 0) {
+        totalKg += (item.weight_grams / 1000) * qty;
+      } else if (item.weight_kg && item.weight_kg > 0) {
+        totalKg += item.weight_kg * qty;
+      } else {
+        const parsed = parseWeightFromText(item.variant_name || "") ?? parseWeightFromText(item.product_name || "");
+        if (parsed && parsed > 0) {
+          totalKg += parsed * qty;
+        }
+      }
+    }
+  }
+
+  return totalKg > 0 ? Math.round(totalKg * 1000) / 1000 : null;
+}
+
+export function formatWeightDisplay(kg: number): string {
+  // Clean dynamic decimal without trailing zeros (e.g. 1 kg, 1.5 kg, 2.25 kg)
+  const formatted = Number.isInteger(kg) ? kg.toString() : kg.toFixed(2).replace(/\.?0+$/, "");
+  return `WEIGHT: ${formatted} kg`;
+}
+
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -556,6 +645,7 @@ function PrintContent() {
                   .match(/.{1,3}/g)
                   ?.join(" ") || String(courierConsignmentId).replace(/^#+/, "")
               : null;
+            const totalWeightKg = resolveOrderTotalWeightKg(order);
             const qrDataUrl = qrDataUrls[storeConfig.website] || "";
 
             return (
@@ -631,6 +721,15 @@ function PrintContent() {
                         title="Courier Consignment ID"
                       >
                         #{formattedConsignmentId}
+                      </div>
+                    )}
+
+                    {totalWeightKg !== null && (
+                      <div
+                        className="text-center font-bold text-[11px] sm:text-[12px] tracking-wide select-all py-0.5 leading-none my-0.5"
+                        title="Total Package Weight"
+                      >
+                        {formatWeightDisplay(totalWeightKg)}
                       </div>
                     )}
 

@@ -9,21 +9,42 @@ export const orderIncompleteFunction = inngest.createFunction(
     name: "Incomplete/Abandoned Draft Order: Admin Email",
     retries: 3,
     triggers: [{ event: "order.incomplete" }],
+    cancelOn: [
+      {
+        event: "order.created",
+        if: "async.data.orderId == event.data.orderId || async.data.customerPhone == event.data.customerPhone",
+      },
+    ],
   },
   async ({ event, step }) => {
     const data = event.data as OrderIncompleteEventData;
     const { orderId, orderNumber } = data;
 
+    // 1. Hold in queue for 5 minutes (grace period).
+    // If order.created matching orderId or customerPhone arrives during this time,
+    // Inngest automatically cancels and deletes this run from the queue.
+    await step.sleep("wait-for-order-completion-grace-period", "5m");
+
+    // 2. Defensive check & notification dispatch
     const result = await step.run("send-incomplete-order-email", async () => {
       const supabaseAdmin = getSupabaseAdmin();
-      // 1. Verify that order has not already been notified
+
+      // Check current status in DB in case of external/manual updates
       const { data: orderRow } = await supabaseAdmin
         .from("orders")
-        .select("attribution")
+        .select("status, attribution")
         .eq("id", orderId)
         .maybeSingle();
 
-      const currentAttr = (orderRow?.attribution as Record<string, unknown>) || {};
+      // Skip if already submitted or no longer an incomplete order
+      if (!orderRow || orderRow.status !== "incomplete_order") {
+        return {
+          skipped: true,
+          reason: `Order status is "${orderRow?.status || "missing"}", not incomplete_order`,
+        };
+      }
+
+      const currentAttr = (orderRow.attribution as Record<string, unknown>) || {};
       if (currentAttr.brevo_incomplete_notified_at) {
         return { skipped: true, reason: "Already notified incomplete order" };
       }
