@@ -45,6 +45,7 @@ import {
   selectCartItems,
   selectCartSubtotal,
   selectCartTotalQuantity,
+  selectCartTotalWeightKg,
   incrementQuantity,
   decrementQuantity,
   removeFromCart,
@@ -163,6 +164,7 @@ export function CheckoutSection({
   const cartItems = useAppSelector(selectCartItems);
   const cartSubtotal = useAppSelector(selectCartSubtotal);
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
+  const cartTotalWeightKg = useAppSelector(selectCartTotalWeightKg);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -172,6 +174,7 @@ export function CheckoutSection({
   const displayCartItems = mounted ? cartItems : [];
   const displaySubtotal = mounted ? cartSubtotal : 0;
   const displayTotalQuantity = mounted ? cartTotalQuantity : 0;
+  const displayTotalWeightKg = mounted ? cartTotalWeightKg : 0;
 
   const queryClient = useQueryClient();
   const [deliveryZone, setDeliveryZone] = useState<"inside_dhaka" | "outside_dhaka">("inside_dhaka");
@@ -519,12 +522,22 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
         const total = item.quantity * item.unitPrice;
         const formattedUnit = formatStorePrice(item.unitPrice, lang);
         const formattedQty = item.quantity;
+        const wKg =
+          typeof item.weightKg === "number" && item.weightKg > 0
+            ? item.weightKg
+            : typeof item.weightGrams === "number" && item.weightGrams > 0
+            ? item.weightGrams / 1000
+            : 1;
+        const lineWeightKg = wKg * item.quantity;
         return (
           <div className="text-right py-2.5 pl-2">
             <span className="block font-mono text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
               {formatStorePrice(total, lang)}
             </span>
-            <span className="block font-mono text-[11px] text-stone-500 dark:text-stone-400 mt-1 whitespace-nowrap">
+            <span className="inline-block font-mono text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40 mt-1 whitespace-nowrap">
+              {lang === "bn" ? `মোট ${lineWeightKg.toLocaleString("bn-BD")} কেজি` : `Total ${lineWeightKg} kg`}
+            </span>
+            <span className="block font-mono text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 whitespace-nowrap">
               ({formattedUnit} × {formattedQty})
             </span>
           </div>
@@ -732,6 +745,13 @@ return (
                 <span className="font-semibold">{lang === "bn" ? "পণ্যের মোট মূল্য:" : "Items Subtotal:"}</span>
                 <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base">
                   {formatStorePrice(displaySubtotal, lang)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
+                <span className="font-semibold">{lang === "bn" ? "মোট পার্সেল ওজন:" : "Total Parcel Weight:"}</span>
+                <span className="font-mono font-bold text-amber-900 dark:text-amber-200 text-sm sm:text-base">
+                  {lang === "bn" ? `${displayTotalWeightKg.toLocaleString("bn-BD")} কেজি` : `${displayTotalWeightKg} kg`}
                 </span>
               </div>
 

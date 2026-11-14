@@ -147,13 +147,13 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const [prodRes, varRes, imgRes] = await Promise.all([
       client
         .from("products")
-        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order")
+        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order, price_per_kg")
         .eq("status", "active")
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
       client
         .from("product_variants")
-        .select("id, product_id, name, name_bn, price, compare_at_price, net_quantity, net_unit, stock_status, is_default, is_active, is_combo, sort_order")
+        .select("id, product_id, name, name_bn, price, compare_at_price, net_quantity, net_unit, weight_grams, stock_status, is_default, is_active, is_combo, sort_order")
         .order("sort_order", { ascending: true })
         .order("price", { ascending: true }),
       client
@@ -217,6 +217,12 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
           compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
           netQuantity: v.net_quantity,
           netUnit: v.net_unit,
+          weightGrams: v.weight_grams ? Number(v.weight_grams) : undefined,
+          weightKg: v.weight_grams
+            ? Number(v.weight_grams) / 1000
+            : v.net_quantity
+            ? Number(v.net_quantity)
+            : 1,
           stockStatus: v.stock_status,
           isDefault: Boolean(v.is_default),
           sortOrder: typeof v.sort_order === "number" ? v.sort_order : 0,
@@ -284,6 +290,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
             origin: p.origin,
             ratingAvg: Number(p.rating_avg) || 5,
             ratingCount: Number(p.rating_count) || 1,
+            pricePerKg: Number((p as any).price_per_kg) || undefined,
             variants,
           };
         })

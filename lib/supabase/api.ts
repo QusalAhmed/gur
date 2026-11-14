@@ -355,22 +355,27 @@ export const fallbackDistricts: DbGeoDistrict[] = [
 export function formatDbOrderRecord(data: any): Order {
   const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
   const rawItems = data.order_items || data.items || [];
-  const items: OrderItem[] = rawItems.map((it: any, idx: number) => ({
-    id: it.id || `item-db-${idx}-${it.sku}`,
-    sku: it.sku || "",
-    product_name: it.product_name || "",
-    variant_name: it.variant_name || "",
-    quantity: Number(it.quantity) || 1,
-    unit_price: Number(it.unit_price) || 0,
-    line_total: Number(it.line_total) || Number(it.quantity) * Number(it.unit_price),
-    variant_id: it.variant_id,
-    product_id: it.product_id || null,
-    image: it.image || null,
-    product_name_bn: it.product_name_bn || it.products?.name_bn || null,
-    variant_name_bn: it.variant_name_bn || it.product_variants?.name_bn || null,
-    is_combo: Boolean(it.is_combo),
-    combo_components: Array.isArray(it.combo_components) ? it.combo_components : [],
-  }));
+  const items: OrderItem[] = rawItems.map((it: any, idx: number) => {
+    const weightGrams = Number(it.weight_grams) || 0;
+    return {
+      id: it.id || `item-db-${idx}-${it.sku}`,
+      sku: it.sku || "",
+      product_name: it.product_name || "",
+      variant_name: it.variant_name || "",
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+      line_total: Number(it.line_total) || Number(it.quantity) * Number(it.unit_price),
+      variant_id: it.variant_id,
+      product_id: it.product_id || null,
+      image: it.image || null,
+      product_name_bn: it.product_name_bn || it.products?.name_bn || null,
+      variant_name_bn: it.variant_name_bn || it.product_variants?.name_bn || null,
+      is_combo: Boolean(it.is_combo),
+      combo_components: Array.isArray(it.combo_components) ? it.combo_components : [],
+      weight_grams: weightGrams,
+      weight_kg: weightGrams > 0 ? Number((weightGrams / 1000).toFixed(2)) : undefined,
+    };
+  });
 
   const rawEvents = data.order_events || data.timeline || [];
   const events: OrderEvent[] = rawEvents.map((ev: any, idx: number) => ({
@@ -437,6 +442,13 @@ export function formatDbOrderRecord(data: any): Order {
     courier_payload_snapshot: data.courier_payload_snapshot || null,
     printed_at: data.printed_at || null,
     printed_courier_snapshot: data.printed_courier_snapshot || null,
+    total_weight_kg: (() => {
+      if (data.total_weight_kg !== undefined && data.total_weight_kg !== null && Number(data.total_weight_kg) > 0) {
+        return Number(Number(data.total_weight_kg).toFixed(2));
+      }
+      const sumGrams = items.reduce((acc, it) => acc + ((it.weight_grams || 0) * (it.quantity || 1)), 0);
+      return sumGrams > 0 ? Number((sumGrams / 1000).toFixed(2)) : undefined;
+    })(),
     items,
     notes: Array.isArray(data.order_notes)
       ? data.order_notes

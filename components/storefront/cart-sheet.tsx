@@ -10,6 +10,7 @@ import {
   selectCartItems,
   selectIsCartOpen,
   selectCartTotalQuantity,
+  selectCartTotalWeightKg,
   selectCartSubtotal,
   closeCart,
   incrementQuantity,
@@ -32,6 +33,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
   const isOpen = useAppSelector(selectIsCartOpen);
   const items = useAppSelector(selectCartItems);
   const totalQuantity = useAppSelector(selectCartTotalQuantity);
+  const totalWeightKg = useAppSelector(selectCartTotalWeightKg);
   const subtotal = useAppSelector(selectCartSubtotal);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -98,8 +100,13 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                   <h2 id="cart-heading" className="text-base sm:text-lg font-black text-amber-950 dark:text-amber-100 leading-tight">
                     {t.cartTitle}
                   </h2>
-                  <p className="text-xs text-stone-600 dark:text-stone-400">
-                    {totalQuantity} {t.itemsCount}
+                  <p className="text-xs text-stone-700 dark:text-stone-300 font-semibold flex items-center gap-1.5">
+                    <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                      {lang === "bn" ? `মোট ${totalWeightKg.toLocaleString("bn-BD")} কেজি` : `Total ${totalWeightKg} kg`}
+                    </span>
+                    <span className="text-stone-500 dark:text-stone-400 font-normal">
+                      • ({totalQuantity} {t.itemsCount})
+                    </span>
                   </p>
                 </div>
               </div>
@@ -179,9 +186,16 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                               <h4 className="font-extrabold text-sm text-amber-950 dark:text-amber-100 truncate">
                                 {itemTitle}
                               </h4>
-                              <span className="inline-block bg-amber-100/80 dark:bg-stone-800 text-amber-900 dark:text-amber-300 text-[11px] font-semibold px-2 py-0.5 rounded-md mt-0.5">
-                                {variantTitle}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span className="inline-block bg-amber-100/80 dark:bg-stone-800 text-amber-900 dark:text-amber-300 text-[11px] font-semibold px-2 py-0.5 rounded-md">
+                                  {variantTitle}
+                                </span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40">
+                                  {lang === "bn"
+                                    ? `মোট ${((item.weightKg || (item.weightGrams ? item.weightGrams / 1000 : 1)) * item.quantity).toLocaleString("bn-BD")} কেজি`
+                                    : `Total ${(item.weightKg || (item.weightGrams ? item.weightGrams / 1000 : 1)) * item.quantity} kg`}
+                                </span>
+                              </div>
                             </div>
                             <button
                               type="button"
@@ -268,6 +282,12 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                   <div className="flex justify-between text-stone-700 dark:text-stone-300">
                     <span>{t.subtotal}</span>
                     <span className="font-bold">{formatStorePrice(subtotal, lang)}</span>
+                  </div>
+                  <div className="flex justify-between text-stone-700 dark:text-stone-300">
+                    <span>{lang === "bn" ? "মোট পার্সেল ওজন:" : "Total Parcel Weight:"}</span>
+                    <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                      {lang === "bn" ? `${totalWeightKg.toLocaleString("bn-BD")} কেজি` : `${totalWeightKg} kg`}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-stone-600 dark:text-stone-400 text-xs">
                     <span>{t.deliveryCharge}</span>

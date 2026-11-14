@@ -458,6 +458,7 @@ export type Database = {
           name: string
           name_bn: string | null
           parent_id: string | null
+          price_per_kg: number | null
           product_type: string | null
           seo_description: string | null
           seo_title: string | null
@@ -476,6 +477,7 @@ export type Database = {
           name: string
           name_bn?: string | null
           parent_id?: string | null
+          price_per_kg?: number | null
           product_type?: string | null
           seo_description?: string | null
           seo_title?: string | null
@@ -494,6 +496,7 @@ export type Database = {
           name?: string
           name_bn?: string | null
           parent_id?: string | null
+          price_per_kg?: number | null
           product_type?: string | null
           seo_description?: string | null
           seo_title?: string | null
@@ -2003,6 +2006,7 @@ export type Database = {
           name_bn: string | null
           nutrition: Json
           origin: string | null
+          price_per_kg: number | null
           product_type: string | null
           published_at: string | null
           rating_avg: number
@@ -2038,6 +2042,7 @@ export type Database = {
           name_bn?: string | null
           nutrition?: Json
           origin?: string | null
+          price_per_kg?: number | null
           product_type?: string | null
           published_at?: string | null
           rating_avg?: number
@@ -2073,6 +2078,7 @@ export type Database = {
           name_bn?: string | null
           nutrition?: Json
           origin?: string | null
+          price_per_kg?: number | null
           product_type?: string | null
           published_at?: string | null
           rating_avg?: number

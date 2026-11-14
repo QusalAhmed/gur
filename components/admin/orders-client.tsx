@@ -49,6 +49,7 @@ import {
   ClipboardCheck,
   Package,
   XCircle,
+  Scale,
 } from "lucide-react";
 import {
   DbGeoDivision,
@@ -2356,6 +2357,16 @@ export function OrdersClient() {
                 <span className="text-xs text-muted-foreground font-mono">
                   ({itemCount} {itemCount === 1 ? "item" : "items"})
                 </span>
+                {order.total_weight_kg && order.total_weight_kg > 0 ? (
+                  <Badge
+                    variant="secondary"
+                    title={`Parcel total weight: ${order.total_weight_kg} kg`}
+                    className="text-[11px] font-mono font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20"
+                  >
+                    <Scale className="h-3 w-3 mr-1 text-amber-600 shrink-0" />
+                    {order.total_weight_kg} kg
+                  </Badge>
+                ) : null}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <Badge

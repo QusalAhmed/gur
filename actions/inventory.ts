@@ -31,6 +31,11 @@ export interface InventoryItem {
   reorder: number;
   status: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
   uom?: string;
+  weightGrams?: number;
+  weightKg?: number;
+  onHandKg?: number;
+  reservedKg?: number;
+  availableKg?: number;
 }
 
 export interface BatchItem {
@@ -109,6 +114,17 @@ export interface SupplierItem {
   status: "active" | "inactive";
 }
 
+export interface InventoryKpis {
+  totalOnHand: number;
+  totalReserved: number;
+  totalAvailable: number;
+  totalOnHandKg?: number;
+  totalReservedKg?: number;
+  totalAvailableKg?: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+}
+
 /**
  * Loads inventory levels with warehouse and variant info.
  * Enforces staff authentication with RLS.
@@ -117,13 +133,7 @@ export async function getAdminInventoryAction(): Promise<{
   success: boolean;
   data: {
     inventory: InventoryItem[];
-    kpis: {
-      totalOnHand: number;
-      totalReserved: number;
-      totalAvailable: number;
-      lowStockCount: number;
-      outOfStockCount: number;
-    };
+    kpis: InventoryKpis;
   };
   error?: string;
 }> {
@@ -147,11 +157,16 @@ export async function getAdminInventoryAction(): Promise<{
         ),
         product_variants:variant_id (
           id,
-          title,
+          name,
+          name_bn,
           sku,
-          uom,
+          net_quantity,
+          net_unit,
+          weight_grams,
           products:product_id (
-            name
+            id,
+            name,
+            name_bn
           )
         )
       `
@@ -164,13 +179,25 @@ export async function getAdminInventoryAction(): Promise<{
       const productInfo = Array.isArray(variantInfo?.products) ? variantInfo?.products[0] : variantInfo?.products;
       const warehouseInfo = Array.isArray(lvl.warehouses) ? lvl.warehouses[0] : lvl.warehouses;
 
-      const variantTitle = variantInfo?.title ? `${productInfo?.name || "Molasses"} - ${variantInfo.title}` : (productInfo?.name || "Molasses Item");
+      const variantName = variantInfo?.name || variantInfo?.name_bn || "";
+      const prodName = productInfo?.name || "Molasses Item";
+      const variantTitle = variantName ? `${prodName} (${variantName})` : prodName;
       const sku = variantInfo?.sku || "SKU-N/A";
       const warehouse = warehouseInfo?.name || "Main Warehouse";
       const onHand = Number(lvl.on_hand || 0);
       const reserved = Number(lvl.reserved || 0);
       const available = Number(lvl.available !== null && lvl.available !== undefined ? lvl.available : onHand - reserved);
       const reorder = Number(lvl.reorder_point || 10);
+
+      const weightGrams =
+        Number(variantInfo?.weight_grams) ||
+        (variantInfo?.net_unit === "g"
+          ? Number(variantInfo?.net_quantity) || 1000
+          : (Number(variantInfo?.net_quantity) || 1) * 1000);
+      const weightKg = weightGrams / 1000.0;
+      const onHandKg = onHand * weightKg;
+      const reservedKg = reserved * weightKg;
+      const availableKg = available * weightKg;
 
       let status: InventoryItem["status"] = "in_stock";
       if (available <= 0) status = "out_of_stock";
@@ -188,13 +215,21 @@ export async function getAdminInventoryAction(): Promise<{
         available,
         reorder,
         status,
-        uom: variantInfo?.uom,
+        uom: variantInfo?.net_unit || "kg",
+        weightGrams,
+        weightKg,
+        onHandKg,
+        reservedKg,
+        availableKg,
       };
     });
 
     const totalOnHand = inventory.reduce((sum, item) => sum + item.onHand, 0);
     const totalReserved = inventory.reduce((sum, item) => sum + item.reserved, 0);
     const totalAvailable = inventory.reduce((sum, item) => sum + item.available, 0);
+    const totalOnHandKg = inventory.reduce((sum, item) => sum + (item.onHandKg || 0), 0);
+    const totalReservedKg = inventory.reduce((sum, item) => sum + (item.reservedKg || 0), 0);
+    const totalAvailableKg = inventory.reduce((sum, item) => sum + (item.availableKg || 0), 0);
     const lowStockCount = inventory.filter((item) => item.status === "low_stock").length;
     const outOfStockCount = inventory.filter((item) => item.status === "out_of_stock").length;
 
@@ -206,6 +241,9 @@ export async function getAdminInventoryAction(): Promise<{
           totalOnHand,
           totalReserved,
           totalAvailable,
+          totalOnHandKg,
+          totalReservedKg,
+          totalAvailableKg,
           lowStockCount,
           outOfStockCount,
         },
@@ -222,6 +260,9 @@ export async function getAdminInventoryAction(): Promise<{
           totalOnHand: 0,
           totalReserved: 0,
           totalAvailable: 0,
+          totalOnHandKg: 0,
+          totalReservedKg: 0,
+          totalAvailableKg: 0,
           lowStockCount: 0,
           outOfStockCount: 0,
         },

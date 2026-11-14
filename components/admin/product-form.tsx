@@ -21,6 +21,7 @@ import {
   Gift,
   Boxes,
   Percent,
+  Scale,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -166,6 +167,28 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const [productType, setProductType] = React.useState(
     initialData?.product_type || ""
   );
+  const [pricePerKg, setPricePerKg] = React.useState<number | "">(
+    (initialData as any)?.price_per_kg ?? 400
+  );
+
+  const handlePricePerKgChange = (newRate: number | "") => {
+    setPricePerKg(newRate);
+    if (typeof newRate === "number" && newRate > 0) {
+      setVariants((prev) =>
+        prev.map((v) => {
+          if (v.is_combo) return v;
+          const weight =
+            v.net_unit === "g"
+              ? (Number(v.net_quantity) || 1000) / 1000
+              : Number(v.net_quantity) || 1;
+          return {
+            ...v,
+            price: Math.round(weight * newRate),
+          };
+        })
+      );
+    }
+  };
 
   // Variants State
   const [variants, setVariants] = React.useState<FormVariant[]>(() => {
@@ -512,6 +535,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           seo_description: seoDescription.trim() || undefined,
           google_product_category: googleProductCategory.trim() || undefined,
           product_type: productType.trim() || undefined,
+          price_per_kg: typeof pricePerKg === "number" ? pricePerKg : null,
         },
         variants: sanitizedVariants,
         images,
@@ -1007,6 +1031,40 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
         {/* ── TAB 3: VARIANTS & PACK SIZES ────────────────────────────────────── */}
         <TabsContent value="variants" className="space-y-6">
+          {/* Base Price per KG Card */}
+          <Card className="border shadow-xs border-amber-300 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold text-amber-950 dark:text-amber-100 flex items-center gap-2">
+                <Scale className="h-4 w-4 text-amber-600" />
+                Base Rate per Kilogram (দর প্রতি কেজি)
+              </CardTitle>
+              <CardDescription className="text-xs text-stone-600 dark:text-stone-400">
+                Set the standard sales price per KG (৳/kg). All non-combo variant pack prices strictly calculate from this rate based on their net weight.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 max-w-xs">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-mono text-sm font-bold">
+                    ৳
+                  </span>
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={pricePerKg}
+                    onChange={(e) => handlePricePerKgChange(parseFloat(e.target.value) || "")}
+                    placeholder="400"
+                    className="pl-7 h-9 text-sm font-mono font-bold bg-white dark:bg-stone-800"
+                  />
+                </div>
+                <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 shrink-0">
+                  / কেজি (per kg)
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border shadow-xs">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

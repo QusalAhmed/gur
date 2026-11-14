@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "meta:sync": "node scripts/meta-catalog-sync.mjs",
-    "meta:test": "node scripts/meta-catalog-sync.mjs --test"
+    "meta:test": "node scripts/meta-catalog-sync.mjs --test",
+    "inngest:dev": "inngest dev -u http://localhost:3000/api/inngest"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -239,27 +239,27 @@ export function InventoryView({
       {/* KPI Cards Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Card className="rounded-xl p-3 border shadow-xs">
-          <div className="text-[11px] font-medium text-muted-foreground">Total On Hand</div>
-          <div className="text-xl font-bold tracking-tight mt-1 font-mono">
-            {kpis.totalOnHand.toLocaleString()}
+          <div className="text-[11px] font-medium text-muted-foreground">Total On Hand (KG)</div>
+          <div className="text-xl font-bold tracking-tight mt-1 font-mono text-amber-950 dark:text-amber-100">
+            {((kpis as any).totalOnHandKg || kpis.totalOnHand).toLocaleString()} kg
           </div>
-          <span className="text-[10px] text-muted-foreground">In all warehouses</span>
+          <span className="text-[10px] text-muted-foreground">{kpis.totalOnHand.toLocaleString()} total packs</span>
         </Card>
 
         <Card className="rounded-xl p-3 border shadow-xs">
-          <div className="text-[11px] font-medium text-muted-foreground">Available to Sell</div>
+          <div className="text-[11px] font-medium text-muted-foreground">Available to Sell (KG)</div>
           <div className="text-xl font-bold tracking-tight mt-1 font-mono text-emerald-600 dark:text-emerald-400">
-            {kpis.totalAvailable.toLocaleString()}
+            {((kpis as any).totalAvailableKg || kpis.totalAvailable).toLocaleString()} kg
           </div>
-          <span className="text-[10px] text-muted-foreground">Unreserved stock</span>
+          <span className="text-[10px] text-muted-foreground">{kpis.totalAvailable.toLocaleString()} packs available</span>
         </Card>
 
         <Card className="rounded-xl p-3 border shadow-xs">
           <div className="text-[11px] font-medium text-muted-foreground">Reserved in Orders</div>
           <div className="text-xl font-bold tracking-tight mt-1 font-mono text-amber-600 dark:text-amber-400">
-            {kpis.totalReserved.toLocaleString()}
+            {((kpis as any).totalReservedKg || kpis.totalReserved).toLocaleString()} kg
           </div>
-          <span className="text-[10px] text-muted-foreground">Pending dispatch</span>
+          <span className="text-[10px] text-muted-foreground">{kpis.totalReserved.toLocaleString()} packs pending</span>
         </Card>
 
         <Card className="rounded-xl p-3 border shadow-xs">
@@ -437,15 +437,19 @@ export function InventoryView({
                           </td>
                           <td className="py-2.5 px-3 text-muted-foreground">{item.warehouse}</td>
                           <td className="py-2.5 px-3 text-right font-mono font-semibold">
-                            {item.onHand.toLocaleString()}
+                            <div>{(item.onHandKg ?? item.onHand).toLocaleString()} kg</div>
+                            <div className="text-[10px] text-muted-foreground font-normal">{item.onHand} packs</div>
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
                             {item.reserved > 0 ? (
-                              <span className="text-amber-600 dark:text-amber-400">
-                                {item.reserved.toLocaleString()}
-                              </span>
+                              <div>
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {(item.reservedKg ?? item.reserved).toLocaleString()} kg
+                                </span>
+                                <div className="text-[10px] text-muted-foreground font-normal">{item.reserved} packs</div>
+                              </div>
                             ) : (
-                              "0"
+                              "0 kg"
                             )}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono font-bold">
@@ -458,8 +462,9 @@ export function InventoryView({
                                   : "text-emerald-600 dark:text-emerald-400"
                               }
                             >
-                              {item.available.toLocaleString()}
+                              {(item.availableKg ?? item.available).toLocaleString()} kg
                             </span>
+                            <div className="text-[10px] text-muted-foreground font-normal">{item.available} packs</div>
                           </td>
                           <td className="py-2.5 px-3 text-right">
                             {isEditingReorder ? (

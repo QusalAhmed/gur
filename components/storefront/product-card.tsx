@@ -45,6 +45,8 @@ export interface StorefrontVariant {
   compareAtPrice?: number | null;
   netQuantity?: number;
   netUnit?: string;
+  weightGrams?: number;
+  weightKg?: number;
   stockStatus?: string;
   isDefault?: boolean;
   sortOrder?: number;
@@ -75,6 +77,7 @@ export interface StorefrontProduct {
   origin?: string;
   ratingAvg?: number;
   ratingCount?: number;
+  pricePerKg?: number;
   variants: StorefrontVariant[];
 }
 
@@ -412,6 +415,11 @@ export function ProductCard({
       }
 
       if (currentUnit === 0) {
+        const variantWeightKg =
+          selectedVariant.weightKg ||
+          (selectedVariant.weightGrams
+            ? selectedVariant.weightGrams / 1000
+            : selectedVariant.netQuantity || 1);
         dispatch(
           addToCart({
             productId: product.id,
@@ -427,6 +435,9 @@ export function ProductCard({
             descriptionBn: product.summaryBn,
             isCombo: Boolean(selectedVariant.isCombo),
             comboItems: selectedVariant.comboItems || [],
+            weightGrams: selectedVariant.weightGrams || Math.round(variantWeightKg * 1000),
+            weightKg: variantWeightKg,
+            pricePerKg: product.pricePerKg || Math.round(unitPrice / variantWeightKg),
           })
         );
       } else {
@@ -473,15 +484,15 @@ export function ProductCard({
 
     setTimeout(() => {
       setIsBagAnimating(true);
-    }, 320);
+    }, 720);
 
     setTimeout(() => {
       setIsBagAnimating(false);
-    }, 850);
+    }, 1450);
 
     setTimeout(() => {
       setFlyingItems((prev) => prev.filter((item) => item.id !== newId));
-    }, 650);
+    }, 1000);
   };
 
   const handleAddQuantityWithAnimation = () => {
@@ -716,20 +727,32 @@ export function ProductCard({
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border border-amber-200 dark:border-stone-800 rounded-xl shadow-xl z-50 p-1">
-                    {sortedVariants.map((v) => (
-                      <SelectItem
-                        key={v.id}
-                        value={v.id}
-                        className="text-xs sm:text-sm font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
-                      >
-                        <span className="flex items-center justify-between w-full gap-3">
-                          <span>{lang === "bn" ? v.nameBn || v.name : v.name}</span>
-                          <span className="font-mono text-amber-700 dark:text-amber-400 font-bold text-xs">
-                            {formatStorePrice(v.price, lang)}
+                    {sortedVariants.map((v) => {
+                      const vWeight = v.weightKg || (v.weightGrams ? v.weightGrams / 1000 : (v.netQuantity || 1));
+                      const vRatePerKg = product.pricePerKg || Math.round(v.price / vWeight);
+                      const title = lang === "bn" ? v.nameBn || v.name : v.name;
+                      return (
+                        <SelectItem
+                          key={v.id}
+                          value={v.id}
+                          className="text-xs sm:text-sm font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
+                        >
+                          <span className="flex items-center justify-between w-full gap-3">
+                            <span className="flex items-center gap-1.5 truncate">
+                              <span className="font-bold">{title}</span>
+                              {!v.isCombo && (
+                                <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-normal">
+                                  ({formatStorePrice(vRatePerKg, lang)}/কেজি)
+                                </span>
+                              )}
+                            </span>
+                            <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-xs shrink-0">
+                              {formatStorePrice(v.price, lang)}
+                            </span>
                           </span>
-                        </span>
-                      </SelectItem>
-                    ))}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -764,27 +787,20 @@ export function ProductCard({
             )}
 
             {/* Price (displayed below the variation dropdown) */}
-            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 px-1">
-              {/* Unit Price */}
-              <div className="flex flex-wrap items-center gap-1 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
-                <span>
-                  {displayUnit > 0
-                    ? lang === "bn"
-                      ? "একক দর:"
-                      : "Unit Price:"
-                    : lang === "bn"
-                      ? "মূল্য:"
-                      : "Price:"}
-                </span>
-                <span
-                  className={`font-mono ${
-                    displayUnit > 0
-                      ? "text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200"
-                      : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
-                  }`}
-                >
-                  {formatStorePrice(unitPrice, lang)}
-                </span>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
+              {/* Base Rate / Unit Price */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
+                {!selectedVariant.isCombo ? (
+                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2 py-0.5 rounded-md font-mono text-xs sm:text-sm font-black border border-amber-300/60 dark:border-amber-800/60">
+                    <span>{formatStorePrice(product.pricePerKg || Math.round(unitPrice / (selectedVariant.weightKg || 1)), lang)}</span>
+                    <span className="font-sans text-[11px] font-semibold text-amber-800 dark:text-amber-300">/ {lang === "bn" ? "কেজি" : "kg"}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2 py-0.5 rounded-md font-mono text-xs sm:text-sm font-black border border-amber-300/60 dark:border-amber-800/60">
+                    <span>{formatStorePrice(unitPrice, lang)}</span>
+                    <span className="font-sans text-[11px] font-semibold text-amber-800 dark:text-amber-300">({lang === "bn" ? `${(selectedVariant.weightKg || 3).toLocaleString("bn-BD")} কেজি বান্ডিল` : `${selectedVariant.weightKg || 3} kg bundle`})</span>
+                  </span>
+                )}
                 {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
                   <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
                     {formatStorePrice(selectedVariant.compareAtPrice, lang)}
@@ -795,11 +811,6 @@ export function ProductCard({
                     {lang === "bn"
                       ? `${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)} সাশ্রয়`
                       : `Save ${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)}`}
-                  </span>
-                )}
-                {selectedVariant.name && (
-                  <span className="text-[10px] sm:text-[11px] text-amber-700/70 dark:text-amber-400/70 font-normal">
-                    / {lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}
                   </span>
                 )}
               </div>
@@ -820,8 +831,8 @@ export function ProductCard({
                     <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
                       {formatStorePrice(unitPrice * displayUnit, lang)}
                     </span>
-                    <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                      ({lang === "bn" ? `${displayUnit}টি` : `${displayUnit} ${displayUnit > 1 ? "packs" : "pack"}`})
+                    <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
+                      ({lang === "bn" ? `মোট ${((selectedVariant.weightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(selectedVariant.weightKg || 1) * displayUnit} kg`})
                     </span>
                   </motion.div>
                 )}
@@ -853,24 +864,24 @@ export function ProductCard({
                     {flyingItems.map((item) => (
                       <motion.div
                         key={item.id}
-                        initial={{ x: 0, y: 0, scale: 0.7, opacity: 1, rotate: 0 }}
+                        initial={{ x: 0, y: 0, scale: 0.8, opacity: 1, rotate: 0 }}
                         animate={{
                           x: [0, item.dx * 0.45, item.dx],
-                          y: [0, -42, 2],
-                          scale: [0.7, 1.2, 0.2],
-                          rotate: [0, -18, 22],
-                          opacity: [1, 1, 0.15],
+                          y: [0, -54, 2],
+                          scale: [0.8, 1.35, 0.2],
+                          rotate: [0, -22, 28],
+                          opacity: [1, 1, 0.1],
                         }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                        transition={{ duration: 0.95, ease: [0.25, 1, 0.35, 1] }}
                         className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-50 pointer-events-none"
                       >
-                        <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-amber-300 dark:border-amber-400 shadow-[0_4px_14px_rgba(217,119,6,0.6)] bg-white relative flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-300 dark:border-amber-400 shadow-[0_4px_16px_rgba(217,119,6,0.65)] bg-white relative flex items-center justify-center">
                           <Image
                             src={imagesList[currentSlide] || product.image}
                             alt="flying product"
                             fill
-                            sizes="32px"
+                            sizes="36px"
                             className="object-cover"
                           />
                         </div>
@@ -916,7 +927,7 @@ export function ProductCard({
                           <motion.div
                             initial={{ scale: 0.7, opacity: 0.95 }}
                             animate={{ scale: 2.2, opacity: 0 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }}
+                            transition={{ duration: 0.7, ease: "easeOut" }}
                             className="absolute inset-0 rounded-2xl border-2 border-amber-300 bg-amber-300/30 pointer-events-none"
                           />
                         )}
@@ -925,8 +936,8 @@ export function ProductCard({
                         {isBagAnimating && (
                           <motion.span
                             initial={{ y: 0, opacity: 1, scale: 0.7 }}
-                            animate={{ y: -24, opacity: 0, scale: 1.25 }}
-                            transition={{ duration: 0.6, ease: "easeOut" }}
+                            animate={{ y: -30, opacity: 0, scale: 1.3 }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
                             className="absolute -top-3 font-mono font-black text-xs sm:text-sm text-amber-200 pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
                           >
                             +1
@@ -942,7 +953,7 @@ export function ProductCard({
                                 }
                               : { scale: 1 }
                           }
-                          transition={{ duration: 0.45 }}
+                          transition={{ duration: 0.6 }}
                           className={`px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl border transition-all flex items-center justify-center min-w-[56px] sm:min-w-[68px] ${
                             displayUnit > 0
                               ? "bg-black/35 border-white/25 text-white shadow-inner"
@@ -997,7 +1008,7 @@ export function ProductCard({
                           : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
                       }`}
                     >
-                      {lang === "bn" ? `${preset}টি` : preset}
+                      {preset}
                     </button>
                   ))}
                 </div>

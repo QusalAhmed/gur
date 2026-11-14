@@ -26,6 +26,8 @@ export interface OrderItem {
     weight_grams?: number;
     pack_type?: string;
   }>;
+  weight_grams?: number;
+  weight_kg?: number;
 }
 
 export type OrderNoteType =
@@ -110,6 +112,7 @@ export interface Order {
   courier_payload_snapshot?: Record<string, any> | null;
   printed_at?: string | null;
   printed_courier_snapshot?: Record<string, any> | null;
+  total_weight_kg?: number;
   items: OrderItem[];
   notes: OrderNote[];
   events: OrderEvent[];

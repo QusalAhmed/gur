@@ -15,6 +15,9 @@ export interface CartItem {
   descriptionBn?: string;
   isCombo?: boolean;
   comboItems?: any[];
+  weightGrams?: number;
+  weightKg?: number;
+  pricePerKg?: number;
 }
 
 export interface CartState {
@@ -150,6 +153,20 @@ export const selectIsCartHydrated = (state: { cart: CartState }) => state.cart.i
 export const selectCartTotalQuantity = createSelector(
   [selectCartItems],
   (items) => items.reduce((total, item) => total + (item.quantity || 0), 0)
+);
+
+export const selectCartTotalWeightKg = createSelector(
+  [selectCartItems],
+  (items) =>
+    items.reduce((total, item) => {
+      const wKg =
+        typeof item.weightKg === "number" && item.weightKg > 0
+          ? item.weightKg
+          : typeof item.weightGrams === "number" && item.weightGrams > 0
+          ? item.weightGrams / 1000
+          : 1;
+      return total + (item.quantity || 0) * wKg;
+    }, 0)
 );
 
 export const selectCartSubtotal = createSelector(

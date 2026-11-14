@@ -1355,6 +1355,11 @@ export function OrderDetailsSheet({
                                       {item.variant_name && (
                                         <span>{item.variant_name}</span>
                                       )}
+                                      {(item as any).weight_grams ? (
+                                        <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                                          • {(((item as any).weight_grams / 1000) * item.quantity).toLocaleString()} kg
+                                        </span>
+                                      ) : null}
                                       {item.variant_name && item.sku && <span>•</span>}
                                       {item.sku && (
                                         <button
@@ -1442,6 +1447,12 @@ export function OrderDetailsSheet({
                   <div className="flex justify-between">
                     <span>Shipping Fee</span>
                     <span className="font-mono text-foreground">৳ {order.shipping_total.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-foreground font-semibold">
+                    <span>Total Weight (Parcel)</span>
+                    <Badge variant="outline" className="font-mono text-xs bg-amber-500/10 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700">
+                      {((order as any).total_weight_kg || 0).toLocaleString()} kg
+                    </Badge>
                   </div>
                 </div>
 

@@ -564,17 +564,67 @@ export async function saveSupplierPurchaseAction(payload: {
       return { ok: false, message: mapDatabaseError(purErr).message };
     }
 
-    const itemRows: Database["public"]["Tables"]["supplier_purchase_items"]["Insert"][] =
-      cleanItems.map((it) => ({
+    // Resolve default warehouse for automatic inventory replenishment in KG
+    const { data: defaultWh } = await supabase
+      .from("warehouses")
+      .select("id")
+      .eq("is_default", true)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    const warehouseId = defaultWh?.id;
+
+    const itemRows: Database["public"]["Tables"]["supplier_purchase_items"]["Insert"][] = [];
+
+    for (const it of cleanItems) {
+      let stockMovementId: number | null = null;
+      let variantId: string | null = null;
+
+      if (it.productId && warehouseId) {
+        // Resolve base stock variant for this product
+        const { data: baseVar } = await supabase
+          .from("product_variants")
+          .select("id")
+          .eq("product_id", it.productId)
+          .eq("is_active", true)
+          .order("is_default", { ascending: false })
+          .order("sort_order", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (baseVar?.id) {
+          variantId = baseVar.id;
+          // Create stock movement in bulk KG
+          const { data: sm, error: smErr } = await supabase
+            .from("stock_movements")
+            .insert({
+              variant_id: baseVar.id,
+              warehouse_id: warehouseId,
+              movement_type: "purchase",
+              quantity_delta: it.quantity,
+              unit_cost: roundMoney(it.unitPrice),
+              note: `Purchased in KG from supplier (${createdPurchase.purchase_number})`,
+            })
+            .select("id")
+            .single();
+
+          if (!smErr && sm?.id) {
+            stockMovementId = sm.id;
+          }
+        }
+      }
+
+      itemRows.push({
         purchase_id: createdPurchase.id,
         product_id: it.productId,
-        variant_id: null,
+        variant_id: variantId,
         item_name: it.itemName,
         quantity: it.quantity,
         unit: "kg",
         unit_price: roundMoney(it.unitPrice),
-        stock_movement_id: null,
-      }));
+        stock_movement_id: stockMovementId,
+      });
+    }
 
     const { error: itemsErr } = await supabase.from("supplier_purchase_items").insert(itemRows);
     if (itemsErr) {
@@ -627,6 +677,38 @@ export async function voidSupplierPurchaseAction(payload: {
       .eq("status", "active");
 
     if (error) return { ok: false, message: mapDatabaseError(error).message };
+
+    // Reverse inventory replenishment for voided purchase items
+    const { data: pItems } = await supabase
+      .from("supplier_purchase_items")
+      .select("variant_id, quantity, stock_movement_id")
+      .eq("purchase_id", payload.id);
+
+    if (pItems && pItems.length > 0) {
+      const { data: defaultWh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("is_default", true)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      const whId = defaultWh?.id;
+      if (whId) {
+        for (const pi of pItems) {
+          if (pi.variant_id && pi.stock_movement_id) {
+            await supabase.from("stock_movements").insert({
+              variant_id: pi.variant_id,
+              warehouse_id: whId,
+              movement_type: "adjustment",
+              quantity_delta: -Number(pi.quantity),
+              note: `Reversal of voided purchase (${payload.id})`,
+            });
+          }
+        }
+      }
+    }
+
     revalidatePath("/admin/suppliers");
     return { ok: true };
   } catch (err: unknown) {
@@ -739,6 +821,38 @@ export async function voidSupplierPaymentAction(payload: {
       .eq("status", "active");
 
     if (error) return { ok: false, message: mapDatabaseError(error).message };
+
+    // Reverse inventory replenishment for voided purchase items
+    const { data: pItems } = await supabase
+      .from("supplier_purchase_items")
+      .select("variant_id, quantity, stock_movement_id")
+      .eq("purchase_id", payload.id);
+
+    if (pItems && pItems.length > 0) {
+      const { data: defaultWh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("is_default", true)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      const whId = defaultWh?.id;
+      if (whId) {
+        for (const pi of pItems) {
+          if (pi.variant_id && pi.stock_movement_id) {
+            await supabase.from("stock_movements").insert({
+              variant_id: pi.variant_id,
+              warehouse_id: whId,
+              movement_type: "adjustment",
+              quantity_delta: -Number(pi.quantity),
+              note: `Reversal of voided purchase (${payload.id})`,
+            });
+          }
+        }
+      }
+    }
+
     revalidatePath("/admin/suppliers");
     return { ok: true };
   } catch (err: unknown) {
