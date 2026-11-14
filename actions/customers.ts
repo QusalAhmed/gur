@@ -17,6 +17,7 @@ export interface CustomerItem {
   spentNumeric: number;
   joined: string;
   lastOrder: string;
+  fbLink?: string | null;
 }
 
 export interface BusinessItem {
@@ -54,7 +55,7 @@ export async function getAdminCustomersAction(): Promise<{
     const [customersRes, businessesRes, membersRes] = await Promise.all([
       supabase
         .from("customers")
-        .select("id, full_name, phone, email, total_orders, total_spent, last_order_at, user_id, created_at")
+        .select("id, full_name, phone, email, total_orders, total_spent, last_order_at, user_id, created_at, fb_link")
         .order("created_at", { ascending: false })
         .limit(500),
 
@@ -98,6 +99,7 @@ export async function getAdminCustomersAction(): Promise<{
       spentNumeric: Number(c.total_spent || 0),
       joined: c.created_at,
       lastOrder: c.last_order_at || c.created_at,
+      fbLink: c.fb_link || null,
     }));
 
     // Count members per business

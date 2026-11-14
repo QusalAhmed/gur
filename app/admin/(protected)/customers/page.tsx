@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Ban,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -157,7 +158,7 @@ export default function CustomersPage() {
 
   const handleExportCustomersCSV = (selected: CustomerItem[]) => {
     const list = selected.length > 0 ? selected : customers;
-    const headers = ["ID", "Name", "Email", "Phone", "Type", "Orders", "Spent", "Joined", "LastOrder"];
+    const headers = ["ID", "Name", "Email", "Phone", "Type", "Orders", "Spent", "Joined", "LastOrder", "FBLink"];
     const rows = list.map((c) => [
       c.id,
       `"${c.name}"`,
@@ -168,6 +169,7 @@ export default function CustomersPage() {
       `"${c.spent}"`,
       formatDate(c.joined),
       formatDate(c.lastOrder),
+      c.fbLink ? `"${c.fbLink}"` : "",
     ]);
     const csv = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const link = document.createElement("a");
@@ -233,9 +235,23 @@ export default function CustomersPage() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
-                {c.name}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm text-foreground hover:text-amber-600 transition-colors">
+                  {c.name}
+                </p>
+                {c.fbLink && (
+                  <a
+                    href={c.fbLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-600 hover:text-blue-700 transition-colors p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                    title="Open Facebook Profile"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">{c.phone}</p>
             </div>
           </div>
