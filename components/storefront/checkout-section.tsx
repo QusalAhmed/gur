@@ -59,6 +59,8 @@ import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
 import { LiveStockSection } from "./live-stock-section";
 import type { Order } from "@/types/order";
+import { type DeliveryChargeConfig } from "@/lib/delivery-charge";
+import { useDeliveryCharge } from "@/hooks/use-delivery-charge";
 import {
   trackInitiateCheckout,
   trackAddToCart,
@@ -147,12 +149,14 @@ interface CheckoutSectionProps {
   lang: StorefrontLang;
   hotline: string;
   onScrollToProducts: () => void;
+  deliveryConfig?: DeliveryChargeConfig;
 }
 
 export function CheckoutSection({
   lang,
   hotline = "01843557389",
   onScrollToProducts,
+  deliveryConfig,
 }: CheckoutSectionProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -176,8 +180,20 @@ export function CheckoutSection({
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const t = STOREFRONT_TEXT[lang];
-  const deliveryCharge = deliveryZone === "inside_dhaka" ? 70 : 130;
-  const grandTotal = displaySubtotal + (displayCartItems.length > 0 ? deliveryCharge : 0);
+
+  // Dynamic delivery charge calculated authoritatively using central rates & free delivery threshold
+  const {
+    fee: deliveryCharge,
+    isFree: isFreeDelivery,
+    config: deliveryConfigResolved,
+  } = useDeliveryCharge({
+    zone: deliveryZone,
+    subtotal: displaySubtotal,
+    hasItems: displayCartItems.length > 0,
+    overrideConfig: deliveryConfig,
+  });
+
+  const grandTotal = displaySubtotal + deliveryCharge;
   const rawHotline = hotline.replace(/[^0-9]/g, "");
 
   const store = useAppStore();
@@ -604,6 +620,7 @@ const form = useForm({
         customerName: value.customerName?.trim() || undefined,
         customerPhone: parseBdPhone(value.customerPhone).local || value.customerPhone.trim(),
         deliveryZone,
+        expectedShippingTotal: deliveryCharge,
         addressLine: value.addressLine?.trim() || undefined,
         customerNote: value.customerNote?.trim() || undefined,
         eventId: purchaseEventId,
@@ -733,9 +750,16 @@ return (
                     )
                   </span>
                 </div>
-                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
-                  {formatStorePrice(deliveryCharge, lang)}
-                </span>
+                {isFreeDelivery ? (
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full text-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 font-sans shadow-sm">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    {lang === "bn" ? "ফ্রি ডেলিভারি" : "Free Delivery"}
+                  </span>
+                ) : (
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
+                    {formatStorePrice(deliveryCharge, lang)}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-black text-amber-950 dark:text-amber-100">
@@ -965,8 +989,17 @@ return (
                   <span className="font-extrabold text-sm sm:text-base">
                     {lang === "bn" ? "ঢাকার ভিতরে" : "Inside Dhaka"}
                   </span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                    {lang === "bn" ? "চার্জ ৳৭০" : "Fee ৳70"}
+                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    {isFreeDelivery ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">
+                        <Sparkles className="w-3 h-3" />
+                        {lang === "bn" ? "চার্জ ফ্রি" : "Free"}
+                      </span>
+                    ) : (
+                      lang === "bn"
+                        ? `চার্জ ৳${deliveryConfigResolved.insideDhakaFee}`
+                        : `Fee ৳${deliveryConfigResolved.insideDhakaFee}`
+                    )}
                   </span>
                 </button>
 
@@ -983,8 +1016,17 @@ return (
                   <span className="font-extrabold text-sm sm:text-base">
                     {lang === "bn" ? "ঢাকার বাইরে" : "Outside Dhaka"}
                   </span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                    {lang === "bn" ? "চার্জ ৳১৩০" : "Fee ৳130"}
+                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    {isFreeDelivery ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">
+                        <Sparkles className="w-3 h-3" />
+                        {lang === "bn" ? "চার্জ ফ্রি" : "Free"}
+                      </span>
+                    ) : (
+                      lang === "bn"
+                        ? `চার্জ ৳${deliveryConfigResolved.outsideDhakaFee}`
+                        : `Fee ৳${deliveryConfigResolved.outsideDhakaFee}`
+                    )}
                   </span>
                 </button>
               </div>

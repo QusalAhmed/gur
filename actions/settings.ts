@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { invalidateDeliveryConfigCache } from "@/lib/delivery-charge";
 
 export interface SiteSettingsMap {
   // Store Profile
@@ -51,6 +52,12 @@ export interface SiteSettingsMap {
   "orders.unpaid_online_expiry_minutes"?: number;
   "orders.auto_cancel_cod_hours"?: string | number;
   "orders.allow_backorders"?: string;
+
+  // Shipping & Central Delivery Charges
+  "shipping.inside_dhaka_fee"?: number;
+  "shipping.outside_dhaka_fee"?: number;
+  "shipping.free_delivery_enabled"?: boolean;
+  "shipping.free_delivery_threshold"?: number;
 
   // Inventory Thresholds & Production
   "inventory.low_stock_threshold_bulk"?: number;
@@ -160,6 +167,10 @@ const PUBLIC_SETTING_KEYS = new Set([
   "seo.allow_indexing",
   "checkout.cod_enabled",
   "checkout.guest_checkout_enabled",
+  "shipping.inside_dhaka_fee",
+  "shipping.outside_dhaka_fee",
+  "shipping.free_delivery_enabled",
+  "shipping.free_delivery_threshold",
   "inventory.daily_production_kg",
   "inventory.simulated_demand_enabled",
   "inventory.simulated_demand_kg",
@@ -319,6 +330,7 @@ export async function updateSiteSettingsAction(
     }
 
     // Revalidate paths and caches that consume site settings
+    invalidateDeliveryConfigCache();
     revalidateTag("site-settings", "max");
     revalidateTag("storefront-products", "max");
     revalidatePath("/admin/settings");

@@ -4,12 +4,14 @@ import { cacheLife, cacheTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import type { StorefrontProduct } from "@/components/storefront/product-card";
+import { DeliveryChargeConfig, DEFAULT_DELIVERY_CONFIG } from "@/lib/delivery-charge";
 
 export interface StorefrontDataResult {
   products: StorefrontProduct[];
   hotline: string;
   storeName: string;
   storeSubtitle: string;
+  deliveryConfig: DeliveryChargeConfig;
 }
 
 export interface PublicLiveStockStatsResult {
@@ -90,24 +92,47 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
   let storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  const deliveryConfig: DeliveryChargeConfig = { ...DEFAULT_DELIVERY_CONFIG };
 
   try {
     const { data: settings } = await client
       .from("site_settings")
       .select("key, value")
       .eq("is_public", true)
-      .in("key", ["store.support_phone", "store.name_bn", "store.name", "store.subtitle"]);
+      .in("key", [
+        "store.support_phone",
+        "store.name_bn",
+        "store.name",
+        "store.subtitle",
+        "shipping.inside_dhaka_fee",
+        "shipping.outside_dhaka_fee",
+        "shipping.free_delivery_enabled",
+        "shipping.free_delivery_threshold",
+      ]);
 
     if (settings) {
       let nameEn = "";
       let nameBn = "";
       for (const row of settings) {
-        const cleanVal = String(row.value || "").replace(/^["']|["']$/g, "").trim();
-        if (!cleanVal) continue;
-        if (row.key === "store.support_phone") hotline = cleanVal;
-        if (row.key === "store.name") nameEn = cleanVal;
-        if (row.key === "store.name_bn") nameBn = cleanVal;
-        if (row.key === "store.subtitle") storeSubtitle = cleanVal;
+        const val = row.value;
+        const cleanVal = String(val || "").replace(/^["']|["']$/g, "").trim();
+        if (row.key === "store.support_phone" && cleanVal) hotline = cleanVal;
+        if (row.key === "store.name" && cleanVal) nameEn = cleanVal;
+        if (row.key === "store.name_bn" && cleanVal) nameBn = cleanVal;
+        if (row.key === "store.subtitle" && cleanVal) storeSubtitle = cleanVal;
+
+        if (row.key === "shipping.inside_dhaka_fee") {
+          const num = typeof val === "number" ? val : parseFloat(cleanVal);
+          if (!isNaN(num) && num >= 0) deliveryConfig.insideDhakaFee = num;
+        } else if (row.key === "shipping.outside_dhaka_fee") {
+          const num = typeof val === "number" ? val : parseFloat(cleanVal);
+          if (!isNaN(num) && num >= 0) deliveryConfig.outsideDhakaFee = num;
+        } else if (row.key === "shipping.free_delivery_enabled") {
+          deliveryConfig.freeDeliveryEnabled = val === true || val === "true" || cleanVal === "true";
+        } else if (row.key === "shipping.free_delivery_threshold") {
+          const num = typeof val === "number" ? val : parseFloat(cleanVal);
+          if (!isNaN(num) && num >= 0) deliveryConfig.freeDeliveryThreshold = num;
+        }
       }
       if (nameBn) storeName = nameBn;
       else if (nameEn) storeName = nameEn;
@@ -273,6 +298,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     hotline,
     storeName,
     storeSubtitle,
+    deliveryConfig,
   };
 }
 

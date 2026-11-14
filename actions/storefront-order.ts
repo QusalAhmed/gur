@@ -7,6 +7,7 @@ import { captureStorefrontMetaTrackingInternal } from "@/lib/capi-service";
 import { createNotificationInternal } from "@/lib/notifications-service";
 import { clampInt, isValidUuid, safePublicErrorMessage } from "@/lib/security";
 import { enqueueAndDispatch } from "@/lib/outbox";
+import { calculateAuthoritativeDeliveryCharge, getCachedDeliveryConfig } from "@/lib/delivery-charge";
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -28,6 +29,7 @@ export interface StorefrontOrderPayload {
   district?: string;
   courierName?: string;
   customerNote?: string;
+  expectedShippingTotal?: number; // Claimed delivery charge from client to strictly verify against central rates
   // Multiple items from Redux cart
   items?: StorefrontOrderItem[];
   // Single-item backwards compatibility
@@ -398,8 +400,29 @@ export async function placeStorefrontOrderAction(
         : 0;
 
       const hasDeliveryZone = Boolean(payload.deliveryZone);
-      const isDhaka = payload.deliveryZone === "inside_dhaka";
-      const baseShippingFee = hasItems && hasDeliveryZone ? (isDhaka ? 70 : 130) : 0;
+      const deliveryConfig = await getCachedDeliveryConfig();
+      const authoritativeCharge = calculateAuthoritativeDeliveryCharge({
+        zone: payload.deliveryZone,
+        subtotal: rawSubtotal,
+        hasItems,
+        config: deliveryConfig,
+      });
+      const baseShippingFee = authoritativeCharge.fee;
+
+      // Strict Pre-Verification: Verify client-claimed shipping fee before executing RPC
+      if (
+        targetStatus === "pending" &&
+        payload.expectedShippingTotal !== undefined &&
+        hasItems &&
+        hasDeliveryZone
+      ) {
+        if (Math.abs(payload.expectedShippingTotal - baseShippingFee) > 0.01) {
+          return {
+            success: false,
+            error: `ডেলিভারি চার্জ পরিবর্তিত হয়েছে (দাবিকৃত: ৳${payload.expectedShippingTotal}, নির্ধারিত: ৳${baseShippingFee})। অনুগ্রহ করে পেজটি রিফ্রেশ করুন।`,
+          };
+        }
+      }
 
       const metaTracking = await captureStorefrontMetaTrackingInternal({
         eventId: payload.eventId,
@@ -449,6 +472,10 @@ export async function placeStorefrontOrderAction(
           p_division: payload.division !== undefined ? (payload.division.trim() || null) : null,
           p_district: payload.district !== undefined ? (payload.district.trim() || null) : null,
           p_courier_name: payload.courierName !== undefined ? (payload.courierName.trim() || null) : null,
+          p_expected_shipping_total:
+            targetStatus === "pending" && hasItems && hasDeliveryZone
+              ? (payload.expectedShippingTotal ?? baseShippingFee)
+              : null,
           p_items: resolvedItems.map((item) => ({
             product_id: item.productId,
             product_name: item.productName || "খেজুরের খাঁটি গুড়",
@@ -585,6 +612,14 @@ export async function placeStorefrontOrderAction(
             phone: rpcData.phone,
             deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
             eventId: payload.eventId,
+          };
+        }
+
+        // If the error was a delivery charge mismatch validation error raised by the RPC (code P0002)
+        if (rpcErr && rpcErr.code === "P0002") {
+          return {
+            success: false,
+            error: "ডেলিভারি চার্জ পরিবর্তিত হয়েছে। অনুগ্রহ করে পেজটি রিফ্রেশ করুন।",
           };
         }
 

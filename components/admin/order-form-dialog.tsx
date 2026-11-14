@@ -540,7 +540,10 @@ export function OrderFormDialog({
       status: (mode === "edit" ? (order?.status || "confirmed") : (defaultStatus || "confirmed")) as Order["status"],
       payment: (mode === "edit" ? (order?.payment || "unpaid") : "unpaid") as Order["payment"],
       fulfillment: (mode === "edit" ? (order?.fulfillment || "unfulfilled") : "unfulfilled") as Order["fulfillment"],
-      shipping_total: mode === "edit" ? (order?.shipping_total ?? 120) : 120,
+      shipping_total:
+        mode === "edit"
+          ? (order?.shipping_total ?? 70)
+          : (order?.address?.district && (order.address.district.toLowerCase() === "dhaka" || order.address.district === "ঢাকা") ? 70 : 130),
       discount_total: mode === "edit" ? (order?.discount_total ?? 0) : 0,
       amount_paid: mode === "edit" ? (order?.amount_paid ?? 0) : 0,
       customer_note: mode === "edit" ? (order?.customer_note || "") : "",
@@ -955,7 +958,7 @@ export function OrderFormDialog({
           status: order.status || "confirmed",
           payment: order.payment || "unpaid",
           fulfillment: order.fulfillment || "unfulfilled",
-          shipping_total: order.shipping_total ?? 120,
+          shipping_total: order.shipping_total ?? 70,
           discount_total: order.discount_total ?? 0,
           amount_paid: order.amount_paid ?? 0,
           customer_note: order.customer_note || "",
@@ -990,7 +993,7 @@ export function OrderFormDialog({
           status: defaultStatus || "confirmed",
           payment: "unpaid",
           fulfillment: "unfulfilled",
-          shipping_total: 120,
+          shipping_total: 130,
           discount_total: 0,
           amount_paid: 0,
           customer_note: "",
@@ -1742,7 +1745,15 @@ export function OrderFormDialog({
                           <DistrictCombobox
                             id="order_form_district"
                             value={field.state.value}
-                            onChange={(val) => field.handleChange(val)}
+                            onChange={(val) => {
+                              field.handleChange(val);
+                              if (mode !== "edit") {
+                                const isDhaka =
+                                  (val || "").trim().toLowerCase() === "dhaka" ||
+                                  (val || "").trim() === "ঢাকা";
+                                form.setFieldValue("shipping_total", isDhaka ? 70 : 130);
+                              }
+                            }}
                             onBlur={field.handleBlur}
                             divisionId={currentDivObj?.id}
                             divisionName={currentDivName}

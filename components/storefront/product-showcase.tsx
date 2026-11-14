@@ -20,6 +20,7 @@ import {
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
 import { useStorefrontIntro } from "@/hooks/use-storefront-intro";
+import type { DeliveryChargeConfig } from "@/lib/delivery-charge";
 
 // Code-split heavy interactive sections & modals to reduce initial mobile bundle size
 const CheckoutSection = dynamic(
@@ -44,6 +45,7 @@ interface ProductShowcaseProps {
   featuredIdentifier?: string;
   initialVariantId?: string;
   autoScrollToProduct?: boolean;
+  deliveryConfig?: DeliveryChargeConfig;
 }
 
 export function ProductShowcase({
@@ -56,6 +58,7 @@ export function ProductShowcase({
   featuredIdentifier,
   initialVariantId,
   autoScrollToProduct = false,
+  deliveryConfig,
 }: ProductShowcaseProps) {
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
@@ -619,6 +622,7 @@ export function ProductShowcase({
           lang={lang}
           hotline={defaultHotline}
           onScrollToProducts={() => scrollToSection(productsStartIndex)}
+          deliveryConfig={deliveryConfig}
         />
       </main>
 
@@ -634,7 +638,11 @@ export function ProductShowcase({
 
       {/* Redux Cart Drawer Sheet */}
       {isCartOpen && (
-        <CartSheet lang={lang} onProceedToCheckout={handleCheckoutFromCart} />
+        <CartSheet
+          lang={lang}
+          onProceedToCheckout={handleCheckoutFromCart}
+          deliveryConfig={deliveryConfig}
+        />
       )}
     </div>
   );

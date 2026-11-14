@@ -72,6 +72,7 @@ export function StorefrontProductsClient({
         featuredIdentifier={effectiveFeaturedId}
         initialVariantId={effectiveVariantId}
         autoScrollToProduct={effectiveAutoScroll}
+        deliveryConfig={data?.deliveryConfig}
       />
     </>
   );

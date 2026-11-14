@@ -18,13 +18,16 @@ import {
   clearCart,
 } from "@/lib/redux/slices/cart-slice";
 import { trackAddToCart, getClientFbpAndFbc, sendCapiClientEvent } from "@/lib/facebook-pixel";
+import { type DeliveryChargeConfig } from "@/lib/delivery-charge";
+import { useDeliveryConfig } from "@/hooks/use-delivery-charge";
 
 interface CartSheetProps {
   lang: StorefrontLang;
   onProceedToCheckout: () => void;
+  deliveryConfig?: DeliveryChargeConfig;
 }
 
-export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
+export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartSheetProps) {
   const dispatch = useAppDispatch();
   const isOpen = useAppSelector(selectIsCartOpen);
   const items = useAppSelector(selectCartItems);
@@ -33,6 +36,9 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
   const [isMounted, setIsMounted] = useState(false);
 
   const t = STOREFRONT_TEXT[lang];
+  const config = useDeliveryConfig(deliveryConfig);
+  const isFreeDelivery =
+    config.freeDeliveryEnabled && config.freeDeliveryThreshold > 0 && subtotal >= config.freeDeliveryThreshold;
 
   useEffect(() => {
     setIsMounted(true);
@@ -263,9 +269,19 @@ export function CartSheet({ lang, onProceedToCheckout }: CartSheetProps) {
                     <span>{t.subtotal}</span>
                     <span className="font-bold">{formatStorePrice(subtotal, lang)}</span>
                   </div>
-                  <div className="flex justify-between text-stone-600 dark:text-stone-400 text-xs">
+                  <div className="flex justify-between items-center text-stone-600 dark:text-stone-400 text-xs">
                     <span>{t.deliveryCharge}</span>
-                    <span className="font-medium">{lang === "bn" ? "৳৭০ (ঢাকা) / ৳১৩০ (বাইরে)" : "৳70 (Dhaka) / ৳130 (Out)"}</span>
+                    {isFreeDelivery ? (
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-[11px] border border-emerald-200 dark:border-emerald-800">
+                        {lang === "bn" ? "ফ্রি ডেলিভারি" : "Free Delivery"}
+                      </span>
+                    ) : (
+                      <span className="font-medium">
+                        {lang === "bn"
+                          ? `৳${config.insideDhakaFee} (ঢাকা) / ৳${config.outsideDhakaFee} (বাইরে)`
+                          : `৳${config.insideDhakaFee} (Dhaka) / ৳${config.outsideDhakaFee} (Out)`}
+                      </span>
+                    )}
                   </div>
                   <div className="pt-2 border-t border-amber-200 dark:border-stone-700 flex justify-between items-baseline">
                     <span className="font-extrabold text-sm sm:text-base text-amber-950 dark:text-amber-100">

@@ -86,6 +86,12 @@ export default function SettingsPage() {
   const [lowStockRetail, setLowStockRetail] = React.useState(20);
   const [dailyProductionKg, setDailyProductionKg] = React.useState(50);
 
+  // Courier Delivery Charges & Central Shipping Policies
+  const [insideDhakaFee, setInsideDhakaFee] = React.useState(70);
+  const [outsideDhakaFee, setOutsideDhakaFee] = React.useState(130);
+  const [freeDeliveryEnabled, setFreeDeliveryEnabled] = React.useState(false);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = React.useState(0);
+
   // Simulated Stock & Pre-Order Urgency State (Inngest)
   const [simulatedDemandEnabled, setSimulatedDemandEnabled] = React.useState(true);
   const [simulatedDemandKg, setSimulatedDemandKg] = React.useState(0);
@@ -240,6 +246,20 @@ export default function SettingsPage() {
           setSimulatedDemandIntervalMins(Number(data["inventory.simulated_demand_interval_mins"]) || 10);
         }
 
+        // Courier Delivery Charges & Central Shipping Policies
+        if (data["shipping.inside_dhaka_fee"] !== undefined) {
+          setInsideDhakaFee(Number(data["shipping.inside_dhaka_fee"]) || 70);
+        }
+        if (data["shipping.outside_dhaka_fee"] !== undefined) {
+          setOutsideDhakaFee(Number(data["shipping.outside_dhaka_fee"]) || 130);
+        }
+        if (typeof data["shipping.free_delivery_enabled"] === "boolean") {
+          setFreeDeliveryEnabled(data["shipping.free_delivery_enabled"]);
+        }
+        if (data["shipping.free_delivery_threshold"] !== undefined) {
+          setFreeDeliveryThreshold(Number(data["shipping.free_delivery_threshold"]) || 0);
+        }
+
         // SMS & Notifications
         if (typeof data["notifications.sms_enabled"] === "boolean") {
           setSmsEnabled(data["notifications.sms_enabled"]);
@@ -385,6 +405,10 @@ export default function SettingsPage() {
         "checkout.guest_checkout_enabled": guestCheckoutEnabled,
         "orders.auto_cancel_cod_hours": autoCancelCodHours,
         "orders.allow_backorders": allowBackorders,
+        "shipping.inside_dhaka_fee": Math.max(0, Number(insideDhakaFee) || 0),
+        "shipping.outside_dhaka_fee": Math.max(0, Number(outsideDhakaFee) || 0),
+        "shipping.free_delivery_enabled": freeDeliveryEnabled,
+        "shipping.free_delivery_threshold": Math.max(0, Number(freeDeliveryThreshold) || 0),
         "inventory.low_stock_threshold_bulk": Number(lowStockBulk),
         "inventory.low_stock_threshold_retail": Number(lowStockRetail),
         "inventory.daily_production_kg": Number(dailyProductionKg) || 50,
@@ -892,6 +916,106 @@ export default function SettingsPage() {
                     <p className="text-[11px] text-muted-foreground">
                       Controls whether the cart accepts orders for items with zero warehouse inventory.
                     </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Courier Delivery Charges & Free Shipping Policy */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-amber-600" />
+                  Courier Delivery Charges &amp; Free Shipping
+                </CardTitle>
+                <CardDescription>
+                  Central delivery fees for inside and outside Dhaka, used across storefront checkout and strictly verified upon order placement.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Inside Dhaka Delivery Fee (৳)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={insideDhakaFee}
+                      onChange={(e) => setInsideDhakaFee(Math.max(0, Number(e.target.value) || 0))}
+                      placeholder="70"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Standard courier delivery fee for addresses within Dhaka district.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Outside Dhaka Delivery Fee (৳)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={outsideDhakaFee}
+                      onChange={(e) => setOutsideDhakaFee(Math.max(0, Number(e.target.value) || 0))}
+                      placeholder="130"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Standard nationwide courier fee for all districts outside Dhaka.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t">
+                  <div className="grid gap-4 sm:grid-cols-2 items-start">
+                    {/* Free Delivery Toggle Card */}
+                    <div
+                      onClick={() => setFreeDeliveryEnabled(!freeDeliveryEnabled)}
+                      className={`flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                        freeDeliveryEnabled
+                          ? "border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-500/10"
+                          : "border-border bg-card hover:bg-muted/40"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={freeDeliveryEnabled}
+                        onCheckedChange={(checked) => setFreeDeliveryEnabled(Boolean(checked))}
+                        className="mt-0.5"
+                      />
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-semibold cursor-pointer flex items-center gap-1.5">
+                          <span>Enable Free Delivery Threshold</span>
+                          <Sparkles className="h-3 w-3 text-emerald-600" />
+                        </label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Automatically waive courier charges when cart subtotal meets or exceeds the threshold.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Free Delivery Threshold Input */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold flex items-center justify-between">
+                        <span>Free Delivery Minimum Subtotal (৳)</span>
+                        {!freeDeliveryEnabled && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            Disabled
+                          </Badge>
+                        )}
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={50}
+                        disabled={!freeDeliveryEnabled}
+                        value={freeDeliveryThreshold}
+                        onChange={(e) => setFreeDeliveryThreshold(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="1500"
+                        className={!freeDeliveryEnabled ? "opacity-50" : ""}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Customer orders with product subtotal equal to or above this amount get free delivery.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
