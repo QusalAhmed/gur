@@ -118,7 +118,7 @@ export function WhyBuyFromUs({
           whileInView={{ opacity: 1, y: 0, scale: 1 }}
           viewport={{ once: false, amount: 0.1 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
-          className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs hover:border-amber-400 transition-colors"
+          className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs hover:border-amber-400 transition-colors"
         >
           <motion.span
             animate={{ rotate: [0, 15, -15, 0] }}
@@ -149,7 +149,7 @@ export function WhyBuyFromUs({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: false, amount: 0.1 }}
           transition={{ duration: 0.5, delay: 0.16, ease: "easeOut" }}
-          className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto leading-relaxed"
+          className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-lg mx-auto leading-relaxed"
         >
           {t.whyBuySubtitle}
         </motion.p>
@@ -191,10 +191,10 @@ export function WhyBuyFromUs({
 
               {/* Title & Description */}
               <div className="relative min-w-0 space-y-1">
-                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-stone-100 leading-snug group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
+                <h3 className="text-sm sm:text-base font-extrabold text-stone-900 dark:text-stone-100 leading-snug group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
                   {item.title}
                 </h3>
-                <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
                   {item.desc}
                 </p>
               </div>
@@ -212,7 +212,7 @@ export function WhyBuyFromUs({
         whileHover={{ scale: 1.01 }}
         className="relative overflow-hidden mt-3.5 sm:mt-4 bg-gradient-to-r from-emerald-50 via-amber-50/50 to-emerald-50 dark:from-emerald-950/30 dark:via-stone-900 dark:to-emerald-950/30 border-2 border-emerald-500/50 dark:border-emerald-600/50 rounded-2xl p-3.5 sm:p-4 text-center space-y-1.5 shadow-sm"
       >
-        <div className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs sm:text-sm">
+        <div className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-extrabold text-sm sm:text-base">
           <motion.div
             animate={{ scale: [1, 1.2, 1], rotate: [0, 8, 0] }}
             transition={{
@@ -226,7 +226,7 @@ export function WhyBuyFromUs({
           </motion.div>
           <span>{t.whyBuyGuaranteeTitle}</span>
         </div>
-        <p className="text-[11px] sm:text-xs text-stone-600 dark:text-stone-300 max-w-md mx-auto leading-relaxed">
+        <p className="text-xs sm:text-sm md:text-base text-stone-600 dark:text-stone-300 max-w-md mx-auto leading-relaxed">
           {t.whyBuyGuaranteeDesc}
         </p>
       </motion.div>

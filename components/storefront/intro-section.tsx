@@ -119,7 +119,7 @@ export function IntroSection({
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
       {/* Top Heritage Pill & Badges */}
       <div className="text-center space-y-2 px-2">
-        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
+        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
           <span>{t.introBadge}</span>
           <span className="opacity-40">•</span>
@@ -132,7 +132,7 @@ export function IntroSection({
           {displayName}
         </h1>
 
-        <p className="text-xs sm:text-sm md:text-base text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
+        <p className="text-sm sm:text-base md:text-lg text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
           {displaySubtitle}
         </p>
       </div>
@@ -157,7 +157,7 @@ export function IntroSection({
                     />
                   </span>
                 </div>
-                <span className="block text-[11px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium leading-tight">
+                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-medium leading-tight">
                   {s.label}
                 </span>
               </div>
@@ -174,10 +174,10 @@ export function IntroSection({
             {t.introHeritageHeading}
           </h2>
         </div>
-        <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
+        <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
           {t.introHeritageText}
         </p>
-        <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs font-semibold text-emerald-800 dark:text-emerald-400 border-t border-amber-200/80 dark:border-stone-800">
+        <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-xs sm:text-sm md:text-base font-semibold text-emerald-800 dark:text-emerald-400 border-t border-amber-200/80 dark:border-stone-800">
           <span>{t.introCustomerPromise}</span>
           <div className="flex items-center gap-2">
             {onScrollToWhyBuy && (
@@ -210,7 +210,7 @@ export function IntroSection({
           type="button"
           onClick={handleScrollToProducts}
           aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
         >
           <span>{t.viewProductsBtn}</span>
           <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />

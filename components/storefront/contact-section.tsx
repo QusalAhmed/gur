@@ -178,7 +178,7 @@ export function ContactSection({
         transition={{ duration: 0.45, ease: "easeOut" }}
         className="text-center mb-3 sm:mb-4 px-2 space-y-1 sm:space-y-1.5"
       >
-        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-xs font-bold shadow-xs">
+        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
           <span>{displayName}</span>
           <span className="opacity-40">•</span>
@@ -189,7 +189,7 @@ export function ContactSection({
           {lang === "bn" ? "সরাসরি কথা বলে নিশ্চিত অর্ডার করুন" : "Direct Phone Order & Support"}
         </h1>
 
-        <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+        <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
           {lang === "bn"
             ? "গাছিদের সংগ্রহ করা আসল খাঁটি গুড় কিনতে নিচের যেকোনো মাধ্যমে সরাসরি কথা বলুন। কোনো অগ্রিম টাকা নেই।"
             : "Have questions or want to place an order? Call us with 1-tap. No advance payment required."}
@@ -212,10 +212,10 @@ export function ContactSection({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                   {t.phoneCallTitle}
                 </span>
-                <span className="inline-block bg-emerald-100/90 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] px-1.5 py-0.2 rounded">
+                <span className="inline-block bg-emerald-100/90 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs px-2 py-0.5 rounded">
                   {lang === "bn" ? "হটলাইন" : "Hotline"}
                 </span>
               </div>
@@ -243,7 +243,7 @@ export function ContactSection({
                   className="h-0.5 bg-emerald-500 rounded-full block group-hover/phone:w-full transition-all duration-300 mt-0.5"
                 />
               </button>
-              <span className="block text-[11px] text-stone-600 dark:text-stone-400 mt-1">
+              <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1">
                 {lang === "bn" ? "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা" : "Daily 8:00 AM - 10:00 PM"}
               </span>
             </div>
@@ -254,7 +254,7 @@ export function ContactSection({
               href={`tel:${rawPhone}`}
               onClick={() => handleContactClick("phone")}
               aria-label={`${t.phoneCallTitle}: ${hotline} - ${t.callNowBtn}`}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm py-2.5 sm:py-3 px-5 sm:px-6 rounded-xl sm:rounded-2xl shadow-md transition-all touch-manipulation cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm sm:text-base py-3 sm:py-3.5 px-5 sm:px-6 rounded-xl sm:rounded-2xl shadow-md transition-all touch-manipulation cursor-pointer"
             >
               <Phone className="w-4 h-4" aria-hidden="true" />
               <span>{t.callNowBtn}</span>
@@ -266,7 +266,7 @@ export function ContactSection({
               whileTap={{ scale: 0.93 }}
               onClick={handleCopyNumber}
               aria-label={copied ? (lang === "bn" ? "হটলাইন নম্বর কপি হয়েছে" : "Hotline number copied") : (lang === "bn" ? "হটলাইন নম্বর কপি করুন" : "Copy hotline number")}
-              className={`relative inline-flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl border transition-all duration-200 touch-manipulation cursor-pointer select-none ${
+              className={`relative inline-flex items-center justify-center gap-1.5 text-sm font-bold py-3 sm:py-3.5 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl border transition-all duration-200 touch-manipulation cursor-pointer select-none ${
                 copied
                   ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-500/70 dark:border-emerald-500/60 shadow-sm ring-2 ring-emerald-500/25"
                   : "bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700"
@@ -294,7 +294,7 @@ export function ContactSection({
                     transition={{ type: "spring", stiffness: 500, damping: 24 }}
                     className="absolute -top-1 left-1/2 -translate-x-1/2 z-30 pointer-events-none whitespace-nowrap drop-shadow-lg"
                   >
-                    <div className="bg-stone-900/95 dark:bg-stone-100 text-stone-50 dark:text-stone-900 text-[11px] font-bold py-1 px-3 rounded-full flex items-center gap-1.5 border border-emerald-500/40 backdrop-blur-xs">
+                    <div className="bg-stone-900/95 dark:bg-stone-100 text-stone-50 dark:text-stone-900 text-xs font-bold py-1 px-3 rounded-full flex items-center gap-1.5 border border-emerald-500/40 backdrop-blur-xs">
                       <Check className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600 stroke-[2.5]" />
                       <span>{lang === "bn" ? "নম্বর কপি হয়েছে!" : "Phone copied!"}</span>
                     </div>
@@ -315,7 +315,7 @@ export function ContactSection({
                     className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold"
                   >
                     <Check className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
-                    <span className="text-[11px]">{t.numberCopied}</span>
+                    <span className="text-xs">{t.numberCopied}</span>
                   </motion.span>
                 ) : (
                   <motion.span
@@ -327,7 +327,7 @@ export function ContactSection({
                     className="inline-flex items-center gap-1.5"
                   >
                     <Copy className="w-4 h-4" aria-hidden="true" />
-                    <span className="hidden xs:inline text-[11px] font-semibold">{t.copyNumberBtn}</span>
+                    <span className="hidden xs:inline text-xs font-semibold">{t.copyNumberBtn}</span>
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -361,15 +361,15 @@ export function ContactSection({
                 <MessageCircle className="w-5 h-5 fill-current" aria-hidden="true" />
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
                   {t.whatsappTitle}
                 </span>
-                <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
+                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
                   {lang === "bn" ? "মেসেজে অর্ডার" : "Chat & Order"}
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+            <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
               <span>{t.whatsappChatBtn}</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
             </span>
@@ -395,15 +395,15 @@ export function ContactSection({
                 </svg>
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
                   {t.messengerTitle}
                 </span>
-                <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
+                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
                   {lang === "bn" ? "ইনবক্সে অর্ডার" : "Inbox & Order"}
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+            <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
               <span>{t.messengerChatBtn}</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
             </span>
@@ -416,10 +416,10 @@ export function ContactSection({
                 imo
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
                   {t.imoTitle}
                 </span>
-                <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
+                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
                   {lang === "bn" ? "ফ্রি কল ও চ্যাট" : "Free Call & Chat"}
                 </span>
               </div>
@@ -428,7 +428,7 @@ export function ContactSection({
               href={`imo://call?phone=${intlPhone}`}
               onClick={() => handleContactClick("imo")}
               aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
-              className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
+              className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
             >
               <span>{t.imoLaunchBtn}</span>
             </a>
@@ -446,15 +446,15 @@ export function ContactSection({
                 <MessageSquare className="w-4 h-4" aria-hidden="true" />
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-xs font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
                   {t.smsTitle}
                 </span>
-                <span className="block text-[11px] text-stone-600 dark:text-stone-400 truncate">
+                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
                   {lang === "bn" ? "অফলাইন বার্তা" : "Offline SMS"}
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold py-1 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+            <span className="inline-flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
               <span>{t.smsSendBtn}</span>
             </span>
           </a>

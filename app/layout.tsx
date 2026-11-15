@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { Titillium_Web } from "next/font/google";
-import localFont from "next/font/local";
+import { Roboto, Noto_Serif_Bengali } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -14,16 +13,15 @@ import { getCachedSeoSettings } from "@/lib/seo-settings";
 import { SeoGlobalScripts } from "@/components/seo-global-scripts";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-const titilliumWeb = Titillium_Web({
-  variable: "--font-titillium-web",
+const roboto = Roboto({
+  variable: "--font-roboto",
   subsets: ["latin"],
-  weight: ["200", "300", "400", "600", "700", "900"],
   display: "swap",
 });
 
-const liAdorNoirrit = localFont({
-  src: "../public/font/Li Ador Noirrit Regular.ttf",
-  variable: "--font-li-ador-noirrit",
+const notoSerifBengali = Noto_Serif_Bengali({
+  variable: "--font-noto-serif-bengali",
+  subsets: ["bengali"],
   display: "swap",
 });
 
@@ -87,7 +85,7 @@ export default function RootLayout({
   return (
     <html
       lang="bn"
-      className={`${titilliumWeb.variable} ${liAdorNoirrit.variable} h-full antialiased`}
+      className={`${roboto.variable} ${notoSerifBengali.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">

@@ -75,10 +75,10 @@ export function MobileDock({
             <Sparkles className="w-4 h-4 text-amber-100" aria-hidden="true" />
           </div>
           <div className="min-w-0 hidden xs:block">
-            <span className="block font-black text-xs text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
+            <span className="block font-black text-sm text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
               {displayName}
             </span>
-            <span className="block text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
+            <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
               {t.authenticityBadge}
             </span>
           </div>
@@ -90,11 +90,11 @@ export function MobileDock({
           href={`tel:${rawHotlineDigits}`}
           onClick={() => trackContact({ channel: "phone", customData: { source: "mobile_dock" } })}
           aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
-          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3 rounded-full shadow-md transition-all touch-manipulation shrink-0"
+          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-1.5 px-3 rounded-full shadow-md transition-all touch-manipulation shrink-0"
           title={t.hotlineLabel}
         >
           <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" aria-hidden="true" />
-          <span className="font-mono text-xs">{defaultHotline}</span>
+          <span className="font-mono text-xs sm:text-sm">{defaultHotline}</span>
         </motion.a>
 
         {/* 3. Redux Cart Button with Live Bouncing Badge (Clicks jump to Checkout section) */}
@@ -118,7 +118,7 @@ export function MobileDock({
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900"
+              className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white text-xs font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900"
             >
               {displayCartQuantity}
             </motion.span>
@@ -130,7 +130,7 @@ export function MobileDock({
           whileTap={{ scale: 0.92 }}
           type="button"
           onClick={onToggleLang}
-          className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-[11px] py-1.5 px-2.5 rounded-full transition-all shadow-sm touch-manipulation shrink-0"
+          className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-xs py-1.5 px-2.5 rounded-full transition-all shadow-sm touch-manipulation shrink-0"
           aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
         >
           <Globe className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />

@@ -328,7 +328,7 @@ export function ProductShowcase({
             <h1 className="text-sm sm:text-base md:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight truncate">
               {displayStoreName}
             </h1>
-            <p className="text-[10px] sm:text-xs text-stone-600 dark:text-stone-400 font-medium hidden md:block truncate">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-medium hidden md:block truncate">
               {storeSubtitle || t.storeSubtitle}
             </p>
           </div>
@@ -339,7 +339,7 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => scrollToSection(0)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === 0
                 ? "bg-white text-amber-900 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
@@ -351,7 +351,7 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => scrollToSection(productsStartIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex >= productsStartIndex && activeSectionIndex < checkoutSectionIndex
                 ? "bg-white text-amber-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
@@ -364,7 +364,7 @@ export function ProductShowcase({
             type="button"
             data-tour="header-checkout-cta"
             onClick={() => scrollToSection(checkoutSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
                 ? "bg-white text-emerald-800 shadow-xs"
                 : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
@@ -373,7 +373,7 @@ export function ProductShowcase({
             <ShoppingCart className="w-3.5 h-3.5" />
             <span>{t.navCheckout}</span>
             {displayCartQuantity > 0 && (
-              <span className="bg-amber-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
+              <span className="bg-amber-600 text-white text-xs font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
                 {displayCartQuantity}
               </span>
             )}
@@ -388,18 +388,18 @@ export function ProductShowcase({
             data-tour="header-cart-cta"
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
-            className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
+            className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-sm sm:text-base py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
             aria-label={lang === "bn" ? `কার্ট খুলুন, ${displayCartQuantity}টি পণ্য রয়েছে` : `Open cart, ${displayCartQuantity} items`}
           >
             <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.cartTitle}</span>
             {displayCartQuantity > 0 && (
-              <span className="bg-amber-600 text-white text-[11px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
+              <span className="bg-amber-600 text-white text-xs font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
                 {displayCartQuantity}
               </span>
             )}
             {displayCartSubtotal > 0 && (
-              <span className="hidden md:inline font-mono text-emerald-700 dark:text-emerald-400 text-xs">
+              <span className="hidden md:inline font-mono text-emerald-700 dark:text-emerald-400 text-xs sm:text-sm">
                 ({formatStorePrice(displayCartSubtotal, lang)})
               </span>
             )}
@@ -410,12 +410,12 @@ export function ProductShowcase({
             href={`tel:${rawHotlineDigits}`}
             onClick={() => trackContact({ channel: "phone", customData: { source: "showcase_header" } })}
             aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
-            className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full shadow-md transition-all touch-manipulation"
+            className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm sm:text-base py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full shadow-md transition-all touch-manipulation"
             title={t.hotlineLabel}
           >
             <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.hotlineLabel}:</span>
-            <span className="font-mono text-xs sm:text-sm">{defaultHotline}</span>
+            <span className="font-mono text-sm sm:text-base">{defaultHotline}</span>
           </a>
 
           {/* 1-Tap Language Switcher */}
@@ -423,7 +423,7 @@ export function ProductShowcase({
             type="button"
             onClick={toggleLanguage}
             aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
-            className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-xs sm:text-sm py-1.5 px-2.5 sm:px-3 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
+            className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-sm sm:text-base py-1.5 px-2.5 sm:px-3 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
           >
             <Globe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
             <span>{t.langToggle}</span>
@@ -568,7 +568,7 @@ export function ProductShowcase({
               type="button"
               onClick={() => scrollToSection(productsStartIndex)}
               aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-xs sm:text-sm py-2.5 sm:py-3 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
             >
               <span>{t.viewProductsBtn}</span>
               <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
@@ -587,7 +587,7 @@ export function ProductShowcase({
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-950 dark:text-amber-100">
               {lang === "bn" ? "নতুন পণ্য শীঘ্রই আসছে" : "Fresh Stock Coming Soon"}
             </h2>
-            <p className="text-stone-600 dark:text-stone-400 mt-2 max-w-sm text-sm sm:text-base leading-relaxed">
+            <p className="text-stone-600 dark:text-stone-400 mt-2 max-w-sm text-base sm:text-lg leading-relaxed">
               {lang === "bn"
                 ? "বর্তমানে নতুন ব্যাচের তাজা গুড় প্রস্তুত হচ্ছে। সরাসরি ফোনে প্রি-অর্ডার করতে নিচের নম্বরে কল করুন।"
                 : "Fresh artisanal molasses is currently being prepared. Call us directly to pre-order."}

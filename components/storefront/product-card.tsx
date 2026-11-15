@@ -532,8 +532,8 @@ export function ProductCard({
         <div className="w-full flex flex-col items-center justify-center">
           {/* Top Meta Header on Mobile Only (< md) */}
           {!selectedVariant.isCombo && (
-            <div className="md:hidden w-full max-w-md flex items-center justify-between text-xs font-semibold text-amber-900 dark:text-amber-300 mb-2">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-xs">
+            <div className="md:hidden w-full max-w-md flex items-center justify-between text-sm font-semibold text-amber-900 dark:text-amber-300 mb-2">
+              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-sm">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>
                   {t.productCounter}{" "}
@@ -544,7 +544,7 @@ export function ProductCard({
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 py-1 rounded-full shadow-xs text-xs">
+              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 py-1 rounded-full shadow-xs text-sm">
                 <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>{t.authenticityBadge}</span>
               </div>
@@ -631,13 +631,13 @@ export function ProductCard({
                 className="absolute top-2.5 right-2.5 z-30 bg-emerald-600/95 dark:bg-emerald-700/95 backdrop-blur-md text-white px-3 py-1 rounded-full shadow-[0_6px_16px_rgba(5,150,105,0.4)] border border-emerald-300/80 flex items-center gap-1.5 select-none pointer-events-none"
               >
                 <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-200" />
-                <div className="flex items-center gap-1 font-black text-xs sm:text-sm">
+                <div className="flex items-center gap-1 font-black text-sm sm:text-base">
                   <SlidingNumber
                     value={displayUnit}
                     isBengali={false}
                     className="font-mono font-black"
                   />
-                  <span className="text-[11px] sm:text-xs font-bold text-emerald-100">
+                  <span className="text-xs sm:text-sm font-bold text-emerald-100">
                     {lang === "bn" ? "টি কার্টে" : "in cart"}
                   </span>
                 </div>
@@ -656,8 +656,8 @@ export function ProductCard({
         >
           {/* Top Meta Header on Desktop & Tab (>= md) */}
           {!selectedVariant.isCombo && (
-            <div className="hidden md:flex items-center justify-between text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-300">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-xs sm:text-sm">
+            <div className="hidden md:flex items-center justify-between text-sm sm:text-base font-semibold text-amber-900 dark:text-amber-300">
+              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-sm sm:text-base">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>
                   {t.productCounter}{" "}
@@ -668,7 +668,7 @@ export function ProductCard({
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 sm:px-3 py-1 rounded-full shadow-xs text-xs sm:text-sm">
+              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 sm:px-3 py-1 rounded-full shadow-xs text-sm sm:text-base">
                 <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>{t.authenticityBadge}</span>
               </div>
@@ -681,7 +681,7 @@ export function ProductCard({
               {displayName}
             </h2>
             {!selectedVariant.isCombo && displaySummary && (
-              <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1 leading-relaxed">
+              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed">
                 {displaySummary}
               </p>
             )}
@@ -697,7 +697,7 @@ export function ProductCard({
               <div className="space-y-1.5 px-1">
                 <label
                   htmlFor={`variant-select-${product.id}`}
-                  className="block text-[11px] sm:text-xs font-bold text-amber-900/80 dark:text-amber-300"
+                  className="block text-xs sm:text-sm font-bold text-amber-900/80 dark:text-amber-300"
                 >
                   {t.packSizeLabel}
                 </label>
@@ -715,12 +715,12 @@ export function ProductCard({
                     id={`variant-select-${product.id}`}
                     data-tour={index === 0 ? "product-variant-select" : undefined}
                     aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
-                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-sm px-3.5 rounded-xl border border-amber-300/80 dark:border-stone-700 shadow-xs hover:border-amber-400 dark:hover:border-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500/50"
+                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-amber-300/80 dark:border-stone-700 shadow-xs hover:border-amber-400 dark:hover:border-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500/50"
                   >
                     <SelectValue>
                       <span className="flex items-center justify-between w-full pr-1.5">
                         <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
-                        <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-xs ml-2 shrink-0">
+                        <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-sm ml-2 shrink-0">
                           {formatStorePrice(selectedVariant.price, lang)}
                         </span>
                       </span>
@@ -735,18 +735,18 @@ export function ProductCard({
                         <SelectItem
                           key={v.id}
                           value={v.id}
-                          className="text-xs sm:text-sm font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
+                          className="text-sm sm:text-base font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
                         >
                           <span className="flex items-center justify-between w-full gap-3">
                             <span className="flex items-center gap-1.5 truncate">
                               <span className="font-bold">{title}</span>
                               {!v.isCombo && (
-                                <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80 font-normal">
+                                <span className="text-xs sm:text-sm text-amber-700/80 dark:text-amber-400/80 font-normal">
                                   ({formatStorePrice(vRatePerKg, lang)}/কেজি)
                                 </span>
                               )}
                             </span>
-                            <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-xs shrink-0">
+                            <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0">
                               {formatStorePrice(v.price, lang)}
                             </span>
                           </span>
@@ -761,11 +761,11 @@ export function ProductCard({
             {/* Combo Contents Breakdown Box */}
             {selectedVariant.isCombo && selectedVariant.comboItems && selectedVariant.comboItems.length > 0 && (
               <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/80 border border-amber-200/90 dark:border-stone-700/80 space-y-1.5 text-left">
-                <span className="text-[11px] sm:text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
                   <Boxes className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                   {lang === "bn" ? "প্যাকেজে যা যা থাকছে:" : "What's in this combo:"}
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] sm:text-xs text-stone-700 dark:text-stone-300">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
                   {selectedVariant.comboItems.map((ci, idx) => (
                     <div
                       key={idx}
@@ -777,7 +777,7 @@ export function ProductCard({
                           {lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name}
                         </span>
                       </div>
-                      <span className="text-amber-800 dark:text-amber-300 font-extrabold text-xs shrink-0 ml-1">
+                      <span className="text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0 ml-1">
                         ×{ci.quantity}
                       </span>
                     </div>
@@ -789,25 +789,25 @@ export function ProductCard({
             {/* Price (displayed below the variation dropdown) */}
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
               {/* Base Rate / Unit Price */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs text-amber-800/80 dark:text-amber-400 font-bold">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
                 {!selectedVariant.isCombo ? (
-                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2 py-0.5 rounded-md font-mono text-xs sm:text-sm font-black border border-amber-300/60 dark:border-amber-800/60">
+                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2.5 py-1 rounded-md font-mono text-sm sm:text-base font-black border border-amber-300/60 dark:border-amber-800/60">
                     <span>{formatStorePrice(product.pricePerKg || Math.round(unitPrice / (selectedVariant.weightKg || 1)), lang)}</span>
-                    <span className="font-sans text-[11px] font-semibold text-amber-800 dark:text-amber-300">/ {lang === "bn" ? "কেজি" : "kg"}</span>
+                    <span className="font-sans text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-300">/ {lang === "bn" ? "কেজি" : "kg"}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2 py-0.5 rounded-md font-mono text-xs sm:text-sm font-black border border-amber-300/60 dark:border-amber-800/60">
+                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2.5 py-1 rounded-md font-mono text-sm sm:text-base font-black border border-amber-300/60 dark:border-amber-800/60">
                     <span>{formatStorePrice(unitPrice, lang)}</span>
-                    <span className="font-sans text-[11px] font-semibold text-amber-800 dark:text-amber-300">({lang === "bn" ? `${(selectedVariant.weightKg || 3).toLocaleString("bn-BD")} কেজি বান্ডিল` : `${selectedVariant.weightKg || 3} kg bundle`})</span>
+                    <span className="font-sans text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-300">({lang === "bn" ? `${(selectedVariant.weightKg || 3).toLocaleString("bn-BD")} কেজি বান্ডিল` : `${selectedVariant.weightKg || 3} kg bundle`})</span>
                   </span>
                 )}
                 {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
+                  <span className="line-through text-stone-400 dark:text-stone-500 text-sm sm:text-base font-semibold ml-1">
                     {formatStorePrice(selectedVariant.compareAtPrice, lang)}
                   </span>
                 )}
                 {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-md ml-1">
+                  <span className="px-2 py-0.5 text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-md ml-1">
                     {lang === "bn"
                       ? `${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)} সাশ্রয়`
                       : `Save ${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)}`}
@@ -825,13 +825,13 @@ export function ProductCard({
                     transition={{ duration: 0.25, ease: "easeOut" }}
                     className="flex items-baseline gap-1.5 overflow-hidden"
                   >
-                    <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
+                    <span className="text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300">
                       {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
                     </span>
-                    <span className="font-mono text-base sm:text-xl font-extrabold text-amber-950 dark:text-amber-100">
+                    <span className="font-mono text-lg sm:text-2xl font-extrabold text-amber-950 dark:text-amber-100">
                       {formatStorePrice(unitPrice * displayUnit, lang)}
                     </span>
-                    <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
+                    <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
                       ({lang === "bn" ? `মোট ${((selectedVariant.weightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(selectedVariant.weightKg || 1) * displayUnit} kg`})
                     </span>
                   </motion.div>
@@ -991,7 +991,7 @@ export function ProductCard({
 
                 {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
                 <div className="flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-amber-900/80 dark:text-amber-400 mr-1">
+                  <span className="text-xs sm:text-sm font-semibold text-amber-900/80 dark:text-amber-400 mr-1">
                     {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
                   </span>
                   {[1, 2, 3, 5, 10].map((preset) => (
@@ -1002,7 +1002,7 @@ export function ProductCard({
                       onClick={() => handlePresetClick(preset)}
                       aria-label={lang === "bn" ? `${preset}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
                       aria-pressed={displayUnit === preset}
-                      className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-all touch-manipulation cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg text-sm font-bold border transition-all touch-manipulation cursor-pointer ${
                         displayUnit === preset
                           ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                           : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
@@ -1022,13 +1022,13 @@ export function ProductCard({
               <motion.div
                 animate={{ y: [0, 4, 0] }}
                 transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800/80 dark:text-amber-400/80 cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-amber-800/80 dark:text-amber-400/80 cursor-pointer"
               >
                 <span>{t.scrollHint}</span>
                 <ChevronDown className="w-3.5 h-3.5" />
               </motion.div>
             ) : (
-              <div className="text-[11px] text-amber-900/60 dark:text-amber-400/60 font-medium">
+              <div className="text-xs sm:text-sm text-amber-900/70 dark:text-amber-400/70 font-medium">
                 {t.guaranteeBadge}
               </div>
             )}

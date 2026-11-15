@@ -127,8 +127,9 @@ export function PhoneHelpForm({
             } else {
               setErrorMessage(res.error || t.phoneHelpInvalidError);
             }
-          } catch (err: any) {
-            setErrorMessage(err.message || t.phoneHelpInvalidError);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : t.phoneHelpInvalidError;
+            setErrorMessage(message || t.phoneHelpInvalidError);
           } finally {
             isSubmittingRef.current = false;
           }
@@ -193,7 +194,7 @@ export function PhoneHelpForm({
     <div id="incomplete-order-form" className="w-full">
       {/* Top Banner & Title */}
       <div className="text-center mb-2.5 sm:mb-3.5 px-2 space-y-1">
-        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3 py-0.5 rounded-full text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs font-bold shadow-xs">
+        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3 py-0.5 rounded-full text-amber-950 dark:text-amber-200 text-xs sm:text-sm font-bold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
           <span>{t.phoneHelpBadge}</span>
           <span className="opacity-40">•</span>
@@ -206,7 +207,7 @@ export function PhoneHelpForm({
           {t.phoneHelpTitle}
         </h3>
 
-        <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+        <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
           {t.phoneHelpSubtitle}
         </p>
       </div>
@@ -217,7 +218,7 @@ export function PhoneHelpForm({
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="assistedPhoneInput"
-                  className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold text-stone-800 dark:text-stone-200"
+                  className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold text-stone-800 dark:text-stone-200"
                 >
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
                   <span>{t.phoneHelpInputLabel}</span>
@@ -227,12 +228,12 @@ export function PhoneHelpForm({
                 {/* Live Auto-Submission Status Indicator */}
                 <div aria-live="polite" className="inline-flex items-center">
                   {submitMutation.isPending ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
                       <Loader2 className="w-3 h-3 animate-spin text-amber-600" aria-hidden="true" />
                       <span>{t.phoneHelpAutoSubmitting}</span>
                     </span>
                   ) : isPhoneValid ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    <span className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" aria-hidden="true" />
                       <span>{t.phoneHelpValidBadge}</span>
                     </span>
@@ -276,13 +277,13 @@ export function PhoneHelpForm({
                   </div>
 
                       {errorMessage && (
-                        <div id="assisted-phone-error" role="alert" className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 pt-0.5 font-medium">
+                        <div id="assisted-phone-error" role="alert" className="flex items-center gap-1.5 text-xs sm:text-sm text-rose-600 dark:text-rose-400 pt-0.5 font-medium">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                           <span>{errorMessage}</span>
                         </div>
                       )}
 
-                    <p id="assisted-phone-desc" className="text-[11px] text-stone-600 dark:text-stone-400 pt-0.5 leading-relaxed">
+                    <p id="assisted-phone-desc" className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 pt-1 leading-relaxed">
                       {lang === "bn"
                         ? "সরাসরি আপনার মোবাইল নম্বরটি লিখলেই আমাদের সিস্টেমে চলে যাবে — কোনো বাটনে চাপ দিতে হবে না।"
                         : "Simply enter your mobile number and your request will submit automatically without pressing any button."}
@@ -290,7 +291,7 @@ export function PhoneHelpForm({
                   </div>
 
         {/* Quick Hotline & Fast Callback Reminder */}
-                <div className="mt-3 pt-2.5 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2 text-stone-600 dark:text-stone-400 text-[11px] sm:text-xs">
+                <div className="mt-3 pt-2.5 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2 text-stone-600 dark:text-stone-400 text-xs sm:text-sm">
                   <span className="inline-flex items-center gap-1.5">
                     <span>{t.phoneHelpOrCallDirect}</span>
                     <a
@@ -348,33 +349,33 @@ export function PhoneHelpForm({
                         {t.phoneHelpModalTitle}
                       </h3>
 
-                      <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-2 leading-relaxed">
+                      <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-2 leading-relaxed">
                         {t.phoneHelpModalDesc}
                       </p>
 
                       {/* Submitted Phone & Reference Box */}
                       <div className="my-4 bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-left space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center justify-between text-xs sm:text-sm">
                           <span className="text-stone-500 dark:text-stone-400 font-semibold">
                             {t.phoneHelpModalNumberLabel}
                           </span>
-                          <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm">
+                          <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base">
                             {submittedData.phone}
                           </span>
                         </div>
 
                         {submittedData.orderNumber && (
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center justify-between text-xs sm:text-sm">
                             <span className="text-stone-500 dark:text-stone-400 font-semibold">
                               {t.phoneHelpModalOrderRefLabel}
                             </span>
-                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
                               {submittedData.orderNumber}
                             </span>
                           </div>
                         )}
 
-                        <div className="pt-1 border-t border-stone-200 dark:border-stone-750 flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                        <div className="pt-1 border-t border-stone-200 dark:border-stone-750 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <span>
                             {lang === "bn"

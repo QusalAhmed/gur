@@ -5,22 +5,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@font-face {
-  font-family: "Li Ador Noirrit";
-  src: url("/font/Li%20Ador%20Noirrit%20Regular.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-titillium-web), "Titillium Web", var(--font-geist-sans), var(--font-li-ador-noirrit), "Li Ador Noirrit", var(--font-noto-serif-bengali), "Noto Serif Bengali", var(--font-hind-siliguri), "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-roboto), Roboto, var(--font-noto-serif-bengali), "Noto Serif Bengali", var(--font-hind-siliguri), "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --font-heading: var(--font-titillium-web), "Titillium Web", var(--font-geist-sans), var(--font-li-ador-noirrit), "Li Ador Noirrit", var(--font-noto-serif-bengali), "Noto Serif Bengali", var(--font-hind-siliguri), "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: var(--font-li-ador-noirrit), "Li Ador Noirrit", var(--font-noto-serif-bengali), "Noto Serif Bengali", Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-bangla: var(--font-li-ador-noirrit), "Li Ador Noirrit", var(--font-noto-serif-bengali), "Noto Serif Bengali", "Hind Siliguri", "Noto Sans Bengali", sans-serif;
+  --font-heading: var(--font-roboto), Roboto, var(--font-noto-serif-bengali), "Noto Serif Bengali", var(--font-hind-siliguri), "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-noto-serif-bengali), "Noto Serif Bengali", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-bangla: var(--font-noto-serif-bengali), "Noto Serif Bengali", var(--font-hind-siliguri), "Hind Siliguri", "Noto Sans Bengali", serif;
+  --font-english: var(--font-roboto), Roboto, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -60,13 +53,13 @@
 }
 
 :root {
-  --font-titillium-web: "Titillium Web", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-geist-sans: var(--font-titillium-web);
+  --font-roboto: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-geist-sans: var(--font-roboto);
   --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --font-li-ador-noirrit: "Li Ador Noirrit", "Noto Serif Bengali", "Hind Siliguri", sans-serif;
-  --font-noto-serif-bengali: var(--font-li-ador-noirrit);
-  --font-hind-siliguri: var(--font-li-ador-noirrit);
-  --font-bangla: var(--font-li-ador-noirrit), "Li Ador Noirrit", "Noto Serif Bengali", "Hind Siliguri", "Noto Sans Bengali", sans-serif;
+  --font-noto-serif-bengali: "Noto Serif Bengali", "Hind Siliguri", "Noto Sans Bengali", serif;
+  --font-hind-siliguri: var(--font-noto-serif-bengali), "Noto Serif Bengali", "Hind Siliguri", sans-serif;
+  --font-bangla: var(--font-noto-serif-bengali), "Noto Serif Bengali", "Hind Siliguri", "Noto Sans Bengali", serif;
+  --font-english: var(--font-roboto);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -150,6 +143,10 @@
 
   .font-bangla {
     font-family: var(--font-bangla);
+  }
+
+  .font-english {
+    font-family: var(--font-english);
   }
 
   button,
