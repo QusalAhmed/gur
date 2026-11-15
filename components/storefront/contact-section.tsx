@@ -488,8 +488,8 @@ export function ContactSection({
   return (
     <section
       id="contact"
-      data-section-index="2"
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-14 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#FAF8F5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+      data-section-index="contact"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
     >
       {/* Soft Ambient Warm Glow (Clean & Elegant, no noisy dots) */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-gradient-to-b from-amber-200/40 via-amber-100/15 to-transparent dark:from-amber-950/25 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
