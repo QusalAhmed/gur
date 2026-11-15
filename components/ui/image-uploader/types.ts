@@ -101,7 +101,7 @@ export interface ImageUploaderProps {
 
   /**
    * Accepted MIME types map for react-dropzone
-   * @default { "image/*": [".jpeg", ".jpg", ".png", ".webp", ".avif", ".svg"] }
+   * @default { "image/*": [".jpeg", ".jpg", ".jfif", ".png", ".webp", ".avif", ".svg"] }
    */
   accept?: Record<string, string[]>;
 

@@ -51,7 +51,8 @@ export async function compressImage(
   } = options;
 
   // Don't compress SVGs or non-images
-  if (!file.type.startsWith("image/") || file.type.includes("svg")) {
+  const isImage = file.type.startsWith("image/") || /\.(jpe?g|jfif|png|webp|avif)$/i.test(file.name);
+  if (!isImage || file.type.includes("svg")) {
     return file;
   }
 
@@ -74,17 +75,16 @@ export async function compressImage(
 
     const compressedBlob = await imageCompression(file, compressionOptions);
 
-    // If compression produced a blob that is larger, return original
-    if (compressedBlob.size >= file.size) {
+    // If already webp and compression produced a larger blob, keep original
+    if (file.type === "image/webp" && compressedBlob.size >= file.size) {
       return file;
     }
 
     const baseName = file.name.replace(/\.[^/.]+$/, "");
-    const ext = compressedBlob.type === "image/webp" ? "webp" : "jpg";
-    const newName = `${baseName}.${ext}`;
+    const newName = `${baseName}.webp`;
 
     return new File([compressedBlob], newName, {
-      type: compressedBlob.type || "image/webp",
+      type: "image/webp",
       lastModified: Date.now(),
     });
   } catch (error) {
@@ -139,7 +139,11 @@ function compressImageCanvasFallback(
 
       canvas.toBlob(
         (blob) => {
-          if (!blob || blob.size >= file.size) {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          if (file.type === "image/webp" && blob.size >= file.size) {
             resolve(file);
             return;
           }

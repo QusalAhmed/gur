@@ -21,6 +21,7 @@ import {
   uploadCategoryImageToStorage,
   deleteCategoryImageFromStorage,
 } from "@/lib/supabase";
+import { compressImage } from "@/components/ui/image-uploader";
 import {
   createCategoryAction,
   updateCategoryAction,
@@ -196,8 +197,9 @@ export function CategoryFormDialog({
 
     setUploadingImage(true);
     try {
+      const uploadFile = await compressImage(file);
       const { path, publicUrl } = await uploadCategoryImageToStorage(
-        file,
+        uploadFile,
         category?.id || "new"
       );
       form.setFieldValue("imagePath", path);
@@ -465,7 +467,7 @@ export function CategoryFormDialog({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
+                accept="image/jpeg,image/png,image/webp,image/avif,.jfif"
                 onChange={handleImageUpload}
                 className="hidden"
               />

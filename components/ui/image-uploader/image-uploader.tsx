@@ -31,7 +31,7 @@ export function ImageUploader({
   maxWidthOrHeight = 2048,
   compressQuality = 0.85,
   accept = {
-    "image/*": [".jpeg", ".jpg", ".png", ".webp", ".avif"],
+    "image/*": [".jpeg", ".jpg", ".jfif", ".png", ".webp", ".avif"],
   },
   onRemove,
   onUpload,
