@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { normalizeSiteUrl } from "@/lib/site-url";
+import { shortenTrackingUrl } from "@/lib/url-shortener";
 
 export type OrderSmsStatus = "placed" | "confirmed" | "shipped" | "delivered" | "manual" | "test";
 
@@ -65,14 +66,19 @@ export interface DispatchOrderStatusSmsParams {
   trackingCode?: string;
   trackingUrl?: string;
   force?: boolean;
+  customMessage?: string;
 }
 
-const DEFAULT_TEMPLATES = {
+export const DEFAULT_TEMPLATES = {
   placed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। বিস্তারিত দেখুন: {order_link}",
   confirmed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। বিস্তারিত দেখুন: {order_link}",
-  shipped: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: {tracking_code}। পার্সেল ট্র্যাক করুন: {tracking_url}",
+  shipped: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। পার্সেল ট্র্যাক করুন: {tracking_url}",
+  shipped_no_tracking: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। প্রয়োজনে কল করুন: {support_phone}",
   delivered: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!",
 };
+
+export const LEGACY_SHIPPED_TEMPLATE =
+  "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: {tracking_code}। পার্সেল ট্র্যাক করুন: {tracking_url}";
 
 /**
  * Normalizes any Bangladeshi phone number input into standard MSISDN (8801XXXXXXXXX).
@@ -204,7 +210,11 @@ export async function getSmsConfig(): Promise<SmsBangladeshConfig> {
       }
       if (dict.has("notifications.sms_template_shipped")) {
         const t = String(dict.get("notifications.sms_template_shipped") || "").replace(/^"|"$/g, "").trim();
-        if (t) templateShipped = t;
+        if (t && t !== LEGACY_SHIPPED_TEMPLATE) {
+          templateShipped = t;
+        } else {
+          templateShipped = DEFAULT_TEMPLATES.shipped;
+        }
       }
       if (dict.has("notifications.sms_template_delivered")) {
         const t = String(dict.get("notifications.sms_template_delivered") || "").replace(/^"|"$/g, "").trim();
@@ -461,7 +471,7 @@ export async function dispatchOrderStatusSms(
     const cleanOrderNumber = sanitizePostgrestFilterTerm(orderNumber || orderId);
     let query = supabaseAdmin
       .from("orders")
-      .select("id, order_number, public_token, attribution");
+      .select("id, order_number, public_token, attribution, courier_tracking_code, courier_consignment_id, courier_name, customer_phone, grand_total");
 
     if (isValidUuid(cleanOrderId) && cleanOrderNumber) {
       query = query.or(`id.eq.${cleanOrderId},order_number.eq.${cleanOrderNumber}`);
@@ -486,25 +496,76 @@ export async function dispatchOrderStatusSms(
     console.warn("[dispatchOrderStatusSms] Error checking attribution deduplication:", e);
   }
 
-  // 4. Render Message from Template
+  // 4. Determine Tracking Availability & Parcel Tracking Link
+  const resolvedTrackingCode = (
+    trackingCode ||
+    orderRow?.courier_tracking_code ||
+    ""
+  ).trim();
+  const resolvedConsignmentId = (
+    orderRow?.courier_consignment_id ? String(orderRow.courier_consignment_id).trim() : ""
+  );
+  const resolvedTrackingUrl = (
+    trackingUrl ||
+    ""
+  ).trim();
+
+  const hasCourierTracking = Boolean(
+    (resolvedTrackingCode && resolvedTrackingCode.toUpperCase() !== "N/A") ||
+    resolvedConsignmentId ||
+    resolvedTrackingUrl
+  );
+
   const baseUrl = normalizeSiteUrl(
     process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL
   );
   const tokenParam = orderRow?.public_token ? `?token=${orderRow.public_token}` : "";
   const confirmationUrl = `${baseUrl}/order-confirmed/${orderNumber || orderId}${tokenParam}`;
 
-  const template = config.templates[status] || DEFAULT_TEMPLATES[status];
-  const renderedMessage = renderSmsTemplate(template, {
+  // Website's parcel tracking URL (using human-friendly order_number or id)
+  const targetIdentifier = orderRow?.order_number || orderNumber || orderRow?.id || orderId;
+  const rawWebsiteTrackingUrl = `${baseUrl}/track/${encodeURIComponent(targetIdentifier)}`;
+
+  let finalTrackingUrl = "";
+  if (hasCourierTracking) {
+    // Check cached short URL in attribution
+    const cachedShortUrl = orderRow?.attribution?.short_tracking_url;
+    if (cachedShortUrl && typeof cachedShortUrl === "string" && cachedShortUrl.startsWith("http")) {
+      finalTrackingUrl = cachedShortUrl;
+    } else {
+      // Shorten via spoo.me with 10s timeout & raw link fallback
+      finalTrackingUrl = await shortenTrackingUrl(rawWebsiteTrackingUrl);
+    }
+  }
+
+  // Select template based on status & tracking presence
+  let templateToUse = params.customMessage && params.customMessage.trim()
+    ? params.customMessage.trim()
+    : config.templates[status] || DEFAULT_TEMPLATES[status];
+
+  if (!params.customMessage || !params.customMessage.trim()) {
+    if (status === "shipped") {
+      if (!hasCourierTracking) {
+        templateToUse = DEFAULT_TEMPLATES.shipped_no_tracking;
+      } else {
+        if (templateToUse === LEGACY_SHIPPED_TEMPLATE || templateToUse.includes("ট্র্যাকিং কোড: {tracking_code}")) {
+          templateToUse = DEFAULT_TEMPLATES.shipped;
+        }
+      }
+    }
+  }
+
+  const renderedMessage = renderSmsTemplate(templateToUse, {
     customer_name: customerName || "সম্মানিত গ্রাহক",
-    order_number: orderNumber,
-    order_id: orderNumber,
-    amount: grandTotal != null ? Math.round(Number(grandTotal)) : "",
+    order_number: orderNumber || orderRow?.order_number || "",
+    order_id: orderNumber || orderRow?.order_number || "",
+    amount: grandTotal != null ? Math.round(Number(grandTotal)) : (orderRow?.grand_total != null ? Math.round(Number(orderRow.grand_total)) : ""),
     order_link: confirmationUrl,
     confirmation_link: confirmationUrl,
-    courier_name: courierName || "Steadfast Courier",
-    tracking_code: trackingCode || "N/A",
-    tracking_url: trackingUrl || "https://steadfast.com.bd/t/" + (trackingCode || ""),
-    support_phone: "+880 1700-000001",
+    courier_name: courierName || orderRow?.courier_name || "Steadfast Courier",
+    tracking_code: orderNumber || orderRow?.order_number || "N/A", // Website tracking code
+    tracking_url: finalTrackingUrl || "",
+    support_phone: "01843557389",
     store_name: "খেজুরের খাঁটি গুড়",
   });
 
@@ -547,7 +608,7 @@ export async function dispatchOrderStatusSms(
       console.warn("[dispatchOrderStatusSms] Failed to insert into sms_logs:", logErr);
     }
 
-    // 7. Record Order Event and Update Deduplication Attribution
+    // 7. Record Order Event and Update Deduplication & Tracking URL Attribution
     if (finalOrderUuid) {
       try {
         const eventMsg = sendResult.success
@@ -562,22 +623,31 @@ export async function dispatchOrderStatusSms(
           actor_id: null,
         });
 
-        if (sendResult.success) {
-          const currentAttr = (orderRow?.attribution && typeof orderRow.attribution === "object")
-            ? orderRow.attribution
-            : {};
-          const currentSmsSent = currentAttr.sms_sent || {};
+        const currentAttr = (orderRow?.attribution && typeof orderRow.attribution === "object")
+          ? orderRow.attribution
+          : {};
+        const currentSmsSent = currentAttr.sms_sent || {};
 
+        const updatedAttr: Record<string, any> = {
+          ...currentAttr,
+        };
+
+        if (finalTrackingUrl) {
+          updatedAttr.short_tracking_url = finalTrackingUrl;
+        }
+
+        if (sendResult.success) {
+          updatedAttr.sms_sent = {
+            ...currentSmsSent,
+            [status]: nowIso,
+          };
+        }
+
+        if (sendResult.success || (finalTrackingUrl && !orderRow?.attribution?.short_tracking_url)) {
           await supabaseAdmin
             .from("orders")
             .update({
-              attribution: {
-                ...currentAttr,
-                sms_sent: {
-                  ...currentSmsSent,
-                  [status]: nowIso,
-                },
-              },
+              attribution: updatedAttr,
             })
             .eq("id", finalOrderUuid);
         }

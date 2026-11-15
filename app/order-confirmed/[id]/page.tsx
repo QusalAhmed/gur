@@ -25,6 +25,7 @@ import {
   User,
   RotateCcw,
   FileText,
+  ExternalLink,
 } from "lucide-react";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { markReturningCustomer } from "@/lib/storefront-intro";
@@ -980,6 +981,20 @@ function OrderConfirmedContent() {
                     </p>
                   </div>
                 </div>
+
+                {/* Direct Link to Track Parcel */}
+                {order?.id && (
+                  <div className="pt-2 pl-1">
+                    <Link
+                      href={`/track/${order.id}`}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-700 via-amber-800 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm group"
+                    >
+                      <Truck className="w-4 h-4 text-amber-300 animate-pulse" />
+                      <span>লাইভ পার্সেল ট্র্যাক করুন (Track Parcel Live)</span>
+                      <ExternalLink className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  </div>
+                )}
               </div>
             </motion.div>
 

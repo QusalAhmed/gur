@@ -131,15 +131,43 @@ export function OrderSmsDialog({
       return;
     }
 
-    const rawTemplate =
-      templates[selectedEvent] ||
-      (selectedEvent === "placed"
-        ? "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। খুব শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন। ধন্যবাদ!"
-        : selectedEvent === "confirmed"
-        ? "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। আপনার পার্সেলটি প্যাকিং সম্পন্ন করে দ্রুত পাঠিয়ে দেওয়া হবে। ধন্যবাদ!"
-        : selectedEvent === "shipped"
-        ? "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: {tracking_code}। পার্সেল ট্র্যাক করুন: {tracking_url}"
-        : "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!");
+    const hasTracking = Boolean(
+      (order.courier_tracking_code && order.courier_tracking_code.trim() !== "" && order.courier_tracking_code.trim().toUpperCase() !== "N/A") ||
+      (order.courier_consignment_id && String(order.courier_consignment_id).trim() !== "") ||
+      (order.courier_tracking_url && order.courier_tracking_url.trim() !== "")
+    );
+
+    let rawTemplate = templates[selectedEvent];
+
+    if (selectedEvent === "placed") {
+      rawTemplate =
+        rawTemplate ||
+        "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে গৃহীত হয়েছে। মোট বিল: ৳{amount}। খুব শীঘ্রই আমাদের প্রতিনিধি যোগাযোগ করবেন। ধন্যবাদ!";
+    } else if (selectedEvent === "confirmed") {
+      rawTemplate =
+        rawTemplate ||
+        "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। আপনার পার্সেলটি প্যাকিং সম্পন্ন করে দ্রুত পাঠিয়ে দেওয়া হবে। ধন্যবাদ!";
+    } else if (selectedEvent === "shipped") {
+      if (!hasTracking) {
+        rawTemplate =
+          "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। প্রয়োজনে কল করুন: {support_phone}";
+      } else {
+        if (!rawTemplate || rawTemplate.includes("ট্র্যাকিং কোড: {tracking_code}")) {
+          rawTemplate =
+            "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। পার্সেল ট্র্যাক করুন: {tracking_url}";
+        }
+      }
+    } else if (selectedEvent === "delivered") {
+      rawTemplate =
+        rawTemplate ||
+        "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!";
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const targetId = order.order_number || order.id;
+    const trackingUrl =
+      (order.attribution as any)?.short_tracking_url ||
+      (origin ? `${origin}/track/${encodeURIComponent(targetId)}` : `/track/${encodeURIComponent(targetId)}`);
 
     const rendered = renderSmsTemplate(rawTemplate, {
       customer_name: order.customer || order.address?.recipient_name || "সম্মানিত গ্রাহক",
@@ -147,9 +175,9 @@ export function OrderSmsDialog({
       order_id: order.order_number || order.id,
       amount: Math.round(Number(order.grand_total) || 0),
       courier_name: order.courier_name || "Steadfast Courier",
-      tracking_code: order.courier_tracking_code || "N/A",
-      tracking_url: order.courier_tracking_url || "https://steadfast.com.bd/t/" + (order.courier_tracking_code || ""),
-      support_phone: "+880 1700-000001",
+      tracking_code: order.order_number || order.id,
+      tracking_url: trackingUrl,
+      support_phone: "01843557389",
       store_name: "খেজুরের খাঁটি গুড়",
     });
 

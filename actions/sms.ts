@@ -276,6 +276,7 @@ export async function sendManualOrderSmsAction(params: {
         courierName: params.courierName,
         trackingCode: params.trackingCode,
         trackingUrl: params.trackingUrl,
+        customMessage: params.customMessage,
         force: true,
       });
     }
