@@ -522,8 +522,8 @@ export async function dispatchOrderStatusSms(
   const tokenParam = orderRow?.public_token ? `?token=${orderRow.public_token}` : "";
   const confirmationUrl = `${baseUrl}/order-confirmed/${orderNumber || orderId}${tokenParam}`;
 
-  // Website's parcel tracking URL (using human-friendly order_number or id)
-  const targetIdentifier = orderRow?.order_number || orderNumber || orderRow?.id || orderId;
+  // Website's parcel tracking URL (using unguessable public_token for guest privacy & security)
+  const targetIdentifier = orderRow?.public_token || orderRow?.id || orderId;
   const rawWebsiteTrackingUrl = `${baseUrl}/track/${encodeURIComponent(targetIdentifier)}`;
 
   let finalTrackingUrl = "";

@@ -164,7 +164,7 @@ export function OrderSmsDialog({
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const targetId = order.order_number || order.id;
+    const targetId = order.public_token || order.id || order.order_number || "";
     const trackingUrl =
       (order.attribution as any)?.short_tracking_url ||
       (origin ? `${origin}/track/${encodeURIComponent(targetId)}` : `/track/${encodeURIComponent(targetId)}`);

@@ -119,7 +119,7 @@ export async function getParcelTrackingAction(
   orderId: string
 ): Promise<ParcelTrackingResult> {
   const cleanId = (orderId || "").trim();
-  if (!cleanId || !isValidUuid(cleanId)) {
+  if (!cleanId) {
     return {
       success: false,
       error: "Invalid tracking link or Order ID.",
@@ -130,12 +130,13 @@ export async function getParcelTrackingAction(
   try {
     const supabase = getSupabaseAdmin();
 
-    // 1. Fetch Order details
-    const { data: order, error: orderErr } = await supabase
+    // 1. Fetch Order details by public_token, id, or order_number
+    let query = supabase
       .from("orders")
       .select(`
         id,
         order_number,
+        public_token,
         status,
         fulfillment_status,
         payment_status,
@@ -158,9 +159,17 @@ export async function getParcelTrackingAction(
         shipped_at,
         delivered_at,
         created_at
-      `)
-      .eq("id", cleanId)
-      .maybeSingle();
+      `);
+
+    if (isValidUuid(cleanId)) {
+      query = query.or(`public_token.eq.${cleanId},id.eq.${cleanId}`);
+    } else {
+      query = query.or(
+        `order_number.eq.${cleanId},courier_consignment_id.eq.${cleanId},courier_tracking_code.eq.${cleanId}`
+      );
+    }
+
+    const { data: order, error: orderErr } = await query.maybeSingle();
 
     if (orderErr) {
       console.error("[TrackingAction] Order query error:", orderErr);
