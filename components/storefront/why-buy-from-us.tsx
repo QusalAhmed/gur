@@ -111,29 +111,8 @@ export function WhyBuyFromUs({
 
   const sectionContent = (
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4">
-      {/* Header Pill & Title with Smooth Slide-Up Reveal */}
+      {/* Header Title with Smooth Slide-Up Reveal */}
       <div className="text-center mb-4 sm:mb-6 px-2 space-y-1 sm:space-y-1.5">
-        <motion.div
-          initial={{ opacity: 0, y: -12, scale: 0.92 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: false, amount: 0.1 }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
-          className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs hover:border-amber-400 transition-colors"
-        >
-          <motion.span
-            animate={{ rotate: [0, 15, -15, 0] }}
-            transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
-            className="inline-block"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-          </motion.span>
-          <span>{t.whyBuyBadge}</span>
-          <span className="opacity-40">•</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-            {t.authenticityBadge}
-          </span>
-        </motion.div>
-
         <motion.h2
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
