@@ -8,6 +8,7 @@ import { StoreProvider } from "@/components/providers/store-provider";
 import { Toaster } from "sonner";
 import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
+import { InAppBrowserPrompt } from "@/components/in-app-browser-prompt";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
 import { getCachedSeoSettings } from "@/lib/seo-settings";
 import { SeoGlobalScripts } from "@/components/seo-global-scripts";
@@ -135,6 +136,7 @@ export default function RootLayout({
             <BrandFavicon />
             <FacebookPixelTracker />
             {children}
+            <InAppBrowserPrompt />
             <SpeedInsights />
             <Toaster position="top-right" richColors closeButton />
           </QueryProvider>
