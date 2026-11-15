@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { Geist, Hind_Siliguri } from "next/font/google";
+import { Titillium_Web } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -13,16 +14,16 @@ import { getCachedSeoSettings } from "@/lib/seo-settings";
 import { SeoGlobalScripts } from "@/components/seo-global-scripts";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const titilliumWeb = Titillium_Web({
+  variable: "--font-titillium-web",
   subsets: ["latin"],
+  weight: ["200", "300", "400", "600", "700", "900"],
   display: "swap",
 });
 
-const hindSiliguri = Hind_Siliguri({
-  variable: "--font-hind-siliguri",
-  subsets: ["bengali"],
-  weight: ["400", "600"],
+const liAdorNoirrit = localFont({
+  src: "../public/font/Li Ador Noirrit Regular.ttf",
+  variable: "--font-li-ador-noirrit",
   display: "swap",
 });
 
@@ -86,7 +87,7 @@ export default function RootLayout({
   return (
     <html
       lang="bn"
-      className={`${geistSans.variable} ${hindSiliguri.variable} h-full antialiased`}
+      className={`${titilliumWeb.variable} ${liAdorNoirrit.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">
