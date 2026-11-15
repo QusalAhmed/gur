@@ -6,9 +6,6 @@ import {
   ShieldCheck,
   Flame,
   Truck,
-  Award,
-  CheckCircle2,
-  MapPin,
   HeartHandshake,
   Clock,
   ChevronDown,
@@ -163,44 +160,6 @@ export function IntroSection({
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Business Story & Heritage Statement */}
-      <div className="bg-gradient-to-br from-amber-100/90 via-amber-50/80 to-white dark:from-stone-900 dark:via-stone-900 dark:to-stone-850 border border-amber-300/80 dark:border-stone-700/80 rounded-2xl p-3.5 sm:p-5 shadow-xs space-y-2 text-stone-800 dark:text-stone-200">
-        <div className="flex items-center gap-2">
-          <Award className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
-          <h2 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-100 uppercase tracking-wide">
-            {t.introHeritageHeading}
-          </h2>
-        </div>
-        <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
-          {t.introHeritageText}
-        </p>
-        <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-xs sm:text-sm md:text-base font-semibold text-emerald-800 dark:text-emerald-400 border-t border-amber-200/80 dark:border-stone-800">
-          <span>{t.introCustomerPromise}</span>
-          <div className="flex items-center gap-2">
-            {onScrollToWhyBuy && (
-              <button
-                type="button"
-                onClick={onScrollToWhyBuy}
-                aria-label={lang === "bn" ? "কেন আমাদের গুড় সেরা সেকশনে যান" : "Scroll to Why Choose Us"}
-                className="text-amber-800 dark:text-amber-300 hover:underline font-bold shrink-0 cursor-pointer"
-              >
-                {lang === "bn" ? "কেন আমাদের গুড় সেরা? ❯" : "Why Choose Us? ❯"}
-              </button>
-            )}
-            {onScrollToContact && (
-              <button
-                type="button"
-                onClick={onScrollToContact}
-                aria-label={lang === "bn" ? "যোগাযোগ ও অর্ডার সেকশনে যান" : "Scroll to Contact & Order"}
-                className="text-emerald-800 dark:text-emerald-400 hover:underline font-bold shrink-0 cursor-pointer"
-              >
-                {lang === "bn" ? "যোগাযোগ ও সহায়তা ❯" : "Contact & Support ❯"}
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
