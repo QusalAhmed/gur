@@ -69,13 +69,6 @@ export function ProductShowcase({
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const displayCartQuantity = isMounted ? cartTotalQuantity : 0;
   const displayCartSubtotal = isMounted ? cartSubtotal : 0;
-  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const t = STOREFRONT_TEXT[lang];
-  const displayStoreName = storeName || t.storeName;
-  const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
-
   // Section mapping:
   // Section 0: All Information Sections before Products (Intro, Why Buy From Us, Contact & Support) under the same scrolling area
   // Sections 1..effectiveProductCount: Products
@@ -85,6 +78,28 @@ export function ProductShowcase({
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
   const totalSections = checkoutSectionIndex + 1;
+
+  const [activeSectionIndex, setActiveSectionIndex] = useState(() => {
+    if (autoScrollToProduct || Boolean(featuredIdentifier)) {
+      return productsStartIndex;
+    }
+    if (
+      typeof window !== "undefined" &&
+      (window.location.pathname.startsWith("/products") ||
+        window.location.search.includes("product=") ||
+        window.location.search.includes("p=") ||
+        window.location.search.includes("id=") ||
+        window.location.hash === "#products")
+    ) {
+      return productsStartIndex;
+    }
+    return 0;
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const t = STOREFRONT_TEXT[lang];
+  const displayStoreName = storeName || t.storeName;
+  const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
 
   const { isTourActive, isTourActiveRef } = useStorefrontIntro({
     lang,
@@ -154,6 +169,7 @@ export function ProductShowcase({
         (window.location.pathname.startsWith("/products") ||
           window.location.search.includes("product=") ||
           window.location.search.includes("p=") ||
+          window.location.search.includes("id=") ||
           window.location.hash === "#products"));
 
     if (!shouldScroll) return;
@@ -171,6 +187,7 @@ export function ProductShowcase({
         const height = container.clientHeight || window.innerHeight;
         container.scrollTo({ top: productsStartIndex * height, behavior: "smooth" });
       }
+      setActiveSectionIndex(productsStartIndex);
       hasAutoScrolledRef.current = true;
     };
 

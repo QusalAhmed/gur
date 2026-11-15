@@ -146,4 +146,15 @@ describe("PageView Browser & Server Event ID Deduplication", () => {
     expect(eventId).toBeNull();
     expect(fbqSpy).not.toHaveBeenCalled();
   });
+
+  it("ensures FacebookPixelTracker does not delay PageView with requestIdleCallback", () => {
+    const trackerSource = fs.readFileSync(
+      path.resolve(process.cwd(), "components/providers/facebook-pixel-tracker.tsx"),
+      "utf-8"
+    );
+
+    expect(trackerSource).not.toContain("requestIdleCallback");
+    expect(trackerSource).toContain("const eventId = trackPageView();");
+    expect(trackerSource).toContain('sendCapiClientEvent("PageView"');
+  });
 });

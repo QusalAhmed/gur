@@ -23,43 +23,19 @@ function FacebookPixelTrackerInner() {
       return;
     }
 
-    let cancelled = false;
+    lastTrackedPath.current = pathname;
     const trackedUrl = typeof window !== "undefined" ? window.location.href : undefined;
 
-    const runTracking = () => {
-      if (cancelled || lastTrackedPath.current === pathname) {
-        return;
-      }
-      lastTrackedPath.current = pathname;
-
-      const eventId = trackPageView();
-      if (eventId) {
-        const { fbp, fbc } = getClientFbpAndFbc();
-        sendCapiClientEvent("PageView", {
-          eventId,
-          url: trackedUrl,
-          fbp,
-          fbc,
-        });
-      }
-    };
-
-    if (
-      typeof window !== "undefined" &&
-      typeof window.requestIdleCallback === "function"
-    ) {
-      const idleId = window.requestIdleCallback(runTracking, { timeout: 2500 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback?.(idleId);
-      };
+    const eventId = trackPageView();
+    if (eventId) {
+      const { fbp, fbc } = getClientFbpAndFbc();
+      sendCapiClientEvent("PageView", {
+        eventId,
+        url: trackedUrl,
+        fbp,
+        fbc,
+      });
     }
-
-    const timerId = setTimeout(runTracking, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timerId);
-    };
   }, [pathname]);
 
   return null;

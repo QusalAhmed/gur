@@ -21,8 +21,16 @@ export function StorefrontProductsClient({
   initialData,
 }: StorefrontProductsClientProps) {
   const searchParams = useSearchParams();
-  const urlProduct = searchParams?.get("product") || searchParams?.get("p") || undefined;
-  const urlVariant = searchParams?.get("variant") || searchParams?.get("v") || undefined;
+  const urlProduct =
+    searchParams?.get("product") ||
+    searchParams?.get("p") ||
+    searchParams?.get("id") ||
+    undefined;
+  const urlVariant =
+    searchParams?.get("variant") ||
+    searchParams?.get("v") ||
+    searchParams?.get("variantId") ||
+    undefined;
   const effectiveFeaturedId = featuredIdentifier || urlProduct;
   const effectiveVariantId = initialVariantId || urlVariant;
   const effectiveAutoScroll = autoScrollToProduct || Boolean(effectiveFeaturedId);
