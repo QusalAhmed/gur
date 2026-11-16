@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "motion/react";
 import {
   ShieldCheck,
   PackageCheck,
@@ -20,37 +19,6 @@ interface WhyBuyFromUsProps {
   onScrollToContact?: () => void;
   isStandaloneSection?: boolean;
 }
-
-// Container staggered children animation variants (Linear / Stripe inspiration)
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.12,
-    },
-  },
-};
-
-// Card pop-in spring animation variants
-const cardVariants: Variants = {
-  hidden: {
-    opacity: 0,
-    y: 22,
-    scale: 0.96,
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      type: "spring",
-      damping: 22,
-      stiffness: 280,
-    },
-  },
-};
 
 export function WhyBuyFromUs({
   lang = "bn",
@@ -111,52 +79,27 @@ export function WhyBuyFromUs({
 
   const sectionContent = (
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4">
-      {/* Header Title with Smooth Slide-Up Reveal */}
+      {/* Header Title - Rendered immediately with zero delay */}
       <div className="text-center mb-4 sm:mb-6 px-2 space-y-1 sm:space-y-1.5">
-        <motion.h2
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: false, amount: 0.1 }}
-          transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-          className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 dark:text-stone-50 tracking-tight leading-tight pt-0.5"
-        >
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 dark:text-stone-50 tracking-tight leading-tight pt-0.5">
           {t.whyBuyTitle}
-        </motion.h2>
+        </h2>
 
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: false, amount: 0.1 }}
-          transition={{ duration: 0.5, delay: 0.16, ease: "easeOut" }}
-          className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-lg mx-auto leading-relaxed"
-        >
+        <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-lg mx-auto leading-relaxed">
           {t.whyBuySubtitle}
-        </motion.p>
+        </p>
       </div>
 
-      {/* 6 Core Reasons Grid with Staggered Cascading Reveal */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: false, amount: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 px-0.5"
-      >
+      {/* 6 Core Reasons Grid - Instant rendering with smooth CSS micro-interactions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 px-0.5">
         {reasons.map((item, idx) => {
           const Icon = item.icon;
           return (
-            <motion.div
+            <div
               key={idx}
-              variants={cardVariants}
-              whileHover={{
-                y: -4,
-                scale: 1.015,
-                transition: { type: "spring", stiffness: 400, damping: 25 },
-              }}
-              whileTap={{ scale: 0.98 }}
-              className="group relative overflow-hidden bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-400/90 dark:hover:border-amber-600/80 rounded-2xl p-3.5 sm:p-4 shadow-xs hover:shadow-lg hover:shadow-amber-950/5 dark:hover:shadow-black/30 transition-all duration-300 flex items-start gap-3 sm:gap-3.5 cursor-default"
+              className="group relative overflow-hidden bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-400/90 dark:hover:border-amber-600/80 rounded-2xl p-3.5 sm:p-4 shadow-xs hover:shadow-lg hover:shadow-amber-950/5 dark:hover:shadow-black/30 transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] active:scale-[0.98] flex items-start gap-3 sm:gap-3.5 cursor-default"
             >
-              {/* Subtle Ambient Radial Highlight on Hover (Linear inspiration) */}
+              {/* Subtle Ambient Radial Highlight on Hover */}
               <div
                 className={`absolute inset-0 bg-gradient-to-br ${item.accentGlow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`}
               />
@@ -177,38 +120,23 @@ export function WhyBuyFromUs({
                   {item.desc}
                 </p>
               </div>
-            </motion.div>
+            </div>
           );
         })}
-      </motion.div>
+      </div>
 
-      {/* Trust & Refund Assurance Banner with Ambient Breathing Animation */}
-      <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.96 }}
-        whileInView={{ opacity: 1, y: 0, scale: 1 }}
-        viewport={{ once: false, amount: 0.1 }}
-        transition={{ duration: 0.55, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        whileHover={{ scale: 1.01 }}
-        className="relative overflow-hidden mt-3.5 sm:mt-4 bg-gradient-to-r from-emerald-50 via-amber-50/50 to-emerald-50 dark:from-emerald-950/30 dark:via-stone-900 dark:to-emerald-950/30 border-2 border-emerald-500/50 dark:border-emerald-600/50 rounded-2xl p-3.5 sm:p-4 text-center space-y-1.5 shadow-sm"
-      >
+      {/* Trust & Refund Assurance Banner - Instant load without delay */}
+      <div className="relative overflow-hidden mt-3.5 sm:mt-4 bg-gradient-to-r from-emerald-50 via-amber-50/50 to-emerald-50 dark:from-emerald-950/30 dark:via-stone-900 dark:to-emerald-950/30 border-2 border-emerald-500/50 dark:border-emerald-600/50 rounded-2xl p-3.5 sm:p-4 text-center space-y-1.5 shadow-sm transition-transform duration-200 hover:scale-[1.01]">
         <div className="inline-flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-extrabold text-sm sm:text-base">
-          <motion.div
-            animate={{ scale: [1, 1.2, 1], rotate: [0, 8, 0] }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="inline-flex items-center justify-center"
-          >
+          <div className="inline-flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          </motion.div>
+          </div>
           <span>{t.whyBuyGuaranteeTitle}</span>
         </div>
         <p className="text-xs sm:text-sm md:text-base text-stone-600 dark:text-stone-300 max-w-md mx-auto leading-relaxed">
           {t.whyBuyGuaranteeDesc}
         </p>
-      </motion.div>
+      </div>
     </div>
   );
 

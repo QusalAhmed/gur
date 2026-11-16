@@ -196,21 +196,20 @@ export function ProductShowcase({
         container.querySelector("[data-product-card]")) as HTMLElement | null;
 
       if (productEl) {
-        productEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        productEl.scrollIntoView({ behavior: "instant", block: "start" });
       } else {
         const height = container.clientHeight || window.innerHeight;
-        container.scrollTo({ top: productsStartIndex * height, behavior: "smooth" });
+        container.scrollTo({ top: productsStartIndex * height, behavior: "instant" as ScrollBehavior });
       }
       setActiveSectionIndex(productsStartIndex);
       hasAutoScrolledRef.current = true;
     };
 
-    const t1 = setTimeout(performScroll, 80);
-    const t2 = setTimeout(performScroll, 350);
+    performScroll();
+    const rafId = requestAnimationFrame(performScroll);
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      cancelAnimationFrame(rafId);
     };
   }, [autoScrollToProduct, featuredIdentifier, isLoading, products.length, productsStartIndex]);
 
@@ -609,7 +608,7 @@ export function ProductShowcase({
               className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
             >
               <span>{t.viewProductsBtn}</span>
-              <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
             </button>
           </div>
         </section>

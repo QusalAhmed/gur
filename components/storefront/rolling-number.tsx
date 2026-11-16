@@ -78,11 +78,11 @@ export function RollingNumber({
 
   const containerRef = useRef<HTMLSpanElement>(null);
   const isInView = useInView(containerRef, { amount: "some", once: false });
-  const [currentValue, setCurrentValue] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
-
   const stringValue = String(value);
   const { target, prefix, suffix, isBengali } = parseNumberString(stringValue);
+
+  const [currentValue, setCurrentValue] = useState(target);
+  const [isComplete, setIsComplete] = useState(true);
 
   // Initial zero display (e.g. "০+", "০%", "০")
   const zeroDisplay = `${prefix}${formatNumberWithCommas(0, isBengali)}${suffix}`;

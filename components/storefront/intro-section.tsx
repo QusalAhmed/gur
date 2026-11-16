@@ -122,17 +122,8 @@ export function IntroSection({
 
   const sectionContent = (
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
-      {/* Top Heritage Pill & Badges */}
+      {/* Brand Header */}
       <div className="text-center space-y-2 px-2">
-        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/90 dark:border-amber-700/60 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs">
-          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-          <span>{t.introBadge}</span>
-          <span className="opacity-40">•</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-            {t.introOriginBadge}
-          </span>
-        </div>
-
         {/* Logo centered above brand name */}
         {optimizedLogoUrl && (
           <div className="flex justify-center pt-1.5 sm:pt-2">
@@ -172,11 +163,7 @@ export function IntroSection({
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Icon className={`w-4 h-4 ${s.color}`} />
                   <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
-                    <RollingNumber
-                      value={s.number}
-                      isActive={isActive}
-                      delay={0.12 + idx * 0.08}
-                    />
+                    {s.number}
                   </span>
                 </div>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-medium leading-tight">
@@ -197,7 +184,7 @@ export function IntroSection({
           className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
         >
           <span>{t.viewProductsBtn}</span>
-          <ChevronDown className="w-4 h-4 animate-bounce group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
+          <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
         </button>
       </div>
     </div>

@@ -50,9 +50,8 @@ export function MobileDock({
       className="fixed bottom-2.5 inset-x-2.5 z-40 sm:hidden flex justify-center pointer-events-none"
     >
       <motion.nav
-        initial={{ y: 50, opacity: 0, scale: 0.92 }}
+        initial={false}
         animate={{ y: 0, opacity: 1, scale: 1 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300, delay: 0.1 }}
         className="pointer-events-auto w-full max-w-sm bg-gradient-to-r from-amber-100/95 via-amber-50/95 to-amber-100/95 dark:from-stone-900/95 dark:via-stone-900/95 dark:to-stone-850/95 backdrop-blur-xl border-2 border-amber-300/80 dark:border-amber-700/60 rounded-full shadow-[0_12px_32px_rgba(120,53,15,0.22)] py-1.5 px-2.5 flex items-center justify-between gap-1 select-none"
         aria-label="Mobile Store Navigation"
       >
