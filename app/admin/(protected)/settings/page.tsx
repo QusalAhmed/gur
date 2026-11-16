@@ -140,7 +140,7 @@ export default function SettingsPage() {
 
   // SEO & Social State
   const [seoState, setSeoState] = React.useState<SeoSettingsFormState>({
-    storeSubtitle: "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়",
+    storeSubtitle: "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত",
     seoSiteUrl: "",
     seoDefaultTitle: "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses",
     seoTitleTemplate: "%s | খেজুরের খাটি গুড়",

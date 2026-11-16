@@ -15,7 +15,7 @@ export function formatStorePrice(amount: number, lang: StorefrontLang = "bn"): s
 export const STOREFRONT_TEXT = {
   bn: {
     storeName: "খাঁটি গুড়ের দোকান",
-    storeSubtitle: "গ্রামের গাছিদের তৈরি তাজা ও নির্ভেজাল গুড়",
+    storeSubtitle: "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত",
     hotlineLabel: "সরাসরি ফোন করুন",
     hotlineNumber: "01712-345678",
     langToggle: "English",
@@ -163,7 +163,7 @@ export const STOREFRONT_TEXT = {
     introBadge: "ঐতিহ্যবাহী খাঁটি গুড়ের বিশ্বস্ত ঠিকানা",
     introHeroTitle: "বাঘার ঐতিহ্যবাহী খেজুরের খাঁটি গুড়",
     introHeroSubtitle:
-      "বংশপরম্পরায় অভিজ্ঞ গাছিদের হাতে শীতের ভোরে নামানো তাজা রস মাটির চুলায় কাঠের আঁচে জ্বাল দিয়ে তৈরি শতভাগ খাঁটি, প্রাকৃতিক ও চিনিমুক্ত গুড়। সরাসরি বাঘা থেকে আপনার ঘরে।",
+      "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত",
     introOriginBadge: "বাঘা, রাজশাহী থেকে সরাসরি",
     introPurityBadge: "১০০% চিনি ও কেমিক্যালমুক্ত",
     introCodBadge: "দেখে মূল্য পরিশোধ (COD)",

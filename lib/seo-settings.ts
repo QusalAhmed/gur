@@ -50,7 +50,7 @@ export interface ResolvedSeoSettings {
 const DEFAULT_STORE_NAME_BN = "খেজুরের খাঁটি গুড়";
 const DEFAULT_STORE_NAME_EN = "Pure Cane & Date Palm Molasses";
 const DEFAULT_STORE_SUBTITLE =
-  "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত";
 const DEFAULT_TITLE = "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses";
 const DEFAULT_TITLE_TEMPLATE = "%s | খেজুরের খাটি গুড়";
 const DEFAULT_DESCRIPTION =

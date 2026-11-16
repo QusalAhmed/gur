@@ -91,7 +91,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
 
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
-  let storeSubtitle = "আমার নিজের বাসায় তৈরী খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়";
+  let storeSubtitle = "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত";
   const deliveryConfig: DeliveryChargeConfig = { ...DEFAULT_DELIVERY_CONFIG };
 
   try {
