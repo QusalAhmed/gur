@@ -44,7 +44,7 @@ export function IntroSection({
   const displaySubtitle = storeSubtitle || t.introHeroSubtitle;
 
   const optimizedLogoUrl = logoUrl
-    ? buildImageKitUrl(logoUrl, { width: 160, height: 160, quality: 80, format: "auto" })
+    ? buildImageKitUrl(logoUrl, { width: 256, height: 256, quality: 85, format: "auto" })
     : "";
 
   const handleScrollToProducts = () => {
@@ -135,13 +135,13 @@ export function IntroSection({
 
         {/* Logo centered above brand name */}
         {optimizedLogoUrl && (
-          <div className="flex justify-center pt-1 sm:pt-1.5">
-            <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full overflow-hidden shrink-0 border-2 border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/95 dark:bg-stone-900/95 flex items-center justify-center p-1">
+          <div className="flex justify-center pt-1.5 sm:pt-2">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shrink-0 border-2 border-amber-300/80 dark:border-amber-700/60 shadow-lg bg-white/95 dark:bg-stone-900/95 flex items-center justify-center p-1.5 sm:p-2 transition-transform duration-300 hover:scale-105">
               <Image
                 src={optimizedLogoUrl}
                 alt={displayName}
-                width={80}
-                height={80}
+                width={128}
+                height={128}
                 loading="lazy"
                 decoding="async"
                 className="w-full h-full object-contain"

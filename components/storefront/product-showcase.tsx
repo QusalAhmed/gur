@@ -353,19 +353,19 @@ export function ProductShowcase({
           title={lang === "bn" ? "পরিচিতি ও হোমপেইজ" : "About & Homepage"}
         >
           {logoUrl ? (
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
               <Image
-                src={buildImageKitUrl(logoUrl, { width: 72, height: 72, quality: 80, format: "auto" })}
+                src={buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })}
                 alt={displayStoreName}
-                width={36}
-                height={36}
+                width={40}
+                height={40}
                 loading="lazy"
                 decoding="async"
                 className="w-full h-full object-contain p-0.5"
               />
             </div>
           ) : (
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" aria-hidden="true" />
             </div>
           )}
