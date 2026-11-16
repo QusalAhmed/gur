@@ -352,7 +352,7 @@ export function ProductShowcase({
           title={lang === "bn" ? "পরিচিতি ও হোমপেইজ" : "About & Homepage"}
         >
           {logoUrl ? (
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center">
               <Image
                 src={buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })}
                 alt={displayStoreName}
@@ -360,7 +360,7 @@ export function ProductShowcase({
                 height={40}
                 loading="lazy"
                 decoding="async"
-                className="w-full h-full object-contain p-0.5"
+                className="w-full h-full object-contain"
               />
             </div>
           ) : (

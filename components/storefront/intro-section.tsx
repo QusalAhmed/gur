@@ -123,11 +123,11 @@ export function IntroSection({
   const sectionContent = (
     <div className="relative z-10 w-full max-w-3xl sm:max-w-4xl mx-auto my-auto py-2 space-y-4 sm:space-y-6">
       {/* Brand Header */}
-      <div className="text-center space-y-2 px-2">
+      <div className="text-center px-2">
         {/* Logo centered above brand name */}
         {optimizedLogoUrl && (
-          <div className="flex justify-center pt-1.5 sm:pt-2">
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shrink-0 border-2 border-amber-300/80 dark:border-amber-700/60 shadow-lg bg-white/95 dark:bg-stone-900/95 flex items-center justify-center p-1.5 sm:p-2 transition-transform duration-300 hover:scale-105">
+          <div className="flex justify-center -mb-2 sm:-mb-3 md:-mb-4">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 shrink-0 flex items-center justify-center transition-transform duration-300 hover:scale-105">
               <Image
                 src={optimizedLogoUrl}
                 alt={displayName}
@@ -141,11 +141,11 @@ export function IntroSection({
           </div>
         )}
 
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-amber-950 dark:text-amber-50 tracking-tight leading-tight pt-1">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-amber-950 dark:text-amber-50 tracking-tight leading-tight">
           {displayName}
         </h1>
 
-        <p className="text-sm sm:text-base md:text-lg text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
+        <p className="mt-1.5 sm:mt-2 text-sm sm:text-base md:text-lg text-stone-700 dark:text-stone-300 max-w-2xl mx-auto leading-relaxed font-normal">
           {displaySubtitle}
         </p>
       </div>

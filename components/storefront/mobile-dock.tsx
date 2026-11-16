@@ -175,10 +175,10 @@ export function MobileDock({
             <div className="relative flex items-center justify-center">
               {logoUrl ? (
                 <div
-                  className={`w-6 h-6 rounded-full overflow-hidden border transition-all ${
+                  className={`w-6 h-6 shrink-0 flex items-center justify-center transition-all ${
                     activeSection === "intro"
-                      ? "border-amber-500 ring-2 ring-amber-400/60 shadow-2xs"
-                      : "border-stone-300 dark:border-stone-700"
+                      ? "scale-110 drop-shadow-xs"
+                      : "opacity-80"
                   }`}
                 >
                   <Image
