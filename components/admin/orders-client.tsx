@@ -271,6 +271,9 @@ const paymentStyles: Record<string, string> = {
   refunded: "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
 };
 
+/** Wait 500ms after user stops typing before querying the database for orders */
+const SEARCH_DEBOUNCE_MS = 500;
+
 export function OrdersClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -3556,7 +3559,7 @@ export function OrdersClient() {
                       }
                       searchTimerRef.current = setTimeout(() => {
                         commitSearchRef.current(val);
-                      }, 500);
+                      }, SEARCH_DEBOUNCE_MS);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
