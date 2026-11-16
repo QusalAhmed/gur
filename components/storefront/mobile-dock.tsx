@@ -1,158 +1,258 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Phone, ShoppingBag, Globe, Sparkles } from "lucide-react";
+import { Phone, ShoppingBag, Home } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
+  selectCartSubtotal,
   openCart,
 } from "@/lib/redux/slices/cart-slice";
 import { trackContact } from "@/lib/facebook-pixel";
 import { buildImageKitUrl } from "@/lib/imagekit/url";
 
-interface MobileDockProps {
+export interface MobileDockProps {
   lang: StorefrontLang;
-  onToggleLang: () => void;
+  onToggleLang?: () => void;
   defaultHotline?: string;
   storeName?: string;
   logoUrl?: string;
+  activeSection?: "intro" | "products" | "checkout";
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
   onIntroClick?: () => void;
   onCheckoutClick?: () => void;
 }
 
 const emptySubscribe = () => () => {};
 
+const toBengaliNumber = (num: number | string): string => {
+  const bnDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return String(num).replace(/[0-9]/g, (d) => bnDigits[Number(d)]);
+};
+
 export function MobileDock({
   lang,
-  onToggleLang,
   defaultHotline = "01843557389",
   storeName,
   logoUrl,
+  activeSection = "intro",
+  scrollContainerRef,
   onIntroClick,
   onCheckoutClick,
 }: MobileDockProps) {
   const dispatch = useAppDispatch();
   const cartTotalQuantity = useAppSelector(selectCartTotalQuantity);
+  const cartSubtotal = useAppSelector(selectCartSubtotal);
   const mounted = React.useSyncExternalStore(emptySubscribe, () => true, () => false);
   const displayCartQuantity = mounted ? cartTotalQuantity : 0;
+  const displayCartSubtotal = mounted ? cartSubtotal : 0;
+
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  // Smart Auto-Hide on Scroll Down, Reveal immediately on Scroll Up
+  useEffect(() => {
+    const handleScrollDelta = (currentY: number) => {
+      const delta = currentY - lastScrollY.current;
+      if (currentY <= 30) {
+        setIsVisible(true);
+      } else if (delta > 12) {
+        setIsVisible(false);
+      } else if (delta < -8) {
+        setIsVisible(true);
+      }
+      lastScrollY.current = currentY;
+    };
+
+    const container = scrollContainerRef?.current;
+
+    const onContainerScroll = () => {
+      if (container) handleScrollDelta(container.scrollTop);
+    };
+
+    const onWindowScroll = () => {
+      handleScrollDelta(window.scrollY);
+    };
+
+    if (container) {
+      container.addEventListener("scroll", onContainerScroll, { passive: true });
+    }
+    window.addEventListener("scroll", onWindowScroll, { passive: true });
+
+    // Also observe the overview section if present
+    const overviewEl = document.getElementById("storefront-overview");
+    const onOverviewScroll = () => {
+      if (overviewEl) handleScrollDelta(overviewEl.scrollTop);
+    };
+    if (overviewEl) {
+      overviewEl.addEventListener("scroll", onOverviewScroll, { passive: true });
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener("scroll", onContainerScroll);
+      }
+      window.removeEventListener("scroll", onWindowScroll);
+      if (overviewEl) {
+        overviewEl.removeEventListener("scroll", onOverviewScroll);
+      }
+    };
+  }, [scrollContainerRef]);
 
   const t = STOREFRONT_TEXT[lang];
-
   const rawHotlineDigits = defaultHotline.replace(/[^0-9]/g, "");
   const displayName = storeName || t.storeName;
+
+  const handleHomeClick = () => {
+    if (onIntroClick) {
+      onIntroClick();
+    } else {
+      const introEl =
+        document.getElementById("intro") ||
+        document.getElementById("storefront-overview") ||
+        document.getElementById("contact");
+      if (introEl) {
+        introEl.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  };
+
+  const handleCartClick = () => {
+    if (displayCartQuantity > 0 && onCheckoutClick) {
+      onCheckoutClick();
+    } else {
+      dispatch(openCart());
+    }
+  };
 
   return (
     <div
       data-mobile-dock="true"
-      className="fixed bottom-2.5 inset-x-2.5 z-40 sm:hidden flex justify-center pointer-events-none"
+      className="fixed bottom-0 inset-x-0 z-40 sm:hidden w-full pointer-events-none"
     >
       <motion.nav
         initial={false}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        className="pointer-events-auto w-full max-w-sm bg-gradient-to-r from-amber-100/95 via-amber-50/95 to-amber-100/95 dark:from-stone-900/95 dark:via-stone-900/95 dark:to-stone-850/95 backdrop-blur-xl border-2 border-amber-300/80 dark:border-amber-700/60 rounded-full shadow-[0_12px_32px_rgba(120,53,15,0.22)] py-1.5 px-2.5 flex items-center justify-between gap-1 select-none"
+        animate={{
+          y: isVisible ? 0 : "100%",
+        }}
+        transition={{ type: "spring", stiffness: 350, damping: 32 }}
+        className="pointer-events-auto relative w-full bg-[#FAF8F5]/95 dark:bg-[#141210]/95 backdrop-blur-xl border-t border-amber-900/10 dark:border-stone-800/90 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.5)] select-none"
         aria-label="Mobile Store Navigation"
       >
-        {/* 1. Store Brand & Logo (1-Tap shortcut to Top Intro Section) */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onIntroClick) {
-              onIntroClick();
-            } else {
-              const introEl = document.getElementById("intro") || document.getElementById("contact");
-              if (introEl) {
-                introEl.scrollIntoView({ behavior: "smooth" });
-              } else {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }
+        {/* Specular hairline top glow */}
+        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/40 dark:via-amber-500/30 to-transparent pointer-events-none" />
+
+        <div className="grid grid-cols-3 items-center w-full max-w-sm mx-auto h-13 sm:h-14 px-2">
+          {/* 1. Home Tab */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            type="button"
+            onClick={handleHomeClick}
+            aria-label={lang === "bn" ? `${displayName} - হোম` : `${displayName} - Home`}
+            className={`flex flex-col items-center justify-center h-full py-1 relative touch-manipulation cursor-pointer transition-colors ${
+              activeSection === "intro"
+                ? "text-amber-950 dark:text-amber-300 font-bold"
+                : "text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <div className="relative flex items-center justify-center">
+              {logoUrl ? (
+                <div
+                  className={`w-6 h-6 rounded-full overflow-hidden border transition-all ${
+                    activeSection === "intro"
+                      ? "border-amber-500 ring-2 ring-amber-400/60 shadow-2xs"
+                      : "border-stone-300 dark:border-stone-700"
+                  }`}
+                >
+                  <Image
+                    src={buildImageKitUrl(logoUrl, { width: 48, height: 48, quality: 80, format: "auto" })}
+                    alt={displayName}
+                    width={24}
+                    height={24}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <Home
+                  className="w-5 h-5 transition-transform"
+                  aria-hidden="true"
+                  strokeWidth={activeSection === "intro" ? 2.4 : 1.9}
+                />
+              )}
+            </div>
+            <span className="text-[10px] mt-1 tracking-tight leading-none">
+              {lang === "bn" ? "হোম" : "Home"}
+            </span>
+            {activeSection === "intro" && (
+              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-600 dark:bg-amber-400" />
+            )}
+          </motion.button>
+
+          {/* 2. Direct Hotline Call Tab */}
+          <motion.a
+            whileTap={{ scale: 0.9 }}
+            href={`tel:${rawHotlineDigits}`}
+            onClick={() => trackContact({ channel: "phone", customData: { source: "mobile_dock" } })}
+            aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
+            className="flex flex-col items-center justify-center h-full py-1 relative touch-manipulation cursor-pointer text-stone-500 dark:text-stone-400 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+            title={t.hotlineLabel}
+          >
+            <div className="relative flex items-center justify-center">
+              <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" strokeWidth={2} />
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+            </div>
+            <span className="text-[10px] mt-1 font-semibold tracking-tight leading-none text-emerald-700 dark:text-emerald-400">
+              {lang === "bn" ? "কল" : "Call"}
+            </span>
+          </motion.a>
+
+          {/* 3. Cart / Order Tab */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            type="button"
+            data-tour="mobile-checkout-cta"
+            onClick={handleCartClick}
+            aria-label={
+              lang === "bn"
+                ? `কার্ট ও অর্ডার, ${displayCartQuantity}টি পণ্য, মোট ৳${toBengaliNumber(displayCartSubtotal)}`
+                : `Cart & Checkout, ${displayCartQuantity} items, total ৳${displayCartSubtotal.toLocaleString()}`
             }
-          }}
-          aria-label={lang === "bn" ? `${displayName} - হোমপেইজ` : `${displayName} - Homepage`}
-          className="flex items-center gap-1.5 min-w-0 pl-1 pr-1.5 text-left active:scale-95 transition-transform touch-manipulation cursor-pointer"
-          title="ব্যবসায়ের পরিচিতি ও হোমপেইজ"
-        >
-          {logoUrl ? (
-            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-sm bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
-              <Image
-                src={buildImageKitUrl(logoUrl, { width: 64, height: 64, quality: 80, format: "auto" })}
-                alt={displayName}
-                width={32}
-                height={32}
-                loading="lazy"
-                decoding="async"
-                className="w-full h-full object-contain p-0.5"
+            className={`flex flex-col items-center justify-center h-full py-1 relative touch-manipulation cursor-pointer transition-colors ${
+              displayCartQuantity > 0 || activeSection === "checkout"
+                ? "text-amber-950 dark:text-amber-300 font-bold"
+                : "text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <div className="relative flex items-center justify-center">
+              <ShoppingBag
+                className={`w-5 h-5 transition-transform ${displayCartQuantity > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}
+                aria-hidden="true"
+                strokeWidth={displayCartQuantity > 0 || activeSection === "checkout" ? 2.4 : 1.9}
               />
+              {displayCartQuantity > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs ring-2 ring-[#FAF8F5] dark:ring-[#141210]">
+                  {displayCartQuantity}
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
-              <Sparkles className="w-4 h-4 text-amber-100" aria-hidden="true" />
-            </div>
-          )}
-          <div className="min-w-0 hidden xs:block">
-            <span className="block font-black text-sm text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
-              {displayName}
+            <span className="text-[10px] mt-1 tracking-tight leading-none">
+              {displayCartQuantity > 0
+                ? (lang === "bn" ? `৳${toBengaliNumber(displayCartSubtotal)}` : `৳${displayCartSubtotal.toLocaleString()}`)
+                : (lang === "bn" ? "কার্ট" : "Cart")}
             </span>
-            <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
-              {t.authenticityBadge}
-            </span>
-          </div>
-        </button>
-
-        {/* 2. Direct Call Hotline Button (High-reassurance for senior shoppers) */}
-        <motion.a
-          whileTap={{ scale: 0.92 }}
-          href={`tel:${rawHotlineDigits}`}
-          onClick={() => trackContact({ channel: "phone", customData: { source: "mobile_dock" } })}
-          aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
-          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-1.5 px-3 rounded-full shadow-md transition-all touch-manipulation shrink-0"
-          title={t.hotlineLabel}
-        >
-          <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" aria-hidden="true" />
-          <span className="font-mono text-xs sm:text-sm">{defaultHotline}</span>
-        </motion.a>
-
-        {/* 3. Redux Cart Button with Live Bouncing Badge (Clicks jump to Checkout section) */}
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          type="button"
-          data-tour="mobile-checkout-cta"
-          onClick={() => {
-            if (onCheckoutClick) {
-              onCheckoutClick();
-            } else {
-              dispatch(openCart());
-            }
-          }}
-          className="relative inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all touch-manipulation shrink-0"
-          suppressHydrationWarning
-          aria-label={lang === "bn" ? `কার্ট ও অর্ডার, ${displayCartQuantity}টি পণ্য` : `Cart & Order, ${displayCartQuantity} items`}
-        >
-          <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" aria-hidden="true" />
-          {displayCartQuantity > 0 && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white text-xs font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900"
-            >
-              {displayCartQuantity}
-            </motion.span>
-          )}
-        </motion.button>
-
-        {/* 4. Language Switcher Button */}
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          type="button"
-          onClick={onToggleLang}
-          className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-xs py-1.5 px-2.5 rounded-full transition-all shadow-sm touch-manipulation shrink-0"
-          aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
-        >
-          <Globe className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
-          <span>{t.langToggle}</span>
-        </motion.button>
+            {activeSection === "checkout" && (
+              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-600 dark:bg-amber-400" />
+            )}
+          </motion.button>
+        </div>
       </motion.nav>
     </div>
   );

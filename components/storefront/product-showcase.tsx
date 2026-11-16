@@ -573,6 +573,22 @@ export function ProductShowcase({
           {/* Soft Ambient Warm Glow */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-gradient-to-b from-amber-300/35 via-amber-200/15 to-transparent dark:from-amber-950/30 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
 
+          {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
+          <div
+            className="absolute top-3 right-3 z-20 sm:hidden"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+          >
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
+              className="inline-flex items-center gap-1.5 bg-white/90 dark:bg-stone-800/90 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300/80 dark:border-stone-700/80 text-amber-950 dark:text-amber-200 font-bold text-xs py-1.5 px-3 rounded-full transition-all shadow-xs touch-manipulation cursor-pointer select-none"
+            >
+              <Globe className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
+              <span className="font-mono text-[11px] tracking-tight">{t.langToggle}</span>
+            </button>
+          </div>
+
           {/* 1. Business Introductory Section */}
           <IntroSection
             lang={lang}
@@ -677,10 +693,17 @@ export function ProductShowcase({
       {/* Mobile Floating Island Dock (Eye-catching frosted pill on mobile phones) */}
       <MobileDock
         lang={lang}
-        onToggleLang={toggleLanguage}
         defaultHotline={defaultHotline}
         storeName={storeName}
         logoUrl={logoUrl}
+        activeSection={
+          activeSectionIndex === 0
+            ? "intro"
+            : activeSectionIndex >= checkoutSectionIndex
+            ? "checkout"
+            : "products"
+        }
+        scrollContainerRef={containerRef}
         onIntroClick={() => scrollToSection(introSectionIndex)}
         onCheckoutClick={() => scrollToSection(checkoutSectionIndex)}
       />
