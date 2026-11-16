@@ -14,6 +14,9 @@ export const notificationEmailFunction = inngest.createFunction(
     name: "Direct Transactional Email Dispatch",
     retries: 3,
     triggers: [{ event: "notification.email.send" }],
+    concurrency: {
+      limit: 15,
+    },
   },
   async ({ event, step }) => {
     const data = event.data as NotificationEmailSendEventData;
@@ -31,6 +34,9 @@ export const notificationSmsFunction = inngest.createFunction(
     name: "Direct SMS Dispatch",
     retries: 3,
     triggers: [{ event: "notification.sms.send" }],
+    concurrency: {
+      limit: 15,
+    },
   },
   async ({ event, step }) => {
     const data = event.data as NotificationSmsSendEventData;
@@ -50,6 +56,9 @@ export const metaCapiPurchaseFunction = inngest.createFunction(
     name: "Meta CAPI Purchase Event Trigger",
     retries: 3,
     triggers: [{ event: "meta.capi.purchase" }],
+    concurrency: {
+      limit: 20,
+    },
   },
   async ({ event, step }) => {
     const data = event.data as MetaCapiPurchaseEventData;

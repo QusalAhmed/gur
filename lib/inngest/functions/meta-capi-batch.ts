@@ -8,12 +8,15 @@ export const metaCapiBatchDispatcherFunction = inngest.createFunction(
     name: "Meta CAPI: High-Throughput Event Batcher",
     retries: 3,
     triggers: [{ event: "meta.capi.event" }],
+    concurrency: {
+      limit: 25, // Unlocked on self-hosted Inngest (allows high-parallel ad traffic)
+    },
     batchEvents: {
-      maxSize: 5,
+      maxSize: 50, // Batch up to 50 events per Meta CAPI dispatch (reducing Lambda invocations)
       timeout: "5s",
     },
     throttle: {
-      limit: 10,
+      limit: 25,
       period: "1s",
     },
   },

@@ -9,6 +9,9 @@ export const orderCreatedFunction = inngest.createFunction(
     name: "Order Created: Admin Email & Customer SMS",
     retries: 3,
     triggers: [{ event: "order.created" }],
+    concurrency: {
+      limit: 20, // Allows up to 20 concurrent order notifications during high-traffic surges
+    },
   },
   async ({ event, step }) => {
     const data = event.data as OrderCreatedEventData;
