@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { motion } from "motion/react";
 import { Phone, ShoppingBag, Globe, Sparkles } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
@@ -10,12 +11,14 @@ import {
   openCart,
 } from "@/lib/redux/slices/cart-slice";
 import { trackContact } from "@/lib/facebook-pixel";
+import { buildImageKitUrl } from "@/lib/imagekit/url";
 
 interface MobileDockProps {
   lang: StorefrontLang;
   onToggleLang: () => void;
   defaultHotline?: string;
   storeName?: string;
+  logoUrl?: string;
   onIntroClick?: () => void;
   onCheckoutClick?: () => void;
 }
@@ -27,6 +30,7 @@ export function MobileDock({
   onToggleLang,
   defaultHotline = "01843557389",
   storeName,
+  logoUrl,
   onIntroClick,
   onCheckoutClick,
 }: MobileDockProps) {
@@ -71,9 +75,23 @@ export function MobileDock({
           className="flex items-center gap-1.5 min-w-0 pl-1 pr-1.5 text-left active:scale-95 transition-transform touch-manipulation cursor-pointer"
           title="ব্যবসায়ের পরিচিতি ও হোমপেইজ"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
-            <Sparkles className="w-4 h-4 text-amber-100" aria-hidden="true" />
-          </div>
+          {logoUrl ? (
+            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-sm bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
+              <Image
+                src={buildImageKitUrl(logoUrl, { width: 64, height: 64, quality: 80, format: "auto" })}
+                alt={displayName}
+                width={32}
+                height={32}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-contain p-0.5"
+              />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-sm shrink-0">
+              <Sparkles className="w-4 h-4 text-amber-100" aria-hidden="true" />
+            </div>
+          )}
           <div className="min-w-0 hidden xs:block">
             <span className="block font-black text-sm text-amber-950 dark:text-amber-100 truncate tracking-tight leading-tight">
               {displayName}

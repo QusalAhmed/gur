@@ -11,6 +11,7 @@ export interface StorefrontDataResult {
   hotline: string;
   storeName: string;
   storeSubtitle: string;
+  logoUrl?: string;
   deliveryConfig: DeliveryChargeConfig;
 }
 
@@ -92,6 +93,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
   let hotline = "01843557389";
   let storeName = "খেজুরের খাটি গুড়";
   let storeSubtitle = "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত";
+  let logoUrl: string | undefined = undefined;
   const deliveryConfig: DeliveryChargeConfig = { ...DEFAULT_DELIVERY_CONFIG };
 
   try {
@@ -104,6 +106,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         "store.name_bn",
         "store.name",
         "store.subtitle",
+        "store.logo_url",
         "shipping.inside_dhaka_fee",
         "shipping.outside_dhaka_fee",
         "shipping.free_delivery_enabled",
@@ -120,6 +123,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         if (row.key === "store.name" && cleanVal) nameEn = cleanVal;
         if (row.key === "store.name_bn" && cleanVal) nameBn = cleanVal;
         if (row.key === "store.subtitle" && cleanVal) storeSubtitle = cleanVal;
+        if (row.key === "store.logo_url" && cleanVal) logoUrl = cleanVal;
 
         if (row.key === "shipping.inside_dhaka_fee") {
           const num = typeof val === "number" ? val : parseFloat(cleanVal);
@@ -305,6 +309,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     hotline,
     storeName,
     storeSubtitle,
+    logoUrl,
     deliveryConfig,
   };
 }

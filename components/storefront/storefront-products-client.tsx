@@ -76,6 +76,7 @@ export function StorefrontProductsClient({
         defaultHotline={data?.hotline ?? "01843557389"}
         storeName={data?.storeName ?? "খেজুরের খাঁটি গুড়"}
         storeSubtitle={data?.storeSubtitle}
+        logoUrl={data?.logoUrl}
         isLoading={isLoading}
         featuredIdentifier={effectiveFeaturedId}
         initialVariantId={effectiveVariantId}

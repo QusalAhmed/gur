@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import {
   Sparkles,
   ShieldCheck,
@@ -12,12 +13,14 @@ import {
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { RollingNumber } from "@/components/storefront/rolling-number";
+import { buildImageKitUrl } from "@/lib/imagekit/url";
 
 interface IntroSectionProps {
   lang?: StorefrontLang;
   hotline?: string;
   storeName?: string;
   storeSubtitle?: string;
+  logoUrl?: string;
   isActive?: boolean;
   isStandaloneSection?: boolean;
   onScrollToProducts?: () => void;
@@ -29,6 +32,7 @@ export function IntroSection({
   lang = "bn",
   storeName,
   storeSubtitle,
+  logoUrl,
   isActive = true,
   isStandaloneSection = true,
   onScrollToProducts,
@@ -38,6 +42,10 @@ export function IntroSection({
   const t = STOREFRONT_TEXT[lang];
   const displayName = storeName || t.introHeroTitle;
   const displaySubtitle = storeSubtitle || t.introHeroSubtitle;
+
+  const optimizedLogoUrl = logoUrl
+    ? buildImageKitUrl(logoUrl, { width: 160, height: 160, quality: 80, format: "auto" })
+    : "";
 
   const handleScrollToProducts = () => {
     if (onScrollToProducts) {
@@ -124,6 +132,23 @@ export function IntroSection({
             {t.introOriginBadge}
           </span>
         </div>
+
+        {/* Logo centered above brand name */}
+        {optimizedLogoUrl && (
+          <div className="flex justify-center pt-1 sm:pt-1.5">
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full overflow-hidden shrink-0 border-2 border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/95 dark:bg-stone-900/95 flex items-center justify-center p-1">
+              <Image
+                src={optimizedLogoUrl}
+                alt={displayName}
+                width={80}
+                height={80}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+        )}
 
         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-amber-950 dark:text-amber-50 tracking-tight leading-tight pt-1">
           {displayName}

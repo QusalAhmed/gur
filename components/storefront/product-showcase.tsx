@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ChevronDown } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
@@ -20,6 +21,7 @@ import {
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
 import { useStorefrontIntro } from "@/hooks/use-storefront-intro";
+import { buildImageKitUrl } from "@/lib/imagekit/url";
 import type { DeliveryChargeConfig } from "@/lib/delivery-charge";
 
 // Code-split heavy interactive sections & modals to reduce initial mobile bundle size
@@ -40,6 +42,7 @@ interface ProductShowcaseProps {
   defaultHotline?: string;
   storeName?: string;
   storeSubtitle?: string;
+  logoUrl?: string;
   messengerUrl?: string;
   isLoading?: boolean;
   featuredIdentifier?: string;
@@ -53,6 +56,7 @@ export function ProductShowcase({
   defaultHotline = "01843557389",
   storeName,
   storeSubtitle,
+  logoUrl,
   messengerUrl,
   isLoading = false,
   featuredIdentifier,
@@ -348,9 +352,23 @@ export function ProductShowcase({
           className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2 text-left cursor-pointer active:scale-95 transition-transform"
           title={lang === "bn" ? "পরিচিতি ও হোমপেইজ" : "About & Homepage"}
         >
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" aria-hidden="true" />
-          </div>
+          {logoUrl ? (
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden shrink-0 border border-amber-300/80 dark:border-amber-700/60 shadow-md bg-white/90 dark:bg-stone-900/90 flex items-center justify-center">
+              <Image
+                src={buildImageKitUrl(logoUrl, { width: 72, height: 72, quality: 80, format: "auto" })}
+                alt={displayStoreName}
+                width={36}
+                height={36}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-contain p-0.5"
+              />
+            </div>
+          ) : (
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" aria-hidden="true" />
+            </div>
+          )}
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base md:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight truncate">
               {displayStoreName}
@@ -561,6 +579,7 @@ export function ProductShowcase({
             lang={lang}
             storeName={displayStoreName}
             storeSubtitle={storeSubtitle}
+            logoUrl={logoUrl}
             isActive={activeSectionIndex === 0}
             isStandaloneSection={false}
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
@@ -662,6 +681,7 @@ export function ProductShowcase({
         onToggleLang={toggleLanguage}
         defaultHotline={defaultHotline}
         storeName={storeName}
+        logoUrl={logoUrl}
         onIntroClick={() => scrollToSection(introSectionIndex)}
         onCheckoutClick={() => scrollToSection(checkoutSectionIndex)}
       />
