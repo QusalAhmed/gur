@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
+import { LiveStockSection } from "./live-stock-section";
 import { getOrGenerateInquiryRefCode, trackContact } from "@/lib/facebook-pixel";
 
 interface ContactSectionProps {
@@ -471,6 +472,17 @@ export function ContactSection({
         storeName={storeName}
         onScrollToProducts={handleScrollDown}
       />
+
+      {/* Soft Decorative Separator for Normal Scrolling */}
+      <div className="my-5 sm:my-6 border-t border-dashed border-amber-300/80 dark:border-stone-800" />
+
+      {/* Live Stock & Future Production Availability Section */}
+      <div className="w-full">
+        <LiveStockSection
+          lang={lang}
+          onScrollToProducts={onScrollToProducts || handleScrollDown}
+        />
+      </div>
     </div>
   );
 
@@ -478,7 +490,7 @@ export function ContactSection({
     return (
       <div
         id="contact"
-        className="w-full pt-2 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-6 md:px-12 relative text-stone-900 dark:text-stone-100 select-none"
+        className="w-full pt-1 sm:pt-2 pb-4 sm:pb-6 px-0 sm:px-2 relative text-stone-900 dark:text-stone-100 select-none"
       >
         {sectionContent}
       </div>

@@ -58,7 +58,6 @@ import { useAutoSyncIncompleteOrder } from "@/hooks/use-auto-sync-incomplete-ord
 import { isValidBdPhone, parseBdPhone } from "@/lib/phone";
 import { FormFieldError } from "@/components/ui/tanstack-form";
 import { SlidingNumber } from "@/components/ui/sliding-number";
-import { LiveStockSection } from "./live-stock-section";
 import type { Order } from "@/types/order";
 import { type DeliveryChargeConfig } from "@/lib/delivery-charge";
 import { useDeliveryCharge } from "@/hooks/use-delivery-charge";
@@ -151,6 +150,7 @@ interface CheckoutSectionProps {
   hotline: string;
   onScrollToProducts: () => void;
   deliveryConfig?: DeliveryChargeConfig;
+  children?: React.ReactNode;
 }
 
 export function CheckoutSection({
@@ -158,6 +158,7 @@ export function CheckoutSection({
   hotline = "01843557389",
   onScrollToProducts,
   deliveryConfig,
+  children,
 }: CheckoutSectionProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -669,7 +670,7 @@ return (
   <section
     id="checkout"
     data-section-index="checkout"
-    className="h-[100dvh] max-h-[100dvh] min-h-[620px] w-full snap-start snap-always shrink-0 flex flex-col justify-between pt-3.5 sm:pt-16 pb-16 sm:pb-6 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none"
+    className="h-[100dvh] max-h-[100dvh] min-h-[620px] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
   >
     {/* Background Watcher for Incomplete Order Syncing (zero UI re-renders on keystrokes) */}
     <AutoSyncOrderWatcher
@@ -1193,18 +1194,20 @@ return (
           </form>
         </div>
       </div>
-
-      {/* Live Stock & Future Production Availability Section */}
-      <div className="mt-6 sm:mt-8">
-        <LiveStockSection
-          lang={lang}
-          onScrollToProducts={onScrollToProducts}
-        />
-      </div>
     </div>
 
+    {/* Contact Form / Incomplete Form / Live Stock (Under same scrolling section) */}
+    {children && (
+      <div className="relative z-10 w-full max-w-5xl mx-auto my-3 sm:my-5">
+        <div className="w-full max-w-3xl sm:max-w-4xl mx-auto px-4 mb-4 sm:mb-6">
+          <div className="border-t border-dashed border-amber-300/80 dark:border-stone-800" />
+        </div>
+        {children}
+      </div>
+    )}
+
     {/* Footer Support Guarantee Note */}
-    <div className="relative z-10 w-full text-center py-1 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
+    <div className="relative z-10 w-full text-center py-3 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
       <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
       <span>
         {lang === "bn"

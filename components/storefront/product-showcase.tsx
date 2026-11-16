@@ -72,14 +72,12 @@ export function ProductShowcase({
   // Section mapping:
   // Section 0: Brand & Value Proposition (Intro & Why Buy From Us under same scrolling area)
   // Sections 1..effectiveProductCount: Products
-  // Section checkoutSectionIndex: Checkout Section (Order Form)
-  // Section contactSectionIndex: Contact & Customer Support Section
+  // Section checkoutSectionIndex: Checkout & Contact Section (Order Form, Contact & Live Stock under same scrolling area)
   const introSectionIndex = 0;
   const productsStartIndex = 1;
   const effectiveProductCount = isLoading ? 1 : Math.max(1, products.length);
   const checkoutSectionIndex = productsStartIndex + effectiveProductCount;
-  const contactSectionIndex = checkoutSectionIndex + 1;
-  const totalSections = contactSectionIndex + 1;
+  const totalSections = checkoutSectionIndex + 1;
 
   const [activeSectionIndex, setActiveSectionIndex] = useState(() => {
     if (autoScrollToProduct || Boolean(featuredIdentifier)) {
@@ -148,7 +146,13 @@ export function ProductShowcase({
   // Smooth scroll to an element inside Section 0 (e.g. Why Buy From Us) or Contact Section
   const handleScrollToElement = (elementId: string) => {
     if (elementId === "contact") {
-      scrollToSection(contactSectionIndex);
+      scrollToSection(checkoutSectionIndex);
+      setTimeout(() => {
+        const targetEl = document.getElementById("contact");
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 120);
       return;
     }
     const container = containerRef.current;
@@ -403,12 +407,8 @@ export function ProductShowcase({
           </button>
           <button
             type="button"
-            onClick={() => scrollToSection(contactSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSectionIndex === contactSectionIndex
-                ? "bg-white text-amber-900 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
-            }`}
+            onClick={() => handleScrollToElement("contact")}
+            className="px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
           >
             <Phone className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
             <span>{lang === "bn" ? "যোগাযোগ" : "Contact"}</span>
@@ -527,7 +527,7 @@ export function ProductShowcase({
           })
         )}
 
-        {/* Dot Final - 1: Checkout Section */}
+        {/* Dot Final: Checkout & Contact Section */}
         <button
           type="button"
           onClick={() => scrollToSection(checkoutSectionIndex)}
@@ -536,21 +536,8 @@ export function ProductShowcase({
               ? "bg-emerald-600 ring-4 ring-emerald-400/40 scale-125 shadow-md"
               : "bg-amber-900/40 dark:bg-stone-600 hover:bg-emerald-600/70"
           }`}
-          title={t.navCheckout}
-          aria-label="Scroll to Checkout"
-        />
-
-        {/* Dot Final: Contact Section */}
-        <button
-          type="button"
-          onClick={() => scrollToSection(contactSectionIndex)}
-          className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
-            activeSectionIndex === contactSectionIndex
-              ? "bg-amber-600 ring-4 ring-amber-400/40 scale-125 shadow-md"
-              : "bg-amber-900/40 dark:bg-stone-600 hover:bg-amber-600/70"
-          }`}
-          title={lang === "bn" ? "যোগাযোগ ও সহায়তা" : "Contact & Support"}
-          aria-label="Scroll to Contact"
+          title={lang === "bn" ? "অর্ডার ও যোগাযোগ" : "Order & Contact"}
+          aria-label="Scroll to Checkout and Contact"
         />
       </aside>
 
@@ -578,7 +565,7 @@ export function ProductShowcase({
             isStandaloneSection={false}
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
             onScrollToWhyBuy={() => handleScrollToElement("why-buy-from-us")}
-            onScrollToContact={() => scrollToSection(contactSectionIndex)}
+            onScrollToContact={() => handleScrollToElement("contact")}
           />
 
           {/* Soft Decorative Separator */}
@@ -591,7 +578,7 @@ export function ProductShowcase({
             lang={lang}
             isStandaloneSection={false}
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
-            onScrollToContact={() => scrollToSection(contactSectionIndex)}
+            onScrollToContact={() => handleScrollToElement("contact")}
           />
 
           {/* Bottom Action: "View Products & Order" button at bottom of overview area */}
@@ -649,24 +636,24 @@ export function ProductShowcase({
           ))
         )}
 
-        {/* Section checkoutSectionIndex: Full-Screen Cart Summary & Checkout */}
+        {/* Section checkoutSectionIndex: Full-Screen Cart Summary, Checkout & Contact under same scrolling area */}
         <CheckoutSection
           lang={lang}
           hotline={defaultHotline}
           onScrollToProducts={() => scrollToSection(productsStartIndex)}
           deliveryConfig={deliveryConfig}
-        />
-
-        {/* Section contactSectionIndex: Contact & Customer Support (placed after product section and order form) */}
-        <ContactSection
-          lang={lang}
-          hotline={defaultHotline}
-          storeName={storeName}
-          messengerUrl={messengerUrl}
-          isStandaloneSection={true}
-          onScrollToProducts={() => scrollToSection(productsStartIndex)}
-          onScrollToWhyBuy={() => handleScrollToElement("why-buy-from-us")}
-        />
+        >
+          {/* Contact & Customer Support Form (placed below order form under the same scrolling section) */}
+          <ContactSection
+            lang={lang}
+            hotline={defaultHotline}
+            storeName={storeName}
+            messengerUrl={messengerUrl}
+            isStandaloneSection={false}
+            onScrollToProducts={() => scrollToSection(productsStartIndex)}
+            onScrollToWhyBuy={() => handleScrollToElement("why-buy-from-us")}
+          />
+        </CheckoutSection>
       </main>
 
       {/* Mobile Floating Island Dock (Eye-catching frosted pill on mobile phones) */}

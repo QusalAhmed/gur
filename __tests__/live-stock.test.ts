@@ -34,7 +34,7 @@ describe("Live Stock Logic & Request Behavior", () => {
     expect(sectionFile).not.toContain("hasTriggeredInitialViewSync");
   });
 
-  it("places LiveStockSection in checkout-section below order form and removes it from contact-section", () => {
+  it("places LiveStockSection in contact-section below incomplete section and removes it from checkout-section", () => {
     const checkoutFile = fs.readFileSync(
       path.resolve(__dirname, "../components/storefront/checkout-section.tsx"),
       "utf-8"
@@ -44,8 +44,14 @@ describe("Live Stock Logic & Request Behavior", () => {
       "utf-8"
     );
 
-    expect(checkoutFile).toContain("<LiveStockSection");
-    expect(contactFile).not.toContain("<LiveStockSection");
+    expect(contactFile).toContain("<LiveStockSection");
+    expect(checkoutFile).not.toContain("<LiveStockSection");
+
+    // Verify it is placed after the incomplete order form component
+    const phoneHelpIndex = contactFile.indexOf("<PhoneHelpForm");
+    const liveStockIndex = contactFile.indexOf("<LiveStockSection");
+    expect(phoneHelpIndex).toBeGreaterThan(-1);
+    expect(liveStockIndex).toBeGreaterThan(phoneHelpIndex);
   });
 
   it("does not continuously refetch order data on order confirmation page", () => {
