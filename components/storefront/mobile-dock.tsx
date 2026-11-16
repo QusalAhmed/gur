@@ -52,8 +52,9 @@ export function MobileDock({
 
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollY = useRef(0);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Smart Auto-Hide on Scroll Down, Reveal immediately on Scroll Up
+  // Smart Auto-Hide on Scroll Down, Reveal immediately on Scroll Up or 5s after scrolling stops
   useEffect(() => {
     const handleScrollDelta = (currentY: number) => {
       const delta = currentY - lastScrollY.current;
@@ -65,6 +66,14 @@ export function MobileDock({
         setIsVisible(true);
       }
       lastScrollY.current = currentY;
+
+      // Automatically show bottom bar after 5 seconds of end of scrolling
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+      idleTimerRef.current = setTimeout(() => {
+        setIsVisible(true);
+      }, 5000);
     };
 
     const container = scrollContainerRef?.current;
@@ -92,6 +101,9 @@ export function MobileDock({
     }
 
     return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
       if (container) {
         container.removeEventListener("scroll", onContainerScroll);
       }
