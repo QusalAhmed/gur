@@ -525,9 +525,9 @@ export function ProductCard({
       <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />
 
       {/* Safe Centering Wrapper: centers content when fits, starts at top with padding when content is tall */}
-      <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-20 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
+      <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
         {/* Main Two-Column Container for Desktop & Tablet, Single Column on Mobile */}
-        <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 py-2">
+        <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 pt-1 pb-0 sm:py-2">
         {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
         <div className="w-full flex flex-col items-center justify-center">
           {/* Top Meta Header on Mobile Only (< md) */}
