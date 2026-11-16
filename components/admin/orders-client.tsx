@@ -271,8 +271,8 @@ const paymentStyles: Record<string, string> = {
   refunded: "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
 };
 
-/** Wait 500ms after user stops typing before querying the database for orders */
-const SEARCH_DEBOUNCE_MS = 500;
+/** Wait 1 second (1000ms) after user stops typing before querying the database for orders */
+const SEARCH_DEBOUNCE_MS = 1000;
 
 export function OrdersClient() {
   const router = useRouter();
