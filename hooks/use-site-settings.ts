@@ -42,8 +42,8 @@ export interface ParsedSiteSettings {
 export const SITE_SETTINGS_QUERY_KEY = ["site-settings"] as const;
 
 export const DEFAULT_SITE_SETTINGS: SiteSettingsMap = {
-  "store.name": "GUR",
-  "store.name_bn": "গুড়",
+  "store.name": "Gramayon",
+  "store.name_bn": "গ্রামায়ন",
   "store.currency": "BDT",
   "store.support_phone": "+880 1700-000001",
   "store.whatsapp": "+880 1711-234567",

@@ -47,12 +47,12 @@ export interface ResolvedSeoSettings {
   isFallback?: boolean;
 }
 
-const DEFAULT_STORE_NAME_BN = "খেজুরের খাঁটি গুড়";
-const DEFAULT_STORE_NAME_EN = "Pure Cane & Date Palm Molasses";
+const DEFAULT_STORE_NAME_BN = "গ্রামায়ন";
+const DEFAULT_STORE_NAME_EN = "Gramayon";
 const DEFAULT_STORE_SUBTITLE =
   "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত";
-const DEFAULT_TITLE = "খেজুরের খাটি গুড় | Pure Cane & Date Palm Molasses";
-const DEFAULT_TITLE_TEMPLATE = "%s | খেজুরের খাটি গুড়";
+const DEFAULT_TITLE = "Gramayon | Pure Cane & Date Palm Molasses";
+const DEFAULT_TITLE_TEMPLATE = "%s | Gramayon";
 const DEFAULT_DESCRIPTION =
   "Pure sugarcane and date palm molasses (ঝোলা গুড়, পাটালি গুড়) manufacturing, retail, and B2B wholesale distribution platform in Bangladesh.";
 const DEFAULT_CONTACT_TITLE = "যোগাযোগ ও সরাসরি অর্ডার";
@@ -138,7 +138,7 @@ function resolveSeoSettingsFromMap(
   const configuredStoreNameEn = cleanString(rawMap.get("store.name"));
   const configuredStoreNameBn = cleanString(rawMap.get("store.name_bn"));
   const storeName =
-    configuredStoreNameBn || configuredStoreNameEn || DEFAULT_STORE_NAME_BN;
+    configuredStoreNameEn || configuredStoreNameBn || DEFAULT_STORE_NAME_EN;
   const storeNameEn = configuredStoreNameEn || DEFAULT_STORE_NAME_EN;
   const storeNameBn = configuredStoreNameBn || DEFAULT_STORE_NAME_BN;
   const storeSubtitle = cleanString(rawMap.get("store.subtitle")) || DEFAULT_STORE_SUBTITLE;

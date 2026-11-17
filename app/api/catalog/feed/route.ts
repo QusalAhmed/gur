@@ -26,7 +26,7 @@ export async function GET() {
   const client = getSupabaseAdmin();
   const siteUrl = config.siteUrl;
 
-  let storeName = "গ্রামায়ন";
+  let storeName = "Gramayon";
   try {
     const { data: settings } = await client
       .from("site_settings")
@@ -34,9 +34,9 @@ export async function GET() {
       .in("key", ["store.name", "store.name_bn"]);
 
     if (settings && settings.length > 0) {
-      const bn = settings.find((s) => s.key === "store.name_bn")?.value;
       const en = settings.find((s) => s.key === "store.name")?.value;
-      const val = bn || en;
+      const bn = settings.find((s) => s.key === "store.name_bn")?.value;
+      const val = en || bn;
       if (val) {
         storeName = String(val).replace(/^["']|["']$/g, "").trim();
       }

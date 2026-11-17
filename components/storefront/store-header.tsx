@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Sparkles, Phone, ShoppingBag, ArrowLeft } from "lucide-react";
+import { Phone, ShoppingBag, ArrowLeft } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
@@ -11,8 +11,11 @@ import {
 import { CartSheet } from "./cart-sheet";
 import { trackContact } from "@/lib/facebook-pixel";
 
+import { buildImageKitUrl } from "@/lib/imagekit/url";
+
 interface StoreHeaderProps {
   storeName?: string;
+  logoUrl?: string;
   hotline?: string;
   showBackToHome?: boolean;
 }
@@ -20,7 +23,8 @@ interface StoreHeaderProps {
 const emptySubscribe = () => () => {};
 
 export function StoreHeader({
-  storeName = "খেজুরের খাঁটি গুড়",
+  storeName = "Gramayon",
+  logoUrl,
   hotline = "01843557389",
   showBackToHome = true,
 }: StoreHeaderProps) {
@@ -51,8 +55,17 @@ export function StoreHeader({
             className="flex items-center gap-2 min-w-0 pr-2 group"
             title="হোমপেইজ"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-4 h-4 text-amber-100" />
+            <div className="w-8 h-8 rounded-full bg-white dark:bg-stone-800 border border-amber-300/80 dark:border-stone-700 flex items-center justify-center overflow-hidden shadow-md shrink-0 group-hover:scale-105 transition-transform">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={
+                  logoUrl
+                    ? buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })
+                    : "/admin-icon/icon-192.png"
+                }
+                alt={storeName}
+                className="w-full h-full object-contain p-0.5"
+              />
             </div>
             <div className="min-w-0">
               <span className="text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 tracking-tight block leading-tight truncate">

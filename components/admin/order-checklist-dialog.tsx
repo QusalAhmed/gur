@@ -132,7 +132,7 @@ export function OrderChecklistDialog({
   orders,
 }: OrderChecklistDialogProps) {
   const [mounted, setMounted] = React.useState(false);
-  const { storeName, storeNameBn } = useSiteSettings();
+  const { storeName, logoUrl } = useSiteSettings();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [checkedItems, setCheckedItems] = React.useState<Record<string, boolean>>({});
   const [printDate, setPrintDate] = React.useState("");
@@ -323,7 +323,8 @@ export function OrderChecklistDialog({
     window.print();
   };
 
-  const displayName = storeNameBn || storeName || "খেজুরের খাটি গুড়";
+  const displayName = storeName || "Gramayon";
+  const displayLogo = logoUrl || "/admin-icon/icon-192.png";
   const nowFormatted = printDate || new Date().toLocaleString("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -377,6 +378,13 @@ export function OrderChecklistDialog({
         aria-hidden="true"
       >
         <div style={{ textAlign: "center", marginBottom: "4px" }}>
+          {displayLogo && (
+            <img
+              src={displayLogo}
+              alt={displayName}
+              style={{ width: "26px", height: "26px", objectFit: "contain", margin: "0 auto 2px", display: "block" }}
+            />
+          )}
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: 1.2 }}>
             {displayName}
           </div>

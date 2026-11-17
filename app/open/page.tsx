@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { OpenRedirectClient } from "./open-redirect-client";
 
 export const metadata: Metadata = {
-  title: "ব্রাউজারে খুলুন | খাঁটি খেজুর গুড়",
+  title: "ব্রাউজারে খুলুন | Gramayon",
   description: "ডিফল্ট ব্রাউজারে ওয়েবসাইট ওপেন করার ব্রিজ পেজ",
   robots: {
     index: false,

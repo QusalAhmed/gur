@@ -48,12 +48,14 @@ export default async function ContactPage() {
       hotline: "",
       storeName: "",
       storeSubtitle: "",
+      logoUrl: "",
       products: [],
     })),
   ]);
 
   const hotline = storefrontData.hotline || seo.supportPhone || "01843557389";
-  const storeName = storefrontData.storeName || seo.storeName || "খেজুরের খাঁটি গুড়";
+  const storeName = storefrontData.storeName || seo.storeNameEn || seo.storeName || "Gramayon";
+  const logoUrl = storefrontData.logoUrl || seo.logoUrl || "";
   const rawPhone = hotline.replace(/[^0-9]/g, "");
 
   const contactFaqs = [
@@ -104,7 +106,7 @@ export default async function ContactPage() {
         }}
       />
       {/* Top Header */}
-      <StoreHeader storeName={storeName} hotline={hotline} />
+      <StoreHeader storeName={storeName} logoUrl={logoUrl} hotline={hotline} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-12 space-y-10 sm:space-y-14">

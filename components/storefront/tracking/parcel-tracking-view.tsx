@@ -144,9 +144,15 @@ function calculateCurrentStepIndex(status: string): number {
 
 interface ParcelTrackingViewProps {
   initialData: ParcelTrackingData;
+  storeName?: string;
+  logoUrl?: string;
 }
 
-export function ParcelTrackingView({ initialData }: ParcelTrackingViewProps) {
+export function ParcelTrackingView({
+  initialData,
+  storeName = "Gramayon",
+  logoUrl = "/admin-icon/icon-192.png",
+}: ParcelTrackingViewProps) {
   const [data, setData] = useState<ParcelTrackingData>(initialData);
   const [lang, setLang] = useState<"bn" | "en">("bn");
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -201,8 +207,13 @@ export function ParcelTrackingView({ initialData }: ParcelTrackingViewProps) {
         <div className="flex items-center gap-2">
           {/* Brand Badge */}
           <div className="hidden xs:inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
-            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-            <span>{lang === "bn" ? "খাঁটি খেজুরের গুড়" : "Pure Date Palm Gur"}</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoUrl}
+              alt={storeName}
+              className="w-4 h-4 rounded-full object-contain bg-white p-0.5 shrink-0"
+            />
+            <span>{storeName}</span>
           </div>
 
           {/* Bilingual Toggle */}
@@ -646,7 +657,7 @@ export function ParcelTrackingView({ initialData }: ParcelTrackingViewProps) {
 
       {/* Footer */}
       <footer className="relative z-10 max-w-4xl mx-auto w-full text-center pt-6 pb-2 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
-        © 2026 {lang === "bn" ? "খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা" : "Pure Artisanal Date Palm Jaggery"}
+        © 2026 {storeName} • {lang === "bn" ? "ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা" : "Pure Artisanal Date Palm Jaggery"}
       </footer>
     </main>
   );

@@ -45,7 +45,7 @@ interface StoreConfig {
 const DEFAULT_SITE_URL = getSiteUrl();
 
 const DEFAULT_STORE: StoreConfig = {
-  name: "খেজুরের খাটি গুড়",
+  name: "Gramayon",
   tagline: "Heritage Artisanal Molasses & Natural Sweeteners",
   address: "Bagha, Rajshahi",
   phone: "0184-355389",
@@ -220,17 +220,17 @@ export function formatWeightDisplay(kg: number): string {
 function PrintContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { storeName, storeNameBn, address, supportPhone, currencySymbol, logoUrl } = useSiteSettings();
+  const { storeName, address, supportPhone, currencySymbol, logoUrl } = useSiteSettings();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, "");
 
   const storeConfig: StoreConfig = React.useMemo(() => ({
-    name: storeNameBn || storeName || DEFAULT_STORE.name,
+    name: storeName || DEFAULT_STORE.name,
     tagline: DEFAULT_STORE.tagline,
     address: address || DEFAULT_STORE.address,
     phone: supportPhone || DEFAULT_STORE.phone,
     website: siteUrl,
-    logoUrl,
-  }), [storeName, storeNameBn, address, supportPhone, siteUrl, logoUrl]);
+    logoUrl: logoUrl || "/admin-icon/icon-192.png",
+  }), [storeName, address, supportPhone, siteUrl, logoUrl]);
 
   const idsParam = searchParams.get("ids") || searchParams.get("orderId") || "";
   const isInvoiceType = searchParams.get("type") === "invoice";

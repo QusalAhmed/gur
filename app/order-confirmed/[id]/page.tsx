@@ -122,8 +122,13 @@ function OrderConfirmedSkeleton() {
         </motion.div>
 
         <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
-          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-          <span>খাঁটি খেজুরের গুড়</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/admin-icon/icon-192.png"
+            alt="Gramayon"
+            className="w-4 h-4 rounded-full object-contain bg-white p-0.5 shrink-0"
+          />
+          <span>Gramayon</span>
         </div>
       </header>
 
@@ -245,7 +250,7 @@ function OrderConfirmedSkeleton() {
       </div>
 
       <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
-        © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
+        © 2026 Gramayon • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
       </footer>
     </main>
   );
@@ -279,6 +284,8 @@ function OrderConfirmedContent() {
   // Fetch real products from server for authentic real product pictures
   const { data: storefrontData } = useStorefrontProducts();
   const catalogProducts = storefrontData?.products ?? [];
+  const brandName = storefrontData?.storeName || "Gramayon";
+  const brandLogoUrl = storefrontData?.logoUrl || "/admin-icon/icon-192.png";
 
   const resolveRealProductImage = (item: OrderItem): string => {
     // 1. Direct image returned from order item on server
@@ -424,8 +431,13 @@ function OrderConfirmedContent() {
         </motion.div>
 
         <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
-          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-          <span>খাঁটি খেজুরের গুড়</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={brandLogoUrl}
+            alt={brandName}
+            className="w-4 h-4 rounded-full object-contain bg-white p-0.5 shrink-0"
+          />
+          <span>{brandName}</span>
         </div>
       </header>
 
@@ -1212,7 +1224,7 @@ function OrderConfirmedContent() {
 
       {/* Footer */}
       <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500 space-y-2">
-        <p>© 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা</p>
+        <p>© 2026 {brandName} • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা</p>
         <div className="flex items-center justify-center gap-3 text-xs text-stone-500">
           <Link href="/contact" className="hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors">
             যোগাযোগ

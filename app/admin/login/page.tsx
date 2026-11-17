@@ -32,16 +32,15 @@ import { useSiteSettings } from "@/hooks/use-site-settings";
 
 function AdminLoginForm() {
   const { login } = useAdminAuth();
-  const { storeName, storeNameBn, email: storeEmail, logoUrl } = useSiteSettings();
+  const { storeName, email: storeEmail, logoUrl } = useSiteSettings();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const displayStoreName = mounted ? storeName : "GUR";
-  const displayStoreNameBn = mounted && storeNameBn ? storeNameBn : "গুড় - খাটি গুড় ও চিটাগুড়ের অনলাইন প্ল্যাটফর্ম";
-  const displayLogoUrl = mounted ? logoUrl : "";
+  const displayStoreName = mounted ? (storeName || "Gramayon") : "Gramayon";
+  const displayLogoUrl = mounted && logoUrl ? logoUrl : "/admin-icon/icon-192.png";
 
   const emailDomain =
     storeEmail && storeEmail.includes("@") && !storeEmail.includes("molassesstore")
@@ -126,7 +125,7 @@ function AdminLoginForm() {
                 <img
                   src={displayLogoUrl}
                   alt={displayStoreName}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain p-1"
                 />
               ) : (
                 <ShieldCheck className="h-7 w-7 stroke-[2.2]" />

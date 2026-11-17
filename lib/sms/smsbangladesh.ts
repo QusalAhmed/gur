@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { normalizeSiteUrl } from "@/lib/site-url";
 import { shortenTrackingUrl } from "@/lib/url-shortener";
+import { getAdminBrandSettings } from "@/lib/admin-brand";
 
 export type OrderSmsStatus = "placed" | "confirmed" | "shipped" | "delivered" | "manual" | "test";
 
@@ -74,7 +75,7 @@ export const DEFAULT_TEMPLATES = {
   confirmed: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} কনফার্ম করা হয়েছে। মোট বিল: ৳{amount}। বিস্তারিত দেখুন: {order_link}",
   shipped: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। পার্সেল ট্র্যাক করুন: {tracking_url}",
   shipped_no_tracking: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} {courier_name} কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। প্রয়োজনে কল করুন: {support_phone}",
-  delivered: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!",
+  delivered: "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। {store_name}-এর সাথে থাকার জন্য ধন্যবাদ!",
 };
 
 export const LEGACY_SHIPPED_TEMPLATE =
@@ -555,6 +556,7 @@ export async function dispatchOrderStatusSms(
     }
   }
 
+  const brand = await getAdminBrandSettings();
   const renderedMessage = renderSmsTemplate(templateToUse, {
     customer_name: customerName || "সম্মানিত গ্রাহক",
     order_number: orderNumber || orderRow?.order_number || "",
@@ -566,7 +568,7 @@ export async function dispatchOrderStatusSms(
     tracking_code: orderNumber || orderRow?.order_number || "N/A", // Website tracking code
     tracking_url: finalTrackingUrl || "",
     support_phone: "01843557389",
-    store_name: "খেজুরের খাঁটি গুড়",
+    store_name: brand.appName || "Gramayon",
   });
 
   // 5. Send via SMSBangladesh Gateway

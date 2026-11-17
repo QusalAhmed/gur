@@ -292,7 +292,7 @@ export function AdminSidebar() {
   const searchParams = useSearchParams();
   const { user, role, logout } = useAdminAuth();
   const { data: counts } = useAdminBadgeCounts();
-  const { storeName, storeNameBn, logoUrl } = useSiteSettings();
+  const { storeName, logoUrl } = useSiteSettings();
   const mounted = useMounted();
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
@@ -309,19 +309,12 @@ export function AdminSidebar() {
     return set;
   }, []);
 
-  // Render stable server fallback ("গুড়" / placeholder initial) until mounted
-  // to avoid SSR/client hydration mismatches when React Query client cache has settings
-  const brandName = mounted ? (storeNameBn || storeName || "গুড়") : "গুড়";
-  const brandSubtitle =
-    mounted && storeName && storeNameBn && storeName !== storeNameBn
-      ? storeName
-      : "Molasses Operations";
-  const effectiveLogoUrl = mounted ? logoUrl : "";
+  // Always display the English business name and brand logo cleanly without hydration mismatch
+  const brandName = mounted ? (storeName || "Gramayon") : "Gramayon";
+  const brandSubtitle = "Admin Panel";
+  const effectiveLogoUrl = mounted && logoUrl ? logoUrl : "/admin-icon/icon-192.png";
 
-  const brandInitial =
-    brandName.length >= 2 && brandName.charCodeAt(1) >= 0x0980 && brandName.charCodeAt(1) <= 0x09ff
-      ? brandName.slice(0, 2)
-      : brandName.slice(0, 1).toUpperCase();
+  const brandInitial = brandName.slice(0, 1).toUpperCase();
 
   return (
     <Sidebar

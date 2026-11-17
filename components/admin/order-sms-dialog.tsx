@@ -33,6 +33,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Order } from "@/types/order";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   getSmsConfigAction,
   getOrderSmsHistoryAction,
@@ -54,6 +55,7 @@ export function OrderSmsDialog({
   order,
   onSmsSentSuccess,
 }: OrderSmsDialogProps) {
+  const { storeName, supportPhone } = useSiteSettings();
   const [selectedEvent, setSelectedEvent] = React.useState<
     "placed" | "confirmed" | "shipped" | "delivered" | "manual"
   >("confirmed");
@@ -160,7 +162,7 @@ export function OrderSmsDialog({
     } else if (selectedEvent === "delivered") {
       rawTemplate =
         rawTemplate ||
-        "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। খেজুরের খাঁটি গুড়-এর সাথে থাকার জন্য ধন্যবাদ!";
+        "প্রিয় {customer_name}, আপনার অর্ডার #{order_number} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে। {store_name}-এর সাথে থাকার জন্য ধন্যবাদ!";
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -177,12 +179,12 @@ export function OrderSmsDialog({
       courier_name: order.courier_name || "Steadfast Courier",
       tracking_code: order.order_number || order.id,
       tracking_url: trackingUrl,
-      support_phone: "01843557389",
-      store_name: "খেজুরের খাঁটি গুড়",
+      support_phone: supportPhone || "01843557389",
+      store_name: storeName || "Gramayon",
     });
 
     setMessageText(rendered);
-  }, [selectedEvent, templates, order]);
+  }, [selectedEvent, templates, order, storeName, supportPhone]);
 
   const handleSendSms = async () => {
     if (!order) return;

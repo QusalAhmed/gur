@@ -57,6 +57,7 @@ export interface BrevoConfig {
   apiKey: string;
   senderEmail: string;
   senderName: string;
+  logoUrl?: string;
   adminEmails: string[];
   enabled: boolean;
   notifyIncomplete?: boolean;
@@ -114,7 +115,9 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
   let dbSenderName = "";
   let dbAdminEmail = "";
   let fallbackStoreEmail = "";
-  let fallbackStoreName = "";
+  let fallbackStoreNameEn = "";
+  let fallbackStoreNameBn = "";
+  let storeLogoUrl = "";
 
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -131,6 +134,7 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
           "store.email",
           "store.name_bn",
           "store.name",
+          "store.logo_url",
         ]);
 
     if (rows && rows.length > 0) {
@@ -161,10 +165,13 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
             fallbackStoreEmail = cleanStr;
             break;
           case "store.name_bn":
-            if (!fallbackStoreName) fallbackStoreName = cleanStr;
+            fallbackStoreNameBn = cleanStr;
             break;
           case "store.name":
-            if (!fallbackStoreName) fallbackStoreName = cleanStr;
+            fallbackStoreNameEn = cleanStr;
+            break;
+          case "store.logo_url":
+            storeLogoUrl = cleanStr;
             break;
         }
       }
@@ -183,8 +190,9 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
   const senderName =
     envSenderName ||
     dbSenderName ||
-    fallbackStoreName ||
-    "খেজুরের খাঁটি গুড়";
+    fallbackStoreNameEn ||
+    fallbackStoreNameBn ||
+    "Gramayon";
 
   // Merge admin emails from env, db setting, or fallbackStoreEmail
   const combinedAdminRaw = [envAdminEmail, dbAdminEmail, fallbackStoreEmail]
@@ -196,6 +204,7 @@ export async function getBrevoConfig(): Promise<BrevoConfig> {
     apiKey,
     senderEmail,
     senderName,
+    logoUrl: storeLogoUrl || undefined,
     adminEmails,
     enabled: dbEnabled,
     notifyIncomplete: dbNotifyIncomplete,
@@ -462,6 +471,11 @@ export function renderAdminOrderEmailHtml(
       <!-- Header Banner -->
       <tr>
         <td style="background: ${headerGradient}; padding: 28px 24px; text-align: center; color: #ffffff;">
+          ${
+            config.logoUrl && /^https?:\/\//i.test(config.logoUrl)
+              ? `<div style="margin: 0 auto 12px auto; width: 52px; height: 52px; border-radius: 12px; background-color: #ffffff; padding: 4px; display: inline-block; overflow: hidden;"><img src="${escapeHtml(config.logoUrl)}" alt="${escapedSenderName}" width="44" height="44" style="display: block; width: 44px; height: 44px; object-fit: contain; margin: 0 auto;" /></div><br/>`
+              : ""
+          }
           <div style="display: inline-block; padding: 4px 12px; background-color: rgba(255,255,255,0.2); border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;">
             ${badgeText}
           </div>

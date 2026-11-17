@@ -1,9 +1,10 @@
 import React, { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, PackageX, Sparkles, Phone, ShoppingBag } from "lucide-react";
+import { ArrowLeft, PackageX, Phone, ShoppingBag } from "lucide-react";
 import { getParcelTrackingAction } from "@/actions/tracking";
 import { ParcelTrackingView } from "@/components/storefront/tracking/parcel-tracking-view";
+import { getAdminBrandSettings } from "@/lib/admin-brand";
 
 export const instant = false;
 
@@ -15,9 +16,10 @@ interface TrackPageProps {
 
 export async function generateMetadata({ params }: TrackPageProps): Promise<Metadata> {
   void params;
+  const brand = await getAdminBrandSettings();
   return {
-    title: `পার্সেল ট্র্যাকিং • খেজুরের খাঁটি গুড়`,
-    description: `আপনার খেজুরের গুড়ের পার্সেল ট্র্যাকিং ও ডেলিভারি স্ট্যাটাস চেক করুন।`,
+    title: `পার্সেল ট্র্যাকিং • ${brand.appName}`,
+    description: `${brand.appName} পার্সেল ট্র্যাকিং ও ডেলিভারি স্ট্যাটাস চেক করুন।`,
     robots: {
       index: false,
       follow: false,
@@ -66,7 +68,7 @@ function TrackSkeleton() {
 
       {/* Footer */}
       <footer className="relative z-10 max-w-4xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
-        © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
+        © 2026 Gramayon • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
       </footer>
     </main>
   );
@@ -74,7 +76,12 @@ function TrackSkeleton() {
 
 async function TrackContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
   const { id } = await paramsPromise;
-  const trackingResult = await getParcelTrackingAction(id);
+  const [trackingResult, brand] = await Promise.all([
+    getParcelTrackingAction(id),
+    getAdminBrandSettings(),
+  ]);
+  const brandName = brand.appName || "Gramayon";
+  const brandLogo = brand.logoUrl || "/admin-icon/icon-192.png";
 
   if (!trackingResult.success || !trackingResult.data) {
     return (
@@ -93,8 +100,13 @@ async function TrackContent({ paramsPromise }: { paramsPromise: Promise<{ id: st
           </Link>
 
           <div className="flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full text-xs font-bold text-amber-950 dark:text-amber-200">
-            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-            <span>খাঁটি খেজুরের গুড়</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={brandLogo}
+              alt={brandName}
+              className="w-4 h-4 rounded-full object-contain bg-white p-0.5 shrink-0"
+            />
+            <span>{brandName}</span>
           </div>
         </header>
 
@@ -136,13 +148,19 @@ async function TrackContent({ paramsPromise }: { paramsPromise: Promise<{ id: st
 
         {/* Footer */}
         <footer className="relative z-10 max-w-2xl mx-auto w-full text-center pt-4 border-t border-amber-200/80 dark:border-stone-800 text-[11px] text-stone-500">
-          © 2026 খেজুরের খাঁটি গুড় • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
+          © 2026 {brandName} • ঐতিহ্যবাহী নির্ভেজাল গুড়ের বিশ্বস্ত ঠিকানা
         </footer>
       </main>
     );
   }
 
-  return <ParcelTrackingView initialData={trackingResult.data} />;
+  return (
+    <ParcelTrackingView
+      initialData={trackingResult.data}
+      storeName={brandName}
+      logoUrl={brandLogo}
+    />
+  );
 }
 
 export default function ParcelTrackPage({ params }: TrackPageProps) {

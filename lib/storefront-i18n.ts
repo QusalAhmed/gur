@@ -14,7 +14,7 @@ export function formatStorePrice(amount: number, lang: StorefrontLang = "bn"): s
 
 export const STOREFRONT_TEXT = {
   bn: {
-    storeName: "খাঁটি গুড়ের দোকান",
+    storeName: "Gramayon",
     storeSubtitle: "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত",
     hotlineLabel: "সরাসরি ফোন করুন",
     hotlineNumber: "01712-345678",
@@ -200,7 +200,7 @@ export const STOREFRONT_TEXT = {
     navCheckout: "চেকআউট",
   },
   en: {
-    storeName: "Pure Molasses Store",
+    storeName: "Gramayon",
     storeSubtitle: "Authentic & artisanal jaggery directly from village harvesters",
     hotlineLabel: "Call Us Directly",
     hotlineNumber: "01712-345678",

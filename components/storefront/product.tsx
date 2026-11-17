@@ -25,7 +25,8 @@ export function ProductLoading({
     <ProductShowcase
       products={[]}
       defaultHotline="01843557389"
-      storeName="খেজুরের খাঁটি গুড়"
+      storeName="Gramayon"
+      logoUrl="/admin-icon/icon-192.png"
       isLoading={true}
       autoScrollToProduct={autoScrollToProduct}
     />

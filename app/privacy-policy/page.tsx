@@ -46,12 +46,14 @@ export default async function PrivacyPolicyPage() {
       hotline: "",
       storeName: "",
       storeSubtitle: "",
+      logoUrl: "",
       products: [],
     })),
   ]);
 
   const hotline = storefrontData.hotline || seo.supportPhone || "01843557389";
-  const storeName = storefrontData.storeName || seo.storeName || "খেজুরের খাঁটি গুড়";
+  const storeName = storefrontData.storeName || seo.storeNameEn || seo.storeName || "Gramayon";
+  const logoUrl = storefrontData.logoUrl || seo.logoUrl || "";
   const rawPhone = hotline.replace(/[^0-9]/g, "");
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(seo.siteUrl, [
     { name: "হোম", path: "/" },
@@ -67,7 +69,7 @@ export default async function PrivacyPolicyPage() {
         }}
       />
       {/* Top Header */}
-      <StoreHeader storeName={storeName} hotline={hotline} />
+      <StoreHeader storeName={storeName} logoUrl={logoUrl} hotline={hotline} />
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-12 space-y-8 sm:space-y-10">
