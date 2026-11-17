@@ -4,11 +4,11 @@ import React, { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import { motion, animate, useInView } from "motion/react";
 
 interface RollingNumberProps {
-  /** The value string to animate, e.g. "২০+", "৫,০০০+", "১০০%", "৬৪", "20+", "5,000+" */
+  /** The value string to animate, e.g. "20+", "5,000+", "100%", "64", "২০+", "৫,০০০+" */
   value: string | number;
   /** Explicit control over active state (e.g. current full-screen snap section). Defaults to tracking in-view. */
   isActive?: boolean;
-  /** Duration of the count-up in seconds. Auto-calibrated based on number magnitude if omitted. */
+  /** Duration of the count-up in seconds (minimum 3s). Auto-calibrated if omitted. */
   duration?: number;
   /** Initial delay before count starts in seconds. Defaults to 0 */
   delay?: number;
@@ -20,7 +20,7 @@ const BENGALI_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", 
 const emptySubscribe = () => () => {};
 
 /**
- * Parses numeric value, prefix, suffix, and language from strings like "২০+", "৫,০০০+", "১০০%", "64"
+ * Parses numeric value, prefix, suffix, and language from strings like "20+", "5,000+", "100%", "64", "২০+"
  */
 function parseNumberString(str: string): {
   target: number;
@@ -60,8 +60,7 @@ function formatNumberWithCommas(num: number, isBengali: boolean): string {
 
 /**
  * Dynamic Count-Up Number Component.
- * First shows 0 (or "০+", "০%", "০") then visibly counts up to culmination
- * using Framer Motion with smooth ease-out and an accent celebration pulse.
+ * Strictly starts from 0 (never flashes culmination first) and rolls up smoothly to target culmination.
  */
 export function RollingNumber({
   value,
@@ -77,28 +76,29 @@ export function RollingNumber({
   );
 
   const containerRef = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(containerRef, { amount: "some", once: false });
+  const isInView = useInView(containerRef, { amount: "some", once: true });
   const stringValue = String(value);
   const { target, prefix, suffix, isBengali } = parseNumberString(stringValue);
 
-  const [currentValue, setCurrentValue] = useState(target);
-  const [isComplete, setIsComplete] = useState(true);
-
-  // Initial zero display (e.g. "০+", "০%", "০")
+  // Initial zero display (e.g. "0+", "0%", "0", "০+", "০%")
   const zeroDisplay = `${prefix}${formatNumberWithCommas(0, isBengali)}${suffix}`;
 
-  // Auto-calibrate duration if not provided
-  const resolvedDuration =
-    duration ?? (target >= 1000 ? 1.6 : target >= 100 ? 1.4 : target >= 50 ? 1.2 : 1.0);
+  // When isActive is explicitly provided, respect it; otherwise fall back to in-view detection
+  const isVisible = isActive !== undefined ? isActive : isInView;
+  const shouldAnimate = isHydrated && isVisible && target > 0;
 
-  // Only animate when the number ACTUALLY enters view (and active if specified)
-  const shouldAnimate = isHydrated && isInView && (isActive !== false);
+  // Always start strictly from 0 so the user never sees culminated number first
+  const [currentValue, setCurrentValue] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
 
-  // Active Count-up Animation Loop powered by Framer Motion: starts strictly at 0 then counts to target
+  // Minimum 3s duration to reach climax / culmination
+  const resolvedDuration = Math.max(
+    3.0,
+    duration ?? (target >= 1000 ? 3.4 : target >= 100 ? 3.2 : 3.0)
+  );
+
   useEffect(() => {
-    if (!shouldAnimate || target <= 0) {
-      setCurrentValue(0);
-      setIsComplete(false);
+    if (!shouldAnimate) {
       return;
     }
 
@@ -121,7 +121,7 @@ export function RollingNumber({
     return () => controls.stop();
   }, [shouldAnimate, target, resolvedDuration, delay]);
 
-  // SSR fallback: render 0 with prefix/suffix so the user sees 0 first before hydration/animation
+  // SSR or before hydration: display 0 with prefix/suffix so the user strictly sees 0 first
   if (!isHydrated) {
     return (
       <span
@@ -146,7 +146,7 @@ export function RollingNumber({
       <span className="sr-only">{stringValue}</span>
       <motion.span
         animate={{
-          scale: isCulminated ? [1, 1.12, 1] : 1,
+          scale: isCulminated ? [1, 1.1, 1] : 1,
         }}
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="inline-block tabular-nums"

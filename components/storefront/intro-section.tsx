@@ -163,7 +163,11 @@ export function IntroSection({
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Icon className={`w-4 h-4 ${s.color}`} />
                   <span className="font-mono text-lg sm:text-xl font-black text-amber-950 dark:text-amber-100 inline-flex items-center justify-center">
-                    {s.number}
+                    <RollingNumber
+                      value={s.number}
+                      isActive={isActive}
+                      delay={idx * 0.05}
+                    />
                   </span>
                 </div>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-medium leading-tight">
