@@ -4,12 +4,16 @@ import * as React from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminPwa } from "@/components/admin/admin-pwa-provider";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 const DISMISS_STORAGE_KEY = "gur_admin_pwa_banner_dismissed_until";
 const DISMISS_DURATION_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 export function AdminPwaInstallBanner() {
   const { isStandalone, isIOS, canInstall, promptInstall } = useAdminPwa();
+  const { storeName, logoUrl } = useSiteSettings();
+  const appName = storeName || "Gramayon";
+  const iconSrc = logoUrl || "/admin-icon/icon-192.png";
   const [dismissed, setDismissed] = React.useState(true);
 
   React.useEffect(() => {
@@ -42,13 +46,13 @@ export function AdminPwaInstallBanner() {
     <div className="fixed bottom-3 inset-x-3 z-40 sm:hidden">
       <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-md">
         <img
-          src="/icons/admin-icon-192.png"
-          alt="Gur Admin"
-          className="h-9 w-9 shrink-0 rounded-lg border border-amber-500/30"
+          src={iconSrc}
+          alt={appName}
+          className="h-9 w-9 shrink-0 rounded-lg border border-amber-500/30 bg-background object-contain p-0.5"
         />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-foreground truncate">
-            Install Gur Admin
+            Install {appName}
           </p>
           <p className="text-[11px] text-muted-foreground truncate">
             {isIOS

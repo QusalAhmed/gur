@@ -1,5 +1,6 @@
 import * as webpush from "web-push";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminBrandSettings } from "@/lib/admin-brand";
 import {
   AdminRole,
   canRoleAccessPath,
@@ -197,13 +198,13 @@ export function buildPushPayload(
       ? `/admin/orders?search=${encodeURIComponent(orderNumber)}`
       : resolveNotificationPermissionPath(notification));
 
-  const title = redactPhoneNumbers(notification.title || "Gur Admin");
+  const title = redactPhoneNumbers(notification.title || "Gramayon");
   const body = redactPhoneNumbers(notification.message || "");
 
   return {
     title: title.slice(0, 120),
     body: body.slice(0, 220),
-    icon: "/icons/admin-icon-192.png",
+    icon: "/admin-icon/icon-192.png",
     badge: "/icons/admin-badge-96.png",
     tag: `gur-notif-${notification.id}`,
     url: targetUrl,
@@ -500,11 +501,14 @@ export async function sendTestPushToSubscription(
     };
   }
 
-  const unreadCount = await getUnreadNotificationCount();
+  const [unreadCount, brand] = await Promise.all([
+    getUnreadNotificationCount(),
+    getAdminBrandSettings(),
+  ]);
   const payload: AdminPushPayload = {
-    title: "Gur Admin Push Active",
+    title: `${brand.appName} Push Active`,
     body: `Test alert for ${staffName || "Admin Staff"} — live order & message notifications are ready on this device.`,
-    icon: "/icons/admin-icon-192.png",
+    icon: "/admin-icon/icon-192.png",
     badge: "/icons/admin-badge-96.png",
     tag: `gur-test-${Date.now()}`,
     url: "/admin/orders",

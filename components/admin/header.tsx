@@ -70,7 +70,7 @@ export function AdminHeader() {
   const breadcrumb = getBreadcrumb(pathname);
   const { user, role, logout, saveProfile } = useAdminAuth();
   const { isStandalone, isIOS, canInstall, promptInstall } = useAdminPwa();
-  const { email: storeEmail } = useSiteSettings();
+  const { email: storeEmail, storeName } = useSiteSettings();
 
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
@@ -239,7 +239,7 @@ export function AdminHeader() {
                   onClick={() => void promptInstall()}
                   className="cursor-pointer text-xs flex items-center justify-between text-amber-600 dark:text-amber-400"
                 >
-                  <span>Install Admin App / অ্যাপ ইনস্টল</span>
+                  <span>Install {storeName || "Gramayon"} / অ্যাপ ইনস্টল</span>
                   <Download className="h-3.5 w-3.5" />
                 </DropdownMenuItem>
               ) : null}

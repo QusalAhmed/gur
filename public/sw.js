@@ -114,14 +114,14 @@ self.addEventListener("push", (event) => {
     payload = event.data.json();
   } catch {
     payload = {
-      title: "Gur Admin",
+      title: "Gramayon",
       body: event.data.text() || "New admin notification",
     };
   }
 
-  const title = typeof payload.title === "string" && payload.title.trim() ? payload.title : "Gur Admin";
+  const title = typeof payload.title === "string" && payload.title.trim() ? payload.title : "Gramayon";
   const body = typeof payload.body === "string" ? payload.body : "";
-  const icon = payload.icon || "/icons/admin-icon-192.png";
+  const icon = payload.icon || "/admin-icon/icon-192.png";
   const badge = payload.badge || "/icons/admin-badge-96.png";
   const tag = payload.tag || (payload.notificationId ? `gur-notif-${payload.notificationId}` : "gur-admin-notif");
   const targetUrl = normalizeAdminUrl(payload.url);

@@ -130,6 +130,7 @@ export async function proxy(request: NextRequest) {
       pathname === "/admin-manifest.webmanifest" ||
       pathname === "/sw.js" ||
       pathname === "/admin-offline.html" ||
+      pathname.startsWith("/admin-icon/") ||
       pathname.startsWith("/icons/")
     ) {
       return NextResponse.next();

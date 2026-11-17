@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Share, PlusSquare, Smartphone } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -113,6 +114,10 @@ export function AdminPwaProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAdminAuth();
+  const { storeName } = useSiteSettings();
+  const appName = storeName || "Gramayon";
+  const appNameRef = React.useRef(appName);
+  appNameRef.current = appName;
 
   const [isStandalone, setIsStandalone] = React.useState(false);
   const [isIOS, setIsIOS] = React.useState(false);
@@ -171,7 +176,9 @@ export function AdminPwaProvider({ children }: { children: React.ReactNode }) {
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsStandalone(true);
-      toast.success("Gur Admin installed! Open it from your home screen or desktop.");
+      toast.success(
+        `${appNameRef.current} installed! Open it from your home screen or desktop.`
+      );
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
@@ -504,9 +511,9 @@ export function AdminPwaProvider({ children }: { children: React.ReactNode }) {
     }
 
     toast.info(
-      "Use your browser's menu (Install App / Add to Home Screen) to install Gur Admin."
+      `Use your browser's menu (Install App / Add to Home Screen) to install ${appName}.`
     );
-  }, [deferredPrompt, isIOS]);
+  }, [deferredPrompt, isIOS, appName]);
 
   const openIOSInstallGuide = React.useCallback(() => {
     setIosGuideOpen(true);
@@ -559,7 +566,7 @@ export function AdminPwaProvider({ children }: { children: React.ReactNode }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Smartphone className="h-4 w-4 text-amber-500" />
-              Install Gur Admin on iPhone / iPad
+              Install {appName} on iPhone / iPad
             </DialogTitle>
             <DialogDescription>
               Apple requires adding the admin panel to your Home Screen before enabling lock-screen push notifications.
@@ -596,7 +603,7 @@ export function AdminPwaProvider({ children }: { children: React.ReactNode }) {
                 3
               </span>
               <span className="leading-relaxed">
-                Launch <strong>Gur Admin</strong> from your Home Screen and toggle{" "}
+                Launch <strong>{appName}</strong> from your Home Screen and toggle{" "}
                 <strong>Push Alerts</strong> on inside the bell menu.
               </span>
             </li>

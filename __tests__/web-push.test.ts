@@ -103,7 +103,7 @@ describe("Admin PWA Web Push helpers", () => {
       expect(payload.title).toBe("New order placed");
       expect(payload.body).toBe("ORD-505 · ৳1,800.00 from Customer");
       expect(payload.body).not.toContain("01799887766");
-      expect(payload.icon).toBe("/icons/admin-icon-192.png");
+      expect(payload.icon).toBe("/admin-icon/icon-192.png");
       expect(payload.badge).toBe("/icons/admin-badge-96.png");
       expect(payload.url).toBe("/admin/orders?search=ORD-505");
       expect(payload.unreadCount).toBe(7);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminBrandSettings } from "@/lib/admin-brand";
 
 export async function GET(request: NextRequest) {
   const host = request.headers.get("host")?.toLowerCase() || "";
@@ -6,15 +7,15 @@ export async function GET(request: NextRequest) {
   const isAdminSubdomain =
     hostname === "admin.khatikhejurgur.shop" || hostname.startsWith("admin.");
 
+  const brand = await getAdminBrandSettings();
   const startUrl = isAdminSubdomain ? "/" : "/admin";
   const scope = isAdminSubdomain ? "/" : "/admin";
 
   const manifest = {
     id: isAdminSubdomain ? "gur-admin-pwa" : "gur-admin-pwa-local",
-    name: "Gur Admin",
-    short_name: "Gur Admin",
-    description:
-      "Operations panel for orders, Steadfast shipments, inventory, and customer messages.",
+    name: brand.appName,
+    short_name: brand.shortName,
+    description: `${brand.appName} admin operations panel for orders, shipments, inventory, and messages.`,
     start_url: startUrl,
     scope,
     display: "standalone",
@@ -24,19 +25,19 @@ export async function GET(request: NextRequest) {
     categories: ["business", "productivity"],
     icons: [
       {
-        src: "/icons/admin-icon-192.png",
+        src: "/admin-icon/icon-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/admin-icon-512.png",
+        src: "/admin-icon/icon-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/admin-icon-maskable-512.png",
+        src: "/admin-icon/maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
@@ -47,19 +48,19 @@ export async function GET(request: NextRequest) {
         name: "Orders",
         short_name: "Orders",
         url: isAdminSubdomain ? "/orders" : "/admin/orders",
-        icons: [{ src: "/icons/admin-icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/admin-icon/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Messages",
         short_name: "Messages",
         url: isAdminSubdomain ? "/messages" : "/admin/messages",
-        icons: [{ src: "/icons/admin-icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/admin-icon/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Inventory",
         short_name: "Inventory",
         url: isAdminSubdomain ? "/inventory" : "/admin/inventory",
-        icons: [{ src: "/icons/admin-icon-192.png", sizes: "192x192", type: "image/png" }],
+        icons: [{ src: "/admin-icon/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
     ],
   };
