@@ -406,7 +406,6 @@ export function ProductShowcase({
           </button>
           <button
             type="button"
-            data-tour="header-checkout-cta"
             onClick={() => scrollToSection(checkoutSectionIndex)}
             className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
@@ -437,7 +436,6 @@ export function ProductShowcase({
           {/* Redux Cart Button with Live Counter Badge */}
           <button
             type="button"
-            data-tour="header-cart-cta"
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
             className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-sm sm:text-base py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"

@@ -115,18 +115,16 @@ describe("Storefront Intro Onboarding Logic", () => {
     expect(shouldShowCheckoutIntro()).toBe(true);
   });
 
-  it("builds 3 product tour steps with Pack Size, focused Plus CTA, and Mobile Dock CTA", () => {
+  it("builds product tour steps with Pack Size and focused Plus CTA without any cart/checkout CTA step", () => {
     const bnSteps = buildProductIntroSteps({
       lang: "bn",
       hasVariantSelect: true,
       isCombo: false,
-      checkoutTarget: "mobile-dock",
     });
 
     expect(bnSteps.map((s) => s.selector)).toEqual([
       '#products [data-tour="product-variant-select"]',
       '#products [data-tour="product-plus-btn"]',
-      '[data-tour="mobile-checkout-cta"]',
     ]);
     expect(bnSteps[0].title).toContain("১.");
     expect(bnSteps[0].highlightClass).toBeUndefined();
@@ -134,25 +132,19 @@ describe("Storefront Intro Onboarding Logic", () => {
     expect(bnSteps[1].title).toContain("+");
     expect(bnSteps[1].intro).toContain("+");
     expect(bnSteps[1].highlightClass).toBe("gur-intro-plus-highlight");
-    expect(bnSteps[2].title).toContain("৩.");
-    expect(bnSteps[2].position).toBe("top");
-    expect(bnSteps[2].highlightClass).toBeUndefined();
 
     const enSteps = buildProductIntroSteps({
       lang: "en",
       hasVariantSelect: true,
       isCombo: false,
-      checkoutTarget: "header-checkout",
     });
     expect(enSteps.map((s) => s.selector)).toEqual([
       '#products [data-tour="product-variant-select"]',
       '#products [data-tour="product-plus-btn"]',
-      '[data-tour="header-checkout-cta"]',
     ]);
     expect(enSteps[1].title).toContain("+");
     expect(enSteps[1].intro).toContain("+");
     expect(enSteps[1].highlightClass).toBe("gur-intro-plus-highlight");
-    expect(enSteps[2].position).toBe("bottom");
   });
 
   it("skips variant selector step for single-variant products and adapts copy for combos", () => {
@@ -160,22 +152,18 @@ describe("Storefront Intro Onboarding Logic", () => {
       lang: "en",
       hasVariantSelect: false,
       isCombo: false,
-      checkoutTarget: "header-cart",
     });
 
     expect(singleVariantSteps.map((s) => s.selector)).toEqual([
       '#products [data-tour="product-plus-btn"]',
-      '[data-tour="header-cart-cta"]',
     ]);
     expect(singleVariantSteps[0].title).toMatch(/^1\./);
     expect(singleVariantSteps[0].highlightClass).toBe("gur-intro-plus-highlight");
-    expect(singleVariantSteps[1].title).toMatch(/^2\./);
 
     const comboSteps = buildProductIntroSteps({
       lang: "bn",
       hasVariantSelect: true,
       isCombo: true,
-      checkoutTarget: null,
     });
     expect(comboSteps.map((s) => s.selector)).toEqual([
       '#products [data-tour="product-combo-buy"]',

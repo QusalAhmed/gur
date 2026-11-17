@@ -230,7 +230,6 @@ export function MobileDock({
           <motion.button
             whileTap={{ scale: 0.9 }}
             type="button"
-            data-tour="mobile-checkout-cta"
             onClick={handleCartClick}
             aria-label={
               lang === "bn"

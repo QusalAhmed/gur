@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StorefrontLang } from "@/lib/storefront-i18n";
 import {
   INTRO_BUTTON_LABELS,
-  type IntroCheckoutTargetType,
   type IntroStepBlueprint,
   alignIntroTooltipArrow,
   buildCheckoutIntroSteps,
@@ -100,9 +99,8 @@ export function useStorefrontIntro({
       const { onProductSection, onCheckoutSection } = sectionStateRef.current;
 
       // While a tour is active:
-      // 1) Clicking the highlighted + button adds to cart and auto-advances to Checkout CTA.
-      // 2) Tapping Checkout CTA marks product tour seen before section scroll cleanup runs.
-      // 3) Typing inside checkout inputs dismisses checkout tour so arrow/enter keys aren't captured.
+      // 1) Clicking the highlighted + button adds to cart and advances or finishes the product tour.
+      // 2) Typing inside checkout inputs dismisses checkout tour so arrow/enter keys aren't captured.
       if (isTourActiveRef.current) {
         if (e.type === "click" && onProductSection && activeTourRef.current) {
           const plusTarget = target.closest('#products [data-tour="product-plus-btn"]');
@@ -118,31 +116,23 @@ export function useStorefrontIntro({
               (activeStepElement === plusTarget ||
                 activeStepElement.contains(plusTarget)) &&
               plusAdvanceTimerRef.current === null &&
-              typeof currentIdx === "number" &&
-              currentIdx < steps.length - 1
+              typeof currentIdx === "number"
             ) {
               plusAdvanceTimerRef.current = setTimeout(() => {
                 plusAdvanceTimerRef.current = null;
                 if (activeTourRef.current !== tour) return;
                 const latestIdx = tour.getCurrentStep();
                 const latestSteps = tour.getSteps();
-                if (
-                  typeof latestIdx === "number" &&
-                  latestIdx === currentIdx &&
-                  latestIdx < latestSteps.length - 1
-                ) {
-                  void tour.nextStep();
+                if (typeof latestIdx === "number" && latestIdx === currentIdx) {
+                  if (latestIdx < latestSteps.length - 1) {
+                    void tour.nextStep();
+                  } else {
+                    void tour.exit(true);
+                  }
                 }
               }, 260);
             }
           }
-        } else if (
-          e.type === "pointerdown" &&
-          onProductSection &&
-          target.closest('[data-tour="mobile-checkout-cta"], [data-tour="header-checkout-cta"]')
-        ) {
-          productInteractedRef.current = true;
-          markProductIntroSeen();
         } else if (
           e.type === "input" &&
           onCheckoutSection &&
@@ -255,20 +245,10 @@ export function useStorefrontIntro({
           document.querySelector('#products [data-tour="product-combo-buy"]')
         );
 
-        let checkoutTarget: IntroCheckoutTargetType | null = null;
-        if (isElementVisibleInViewport(document.querySelector('[data-tour="mobile-checkout-cta"]'))) {
-          checkoutTarget = "mobile-dock";
-        } else if (isElementVisibleInViewport(document.querySelector('[data-tour="header-checkout-cta"]'))) {
-          checkoutTarget = "header-checkout";
-        } else if (isElementVisibleInViewport(document.querySelector('[data-tour="header-cart-cta"]'))) {
-          checkoutTarget = "header-cart";
-        }
-
         return buildProductIntroSteps({
           lang,
           hasVariantSelect,
           isCombo,
-          checkoutTarget,
         });
       }
 
@@ -343,8 +323,8 @@ export function useStorefrontIntro({
         nextToDone: true,
         hidePrev: true,
         showButtons: true,
-        showBullets: true,
-        showProgress: true,
+        showBullets: resolvedSteps.length > 1,
+        showProgress: resolvedSteps.length > 1,
         showStepNumbers: false,
         exitOnEsc: true,
         exitOnOverlayClick: false,

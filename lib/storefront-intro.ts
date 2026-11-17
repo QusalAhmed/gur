@@ -6,11 +6,6 @@ export const INTRO_STORAGE_KEYS = {
   returningCustomer: "gur_returning_customer_v1",
 } as const;
 
-export type IntroCheckoutTargetType =
-  | "mobile-dock"
-  | "header-checkout"
-  | "header-cart";
-
 export interface IntroStepBlueprint {
   selector: string;
   title: string;
@@ -105,9 +100,8 @@ export function buildProductIntroSteps(params: {
   lang: StorefrontLang;
   hasVariantSelect: boolean;
   isCombo: boolean;
-  checkoutTarget: IntroCheckoutTargetType | null;
 }): IntroStepBlueprint[] {
-  const { lang, hasVariantSelect, isCombo, checkoutTarget } = params;
+  const { lang, hasVariantSelect, isCombo } = params;
   const steps: IntroStepBlueprint[] = [];
 
   if (!isCombo && hasVariantSelect) {
@@ -149,41 +143,6 @@ export function buildProductIntroSteps(params: {
       position: "top",
       highlightClass: "gur-intro-plus-highlight",
     });
-  }
-
-  if (checkoutTarget) {
-    const n = stepPrefix(steps.length, lang);
-    if (checkoutTarget === "mobile-dock") {
-      steps.push({
-        selector: '[data-tour="mobile-checkout-cta"]',
-        title: lang === "bn" ? `${n}. কার্ট দেখুন ও অর্ডার করুন` : `${n}. Go to Order Form`,
-        intro:
-          lang === "bn"
-            ? "নিচে স্ক্রোল করে আরও পণ্য দেখুন, অথবা এখানে ব্যাগ আইকনে ট্যাপ করে সরাসরি অর্ডার ফরমে যান।"
-            : "Scroll down to browse more products, or tap this bag icon anytime to jump straight to the order form.",
-        position: "top",
-      });
-    } else if (checkoutTarget === "header-checkout") {
-      steps.push({
-        selector: '[data-tour="header-checkout-cta"]',
-        title: lang === "bn" ? `${n}. অর্ডার ফরমে যান` : `${n}. Go to Checkout`,
-        intro:
-          lang === "bn"
-            ? "নিচে স্ক্রোল করে আরও পণ্য দেখতে পারেন, অথবা অর্ডার সম্পন্ন করতে 'চেকআউট' বাটনে ক্লিক করুন।"
-            : "Scroll down to see more products, or click Checkout here anytime to complete your order.",
-        position: "bottom",
-      });
-    } else {
-      steps.push({
-        selector: '[data-tour="header-cart-cta"]',
-        title: lang === "bn" ? `${n}. কার্ট দেখুন ও অর্ডার করুন` : `${n}. View Cart & Order`,
-        intro:
-          lang === "bn"
-            ? "এখানে ক্লিক করে আপনার শপিং কার্ট দেখতে পারবেন এবং সরাসরি অর্ডার ফরমে যেতে পারবেন।"
-            : "Click here anytime to open your shopping cart and proceed to the order form.",
-        position: "bottom",
-      });
-    }
   }
 
   return steps;
