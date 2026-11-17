@@ -314,6 +314,41 @@ async function withPhoneLock<T>(phone: string, fn: () => Promise<T>): Promise<T>
 }
 
 /**
+ * Automatically marks any existing incomplete order in-app notification as resolved/read
+ * when a customer converts/confirms an incomplete order.
+ */
+async function resolveIncompleteOrderNotification(orderId: string, orderNumber: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: existingNotifs } = await supabase
+      .from("notifications")
+      .select("id, message, data")
+      .contains("data", { order_id: orderId, status: "incomplete_order" })
+      .eq("is_read", false);
+
+    if (existingNotifs && existingNotifs.length > 0) {
+      for (const notif of existingNotifs) {
+        await supabase
+          .from("notifications")
+          .update({
+            is_read: true,
+            read_at: new Date().toISOString(),
+            message: `${notif.message} — (গ্রাহক অর্ডার #${orderNumber} সফলভাবে কনফার্ম করেছেন)`,
+            data: {
+              ...((notif.data as Record<string, unknown>) || {}),
+              converted_to_order_number: orderNumber,
+              converted_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", notif.id);
+      }
+    }
+  } catch (err) {
+    console.warn("[resolveIncompleteOrderNotification] Failed to resolve incomplete notification:", err);
+  }
+}
+
+/**
  * Places or updates a storefront order with high performance and zero race conditions.
  * - If status is "incomplete_order": records/updates an abandoned lead in real time.
  * - If status is "pending": finalizes the customer order.
@@ -433,15 +468,19 @@ export async function placeStorefrontOrderAction(
 
       // Validate order ownership before passing orderId to RPC or fallback mutation
       let validatedOrderId: string | null = null;
+      let wasIncompleteDraft = false;
       if (payload.orderId && isValidUuid(payload.orderId)) {
         const { data: orderOwner } = await client
           .from("orders")
-          .select("customer_phone")
+          .select("customer_phone, status")
           .eq("id", payload.orderId)
           .maybeSingle();
 
         if (orderOwner && orderOwner.customer_phone === normalizedPhone) {
           validatedOrderId = payload.orderId;
+          if (orderOwner.status === "incomplete_order") {
+            wasIncompleteDraft = true;
+          }
         } else if (!orderOwner) {
           // If order does not exist in DB yet, do not trust arbitrary client UUID
           validatedOrderId = null;
@@ -526,6 +565,11 @@ export async function placeStorefrontOrderAction(
 
           // Trigger Outbox Background Notification Job (Inngest event with transactional guarantee)
           if (rpcData.status === "pending" || rpcData.status === "confirmed") {
+            // Resolve any prior incomplete order in-app notification if this was converted from a draft
+            if (wasIncompleteDraft) {
+              resolveIncompleteOrderNotification(rpcData.order_id, rpcData.order_number).catch(() => {});
+            }
+
             enqueueAndDispatch({
               eventName: "order.created",
               aggregateType: "order",
@@ -561,12 +605,13 @@ export async function placeStorefrontOrderAction(
               console.warn("[Storefront Order] Background Outbox enqueue error (RPC):", outboxErr);
             });
           } else if (rpcData.status === "incomplete_order") {
-            // Transactional Outbox for incomplete draft order / abandoned lead (idempotent per order)
+            // Transactional Outbox for incomplete draft order / abandoned lead.
+            // Timestamp in key ensures subsequent draft edits enqueue fresh events so Inngest resets the 5-min inactivity timer.
             enqueueAndDispatch({
               eventName: "order.incomplete",
               aggregateType: "order",
               aggregateId: rpcData.order_id,
-              idempotencyKey: `order.incomplete:${rpcData.order_id}`,
+              idempotencyKey: `order.incomplete:${rpcData.order_id}:${Date.now()}`,
               payload: {
                 orderId: rpcData.order_id,
                 orderNumber: rpcData.order_number,
@@ -1062,6 +1107,7 @@ export async function placeStorefrontOrderAction(
 
       // Events logging for Rules 1 and 2 (Timeline status audit, no automated order_notes)
       if (wasIncomplete && finalStatus === "pending") {
+        resolveIncompleteOrderNotification(orderDbId, orderNumber).catch(() => {});
         Promise.resolve(
           client.from("order_events").insert({
             order_id: orderDbId,
@@ -1121,12 +1167,13 @@ export async function placeStorefrontOrderAction(
           console.warn("[Storefront Order] Background Outbox enqueue error (Tier 2):", outboxErr);
         });
       } else if (finalStatus === "incomplete_order") {
-        // Transactional Outbox for incomplete draft order (Tier 2)
+        // Transactional Outbox for incomplete draft order (Tier 2).
+        // Timestamp in key ensures subsequent draft edits enqueue fresh events so Inngest resets the 5-min inactivity timer.
         enqueueAndDispatch({
           eventName: "order.incomplete",
           aggregateType: "order",
           aggregateId: orderDbId,
-          idempotencyKey: `order.incomplete:${orderDbId}`,
+          idempotencyKey: `order.incomplete:${orderDbId}:${Date.now()}`,
           payload: {
             orderId: orderDbId,
             orderNumber: orderNumber,

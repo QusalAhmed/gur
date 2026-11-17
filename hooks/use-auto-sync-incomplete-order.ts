@@ -16,7 +16,7 @@ export interface UseAutoSyncIncompleteOrderProps {
   items: StorefrontOrderItem[];
   enabled?: boolean;
   isSubmitting?: boolean;
-  /** Debounce delay in milliseconds after user stops typing (default: 5000ms / 5 seconds) */
+  /** Debounce delay in milliseconds after user stops typing (default: 1500ms / 1.5 seconds) */
   debounceMs?: number;
 }
 
@@ -56,7 +56,7 @@ export function useAutoSyncIncompleteOrder({
   items,
   enabled = true,
   isSubmitting = false,
-  debounceMs = 5000,
+  debounceMs = 1500,
 }: UseAutoSyncIncompleteOrderProps) {
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const draftOrderIdRef = useRef<string | null>(null);
@@ -255,7 +255,7 @@ export function useAutoSyncIncompleteOrder({
     }
   }, [cancelPendingSync, performSync]);
 
-  // Debounced auto-save: triggers ONLY when phone is valid, form data has changed, and 5 seconds after user stops typing
+  // Auto-save: immediately captures draft on valid phone, then debounces 1.5s on subsequent typing
   useEffect(() => {
     if (!enabled || isSubmitting || !isPhoneValid || !currentHash) {
       cancelPendingSync();
@@ -268,9 +268,17 @@ export function useAutoSyncIncompleteOrder({
       return;
     }
 
-    // Form data has changed! Cancel any prior timer and set new debounce timer (5 seconds)
+    // Cancel any prior pending timer
     cancelPendingSync();
 
+    // First draft capture: If phone just became valid and no draft exists yet in session/ref,
+    // trigger IMMEDIATELY so the lead is captured right away even on rapid visitor bounce!
+    if (!draftOrderIdRef.current) {
+      performSync();
+      return;
+    }
+
+    // Subsequent updates: debounce by debounceMs (1.5 seconds)
     debounceTimerRef.current = setTimeout(() => {
       performSync();
     }, debounceMs);

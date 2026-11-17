@@ -123,7 +123,7 @@ function AutoSyncOrderWatcher({
     items: formattedItems,
     enabled,
     isSubmitting: isOrderProcessing,
-    debounceMs: 5000,
+    debounceMs: 1500,
   });
 
   useEffect(() => {
