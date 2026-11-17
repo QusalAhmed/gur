@@ -1,7 +1,27 @@
-import { NonRetriableError } from "inngest";
+import { NonRetriableError, StepError } from "inngest";
 import { inngest } from "@/lib/inngest/client";
 import { sendCapiEvents, type CapiEventParams } from "@/lib/facebook-capi";
 import type { MetaCapiEventData } from "@/lib/inngest/events";
+
+export type MetaCapiGroupOutcome =
+  | {
+      success: true;
+      testEventCode: string | null;
+      processedCount: number;
+      metaResponse: any;
+    }
+  | {
+      success: false;
+      nonRetriable: true;
+      testEventCode: string | null;
+      eventCount: number;
+      error: string;
+    };
+
+export type MetaCapiStepRunner = (
+  id: string,
+  fn: () => Promise<MetaCapiGroupOutcome>
+) => Promise<MetaCapiGroupOutcome>;
 
 function isNonRetriableMetaFailure(result: {
   status?: number;
@@ -30,7 +50,8 @@ function isNonRetriableMetaFailure(result: {
 }
 
 export async function dispatchMetaCapiBatch(
-  events: Array<{ data?: unknown }>
+  events: Array<{ data?: unknown }>,
+  runStep: MetaCapiStepRunner = (_id, fn) => fn()
 ): Promise<{
   success: true;
   processedCount: number;
@@ -54,23 +75,66 @@ export async function dispatchMetaCapiBatch(
 
   let processedCount = 0;
   const responses: any[] = [];
+  const retriableFailures: string[] = [];
+  const permanentFailures: string[] = [];
 
   for (const [testEventCode, capiEventList] of groups.entries()) {
-    const result = await sendCapiEvents(
-      capiEventList,
-      testEventCode ? { testEventCode } : undefined
-    );
+    const stepId = testEventCode
+      ? `dispatch-batch-to-meta:${testEventCode}`
+      : "dispatch-batch-to-meta";
 
-    if (!result.success) {
-      const errorMessage = result.error || "Meta CAPI batch dispatch failed";
-      if (isNonRetriableMetaFailure(result)) {
-        throw new NonRetriableError(errorMessage);
+    try {
+      const outcome = await runStep(stepId, async (): Promise<MetaCapiGroupOutcome> => {
+        const result = await sendCapiEvents(
+          capiEventList,
+          testEventCode ? { testEventCode } : undefined
+        );
+
+        if (!result.success) {
+          const errorMessage = result.error || "Meta CAPI batch dispatch failed";
+          if (isNonRetriableMetaFailure(result)) {
+            return {
+              success: false,
+              nonRetriable: true,
+              testEventCode: testEventCode || null,
+              eventCount: capiEventList.length,
+              error: errorMessage,
+            };
+          }
+          throw new Error(errorMessage);
+        }
+
+        return {
+          success: true,
+          testEventCode: testEventCode || null,
+          processedCount: capiEventList.length,
+          metaResponse: result.data,
+        };
+      });
+
+      if (outcome.success) {
+        processedCount += outcome.processedCount;
+        responses.push(outcome.metaResponse);
+      } else {
+        permanentFailures.push(outcome.error);
       }
-      throw new Error(errorMessage);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : String(err || "Meta CAPI batch dispatch failed");
+      if (err instanceof NonRetriableError || err instanceof StepError) {
+        permanentFailures.push(errorMessage);
+      } else {
+        retriableFailures.push(errorMessage);
+      }
     }
+  }
 
-    processedCount += capiEventList.length;
-    responses.push(result.data);
+  if (retriableFailures.length > 0) {
+    throw new Error(retriableFailures.join("; "));
+  }
+
+  if (permanentFailures.length > 0) {
+    throw new NonRetriableError(permanentFailures.join("; "));
   }
 
   return {
@@ -99,8 +163,6 @@ export const metaCapiBatchDispatcherFunction = inngest.createFunction(
     },
   },
   async ({ events, step }) => {
-    return await step.run("dispatch-batch-to-meta", async () => {
-      return await dispatchMetaCapiBatch(events);
-    });
+    return await dispatchMetaCapiBatch(events, (id, fn) => step.run(id, fn));
   }
 );
