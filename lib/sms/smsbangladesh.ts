@@ -2,7 +2,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { normalizeSiteUrl } from "@/lib/site-url";
 import { shortenTrackingUrl } from "@/lib/url-shortener";
-import { getAdminBrandSettings } from "@/lib/admin-brand";
 
 export type OrderSmsStatus = "placed" | "confirmed" | "shipped" | "delivered" | "manual" | "test";
 
@@ -556,7 +555,31 @@ export async function dispatchOrderStatusSms(
     }
   }
 
-  const brand = await getAdminBrandSettings();
+  let resolvedStoreName = "Gramayon";
+  let resolvedSupportPhone = "01843557389";
+  if (supabaseAdmin) {
+    try {
+      const { data: brandRows } = await supabaseAdmin
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["store.name", "store.name_bn", "store.support_phone"]);
+      if (brandRows && brandRows.length > 0) {
+        let nameEn = "";
+        let nameBn = "";
+        for (const r of brandRows) {
+          const clean = String(r.value ?? "").replace(/^["']|["']$/g, "").trim();
+          if (r.key === "store.name" && clean) nameEn = clean;
+          if (r.key === "store.name_bn" && clean) nameBn = clean;
+          if (r.key === "store.support_phone" && clean) resolvedSupportPhone = clean;
+        }
+        if (nameEn) resolvedStoreName = nameEn;
+        else if (nameBn) resolvedStoreName = nameBn;
+      }
+    } catch {
+      // Keep defaults
+    }
+  }
+
   const renderedMessage = renderSmsTemplate(templateToUse, {
     customer_name: customerName || "সম্মানিত গ্রাহক",
     order_number: orderNumber || orderRow?.order_number || "",
@@ -567,8 +590,8 @@ export async function dispatchOrderStatusSms(
     courier_name: courierName || orderRow?.courier_name || "Steadfast Courier",
     tracking_code: orderNumber || orderRow?.order_number || "N/A", // Website tracking code
     tracking_url: finalTrackingUrl || "",
-    support_phone: "01843557389",
-    store_name: brand.appName || "Gramayon",
+    support_phone: resolvedSupportPhone,
+    store_name: resolvedStoreName,
   });
 
   // 5. Send via SMSBangladesh Gateway
