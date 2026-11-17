@@ -82,7 +82,7 @@ export function formatPhoneForMeta(rawPhone?: string | null): string | null {
 export async function sendCapiEvents(
   events: CapiEventParams[],
   options?: { testEventCode?: string }
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<{ success: boolean; status?: number; data?: any; error?: string }> {
   const token = process.env.FACEBOOK_CAPI_ACCESS_TOKEN;
   const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || FB_PIXEL_ID;
   const testEventCode =
@@ -258,6 +258,7 @@ export async function sendCapiEvents(
       );
       return {
         success: false,
+        status: response.status,
         error: responseJson.error?.message || "Meta CAPI request failed",
         data: responseJson,
       };

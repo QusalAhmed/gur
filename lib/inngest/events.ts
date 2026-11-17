@@ -116,6 +116,7 @@ export interface MetaCapiPurchaseEventData {
 
 export interface MetaCapiEventData {
   event: CapiEventParams;
+  testEventCode?: string;
 }
 
 export interface SteadfastBulkBookingEventData {
