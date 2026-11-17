@@ -235,214 +235,6 @@ export const resetInitiateCheckoutTracking = () => {
   lastInitiateCheckoutCartSignature = null;
 };
 
-export interface UserPropertiesParams {
-  phone?: string | null;
-  email?: string | null;
-  name?: string | null;
-  externalId?: string | null;
-  eventId?: string;
-  customData?: Record<string, any>;
-  skipCapi?: boolean;
-  testEventCode?: string;
-}
-
-const SESSION_STORAGE_TRACKED_PHONES_KEY = "fb_tracked_user_prop_phones";
-
-// In-memory set of normalized phone numbers tracked in this runtime
-const trackedPhoneNumbers = new Set<string>();
-
-/**
- * Checks if a phone number has already had UserProperties dispatched in this session.
- */
-function isPhoneAlreadyTracked(normalizedPhone: string): boolean {
-  if (trackedPhoneNumbers.has(normalizedPhone)) {
-    return true;
-  }
-  if (typeof window !== "undefined") {
-    try {
-      const raw = sessionStorage.getItem(SESSION_STORAGE_TRACKED_PHONES_KEY);
-      if (raw) {
-        const stored: string[] = JSON.parse(raw);
-        if (Array.isArray(stored) && stored.includes(normalizedPhone)) {
-          trackedPhoneNumbers.add(normalizedPhone);
-          return true;
-        }
-      }
-    } catch {
-      // Safe fallback if sessionStorage is inaccessible
-    }
-  }
-  return false;
-}
-
-/**
- * Marks a phone number as tracked both in memory and sessionStorage.
- */
-function markPhoneAsTracked(normalizedPhone: string): void {
-  trackedPhoneNumbers.add(normalizedPhone);
-  if (typeof window !== "undefined") {
-    try {
-      const raw = sessionStorage.getItem(SESSION_STORAGE_TRACKED_PHONES_KEY);
-      const stored: string[] = raw ? JSON.parse(raw) : [];
-      if (!stored.includes(normalizedPhone)) {
-        stored.push(normalizedPhone);
-        sessionStorage.setItem(
-          SESSION_STORAGE_TRACKED_PHONES_KEY,
-          JSON.stringify(stored)
-        );
-      }
-    } catch {
-      // Safe fallback
-    }
-  }
-}
-
-/**
- * Clears the session tracked phone numbers cache.
- */
-export const clearTrackedUserPropertyPhones = () => {
-  trackedPhoneNumbers.clear();
-  if (typeof window !== "undefined") {
-    try {
-      sessionStorage.removeItem(SESSION_STORAGE_TRACKED_PHONES_KEY);
-    } catch {
-      // Safe fallback
-    }
-  }
-};
-
-let lastTrackedUserPropertiesKey: string | null = null;
-
-/**
- * Resets the tracked user properties signature.
- */
-export const resetUserPropertiesTracking = () => {
-  lastTrackedUserPropertiesKey = null;
-};
-
-/**
- * Tracks UserProperties event both in browser (via Meta Pixel) and server (via Meta CAPI).
- * - Client-side: Updates pixel Advanced Matching state (fbq setUserProperties) AND fires
- *   fbq("trackCustom", "UserProperties", properties, { eventID: eventId }) so Meta receives
- *   a distinct browser event with matching eventID.
- * - Server-side: Dispatches sendCapiUserPropertiesAction with the matching eventId.
- * - Result: Meta deduplicates the browser UserProperties event with the CAPI event.
- * Returns { eventId, fired: boolean }.
- */
-export const trackUserProperties = ({
-  phone,
-  email,
-  name,
-  externalId,
-  eventId: customEventId,
-  customData,
-  skipCapi = false,
-  testEventCode,
-}: UserPropertiesParams): { eventId: string | null; fired: boolean } => {
-  if (typeof window === "undefined") return { eventId: null, fired: false };
-
-  let formattedPhone: string | null = null;
-  if (phone) {
-    const parsed = parseBdPhone(phone);
-    if (parsed.isValid) {
-      formattedPhone = parsed.normalized.replace(/^\+/, "");
-    }
-  }
-
-  // If phone was provided but is not a valid Bangladeshi phone, and no email/name/externalId,
-  // do not fire to avoid sending invalid tracking signals
-  if (phone && !formattedPhone && !email && !name && !externalId) {
-    return { eventId: null, fired: false };
-  }
-
-  // CRITICAL: Don't send multiple UserProperties events for the same phone number for pixel and capi
-  if (formattedPhone && isPhoneAlreadyTracked(formattedPhone)) {
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        `[Facebook Pixel] Skipping duplicate UserProperties event for phone: ${formattedPhone}`
-      );
-    }
-    return { eventId: null, fired: false };
-  }
-
-  // Compute a deterministic key to avoid spamming duplicate events on repeated blur events
-  const trackingKey = `${formattedPhone || ""}|${email || ""}|${name || ""}|${externalId || ""}`;
-  if (!trackingKey.replace(/\|/g, "")) {
-    return { eventId: null, fired: false };
-  }
-
-  if (trackingKey === lastTrackedUserPropertiesKey) {
-    return { eventId: null, fired: false };
-  }
-
-  lastTrackedUserPropertiesKey = trackingKey;
-
-  // Mark this phone number as tracked so it will NEVER be sent again
-  if (formattedPhone) {
-    markPhoneAsTracked(formattedPhone);
-  }
-
-  const eventId = customEventId || generateEventId();
-
-  const properties: Record<string, any> = {
-    ...(customData || {}),
-  };
-  if (formattedPhone) properties.ph = formattedPhone;
-  if (email) properties.em = String(email).trim().toLowerCase();
-  if (name) properties.fn = String(name).trim();
-  if (externalId) properties.external_id = String(externalId).trim();
-
-  // Fire single browser custom UserProperties event with matching eventID for CAPI deduplication.
-  // (Do NOT call fbq("setUserProperties") here as that internally dispatches an extra UserProperties event, causing pixel to fire twice)
-  fbq("trackCustom", "UserProperties", properties, { eventID: eventId });
-
-  // 3. Dispatch server-side CAPI event with matching eventId (fire-and-forget safe)
-  if (!skipCapi) {
-    const { fbp, fbc } = getClientFbpAndFbc();
-    const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
-
-    let effectiveTestCode = testEventCode;
-    if (!effectiveTestCode && typeof window !== "undefined") {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        effectiveTestCode =
-          urlParams.get("test_event_code") ||
-          (window as any).__fb_test_event_code ||
-          undefined;
-      } catch {
-        // Safe ignore
-      }
-    }
-
-    sendCapiClientEvent("UserProperties", {
-      eventId,
-      phone: formattedPhone || phone || null,
-      email: email || null,
-      name: name || null,
-      externalId: externalId || null,
-      url: currentUrl,
-      fbp,
-      fbc,
-      customData,
-      testEventCode: effectiveTestCode,
-    });
-  }
-
-  return { eventId, fired: true };
-};
-
-/**
- * Sets customer phone for Advanced Matching via setUserProperties
- * AND sends deduplicated UserProperties event via browser pixel and CAPI.
- * ONLY sends when the phone is a completely valid Bangladeshi mobile number.
- */
-export const setPixelUserPhone = (rawPhone?: string | null, customEventId?: string) => {
-  return trackUserProperties({
-    phone: rawPhone,
-    eventId: customEventId,
-  });
-};
-
 /**
  * Standard InitiateCheckout event.
  * Fired only when the customer types text in the order form.
@@ -464,9 +256,6 @@ export const trackInitiateCheckout = ({
 
   // Don't fire initiate checkout again until cart changes
   if (currentCartSignature === lastInitiateCheckoutCartSignature) {
-    if (phone) {
-      setPixelUserPhone(phone);
-    }
     return { eventId: null, fired: false };
   }
 
@@ -475,11 +264,6 @@ export const trackInitiateCheckout = ({
 
   const safeValue = Number(value) || 0;
   const eventId = customEventId || generateEventId();
-
-  // If phone is provided, only set user properties if it is a completely valid phone number
-  if (phone) {
-    setPixelUserPhone(phone);
-  }
 
   const totalQuantity = safeItems.reduce(
     (sum, item) => sum + (Number(item.quantity) || 0),
@@ -562,10 +346,6 @@ export const trackContact = ({
   eventId: customEventId,
 }: TrackContactParams): string => {
   const eventId = customEventId || generateEventId();
-
-  if (phone) {
-    setPixelUserPhone(phone);
-  }
 
   const payload: Record<string, any> = {
     channel,
@@ -691,10 +471,6 @@ export const trackPurchase = ({
     } catch {
       // Safe fallback
     }
-  }
-
-  if (phone) {
-    setPixelUserPhone(phone);
   }
 
   const safeItems = Array.isArray(items) ? items : [];

@@ -9,7 +9,6 @@ import {
   sendCapiInitiateCheckoutInternal,
   sendCapiPurchaseInternal,
   sendCapiContactInternal,
-  sendCapiUserPropertiesInternal,
 } from "@/lib/capi-service";
 
 export async function POST(req: NextRequest) {
@@ -57,9 +56,6 @@ export async function POST(req: NextRequest) {
       }
       case "Contact":
         result = await sendCapiContactInternal(params as any);
-        break;
-      case "UserProperties":
-        result = await sendCapiUserPropertiesInternal(params as any);
         break;
       default:
         return NextResponse.json(

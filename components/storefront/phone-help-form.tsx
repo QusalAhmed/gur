@@ -20,7 +20,7 @@ import { useAppSelector } from "@/lib/redux/hooks";
 import { selectCartItems } from "@/lib/redux/slices/cart-slice";
 import { StorefrontOrderItem } from "@/actions/storefront-order";
 import { toast } from "sonner";
-import { setPixelUserPhone } from "@/lib/facebook-pixel";
+import { trackContact } from "@/lib/facebook-pixel";
 import { CopyPhoneButton } from "./copy-phone-button";
 
 interface PhoneHelpFormProps {
@@ -99,7 +99,11 @@ export function PhoneHelpForm({
                 });
 
                   if (res.success) {
-                    setPixelUserPhone(validNormalizedPhone);
+                    trackContact({
+                      channel: "phone",
+                      phone: validNormalizedPhone,
+                      customData: { source: "phone_help_form" },
+                    });
                     lastSubmittedPhoneRef.current = validNormalizedPhone;
               setSubmittedData({
                 phone: validLocalPhone,
@@ -249,11 +253,6 @@ export function PhoneHelpForm({
                       onChange={(e) => {
                         setPhone(e.target.value);
                         if (errorMessage) setErrorMessage(null);
-                      }}
-                      onBlur={() => {
-                        if (parsedPhone.isValid && parsedPhone.normalized) {
-                          setPixelUserPhone(parsedPhone.normalized);
-                        }
                       }}
                       placeholder={t.phoneHelpInputPlaceholder}
                       aria-required="true"

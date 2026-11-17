@@ -6,8 +6,6 @@ import { timingSafeTokenEqual } from "@/lib/server-security";
 import {
   sendCapiEvents,
   formatPhoneForMeta,
-  isServerPhoneAlreadyTracked,
-  markServerPhoneAsTracked,
   type CapiEventParams,
   type CapiUserData,
   type CapiContentItem,
@@ -567,59 +565,6 @@ export async function sendCapiPurchaseInternal(params: {
     });
   } catch (err: any) {
     console.error("[CAPI Service] sendCapiPurchaseInternal error:", err);
-    return { success: false, error: "CAPI dispatch failed" };
-  }
-}
-
-export async function sendCapiUserPropertiesInternal(params: {
-  eventId: string;
-  phone?: string | null;
-  email?: string | null;
-  name?: string | null;
-  externalId?: string | null;
-  url?: string;
-  fbp?: string | null;
-  fbc?: string | null;
-  customData?: Record<string, any>;
-  testEventCode?: string;
-}) {
-  try {
-    const metaPhone = formatPhoneForMeta(params.phone);
-    if (metaPhone && isServerPhoneAlreadyTracked(metaPhone)) {
-      return { success: true, skipped: true, reason: "Duplicate phone already sent to CAPI" };
-    }
-
-    if (metaPhone) {
-      markServerPhoneAsTracked(metaPhone);
-    }
-
-    const { userData, eventSourceUrl } = await getRequestContext(
-      {
-        ph: params.phone,
-        em: params.email,
-        fn: params.name,
-        external_id: params.externalId,
-        fbp: params.fbp,
-        fbc: params.fbc,
-      },
-      params.url
-    );
-
-    return await dispatchCapiEventWithQueue(
-      {
-        eventName: "UserProperties",
-        eventId: params.eventId,
-        eventSourceUrl,
-        userData,
-        customData: {
-          ...(params.customData || {}),
-          ...(params.phone ? { phone: params.phone } : {}),
-        },
-      },
-      params.testEventCode ? { testEventCode: params.testEventCode } : undefined
-    );
-  } catch (err: any) {
-    console.error("[CAPI Service] sendCapiUserPropertiesInternal error:", err);
     return { success: false, error: "CAPI dispatch failed" };
   }
 }

@@ -45,7 +45,6 @@ export interface CapiEventParams {
     | "AddToCart"
     | "InitiateCheckout"
     | "Purchase"
-    | "UserProperties"
     | "Contact"
     | "Lead"
     | (string & {});
@@ -74,30 +73,6 @@ export function formatPhoneForMeta(rawPhone?: string | null): string | null {
   if (!parsed.isValid) return null;
   // E.164 is '+8801XXXXXXXXX' -> remove '+' to get '8801XXXXXXXXX'
   return parsed.normalized.replace(/^\+/, "");
-}
-
-// Server-side in-memory cache to prevent sending duplicate UserProperties events for the same phone
-const serverTrackedPhones = new Map<string, number>();
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
-export function isServerPhoneAlreadyTracked(metaPhone: string): boolean {
-  const lastTracked = serverTrackedPhones.get(metaPhone);
-  if (lastTracked && Date.now() - lastTracked < TWENTY_FOUR_HOURS_MS) {
-    return true;
-  }
-  return false;
-}
-
-export function markServerPhoneAsTracked(metaPhone: string): void {
-  serverTrackedPhones.set(metaPhone, Date.now());
-  if (serverTrackedPhones.size > 10000) {
-    const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
-    for (const [key, timestamp] of serverTrackedPhones.entries()) {
-      if (timestamp < cutoff) {
-        serverTrackedPhones.delete(key);
-      }
-    }
-  }
 }
 
 /**
@@ -130,32 +105,9 @@ export async function sendCapiEvents(
     return { success: true };
   }
 
-  // Guard: Filter out duplicate UserProperties events for the same phone number on server
-  const activeEvents = events.filter((event) => {
-    if (event.eventName === "UserProperties") {
-      const metaPhone = formatPhoneForMeta(event.userData?.ph);
-      if (metaPhone && isServerPhoneAlreadyTracked(metaPhone)) {
-        if (process.env.NODE_ENV !== "production") {
-          console.log(
-            `[Facebook CAPI] Skipping duplicate server UserProperties event for phone: ${metaPhone}`
-          );
-        }
-        return false;
-      }
-      if (metaPhone) {
-        markServerPhoneAsTracked(metaPhone);
-      }
-    }
-    return true;
-  });
-
-  if (activeEvents.length === 0) {
-    return { success: true };
-  }
-
   const nowSeconds = Math.floor(Date.now() / 1000);
 
-  const formattedEvents = activeEvents.map((event) => {
+  const formattedEvents = events.map((event) => {
     const rawUserData = event.userData || {};
     const formattedUserData: Record<string, any> = {};
 

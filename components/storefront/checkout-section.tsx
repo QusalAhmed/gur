@@ -65,9 +65,6 @@ import {
   trackInitiateCheckout,
   trackAddToCart,
   resetInitiateCheckoutTracking,
-  trackUserProperties,
-  resetUserPropertiesTracking,
-  setPixelUserPhone,
   generateEventId,
   getClientFbpAndFbc,
   sendCapiClientEvent,
@@ -261,7 +258,6 @@ export function CheckoutSection({
       clearDraftRef.current?.();
       dispatch(clearCart());
       resetInitiateCheckoutTracking();
-      resetUserPropertiesTracking();
 
       const successMsg = lang === "bn"
         ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${result.orderNumber})`
@@ -968,13 +964,6 @@ return (
                         }}
                         onBlur={() => {
                           field.handleBlur();
-                          const name = form.getFieldValue("customerName");
-                          if (field.state.value) {
-                            trackUserProperties({
-                              phone: field.state.value,
-                              name: name?.trim() || undefined,
-                            });
-                          }
                           if (!isOrderProcessing) triggerSyncNowRef.current?.();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"

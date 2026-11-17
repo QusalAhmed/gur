@@ -8,7 +8,6 @@ import {
   sendCapiAddToCartInternal,
   sendCapiInitiateCheckoutInternal,
   sendCapiPurchaseInternal,
-  sendCapiUserPropertiesInternal,
   sendCapiContactInternal,
   enrichOrderMetaTrackingInternal,
   captureStorefrontMetaTrackingInternal,
@@ -130,25 +129,6 @@ export async function sendCapiPurchaseAction(params: {
   } catch (err: any) {
     return { success: false, error: err?.message || "Unauthorized" };
   }
-}
-
-/**
- * Server action to send UserProperties event to Meta CAPI.
- * Deduplicates with browser-side UserProperties event using matching eventId.
- */
-export async function sendCapiUserPropertiesAction(params: {
-  eventId: string;
-  phone?: string | null;
-  email?: string | null;
-  name?: string | null;
-  externalId?: string | null;
-  url?: string;
-  fbp?: string | null;
-  fbc?: string | null;
-  customData?: Record<string, any>;
-  testEventCode?: string;
-}) {
-  return sendCapiUserPropertiesInternal(params);
 }
 
 /**
