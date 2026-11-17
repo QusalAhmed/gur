@@ -104,6 +104,11 @@ export interface NotificationSmsSendEventData {
   orderNumber?: string;
 }
 
+export interface NotificationPushSendEventData {
+  notificationId?: string;
+  limit?: number;
+}
+
 export interface MetaCapiPurchaseEventData {
   outboxEventId?: string;
   orderIdOrNumber: string;
@@ -148,6 +153,9 @@ export type InngestEvents = {
   };
   "notification.sms.send": {
     data: NotificationSmsSendEventData;
+  };
+  "notification.push.send": {
+    data: NotificationPushSendEventData;
   };
   "meta.capi.purchase": {
     data: MetaCapiPurchaseEventData;

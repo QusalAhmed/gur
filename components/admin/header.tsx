@@ -8,6 +8,7 @@ import {
   User,
   Save,
   Loader2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNotificationsPopover } from "@/components/admin/notifications-popover";
@@ -40,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { usePathname, useRouter } from "next/navigation";
 import { useAdminAuth } from "@/components/admin/auth-context";
+import { useAdminPwa } from "@/components/admin/admin-pwa-provider";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { ROLE_CONFIG } from "@/lib/admin-permissions";
 import { AdminLoadingBar } from "@/components/admin/admin-loading-bar";
@@ -67,6 +69,7 @@ export function AdminHeader() {
   const router = useRouter();
   const breadcrumb = getBreadcrumb(pathname);
   const { user, role, logout, saveProfile } = useAdminAuth();
+  const { isStandalone, isIOS, canInstall, promptInstall } = useAdminPwa();
   const { email: storeEmail } = useSiteSettings();
 
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
@@ -229,6 +232,16 @@ export function AdminHeader() {
                     Store Settings / সেটিংস
                   </DropdownMenuItem>
                 </>
+              ) : null}
+
+              {mounted && !isStandalone && (canInstall || isIOS) ? (
+                <DropdownMenuItem
+                  onClick={() => void promptInstall()}
+                  className="cursor-pointer text-xs flex items-center justify-between text-amber-600 dark:text-amber-400"
+                >
+                  <span>Install Admin App / অ্যাপ ইনস্টল</span>
+                  <Download className="h-3.5 w-3.5" />
+                </DropdownMenuItem>
               ) : null}
 
               <DropdownMenuSeparator />

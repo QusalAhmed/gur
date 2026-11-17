@@ -10,6 +10,8 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AdminAuthProvider } from "@/components/admin/auth-context";
+import { AdminPwaProvider } from "@/components/admin/admin-pwa-provider";
+import { AdminPwaInstallBanner } from "@/components/admin/pwa-install-banner";
 import { useAdminRealtime } from "@/hooks/use-admin-realtime";
 
 function AdminRealtimeBridge({ enabled }: { enabled: boolean }) {
@@ -32,20 +34,23 @@ export function AdminLayoutClient({
   return (
     <TooltipProvider>
       <AdminAuthProvider>
-        <AdminRealtimeBridge enabled={!isBareLayout} />
-        {isBareLayout ? (
-          children
-        ) : (
-          <SidebarProvider className="min-w-0 max-w-full overflow-x-hidden">
-            <AdminSidebar />
-            <SidebarInset className="min-w-0 max-w-full">
-              <AdminHeader />
-              <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4 pt-2 sm:pt-3 pb-14 sm:pb-16 lg:pb-20">
-                {children}
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
-        )}
+        <AdminPwaProvider>
+          <AdminRealtimeBridge enabled={!isBareLayout} />
+          {isBareLayout ? (
+            children
+          ) : (
+            <SidebarProvider className="min-w-0 max-w-full overflow-x-hidden">
+              <AdminSidebar />
+              <SidebarInset className="min-w-0 max-w-full">
+                <AdminHeader />
+                <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-2 sm:px-4 pt-2 sm:pt-3 pb-14 sm:pb-16 lg:pb-20">
+                  {children}
+                </div>
+                <AdminPwaInstallBanner />
+              </SidebarInset>
+            </SidebarProvider>
+          )}
+        </AdminPwaProvider>
       </AdminAuthProvider>
     </TooltipProvider>
   );

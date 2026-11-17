@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { sendAdminOrderNotification } from "@/lib/brevo";
 import { dispatchOrderStatusSms } from "@/lib/sms/smsbangladesh";
+import { dispatchPendingNotificationPushes } from "@/lib/push/web-push";
 import type { OrderCreatedEventData } from "@/lib/inngest/events";
 
 export const orderCreatedFunction = inngest.createFunction(
@@ -65,11 +66,22 @@ export const orderCreatedFunction = inngest.createFunction(
       }
     });
 
+    // 3. Dispatch Admin PWA Web Push for DB-trigger notifications (new order & any low-stock alerts)
+    const pushResult = await step.run("dispatch-admin-web-push", async () => {
+      try {
+        return await dispatchPendingNotificationPushes(10);
+      } catch (err: unknown) {
+        console.warn("[Inngest] dispatch-admin-web-push failed:", err);
+        return { processed: 0, totalSent: 0, totalFailed: 0 };
+      }
+    });
+
     return {
       orderId: data.orderId,
       orderNumber: data.orderNumber,
       email: emailResult,
       sms: smsResult,
+      push: pushResult,
     };
   }
 );

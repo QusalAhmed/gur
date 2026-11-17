@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { timingSafeTokenEqual } from "@/lib/server-security";
+import { createNotificationInternal } from "@/lib/notifications-service";
 
 /**
  * Meta Webhook verification handshake (GET)
@@ -39,7 +39,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const payload = await req.json();
 
     if (payload?.object === "page") {
-      const supabase = getSupabaseAdmin();
       const entries = Array.isArray(payload.entry) ? payload.entry : [];
 
       for (const entry of entries) {
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   ? `${commentText.slice(0, 197)}...`
                   : commentText;
 
-              await supabase.from("notifications").insert({
+              await createNotificationInternal({
                 type: "customer_inquiry",
                 title: `💬 FB Comment from ${senderName}`,
                 message: notificationMessage,
@@ -89,7 +88,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   full_comment: commentText,
                   link: commentUrl,
                 },
-                is_read: false,
               });
             }
           }

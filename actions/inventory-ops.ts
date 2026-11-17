@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { enqueueNotificationPush } from "@/lib/notifications-service";
 import { Database } from "@/types/database.types";
 
 type StockMovementType = Database["public"]["Enums"]["stock_movement_type"];
@@ -129,6 +130,7 @@ export async function adjustStockAction(params: AdjustStockParams) {
 
     revalidatePath("/admin/inventory");
     revalidatePath("/admin/batches");
+    enqueueNotificationPush().catch(() => {});
     return { ok: true, data };
   } catch (err: any) {
     const friendly = mapDatabaseError(err);
@@ -178,6 +180,7 @@ export async function writeOffStockAction(params: WriteOffStockParams) {
 
     revalidatePath("/admin/inventory");
     revalidatePath("/admin/batches");
+    enqueueNotificationPush().catch(() => {});
     return { ok: true, data };
   } catch (err: any) {
     const friendly = mapDatabaseError(err);
@@ -217,6 +220,7 @@ export async function updateReorderPointAction(params: UpdateReorderPointParams)
     }
 
     revalidatePath("/admin/inventory");
+    enqueueNotificationPush().catch(() => {});
     return { ok: true, data };
   } catch (err: any) {
     const friendly = mapDatabaseError(err);

@@ -241,6 +241,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     `connect-src ${connectSources.join(" ")}`,
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
+    "manifest-src 'self'",
     `frame-src ${frameSources.join(" ")}`,
     `form-action ${formActionSources.join(" ")}`,
     "object-src 'none'",

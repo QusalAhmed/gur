@@ -3,6 +3,8 @@
 import * as React from "react";
 import {
   Bell,
+  BellRing,
+  BellOff,
   CheckCheck,
   Trash2,
   Volume2,
@@ -15,6 +17,9 @@ import {
   Clock,
   ExternalLink,
   Printer,
+  Send,
+  Loader2,
+  Smartphone,
 } from "lucide-react";
 import {
   Popover,
@@ -25,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useAdminPwa } from "@/components/admin/admin-pwa-provider";
 import {
   isNotificationSoundMuted,
   setNotificationSoundMuted,
@@ -101,10 +107,32 @@ export function AdminNotificationsPopover() {
     isClearingRead,
   } = useNotifications();
 
+  const {
+    isStandalone,
+    isIOS,
+    isPushSupported,
+    isPushConfigured,
+    permission,
+    isSubscribed,
+    isBusy: isPushBusy,
+    isTesting: isPushTesting,
+    enablePush,
+    disablePush,
+    sendTestPush,
+    openIOSInstallGuide,
+    syncAppBadge,
+  } = useAdminPwa();
+
   React.useEffect(() => {
     setMounted(true);
     setSoundMuted(isNotificationSoundMuted());
   }, []);
+
+  // Sync unread count to the installed PWA app icon badge
+  React.useEffect(() => {
+    if (!mounted) return;
+    syncAppBadge(unreadCount);
+  }, [mounted, unreadCount, syncAppBadge]);
 
   const handleToggleSound = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -225,6 +253,101 @@ export function AdminNotificationsPopover() {
             )}
           </div>
         </div>
+
+        {/* Device Push Notifications Controls */}
+        {mounted && (
+          <div className="flex items-center justify-between gap-2 px-3.5 py-2 border-b bg-background/60 text-xs">
+            {isIOS && !isStandalone && !isPushSupported ? (
+              <>
+                <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                  <Smartphone className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <span className="truncate">Add to Home Screen for iOS push</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] shrink-0"
+                  onClick={() => {
+                    setOpen(false);
+                    openIOSInstallGuide();
+                  }}
+                >
+                  How
+                </Button>
+              </>
+            ) : !isPushSupported ? (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <BellOff className="h-3.5 w-3.5 shrink-0" />
+                <span>Device push unsupported in this browser</span>
+              </div>
+            ) : !isPushConfigured ? (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <BellOff className="h-3.5 w-3.5 shrink-0" />
+                <span>Push keys not configured</span>
+              </div>
+            ) : permission === "denied" ? (
+              <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                <BellOff className="h-3.5 w-3.5 shrink-0" />
+                <span>Push blocked in browser settings</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full shrink-0",
+                      isSubscribed ? "bg-emerald-500" : "bg-muted-foreground/40"
+                    )}
+                  />
+                  <span className="font-medium text-foreground/90 truncate">
+                    {isSubscribed ? "Push Alerts: On" : "Push Alerts: Off"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isSubscribed && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                      disabled={isPushTesting || isPushBusy}
+                      onClick={() => void sendTestPush()}
+                      title="Send a test push notification to this device"
+                    >
+                      {isPushTesting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Send className="h-3 w-3" />
+                      )}
+                      Test
+                    </Button>
+                  )}
+                  <Button
+                    variant={isSubscribed ? "outline" : "default"}
+                    size="sm"
+                    className={cn(
+                      "h-6 px-2 text-[11px] gap-1",
+                      !isSubscribed &&
+                        "bg-amber-500 text-black hover:bg-amber-400 font-semibold"
+                    )}
+                    disabled={isPushBusy}
+                    onClick={() =>
+                      void (isSubscribed ? disablePush() : enablePush())
+                    }
+                  >
+                    {isPushBusy ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : isSubscribed ? (
+                      <BellOff className="h-3 w-3" />
+                    ) : (
+                      <BellRing className="h-3 w-3" />
+                    )}
+                    {isSubscribed ? "Disable" : "Enable"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Tab Filters */}
         <Tabs

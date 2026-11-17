@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { dispatchOrderStatusSms } from "@/lib/sms/smsbangladesh";
 import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
+import { dispatchPendingNotificationPushes } from "@/lib/push/web-push";
 import type { OrderStatusUpdatedEventData } from "@/lib/inngest/events";
 
 export const orderStatusUpdatedFunction = inngest.createFunction(
@@ -71,12 +72,23 @@ export const orderStatusUpdatedFunction = inngest.createFunction(
       });
     }
 
+    // 3. Dispatch Admin PWA Web Push for any DB-trigger alerts (e.g. outdated_label_shipped, low_stock)
+    const pushResult = await step.run("dispatch-admin-web-push", async () => {
+      try {
+        return await dispatchPendingNotificationPushes(10);
+      } catch (err: unknown) {
+        console.warn("[Inngest] dispatch-admin-web-push failed:", err);
+        return { processed: 0, totalSent: 0, totalFailed: 0 };
+      }
+    });
+
     return {
       orderId,
       orderNumber,
       status: newStatus,
       sms: smsResult,
       capi: capiResult,
+      push: pushResult,
     };
   }
 );

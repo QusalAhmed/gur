@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enqueueAndDispatch } from "@/lib/outbox";
+import { createNotificationInternal } from "@/lib/notifications-service";
 import { timingSafeTokenEqual } from "@/lib/server-security";
 import { safePublicErrorMessage, sanitizePostgrestFilterTerm } from "@/lib/security";
 
@@ -286,7 +287,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           // Trigger order status change notification for partial delivery per user specification
-          await adminClient.from("notifications").insert({
+          await createNotificationInternal({
             type: "order_status_changed",
             title: `Order ${matchedOrder.order_number} Partially Delivered`,
             message: `Steadfast marked order as partially delivered${
@@ -369,7 +370,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
 
           // Trigger order status change notification for courier cancellation / return
-          await adminClient.from("notifications").insert({
+          await createNotificationInternal({
             type: "order_status_changed",
             title: `Order ${matchedOrder.order_number} ${isShipped ? "Returned" : "Cancelled"} by Courier`,
             message: `Order ${matchedOrder.order_number} was marked as ${newStatus} by Steadfast Courier.${
@@ -467,7 +468,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         });
 
         // Trigger high-priority admin alert notification per user specification
-        await adminClient.from("notifications").insert({
+        await createNotificationInternal({
           type: "system_alert",
           title: `Steadfast Return Request: Order ${matchedOrder.order_number}`,
           message: `A return request was raised by Steadfast for Order ${matchedOrder.order_number}. Reason: ${reason}`,

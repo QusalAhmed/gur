@@ -1,5 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { processPendingOutboxEvents } from "@/lib/outbox";
+import { dispatchPendingNotificationPushes } from "@/lib/push/web-push";
 
 /**
  * Scheduled cron job that sweeps the transactional outbox every 6 hours.
@@ -13,13 +14,22 @@ export const outboxRecoveryCronFunction = inngest.createFunction(
     triggers: [{ cron: "0 */6 * * *" }],
   },
   async ({ step }) => {
-    return await step.run("recover-pending-outbox-events", async () => {
+    const outboxStats = await step.run("recover-pending-outbox-events", async () => {
       const stats = await processPendingOutboxEvents(50);
       return {
         timestamp: new Date().toISOString(),
         ...stats,
       };
     });
+
+    const pushStats = await step.run("recover-pending-admin-push", async () => {
+      return await dispatchPendingNotificationPushes(25);
+    });
+
+    return {
+      ...outboxStats,
+      push: pushStats,
+    };
   }
 );
 

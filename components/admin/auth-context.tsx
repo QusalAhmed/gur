@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AdminUser, AdminRole } from "@/lib/admin-auth";
 import { sanitizeAdminRedirect } from "@/lib/admin-permissions";
 import { updateAdminProfileAction } from "@/actions/admin-profile";
+import { cleanupAdminPushOnLogout } from "@/components/admin/admin-pwa-provider";
 
 interface AdminAuthContextType {
   user: AdminUser | null;
@@ -157,6 +158,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     setIsLoading(true);
     try {
+      await cleanupAdminPushOnLogout();
       await fetch("/api/admin/auth/logout", { method: "POST" });
     } catch (e) {
       console.warn("Logout error:", e);

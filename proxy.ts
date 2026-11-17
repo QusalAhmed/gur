@@ -122,6 +122,19 @@ export async function proxy(request: NextRequest) {
 
   // 2. Subdomain routing for admin.khatikhejurgur.shop (or local admin.localhost)
   if (isAdminSubdomain) {
+    // 0) Allow Admin PWA assets (manifest, service worker, offline fallback, icons) directly
+    if (pathname === "/manifest.webmanifest") {
+      return NextResponse.rewrite(new URL("/admin-manifest.webmanifest", request.url));
+    }
+    if (
+      pathname === "/admin-manifest.webmanifest" ||
+      pathname === "/sw.js" ||
+      pathname === "/admin-offline.html" ||
+      pathname.startsWith("/icons/")
+    ) {
+      return NextResponse.next();
+    }
+
     // A) If someone accesses /admin or /admin/* on the admin subdomain, strip "/admin" with 308 redirect
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
       const cleanPath = pathname === "/admin" ? "/" : pathname.replace(/^\/admin/, "") || "/";

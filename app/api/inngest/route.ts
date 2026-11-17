@@ -8,6 +8,7 @@ import {
   notificationSmsFunction,
   metaCapiPurchaseFunction,
 } from "@/lib/inngest/functions/notification-direct";
+import { notificationPushFunction } from "@/lib/inngest/functions/notification-push";
 import {
   outboxRecoveryCronFunction,
   outboxSweepEventFunction,
@@ -26,6 +27,7 @@ export const { GET, POST, PUT } = serve({
     orderIncompleteFunction,
     notificationEmailFunction,
     notificationSmsFunction,
+    notificationPushFunction,
     metaCapiPurchaseFunction,
     outboxRecoveryCronFunction,
     outboxSweepEventFunction,

@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { createNotificationInternal } from "@/lib/notifications-service";
 import { isValidUuid } from "@/lib/security";
 import { AdminNotification, NotificationType } from "@/types/notification";
 import { revalidatePath } from "next/cache";
@@ -180,23 +181,12 @@ export async function createNotificationAction({
 }): Promise<ActionResult<AdminNotification>> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = getSupabaseAdmin();
-    const { data: inserted, error } = await supabase
-      .from("notifications")
-      .insert({
-        type,
-        title,
-        message,
-        data,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: inserted as AdminNotification };
+    return await createNotificationInternal({
+      type,
+      title,
+      message,
+      data,
+    });
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to create notification" };
   }
