@@ -422,6 +422,24 @@ describe("Security Sanitizers & Constant-Time Token Verification", () => {
     expect(disabledCsp).not.toContain("connect.facebook.net");
     expect(disabledCsp).not.toContain("mpc-prod-27");
   });
+
+  it("permits Vercel Speed Insights endpoints in script-src and connect-src", () => {
+    const csp = buildCspHeader({ nodeEnv: "production" });
+
+    const scriptDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("script-src "));
+    const connectDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("connect-src "));
+
+    expect(scriptDirective).toBeDefined();
+    expect(scriptDirective).toContain("https://va.vercel-scripts.com");
+
+    expect(connectDirective).toBeDefined();
+    expect(connectDirective).toContain("https://va.vercel-scripts.com");
+    expect(connectDirective).toContain("https://vitals.vercel-insights.com");
+  });
 });
 
 describe("HMAC Signed Admin Session Token Verification", () => {

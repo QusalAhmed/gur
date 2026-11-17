@@ -202,6 +202,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://analytics.google.com",
       "https://*.analytics.googletagmanager.com",
       "https://www.googletagmanager.com",
+      "https://va.vercel-scripts.com",
+      "https://vitals.vercel-insights.com",
       ...metaConnectOrigins,
       ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
         ? [`https://${imagekitHost}`]
@@ -216,6 +218,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
     "https://www.googletagmanager.com",
+    "https://va.vercel-scripts.com",
     ...(safePixelId ? ["https://connect.facebook.net"] : []),
   ];
 
