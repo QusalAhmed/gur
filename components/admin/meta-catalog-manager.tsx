@@ -210,7 +210,7 @@ export function MetaCatalogManager({
                 Meta Business SDK & Catalog Integration
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Synchronize e-commerce products with Meta Catalog for Facebook & Instagram Shop, Dynamic Ads, and Pixel matching.
+                Synchronize e-commerce products with Meta Catalog for Facebook & Instagram Shop, Dynamic Ads, and catalog matching.
               </DialogDescription>
             </div>
           </div>
@@ -584,7 +584,7 @@ export function MetaCatalogManager({
             </div>
             <ul className="list-disc list-inside space-y-0.5 pl-1">
               <li>
-                Each catalog item ID matches the <code>content_ids</code> dispatched by Meta Pixel and CAPI for instant Dynamic Product Ads (DPA) attribution.
+                Each catalog item ID matches the <code>content_ids</code> dispatched by Meta CAPI for instant Dynamic Product Ads (DPA) attribution.
               </li>
               <li>
                 Batch sync sends requests via Meta Business SDK with chunking up to 4,999 items per request.

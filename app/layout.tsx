@@ -95,20 +95,22 @@ export default function RootLayout({
           <SeoGlobalScripts />
         </Suspense>
         {safeFbPixelId && (
-          <>
-            <Script
-              id="fb-pixel"
-              strategy="beforeInteractive"
-              dangerouslySetInnerHTML={{
-                __html: `
-                  !function(f,b,e,v,n,t,s)
-                  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          <Script
+            id="fb-pixel"
+            strategy="beforeInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `
+                !function(f,b,e,v,n,t,s)
+                {
+                  var h=(f.location&&f.location.hostname||"").toLowerCase().split(":")[0];
+                  var p=(f.location&&f.location.pathname||"").toLowerCase();
+                  if(h==="admin"||h.indexOf("admin.")===0||p==="/admin"||p.indexOf("/admin/")===0)return;
+                  if(f.fbq)return;n=f.fbq=function(){n.callMethod?
                   n.callMethod.apply(n,arguments):n.queue.push(arguments)};
                   if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
                   n.queue=[];t=b.createElement(e);t.async=!0;
                   t.src=v;s=b.getElementsByTagName(e)[0];
-                  if(s&&s.parentNode){s.parentNode.insertBefore(t,s)}else{b.head.appendChild(t)}}(window, document,'script',
-                  'https://connect.facebook.net/en_US/fbevents.js');
+                  if(s&&s.parentNode){s.parentNode.insertBefore(t,s)}else{b.head.appendChild(t)}
                   fbq.disablePushState = true;
                   fbq.allowDuplicatePageViews = true;
                   fbq('init', ${JSON.stringify(safeFbPixelId)});
@@ -118,19 +120,11 @@ export default function RootLayout({
                       fbq.apply(null, qItem);
                     }
                   }
-                `,
-              }}
-            />
-            <noscript>
-              <img
-                height="1"
-                width="1"
-                style={{ display: "none" }}
-                src={`https://www.facebook.com/tr?id=${encodeURIComponent(safeFbPixelId)}&ev=PageView&noscript=1`}
-                alt=""
-              />
-            </noscript>
-          </>
+                }(window, document,'script',
+                'https://connect.facebook.net/en_US/fbevents.js');
+              `,
+            }}
+          />
         )}
         <StoreProvider>
           <QueryProvider>

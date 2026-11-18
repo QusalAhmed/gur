@@ -303,6 +303,26 @@ export async function sendCapiPageViewInternal(params: {
   fbc?: string | null;
 }) {
   try {
+    if (params.url) {
+      try {
+        const parsed = new URL(params.url);
+        const host = parsed.hostname.toLowerCase().split(":")[0];
+        const path = parsed.pathname.toLowerCase();
+        if (
+          host === "admin" ||
+          host.startsWith("admin.") ||
+          path === "/admin" ||
+          path.startsWith("/admin/")
+        ) {
+          return { success: true, skipped: true };
+        }
+      } catch {
+        if (params.url.includes("/admin")) {
+          return { success: true, skipped: true };
+        }
+      }
+    }
+
     const { userData, eventSourceUrl } = await getRequestContext(
       { fbp: params.fbp, fbc: params.fbc },
       params.url

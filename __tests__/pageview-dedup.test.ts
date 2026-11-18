@@ -40,6 +40,8 @@ import {
   sendCapiClientEvent,
   getClientFbpAndFbc,
   waitForClientFbpAndFbc,
+  isPixelAdminHostOrPath,
+  fbq,
 } from "@/lib/facebook-pixel";
 import { sendCapiPageViewInternal } from "@/lib/capi-service";
 import { POST as capiPostHandler } from "@/app/api/facebook-capi/route";
@@ -182,14 +184,79 @@ describe("PageView Browser & Server Event ID Deduplication", () => {
     vi.stubGlobal("window", {
       fbq: fbqSpy,
       location: {
+        hostname: "khatikhejurgur.shop",
         pathname: "/admin/orders",
-        href: "https://gur-phi.vercel.app/admin/orders",
+        href: "https://khatikhejurgur.shop/admin/orders",
       },
     });
 
     const eventId = trackPageView();
     expect(eventId).toBeNull();
     expect(fbqSpy).not.toHaveBeenCalled();
+  });
+
+  it("skips PageView tracking on admin.* subdomains", () => {
+    const fbqSpy = vi.fn();
+    vi.stubGlobal("window", {
+      fbq: fbqSpy,
+      location: {
+        hostname: "admin.khatikhejurgur.shop",
+        pathname: "/orders",
+        href: "https://admin.khatikhejurgur.shop/orders",
+      },
+    });
+
+    const eventId = trackPageView();
+    expect(eventId).toBeNull();
+    expect(fbqSpy).not.toHaveBeenCalled();
+  });
+
+  it("identifies admin subdomains and paths correctly via isPixelAdminHostOrPath", () => {
+    expect(isPixelAdminHostOrPath("admin.khatikhejurgur.shop", "/")).toBe(true);
+    expect(isPixelAdminHostOrPath("admin.localhost", "/orders")).toBe(true);
+    expect(isPixelAdminHostOrPath("admin", "/products")).toBe(true);
+    expect(isPixelAdminHostOrPath("khatikhejurgur.shop", "/admin")).toBe(true);
+    expect(isPixelAdminHostOrPath("khatikhejurgur.shop", "/admin/settings")).toBe(true);
+    expect(isPixelAdminHostOrPath("localhost", "/admin")).toBe(true);
+    expect(isPixelAdminHostOrPath("khatikhejurgur.shop", "/")).toBe(false);
+    expect(isPixelAdminHostOrPath("khatikhejurgur.shop", "/products")).toBe(false);
+    expect(isPixelAdminHostOrPath("localhost", "/")).toBe(false);
+  });
+
+  it("does not execute fbq or queue on admin routes or hosts", () => {
+    const fbqSpy = vi.fn();
+    const win = {
+      fbq: fbqSpy,
+      _fbqQueue: [] as any[],
+      location: {
+        hostname: "admin.khatikhejurgur.shop",
+        pathname: "/orders",
+      },
+    };
+    vi.stubGlobal("window", win);
+
+    fbq("track", "PageView");
+    expect(fbqSpy).not.toHaveBeenCalled();
+    expect(win._fbqQueue.length).toBe(0);
+  });
+
+  it("skips sendCapiPageViewInternal for admin URLs", async () => {
+    const res = await sendCapiPageViewInternal({
+      eventId: "admin-pv-1",
+      url: "https://admin.khatikhejurgur.shop/orders",
+    });
+    expect(res).toEqual({ success: true, skipped: true });
+    expect(mockSendCapiEvents).not.toHaveBeenCalled();
+    expect(mockInngestSend).not.toHaveBeenCalled();
+  });
+
+  it("verifies layout source guards fb-pixel script against admin panel execution", () => {
+    const layoutSource = fs.readFileSync(
+      path.resolve(process.cwd(), "app/layout.tsx"),
+      "utf-8"
+    );
+
+    expect(layoutSource).toContain('h==="admin"||h.indexOf("admin.")===0||p==="/admin"||p.indexOf("/admin/")===0');
   });
 
   it("ensures FacebookPixelTracker does not delay PageView with requestIdleCallback", () => {

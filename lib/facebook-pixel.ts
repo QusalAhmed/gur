@@ -17,6 +17,36 @@ declare global {
 }
 
 /**
+ * Returns true if the given host or pathname belongs to the Admin Panel
+ * (including `admin.*` subdomains where `pathname` is rewritten cleanly to `/`, `/orders`, etc.).
+ */
+export function isPixelAdminHostOrPath(
+  hostname?: string | null,
+  pathname?: string | null
+): boolean {
+  const host = String(
+    hostname ??
+    (typeof window !== "undefined" ? window.location?.hostname || "" : "")
+  )
+    .trim()
+    .toLowerCase()
+    .split(":")[0];
+
+  if (host === "admin" || host.startsWith("admin.")) {
+    return true;
+  }
+
+  const path = String(
+    pathname ??
+    (typeof window !== "undefined" ? window.location?.pathname || "" : "")
+  )
+    .trim()
+    .toLowerCase();
+
+  return path === "/admin" || path.startsWith("/admin/");
+}
+
+/**
  * Generates a unique UUID v4 string for event deduplication.
  */
 export const generateEventId = (): string => {
@@ -101,6 +131,7 @@ export const waitForClientFbpAndFbc = (
  */
 export const fbq = (...args: any[]) => {
   if (typeof window === "undefined") return;
+  if (isPixelAdminHostOrPath()) return;
 
   if (process.env.NODE_ENV !== "production") {
     console.log(
@@ -125,10 +156,7 @@ export const fbq = (...args: any[]) => {
  * Returns the eventId for CAPI deduplication.
  */
 export const trackPageView = (customEventId?: string): string | null => {
-  if (
-    typeof window !== "undefined" &&
-    window.location.pathname.startsWith("/admin")
-  ) {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
     return null;
   }
   const eventId = customEventId || generateEventId();
@@ -159,6 +187,9 @@ export const trackViewContent = ({
   currency = "BDT",
   eventId: customEventId,
 }: ViewContentParams): string => {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
+    return "";
+  }
   const safePrice = Number(price) || 0;
   const eventId = customEventId || generateEventId();
   const targetId = String(variantId || productId);
@@ -214,6 +245,9 @@ export const trackAddToCart = ({
   currency = "BDT",
   eventId: customEventId,
 }: AddToCartParams): string => {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
+    return "";
+  }
   const safePrice = Number(price) || 0;
   const safeQuantity = Number(quantity) || 1;
   const lineTotal = safePrice * safeQuantity;
@@ -307,6 +341,9 @@ export const trackInitiateCheckout = ({
   currency = "BDT",
   eventId: customEventId,
 }: InitiateCheckoutParams): { eventId: string | null; fired: boolean } => {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
+    return { eventId: null, fired: false };
+  }
   const safeItems = Array.isArray(items) ? items : [];
   if (safeItems.length === 0) return { eventId: null, fired: false };
 
@@ -406,6 +443,9 @@ export const trackContact = ({
   customData,
   eventId: customEventId,
 }: TrackContactParams): string => {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
+    return "";
+  }
   const eventId = customEventId || generateEventId();
 
   const payload: Record<string, any> = {
@@ -450,6 +490,7 @@ export async function sendCapiClientEvent(
   params: Record<string, any>
 ): Promise<void> {
   if (typeof window === "undefined") return;
+  if (isPixelAdminHostOrPath()) return;
 
   const payload = { eventType, ...params };
   const jsonStr = JSON.stringify(payload);
@@ -512,6 +553,9 @@ export const trackPurchase = ({
   eventId: customEventId,
   force = false,
 }: TrackPurchaseParams): { eventId: string; fired: boolean } => {
+  if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
+    return { eventId: "", fired: false };
+  }
   const orderRef =
     (orderNumber ? String(orderNumber).trim() : "") ||
     (orderId ? String(orderId).trim() : "");

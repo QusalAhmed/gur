@@ -6,6 +6,7 @@ import {
   trackPageView,
   waitForClientFbpAndFbc,
   sendCapiClientEvent,
+  isPixelAdminHostOrPath,
 } from "@/lib/facebook-pixel";
 
 function FacebookPixelTrackerInner() {
@@ -17,7 +18,8 @@ function FacebookPixelTrackerInner() {
       return;
     }
 
-    if (pathname.startsWith("/admin")) {
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+    if (isPixelAdminHostOrPath(hostname, pathname)) {
       lastTrackedPath.current = pathname;
       return;
     }
