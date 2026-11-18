@@ -13,6 +13,7 @@ import {
   Truck,
   AlertTriangle,
   MessageSquare,
+  MessageCircle,
   Info,
   Clock,
   ExternalLink,
@@ -78,6 +79,9 @@ function getNotificationIcon(type: NotificationType, data?: Record<string, any>)
     case "low_stock":
       return <AlertTriangle className="h-4 w-4 text-amber-500" />;
     case "customer_inquiry":
+      if (data?.platform === "facebook" && data?.alert_subtype === "facebook_message") {
+        return <MessageCircle className="h-4 w-4 text-indigo-500" />;
+      }
       if (data?.platform === "facebook") {
         return <MessageSquare className="h-4 w-4 text-sky-500" />;
       }
