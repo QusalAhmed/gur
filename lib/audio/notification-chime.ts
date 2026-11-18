@@ -1,11 +1,34 @@
 "use client";
 
+import type { AdminNotification, NotificationType } from "@/types/notification";
+
 const SOUND_STORAGE_KEY = "gur_admin_sound_muted";
 const COIN_DROP_AUDIO_SRC = "/audio/universfield-coin-drop.mp3";
+
+export type NotificationSoundVariant = "order" | "default";
 
 let sharedAudioCtx: AudioContext | null = null;
 let sharedAudioElement: HTMLAudioElement | null = null;
 let audioUnlocked = false;
+
+/**
+ * Determines which sound variant to play for a notification (or batch of newly arrived notifications).
+ * - All `order_created` notifications (new placed orders + incomplete order leads) -> "order" (coin drop MP3)
+ * - All other notifications (FB messages/comments, status changes, low stock, system) -> "default" (two-tone chime)
+ * When multiple notifications arrive in the same sync cycle, any `order_created` takes priority.
+ */
+export function resolveNotificationSoundVariant(
+  input:
+    | NotificationType
+    | Pick<AdminNotification, "type">
+    | Array<Pick<AdminNotification, "type">>
+): NotificationSoundVariant {
+  if (Array.isArray(input)) {
+    return input.some((n) => n.type === "order_created") ? "order" : "default";
+  }
+  const type = typeof input === "string" ? input : input.type;
+  return type === "order_created" ? "order" : "default";
+}
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -53,12 +76,13 @@ if (typeof window !== "undefined") {
     if (audioUnlocked) return;
     audioUnlocked = true;
 
-    // 1. Resume AudioContext if initialized
-    if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
-      sharedAudioCtx.resume().catch(() => {});
+    // 1. Initialize & resume AudioContext on first user interaction so synthesized chimes always play
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
     }
 
-    // 2. Warm up Audio element
+    // 2. Warm up HTML5 Audio element for order coin-drop MP3
     const audio = getAudioElement();
     if (audio) {
       audio.load();
@@ -75,7 +99,7 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Check if notification chime is muted
+ * Check if notification sound is muted
  */
 export function isNotificationSoundMuted(): boolean {
   if (typeof window === "undefined") return false;
@@ -87,7 +111,7 @@ export function isNotificationSoundMuted(): boolean {
 }
 
 /**
- * Toggle or set notification chime mute state
+ * Toggle or set notification sound mute state
  */
 export function setNotificationSoundMuted(muted: boolean): void {
   if (typeof window === "undefined") return;
@@ -96,13 +120,7 @@ export function setNotificationSoundMuted(muted: boolean): void {
   } catch {}
 }
 
-/**
- * Synthesizes a clean two-tone chime (E5 -> G#5) via Web Audio API
- */
-function playOscillatorFallback(): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
+function scheduleTwoToneChime(ctx: AudioContext): void {
   try {
     const now = ctx.currentTime;
 
@@ -145,29 +163,55 @@ function playOscillatorFallback(): void {
 }
 
 /**
- * Plays the notification sound (custom coin-drop MP3 first, falling back to Web Audio chime)
+ * Synthesizes a clean two-tone chime (E5 -> G#5) via Web Audio API
  */
-export function playNotificationChime(): void {
+function playSynthesizedChime(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === "suspended") {
+    ctx
+      .resume()
+      .then(() => scheduleTwoToneChime(ctx))
+      .catch(() => {});
+    return;
+  }
+
+  scheduleTwoToneChime(ctx);
+}
+
+/**
+ * Plays the appropriate notification sound:
+ * - `"order"`: plays `/audio/universfield-coin-drop.mp3` (falls back to synthesized chime if blocked)
+ * - `"default"`: plays the built-in two-tone synthesized chime (E5 -> G#5)
+ */
+export function playNotificationChime(variant: NotificationSoundVariant = "default"): void {
   if (typeof window === "undefined") return;
   if (isNotificationSoundMuted()) return;
 
-  const audio = getAudioElement();
-  if (audio) {
-    try {
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          // If HTML5 audio is blocked by browser autoplay policy, fall back to oscillator
-          console.debug("[Notification Chime] MP3 play blocked or failed, falling back to synthesized chime:", err);
-          playOscillatorFallback();
-        });
+  if (variant === "order") {
+    const audio = getAudioElement();
+    if (audio) {
+      try {
+        audio.currentTime = 0;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            // If HTML5 audio is blocked by browser autoplay policy, fall back to synthesized chime
+            console.debug(
+              "[Notification Chime] MP3 play blocked or failed, falling back to synthesized chime:",
+              err
+            );
+            playSynthesizedChime();
+          });
+          return;
+        }
         return;
+      } catch {
+        // Fall through to synthesized chime fallback
       }
-    } catch {
-      // Fall through to oscillator fallback
     }
   }
 
-  playOscillatorFallback();
+  playSynthesizedChime();
 }

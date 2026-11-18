@@ -11,7 +11,10 @@ import {
   clearReadNotificationsAction,
 } from "@/actions/notifications";
 import { AdminNotification } from "@/types/notification";
-import { playNotificationChime } from "@/lib/audio/notification-chime";
+import {
+  playNotificationChime,
+  resolveNotificationSoundVariant,
+} from "@/lib/audio/notification-chime";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -69,7 +72,7 @@ export function useNotifications() {
     }
 
     if (unseenUnread.length > 0) {
-      playNotificationChime();
+      playNotificationChime(resolveNotificationSoundVariant(unseenUnread));
       const newNotif = unseenUnread[0];
       toast(newNotif.title, {
         description: newNotif.message,
