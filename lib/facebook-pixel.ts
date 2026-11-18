@@ -37,12 +37,63 @@ export const getClientCookie = (name: string): string | null => {
 
 /**
  * Gets _fbp and _fbc from client cookies if available.
+ * Falls back to deriving _fbc from `?fbclid=` in the URL when fbevents.js has not written the cookie yet.
  */
 export const getClientFbpAndFbc = (): { fbp: string | null; fbc: string | null } => {
-  return {
-    fbp: getClientCookie("_fbp"),
-    fbc: getClientCookie("_fbc"),
-  };
+  const fbp = getClientCookie("_fbp");
+  let fbc = getClientCookie("_fbc");
+
+  if (!fbc && typeof window !== "undefined" && window.location?.search) {
+    try {
+      const fbclid = new URLSearchParams(window.location.search).get("fbclid")?.trim();
+      if (fbclid) {
+        fbc = `fb.1.${Date.now()}.${fbclid}`;
+      }
+    } catch {
+      // Safe fallback
+    }
+  }
+
+  return { fbp, fbc };
+};
+
+/**
+ * Waits briefly for Meta Pixel (`fbevents.js`) to initialize and set `_fbp` before dispatching
+ * the paired server CAPI PageView on a cold visit. Resolves immediately if `_fbp` already exists.
+ * Automatically flushes early if the page is hidden/unloaded so the beacon is never lost.
+ */
+export const waitForClientFbpAndFbc = (
+  maxWaitMs = 1500
+): Promise<{ fbp: string | null; fbc: string | null }> => {
+  const initial = getClientFbpAndFbc();
+  if (typeof window === "undefined" || initial.fbp || maxWaitMs <= 0) {
+    return Promise.resolve(initial);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let intervalId: number | null = null;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+      window.removeEventListener("pagehide", finish);
+      resolve(getClientFbpAndFbc());
+    };
+
+    window.addEventListener("pagehide", finish, { once: true });
+    const startedAt = Date.now();
+    intervalId = window.setInterval(() => {
+      const current = getClientFbpAndFbc();
+      if (current.fbp || Date.now() - startedAt >= maxWaitMs) {
+        finish();
+      }
+    }, 100);
+  });
 };
 
 /**

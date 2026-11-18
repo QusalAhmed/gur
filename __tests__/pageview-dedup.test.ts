@@ -35,7 +35,12 @@ vi.mock("@/lib/facebook-capi", async (importOriginal) => {
   };
 });
 
-import { trackPageView, sendCapiClientEvent } from "@/lib/facebook-pixel";
+import {
+  trackPageView,
+  sendCapiClientEvent,
+  getClientFbpAndFbc,
+  waitForClientFbpAndFbc,
+} from "@/lib/facebook-pixel";
 import { sendCapiPageViewInternal } from "@/lib/capi-service";
 import { POST as capiPostHandler } from "@/app/api/facebook-capi/route";
 
@@ -54,9 +59,49 @@ describe("PageView Browser & Server Event ID Deduplication", () => {
       "utf-8"
     );
 
+    expect(layoutSource).toContain('strategy="beforeInteractive"');
     expect(layoutSource).toContain("fbq.disablePushState = true;");
     expect(layoutSource).toContain("fbq.allowDuplicatePageViews = true;");
     expect(layoutSource).not.toMatch(/fbq\(\s*['"]track['"]\s*,\s*['"]PageView['"]\s*\)/);
+  });
+
+  it("derives _fbc from fbclid query parameter when _fbc cookie is not yet set", () => {
+    vi.stubGlobal("document", { cookie: "_fbp=fb.1.1700000000000.1234567890" });
+    vi.stubGlobal("window", {
+      location: { search: "?fbclid=IwAR_TestCase123" },
+    });
+
+    const { fbp, fbc } = getClientFbpAndFbc();
+    expect(fbp).toBe("fb.1.1700000000000.1234567890");
+    expect(fbc).toMatch(/^fb\.1\.\d+\.IwAR_TestCase123$/);
+  });
+
+  it("waits briefly for _fbp on cold visit and resolves as soon as _fbp cookie appears", async () => {
+    vi.useFakeTimers();
+    try {
+      const doc = { cookie: "" };
+      vi.stubGlobal("document", doc);
+      vi.stubGlobal("window", {
+        location: { search: "" },
+        setInterval: globalThis.setInterval,
+        clearInterval: globalThis.clearInterval,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      });
+
+      const pending = waitForClientFbpAndFbc(1500);
+
+      // Simulate fbevents.js setting _fbp after 200ms
+      setTimeout(() => {
+        doc.cookie = "_fbp=fb.1.1700000000000.9988776655";
+      }, 200);
+
+      await vi.advanceTimersByTimeAsync(250);
+      const res = await pending;
+      expect(res.fbp).toBe("fb.1.1700000000000.9988776655");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("sends the exact same eventId to browser fbq and server CAPI for PageView", async () => {

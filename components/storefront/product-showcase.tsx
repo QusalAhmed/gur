@@ -88,16 +88,6 @@ export function ProductShowcase({
     if (autoScrollToProduct || Boolean(featuredIdentifier)) {
       return productsStartIndex;
     }
-    if (
-      typeof window !== "undefined" &&
-      (window.location.pathname.startsWith("/products") ||
-        window.location.search.includes("product=") ||
-        window.location.search.includes("p=") ||
-        window.location.search.includes("id=") ||
-        window.location.hash === "#products")
-    ) {
-      return productsStartIndex;
-    }
     return 0;
   });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -175,14 +165,16 @@ export function ProductShowcase({
     if (hasAutoScrolledRef.current) return;
     if (isLoading || products.length === 0) return;
 
+    const searchParams =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     const shouldScroll =
       autoScrollToProduct ||
       Boolean(featuredIdentifier) ||
       (typeof window !== "undefined" &&
         (window.location.pathname.startsWith("/products") ||
-          window.location.search.includes("product=") ||
-          window.location.search.includes("p=") ||
-          window.location.search.includes("id=") ||
+          Boolean(searchParams?.has("product")) ||
+          Boolean(searchParams?.has("p")) ||
+          Boolean(searchParams?.has("id")) ||
           window.location.hash === "#products"));
 
     if (!shouldScroll) return;

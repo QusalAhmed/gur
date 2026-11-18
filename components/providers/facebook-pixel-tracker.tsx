@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { trackPageView, getClientFbpAndFbc, sendCapiClientEvent } from "@/lib/facebook-pixel";
+import {
+  trackPageView,
+  waitForClientFbpAndFbc,
+  sendCapiClientEvent,
+} from "@/lib/facebook-pixel";
 
 function FacebookPixelTrackerInner() {
   const pathname = usePathname();
@@ -28,12 +32,13 @@ function FacebookPixelTrackerInner() {
 
     const eventId = trackPageView();
     if (eventId) {
-      const { fbp, fbc } = getClientFbpAndFbc();
-      sendCapiClientEvent("PageView", {
-        eventId,
-        url: trackedUrl,
-        fbp,
-        fbc,
+      waitForClientFbpAndFbc(1500).then(({ fbp, fbc }) => {
+        sendCapiClientEvent("PageView", {
+          eventId,
+          url: trackedUrl,
+          fbp,
+          fbc,
+        });
       });
     }
   }, [pathname]);

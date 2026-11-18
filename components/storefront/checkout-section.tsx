@@ -494,7 +494,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                           variantId: item.variantId,
                         })
                       );
-                      trackAddToCart({
+                      const addToCartEventId = trackAddToCart({
                         productId: item.productId,
                         productName: item.productName,
                         variantId: item.variantId,
@@ -502,6 +502,19 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                         price: item.unitPrice,
                         quantity: newQty,
                         currency: "BDT",
+                      });
+                      const { fbp, fbc } = getClientFbpAndFbc();
+                      sendCapiClientEvent("AddToCart", {
+                        eventId: addToCartEventId,
+                        productId: item.productId,
+                        variantId: item.variantId,
+                        productName: item.productName,
+                        price: item.unitPrice,
+                        quantity: newQty,
+                        currency: "BDT",
+                        url: typeof window !== "undefined" ? window.location.href : undefined,
+                        fbp,
+                        fbc,
                       });
                     }}
                     className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
