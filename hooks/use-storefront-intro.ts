@@ -6,28 +6,21 @@ import {
   INTRO_BUTTON_LABELS,
   type IntroStepBlueprint,
   alignIntroTooltipArrow,
-  buildCheckoutIntroSteps,
   buildProductIntroSteps,
   clearIntroArrowAlignment,
   isElementVisibleInViewport,
-  markCheckoutIntroSeen,
   markProductIntroSeen,
   scrollSectionElementIntoView,
-  shouldShowCheckoutIntro,
   shouldShowProductIntro,
 } from "@/lib/storefront-intro";
-
-type TourKind = "product" | "checkout";
 
 interface UseStorefrontIntroProps {
   lang: StorefrontLang;
   activeSectionIndex: number;
   productsStartIndex: number;
-  checkoutSectionIndex: number;
   isLoading: boolean;
   hasProducts: boolean;
   isCartOpen: boolean;
-  hasCartItems: boolean;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -35,11 +28,9 @@ export function useStorefrontIntro({
   lang,
   activeSectionIndex,
   productsStartIndex,
-  checkoutSectionIndex,
   isLoading,
   hasProducts,
   isCartOpen,
-  hasCartItems,
   containerRef,
 }: UseStorefrontIntroProps) {
   const [isTourActive, setIsTourActive] = useState(false);
@@ -63,7 +54,6 @@ export function useStorefrontIntro({
   const plusAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const productInteractedRef = useRef(false);
-  const checkoutInteractedRef = useRef(false);
 
   const clearPlusAdvanceTimer = useCallback(() => {
     if (plusAdvanceTimerRef.current !== null) {
@@ -72,37 +62,23 @@ export function useStorefrontIntro({
     }
   }, []);
 
-  const hasCartItemsRef = useRef(hasCartItems);
+  const onProductSectionRef = useRef(false);
   useEffect(() => {
-    hasCartItemsRef.current = hasCartItems;
-  }, [hasCartItems]);
+    onProductSectionRef.current = activeSectionIndex === productsStartIndex;
+  }, [activeSectionIndex, productsStartIndex]);
 
-  const sectionStateRef = useRef({
-    onProductSection: false,
-    onCheckoutSection: false,
-  });
-  useEffect(() => {
-    sectionStateRef.current = {
-      onProductSection: activeSectionIndex === productsStartIndex,
-      onCheckoutSection: activeSectionIndex === checkoutSectionIndex,
-    };
-  }, [activeSectionIndex, productsStartIndex, checkoutSectionIndex]);
-
-  // Detect early user interaction on Product 1 controls or Checkout form (even during
-  // scroll transitions before activeSectionIndex commits) and handle interactive clicks
-  // while a tour is open.
+  // Detect early user interaction on Product 1 controls (even during scroll
+  // transitions before activeSectionIndex commits) and handle interactive clicks
+  // while the product tour is open.
   useEffect(() => {
     const handleInteraction = (e: Event) => {
       const target = e.target as Element | null;
       if (!target) return;
 
-      const { onProductSection, onCheckoutSection } = sectionStateRef.current;
-
-      // While a tour is active:
-      // 1) Clicking the highlighted + button adds to cart and advances or finishes the product tour.
-      // 2) Typing inside checkout inputs dismisses checkout tour so arrow/enter keys aren't captured.
+      // While the product tour is active, clicking the highlighted + button adds
+      // to cart and advances or finishes the tour.
       if (isTourActiveRef.current) {
-        if (e.type === "click" && onProductSection && activeTourRef.current) {
+        if (e.type === "click" && onProductSectionRef.current && activeTourRef.current) {
           const plusTarget = target.closest('#products [data-tour="product-plus-btn"]');
           if (plusTarget) {
             const tour = activeTourRef.current;
@@ -133,21 +109,6 @@ export function useStorefrontIntro({
               }, 260);
             }
           }
-        } else if (
-          e.type === "input" &&
-          onCheckoutSection &&
-          target.closest('#checkout [data-tour-zone="checkout-form"]')
-        ) {
-          checkoutInteractedRef.current = true;
-          markCheckoutIntroSeen();
-          clearPlusAdvanceTimer();
-          if (activeTourRef.current) {
-            const tourToClose = activeTourRef.current;
-            activeTourRef.current = null;
-            isTourActiveRef.current = false;
-            setIsTourActive(false);
-            tourToClose.exit(true).catch(() => {});
-          }
         }
         return;
       }
@@ -156,29 +117,18 @@ export function useStorefrontIntro({
         productInteractedRef.current = true;
         markProductIntroSeen();
       }
-
-      if (
-        target.closest(
-          '#checkout [data-tour-zone="checkout-form"], #checkout [data-tour="checkout-summary"] button'
-        )
-      ) {
-        checkoutInteractedRef.current = true;
-        markCheckoutIntroSeen();
-      }
     };
 
     document.addEventListener("pointerdown", handleInteraction, { capture: true, passive: true });
     document.addEventListener("click", handleInteraction, { capture: true, passive: true });
     document.addEventListener("focusin", handleInteraction, { capture: true, passive: true });
     document.addEventListener("change", handleInteraction, { capture: true, passive: true });
-    document.addEventListener("input", handleInteraction, { capture: true, passive: true });
 
     return () => {
       document.removeEventListener("pointerdown", handleInteraction, { capture: true });
       document.removeEventListener("click", handleInteraction, { capture: true });
       document.removeEventListener("focusin", handleInteraction, { capture: true });
       document.removeEventListener("change", handleInteraction, { capture: true });
-      document.removeEventListener("input", handleInteraction, { capture: true });
     };
   }, [clearPlusAdvanceTimer]);
 
@@ -203,24 +153,15 @@ export function useStorefrontIntro({
       return;
     }
 
-    let targetKind: TourKind | null = null;
     if (
-      activeSectionIndex === productsStartIndex &&
-      !isLoading &&
-      hasProducts &&
-      !productInteractedRef.current &&
-      shouldShowProductIntro()
+      activeSectionIndex !== productsStartIndex ||
+      isLoading ||
+      !hasProducts ||
+      productInteractedRef.current ||
+      !shouldShowProductIntro()
     ) {
-      targetKind = "product";
-    } else if (
-      activeSectionIndex === checkoutSectionIndex &&
-      !checkoutInteractedRef.current &&
-      shouldShowCheckoutIntro()
-    ) {
-      targetKind = "checkout";
+      return;
     }
-
-    if (!targetKind) return;
 
     let cancelled = false;
     let rafId: number | null = null;
@@ -228,42 +169,26 @@ export function useStorefrontIntro({
     let resizeCleanup: (() => void) | null = null;
     let observerCleanup: (() => void) | null = null;
 
-    const markKindSeen = (kind: TourKind) => {
-      if (kind === "product") {
-        markProductIntroSeen();
-      } else {
-        markCheckoutIntroSeen();
-      }
-    };
+    const resolveBlueprintSteps = (): IntroStepBlueprint[] => {
+      const hasVariantSelect = isElementVisibleInViewport(
+        document.querySelector('#products [data-tour="product-variant-select"]')
+      );
+      const isCombo = isElementVisibleInViewport(
+        document.querySelector('#products [data-tour="product-combo-buy"]')
+      );
 
-    const resolveBlueprintSteps = (kind: TourKind): IntroStepBlueprint[] => {
-      if (kind === "product") {
-        const hasVariantSelect = isElementVisibleInViewport(
-          document.querySelector('#products [data-tour="product-variant-select"]')
-        );
-        const isCombo = isElementVisibleInViewport(
-          document.querySelector('#products [data-tour="product-combo-buy"]')
-        );
-
-        return buildProductIntroSteps({
-          lang,
-          hasVariantSelect,
-          isCombo,
-        });
-      }
-
-      return buildCheckoutIntroSteps({
+      return buildProductIntroSteps({
         lang,
-        hasCartItems: hasCartItemsRef.current,
+        hasVariantSelect,
+        isCombo,
       });
     };
 
-    const launchTour = async (kind: TourKind) => {
+    const launchTour = async () => {
       if (cancelled) return;
-      if (kind === "product" && (productInteractedRef.current || !shouldShowProductIntro())) return;
-      if (kind === "checkout" && (checkoutInteractedRef.current || !shouldShowCheckoutIntro())) return;
+      if (productInteractedRef.current || !shouldShowProductIntro()) return;
 
-      const blueprints = resolveBlueprintSteps(kind);
+      const blueprints = resolveBlueprintSteps();
       const isCompactMobileViewport =
         typeof window !== "undefined" && window.innerWidth < 640;
 
@@ -275,7 +200,7 @@ export function useStorefrontIntro({
           let position = bp.position;
           if (isCompactMobileViewport) {
             const rect = el.getBoundingClientRect();
-            // For tall cards (e.g. order summary on phones), center inside the highlighted card
+            // For tall elements on phones, center inside the highlighted card
             // so the tooltip never gets pushed under the bottom MobileDock.
             if (rect.height > Math.max(290, window.innerHeight - 340)) {
               position = "floating";
@@ -296,8 +221,7 @@ export function useStorefrontIntro({
 
       const { default: introJs } = await import("intro.js");
       if (cancelled) return;
-      if (kind === "product" && (productInteractedRef.current || !shouldShowProductIntro())) return;
-      if (kind === "checkout" && (checkoutInteractedRef.current || !shouldShowCheckoutIntro())) return;
+      if (productInteractedRef.current || !shouldShowProductIntro()) return;
 
       // Ensure any prior tour is cleanly closed before starting
       if (activeTourRef.current) {
@@ -501,7 +425,7 @@ export function useStorefrontIntro({
           setIsTourActive(false);
         }
         if (!programmaticExitRef.current) {
-          markKindSeen(kind);
+          markProductIntroSeen();
         }
       };
 
@@ -553,7 +477,7 @@ export function useStorefrontIntro({
 
         if (!container) {
           settleTimer = setTimeout(() => {
-            void launchTour(targetKind!);
+            void launchTour();
           }, 400);
           return;
         }
@@ -565,7 +489,7 @@ export function useStorefrontIntro({
 
         if (distance <= 6 || elapsed >= 850) {
           settleTimer = setTimeout(() => {
-            void launchTour(targetKind!);
+            void launchTour();
           }, 580);
           return;
         }
@@ -606,7 +530,6 @@ export function useStorefrontIntro({
     lang,
     activeSectionIndex,
     productsStartIndex,
-    checkoutSectionIndex,
     isLoading,
     hasProducts,
     isCartOpen,

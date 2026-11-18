@@ -12,6 +12,7 @@ import { WhyBuyFromUs } from "./why-buy-from-us";
 import { ContactSection } from "./contact-section";
 import { MobileDock } from "./mobile-dock";
 import { trackContact } from "@/lib/facebook-pixel";
+import { claritySetTag } from "@/lib/clarity";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartTotalQuantity,
@@ -109,11 +110,9 @@ export function ProductShowcase({
     lang,
     activeSectionIndex,
     productsStartIndex,
-    checkoutSectionIndex,
     isLoading,
     hasProducts: products.length > 0,
     isCartOpen,
-    hasCartItems: displayCartQuantity > 0,
     containerRef,
   });
 
@@ -336,7 +335,11 @@ export function ProductShowcase({
   };
 
   const toggleLanguage = () => {
-    setLang((prev) => (prev === "bn" ? "en" : "bn"));
+    setLang((prev) => {
+      const next = prev === "bn" ? "en" : "bn";
+      claritySetTag("lang", next);
+      return next;
+    });
   };
 
   return (

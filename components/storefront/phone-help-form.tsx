@@ -249,6 +249,7 @@ export function PhoneHelpForm({
                     <input
                       id="assistedPhoneInput"
                       type="tel"
+                      data-clarity-mask="true"
                       value={phone}
                       onChange={(e) => {
                         setPhone(e.target.value);
@@ -358,7 +359,10 @@ export function PhoneHelpForm({
                           <span className="text-stone-500 dark:text-stone-400 font-semibold">
                             {t.phoneHelpModalNumberLabel}
                           </span>
-                          <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base">
+                          <span
+                            data-clarity-mask="true"
+                            className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base"
+                          >
                             {submittedData.phone}
                           </span>
                         </div>

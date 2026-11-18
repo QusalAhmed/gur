@@ -57,6 +57,7 @@ export interface SeoSettingsFormState {
   seoYoutubeUrl: string;
   seoGoogleVerification: string;
   seoGa4MeasurementId: string;
+  seoClarityProjectId: string;
   seoAllowIndexing: boolean;
 }
 
@@ -621,15 +622,15 @@ export function SeoSettingsTab({
         </CardContent>
       </Card>
 
-      {/* 5. Verification, GA4 Analytics & Search Indexing */}
+      {/* 5. Verification, Analytics (GA4 & Clarity) & Search Indexing */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-amber-600" />
-            Search Console, GA4 Analytics &amp; Indexing
+            Search Console, Analytics (GA4 &amp; Clarity) &amp; Indexing
           </CardTitle>
           <CardDescription>
-            Verify site ownership in Google Search Console, connect Google Analytics 4, and control search engine crawling
+            Verify site ownership in Google Search Console, connect Google Analytics 4 &amp; Microsoft Clarity, and control search engine crawling
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -663,6 +664,22 @@ export function SeoSettingsTab({
               />
               <p className="text-[11px] text-muted-foreground">
                 Leave empty to disable GA4 script injection. Only valid <code>G-...</code> or <code>GT-...</code> IDs are injected.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="seo-clarity-project-id" className="text-xs font-semibold">
+                Microsoft Clarity Project ID
+              </label>
+              <Input
+                id="seo-clarity-project-id"
+                value={state.seoClarityProjectId}
+                onChange={(e) => onChange("seoClarityProjectId", e.target.value)}
+                placeholder="e.g. m9k8j7h6g5"
+                className="font-mono text-xs sm:max-w-md"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Loads heatmaps &amp; session recordings on the production storefront only (excludes <code>/admin</code> and <code>admin.*</code>). Leave empty to use <code>NEXT_PUBLIC_CLARITY_PROJECT_ID</code> env fallback or disable Clarity.
               </p>
             </div>
           </div>

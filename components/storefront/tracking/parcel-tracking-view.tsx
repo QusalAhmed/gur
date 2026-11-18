@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type { ParcelTrackingData } from "@/types/tracking";
 import { getParcelTrackingAction } from "@/actions/tracking";
 import { OrderCartDetailsCard } from "./order-cart-details-card";
+import { claritySetTag } from "@/lib/clarity";
 
 const HOTLINE_NUMBER = "01843557389";
 const HOTLINE_RAW = HOTLINE_NUMBER.replace(/[^0-9]/g, "");
@@ -219,7 +220,10 @@ export function ParcelTrackingView({
           {/* Bilingual Toggle */}
           <div className="flex items-center rounded-full bg-amber-200/60 dark:bg-stone-800 p-0.5 border border-amber-300/80 dark:border-stone-700">
             <button
-              onClick={() => setLang("bn")}
+              onClick={() => {
+                setLang("bn");
+                claritySetTag("lang", "bn");
+              }}
               className={cn(
                 "px-2.5 py-0.5 rounded-full text-xs font-bold transition-all",
                 lang === "bn"
@@ -230,7 +234,10 @@ export function ParcelTrackingView({
               বাংলা
             </button>
             <button
-              onClick={() => setLang("en")}
+              onClick={() => {
+                setLang("en");
+                claritySetTag("lang", "en");
+              }}
               className={cn(
                 "px-2.5 py-0.5 rounded-full text-xs font-bold transition-all",
                 lang === "en"
@@ -593,7 +600,10 @@ export function ParcelTrackingView({
                   <span className="text-stone-500 font-medium">
                     {lang === "bn" ? "প্রাপকের নাম:" : "Recipient:"}
                   </span>
-                  <span className="font-bold text-stone-900 dark:text-stone-100 font-mono">
+                  <span
+                    data-clarity-mask="true"
+                    className="font-bold text-stone-900 dark:text-stone-100 font-mono"
+                  >
                     {data.maskedCustomerName}
                   </span>
                 </div>
@@ -602,7 +612,10 @@ export function ParcelTrackingView({
                   <span className="text-stone-500 font-medium">
                     {lang === "bn" ? "মোবাইল নম্বর:" : "Contact Phone:"}
                   </span>
-                  <span className="font-bold text-stone-900 dark:text-stone-100 font-mono">
+                  <span
+                    data-clarity-mask="true"
+                    className="font-bold text-stone-900 dark:text-stone-100 font-mono"
+                  >
                     {data.maskedCustomerPhone}
                   </span>
                 </div>
@@ -611,7 +624,10 @@ export function ParcelTrackingView({
                   <span className="text-stone-500 font-medium">
                     {lang === "bn" ? "ডেলিভারি জেলা:" : "District / City:"}
                   </span>
-                  <span className="font-bold text-stone-900 dark:text-stone-100">
+                  <span
+                    data-clarity-mask="true"
+                    className="font-bold text-stone-900 dark:text-stone-100"
+                  >
                     {data.destinationDistrict}
                     {data.destinationDivision && ` (${data.destinationDivision})`}
                   </span>

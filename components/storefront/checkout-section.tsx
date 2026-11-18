@@ -69,6 +69,11 @@ import {
   getClientFbpAndFbc,
   sendCapiClientEvent,
 } from "@/lib/facebook-pixel";
+import {
+  claritySetTag,
+  clarityTrackEvent,
+  clarityUpgrade,
+} from "@/lib/clarity";
 
 interface AutoSyncOrderWatcherProps {
   form: any;
@@ -258,6 +263,12 @@ export function CheckoutSection({
       clearDraftRef.current?.();
       dispatch(clearCart());
       resetInitiateCheckoutTracking();
+
+      // Tag & upgrade conversion session in Clarity (no PII)
+      claritySetTag("delivery_zone", variables.deliveryZone || deliveryZone);
+      claritySetTag("order_placed", "true");
+      clarityTrackEvent("purchase");
+      clarityUpgrade("purchase");
 
       const successMsg = lang === "bn"
         ? `আপনার অর্ডারটি ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে! (অর্ডার নং: ${result.orderNumber})`
@@ -685,10 +696,7 @@ return (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
         {/* Left Column (5 Cols): Either Selected Items Table OR Direct Phone Order Assistance */}
         {displayCartItems.length > 0 ? (
-          <div
-            data-tour="checkout-summary"
-            className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between"
-          >
+          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-stone-200 dark:border-stone-800">
                 <div className="flex items-center gap-2">
@@ -789,10 +797,7 @@ return (
           </div>
         ) : (
           /* When 0 products selected: Helpful direct order prompt */
-          <div
-            data-tour="checkout-summary"
-            className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between"
-          >
+          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-stone-200 dark:border-stone-800">
                 <ShoppingBag className="w-5 h-5 text-amber-600" />
@@ -882,7 +887,6 @@ return (
           )}
 
           <form
-            data-tour-zone="checkout-form"
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -898,7 +902,7 @@ return (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <form.Field name="customerName">
                 {(field) => (
-                  <div data-tour="checkout-name">
+                  <div>
                     <label
                       htmlFor="customerName"
                       className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -910,6 +914,7 @@ return (
                       id="customerName"
                       name="customerName"
                       type="text"
+                      data-clarity-mask="true"
                       value={field.state.value}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -941,7 +946,7 @@ return (
                 {(field) => {
                   const hasError = Boolean(field.state.meta.errors && field.state.meta.errors.length > 0);
                   return (
-                    <div data-tour="checkout-phone">
+                    <div>
                       <label
                         htmlFor="customerPhone"
                         className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -953,6 +958,7 @@ return (
                         id="customerPhone"
                         name="customerPhone"
                         type="tel"
+                        data-clarity-mask="true"
                         aria-invalid={hasError ? "true" : undefined}
                         value={field.state.value}
                         onChange={(e) => {
@@ -980,7 +986,7 @@ return (
             </div>
 
             {/* Delivery Zone Selection Pills */}
-            <div data-tour="checkout-zone">
+            <div>
               <label className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-2 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
                 <span>{lang === "bn" ? "ডেলিভারি এলাকা" : "Delivery Area"}</span>
@@ -990,7 +996,10 @@ return (
                   type="button"
                   role="radio"
                   aria-checked={deliveryZone === "inside_dhaka"}
-                  onClick={() => setDeliveryZone("inside_dhaka")}
+                  onClick={() => {
+                    setDeliveryZone("inside_dhaka");
+                    claritySetTag("delivery_zone", "inside_dhaka");
+                  }}
                   className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
                     ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
                     : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
@@ -1017,7 +1026,10 @@ return (
                   type="button"
                   role="radio"
                   aria-checked={deliveryZone === "outside_dhaka"}
-                  onClick={() => setDeliveryZone("outside_dhaka")}
+                  onClick={() => {
+                    setDeliveryZone("outside_dhaka");
+                    claritySetTag("delivery_zone", "outside_dhaka");
+                  }}
                   className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
                     ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
                     : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
@@ -1045,7 +1057,7 @@ return (
             {/* Address Line */}
             <form.Field name="addressLine">
               {(field) => (
-                <div data-tour="checkout-address">
+                <div>
                   <label
                     htmlFor="addressLine"
                     className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
@@ -1056,6 +1068,7 @@ return (
                   <textarea
                     id="addressLine"
                     rows={2}
+                    data-clarity-mask="true"
                     value={field.state.value}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1094,6 +1107,7 @@ return (
                   <input
                     id="customerNote"
                     type="text"
+                    data-clarity-mask="true"
                     value={field.state.value}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1135,7 +1149,6 @@ return (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     type="submit"
-                    data-tour="checkout-submit"
                     disabled={isProcessing}
                     className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-85 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
                   >

@@ -3,17 +3,13 @@ import {
   INTRO_BUTTON_LABELS,
   INTRO_STORAGE_KEYS,
   alignIntroTooltipArrow,
-  buildCheckoutIntroSteps,
   buildProductIntroSteps,
   clearIntroArrowAlignment,
   computeIntroArrowOffset,
-  hasSeenCheckoutIntro,
   hasSeenProductIntro,
   isReturningCustomer,
-  markCheckoutIntroSeen,
   markProductIntroSeen,
   markReturningCustomer,
-  shouldShowCheckoutIntro,
   shouldShowProductIntro,
 } from "@/lib/storefront-intro";
 
@@ -49,52 +45,38 @@ describe("Storefront Intro Onboarding Logic", () => {
   it("handles SSR safely when window is undefined", () => {
     expect(isReturningCustomer()).toBe(false);
     expect(hasSeenProductIntro()).toBe(false);
-    expect(hasSeenCheckoutIntro()).toBe(false);
     expect(shouldShowProductIntro()).toBe(true);
-    expect(shouldShowCheckoutIntro()).toBe(true);
 
     // Calling writers in SSR should be no-ops without throwing
     expect(() => markProductIntroSeen()).not.toThrow();
-    expect(() => markCheckoutIntroSeen()).not.toThrow();
     expect(() => markReturningCustomer()).not.toThrow();
     expect(() => alignIntroTooltipArrow(null)).not.toThrow();
     expect(() => clearIntroArrowAlignment()).not.toThrow();
   });
 
-  it("tracks product and checkout tours independently for new visitors", () => {
+  it("tracks product tour visibility for new visitors", () => {
     const localStorage = createMemoryStorage();
     vi.stubGlobal("window", { localStorage });
 
     expect(shouldShowProductIntro()).toBe(true);
-    expect(shouldShowCheckoutIntro()).toBe(true);
 
-    // Completing or skipping product intro only suppresses product tour
+    // Completing or skipping product intro suppresses future product tours
     markProductIntroSeen();
     expect(localStorage.getItem(INTRO_STORAGE_KEYS.productSeen)).toBe("1");
     expect(hasSeenProductIntro()).toBe(true);
     expect(shouldShowProductIntro()).toBe(false);
-    expect(hasSeenCheckoutIntro()).toBe(false);
-    expect(shouldShowCheckoutIntro()).toBe(true);
-
-    // Reaching & finishing checkout tour suppresses checkout tour too
-    markCheckoutIntroSeen();
-    expect(localStorage.getItem(INTRO_STORAGE_KEYS.checkoutSeen)).toBe("1");
-    expect(hasSeenCheckoutIntro()).toBe(true);
-    expect(shouldShowCheckoutIntro()).toBe(false);
   });
 
-  it("suppresses both onboarding tours once visitor is marked as returning customer", () => {
+  it("suppresses product onboarding tour once visitor is marked as returning customer", () => {
     const localStorage = createMemoryStorage();
     vi.stubGlobal("window", { localStorage });
 
     expect(shouldShowProductIntro()).toBe(true);
-    expect(shouldShowCheckoutIntro()).toBe(true);
 
     markReturningCustomer();
     expect(localStorage.getItem(INTRO_STORAGE_KEYS.returningCustomer)).toBe("1");
     expect(isReturningCustomer()).toBe(true);
     expect(shouldShowProductIntro()).toBe(false);
-    expect(shouldShowCheckoutIntro()).toBe(false);
   });
 
   it("fails gracefully if localStorage throws in restricted browsing modes", () => {
@@ -109,10 +91,8 @@ describe("Storefront Intro Onboarding Logic", () => {
     vi.stubGlobal("window", { localStorage: brokenStorage });
 
     expect(() => markProductIntroSeen()).not.toThrow();
-    expect(() => markCheckoutIntroSeen()).not.toThrow();
     expect(() => markReturningCustomer()).not.toThrow();
     expect(shouldShowProductIntro()).toBe(true);
-    expect(shouldShowCheckoutIntro()).toBe(true);
   });
 
   it("builds product tour steps with Pack Size and focused Plus CTA without any cart/checkout CTA step", () => {
@@ -170,45 +150,6 @@ describe("Storefront Intro Onboarding Logic", () => {
     ]);
     expect(comboSteps[0].title).toContain("কম্বো");
     expect(comboSteps[0].highlightClass).toBeUndefined();
-  });
-
-  it("builds detailed 6-step checkout tour adapting step 1 to cart state in both languages", () => {
-    const bnWithCart = buildCheckoutIntroSteps({
-      lang: "bn",
-      hasCartItems: true,
-    });
-    const bnEmptyCart = buildCheckoutIntroSteps({
-      lang: "bn",
-      hasCartItems: false,
-    });
-
-    expect(bnWithCart.map((s) => s.selector)).toEqual([
-      '#checkout [data-tour="checkout-summary"]',
-      '#checkout [data-tour="checkout-name"]',
-      '#checkout [data-tour="checkout-phone"]',
-      '#checkout [data-tour="checkout-zone"]',
-      '#checkout [data-tour="checkout-address"]',
-      '#checkout [data-tour="checkout-submit"]',
-    ]);
-    expect(bnWithCart[0].title).toContain("নির্বাচিত পণ্য");
-    expect(bnEmptyCart[0].title).toContain("সরাসরি ফোন অর্ডার");
-    expect(bnEmptyCart[0].intro).toContain("গুড় দেখতে উপরে যান");
-    expect(bnWithCart[2].intro).toContain("017XXXXXXXX");
-    expect(bnWithCart[3].intro).toContain("৳৭০");
-    expect(bnWithCart[3].intro).toContain("৳১৩০");
-
-    const enWithCart = buildCheckoutIntroSteps({
-      lang: "en",
-      hasCartItems: true,
-    });
-    const enEmptyCart = buildCheckoutIntroSteps({
-      lang: "en",
-      hasCartItems: false,
-    });
-    expect(enWithCart[0].title).toContain("Review Selected Items");
-    expect(enEmptyCart[0].title).toContain("Direct Phone Order");
-    expect(enWithCart[3].intro).toContain("৳70");
-    expect(enWithCart[3].intro).toContain("৳130");
   });
 
   it("provides localized button labels for bn and en", () => {

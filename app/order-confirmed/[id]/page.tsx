@@ -524,13 +524,27 @@ function OrderConfirmedContent() {
                 <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-1.5 max-w-md mx-auto leading-relaxed">
                   {order?.customer ? (
                     <>
-                      প্রিয় <span className="font-bold text-stone-900 dark:text-stone-100">{order.customer}</span>,{" "}
+                      প্রিয়{" "}
+                      <span
+                        data-clarity-mask="true"
+                        className="font-bold text-stone-900 dark:text-stone-100"
+                      >
+                        {order.customer}
+                      </span>
+                      ,{" "}
                     </>
                   ) : null}
                   আমাদের প্রতিনিধি অল্প কিছুক্ষণের মধ্যেই আপনার নম্বরে
                   {order?.phone ? (
                     <>
-                      {" "}(<span className="font-mono font-bold text-stone-900 dark:text-stone-100">{order.phone}</span>){" "}
+                      {" "}(
+                      <span
+                        data-clarity-mask="true"
+                        className="font-mono font-bold text-stone-900 dark:text-stone-100"
+                      >
+                        {order.phone}
+                      </span>
+                      ){" "}
                     </>
                   ) : (
                     " "
@@ -817,7 +831,10 @@ function OrderConfirmedContent() {
                     <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
                       প্রাপকের নাম
                     </span>
-                    <span className="font-bold text-stone-900 dark:text-stone-100 truncate block">
+                    <span
+                      data-clarity-mask="true"
+                      className="font-bold text-stone-900 dark:text-stone-100 truncate block"
+                    >
                       {recipientName || "সম্মানিত গ্রাহক"}
                     </span>
                   </div>
@@ -830,7 +847,10 @@ function OrderConfirmedContent() {
                     <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
                       যোগাযোগের নম্বর
                     </span>
-                    <span className="font-mono font-bold text-stone-900 dark:text-stone-100 block">
+                    <span
+                      data-clarity-mask="true"
+                      className="font-mono font-bold text-stone-900 dark:text-stone-100 block"
+                    >
                       {primaryPhone || "নম্বর প্রদান করা হয়নি"}
                     </span>
                   </div>
@@ -845,7 +865,10 @@ function OrderConfirmedContent() {
                     <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
                       বিকল্প মোবাইল নম্বর
                     </span>
-                    <span className="font-mono font-bold text-stone-900 dark:text-stone-100 block">
+                    <span
+                      data-clarity-mask="true"
+                      className="font-mono font-bold text-stone-900 dark:text-stone-100 block"
+                    >
                       {altPhone}
                     </span>
                   </div>
@@ -860,7 +883,10 @@ function OrderConfirmedContent() {
                     <span className="block text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-medium">
                       সম্পূর্ণ ডেলিভারি ঠিকানা
                     </span>
-                    <p className="font-bold text-stone-900 dark:text-stone-100 leading-snug">
+                    <p
+                      data-clarity-mask="true"
+                      className="font-bold text-stone-900 dark:text-stone-100 leading-snug"
+                    >
                       {formattedAddress || "ঠিকানা ফোনে নিশ্চিত করা হবে"}
                     </p>
                   </div>
@@ -876,7 +902,10 @@ function OrderConfirmedContent() {
                       <span className="block text-[11px] font-bold text-amber-950 dark:text-amber-200">
                         আপনার বিশেষ নির্দেশনা (নোট):
                       </span>
-                      <p className="text-stone-800 dark:text-stone-200 leading-relaxed italic">
+                      <p
+                        data-clarity-mask="true"
+                        className="text-stone-800 dark:text-stone-200 leading-relaxed italic"
+                      >
                         &ldquo;{order.customer_note.trim()}&rdquo;
                       </p>
                     </div>

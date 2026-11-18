@@ -167,6 +167,7 @@ export default function SettingsPage() {
     seoYoutubeUrl: "",
     seoGoogleVerification: "",
     seoGa4MeasurementId: "",
+    seoClarityProjectId: "",
     seoAllowIndexing: true,
   });
 
@@ -362,6 +363,8 @@ export default function SettingsPage() {
             readStr("seo.google_verification") ?? prev.seoGoogleVerification,
           seoGa4MeasurementId:
             readStr("seo.ga4_measurement_id") ?? prev.seoGa4MeasurementId,
+          seoClarityProjectId:
+            readStr("seo.clarity_project_id") ?? prev.seoClarityProjectId,
           seoAllowIndexing:
             typeof data["seo.allow_indexing"] === "boolean"
               ? data["seo.allow_indexing"]
@@ -461,6 +464,7 @@ export default function SettingsPage() {
         "seo.youtube_url": seoState.seoYoutubeUrl.trim(),
         "seo.google_verification": seoState.seoGoogleVerification.trim(),
         "seo.ga4_measurement_id": seoState.seoGa4MeasurementId.trim().toUpperCase(),
+        "seo.clarity_project_id": seoState.seoClarityProjectId.trim(),
         "seo.allow_indexing": seoState.seoAllowIndexing,
       };
 

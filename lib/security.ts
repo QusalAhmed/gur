@@ -181,7 +181,11 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://www.google-analytics.com",
       "https://*.google-analytics.com",
       "https://www.googletagmanager.com",
-      ...(safePixelId ? ["https://www.facebook.com"] : []),
+      "https://*.clarity.ms",
+      "https://c.bing.com",
+      ...(safePixelId
+        ? ["https://www.facebook.com", "https://connect.facebook.net"]
+        : []),
       "https://*.supabase.co",
       ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
         ? [`https://${imagekitHost}`]
@@ -202,6 +206,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://analytics.google.com",
       "https://*.analytics.googletagmanager.com",
       "https://www.googletagmanager.com",
+      "https://*.clarity.ms",
+      "https://c.bing.com",
       "https://va.vercel-scripts.com",
       "https://vitals.vercel-insights.com",
       ...metaConnectOrigins,
@@ -218,6 +224,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
     "https://www.googletagmanager.com",
+    "https://www.clarity.ms",
+    "https://scripts.clarity.ms",
     "https://va.vercel-scripts.com",
     ...(safePixelId ? ["https://connect.facebook.net"] : []),
   ];

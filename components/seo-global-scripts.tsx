@@ -4,6 +4,7 @@ import {
   buildOrganizationJsonLd,
   getCachedSeoSettings,
 } from "@/lib/seo-settings";
+import { MicrosoftClarity } from "@/components/providers/microsoft-clarity";
 
 export async function SeoGlobalScripts() {
   "use cache";
@@ -46,6 +47,9 @@ export async function SeoGlobalScripts() {
             }}
           />
         </>
+      )}
+      {seo.clarityProjectId && (
+        <MicrosoftClarity projectId={seo.clarityProjectId} />
       )}
     </>
   );

@@ -395,9 +395,14 @@ describe("Security Sanitizers & Constant-Time Token Verification", () => {
     const connectDirective = csp
       .split("; ")
       .find((part) => part.startsWith("connect-src "));
+    const imgDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("img-src "));
     expect(connectDirective).toBeDefined();
     expect(connectDirective).toContain("https://www.facebook.com");
     expect(connectDirective).toContain("https://connect.facebook.net");
+    expect(imgDirective).toContain("https://www.facebook.com");
+    expect(imgDirective).toContain("https://connect.facebook.net");
     expect(connectDirective).toContain("https://mpc-prod-27-s6uit34pua-uk.a.run.app");
     expect(connectDirective).toContain(
       "https://0l-a08c0393bf534f3994bcafe6e0dc91b4.ecs.us-west-2.on.aws"
@@ -439,6 +444,29 @@ describe("Security Sanitizers & Constant-Time Token Verification", () => {
     expect(connectDirective).toBeDefined();
     expect(connectDirective).toContain("https://va.vercel-scripts.com");
     expect(connectDirective).toContain("https://vitals.vercel-insights.com");
+  });
+
+  it("permits Microsoft Clarity endpoints in script-src, connect-src, and img-src", () => {
+    const csp = buildCspHeader({ nodeEnv: "production" });
+
+    const scriptDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("script-src "));
+    const connectDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("connect-src "));
+    const imgDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("img-src "));
+
+    expect(scriptDirective).toContain("https://www.clarity.ms");
+    expect(scriptDirective).toContain("https://scripts.clarity.ms");
+
+    expect(connectDirective).toContain("https://*.clarity.ms");
+    expect(connectDirective).toContain("https://c.bing.com");
+
+    expect(imgDirective).toContain("https://*.clarity.ms");
+    expect(imgDirective).toContain("https://c.bing.com");
   });
 });
 

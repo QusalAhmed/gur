@@ -82,11 +82,19 @@ export function OrderSuccessView({
       <div className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-left mb-4 sm:mb-5 space-y-2">
         <div className="flex justify-between items-center text-xs sm:text-base text-stone-600 dark:text-stone-400">
           <span>{t.customerNameLabel}</span>
-          <span className="font-semibold text-stone-900 dark:text-stone-100">{customerName}</span>
+          <span
+            data-clarity-mask="true"
+            className="font-semibold text-stone-900 dark:text-stone-100"
+          >
+            {customerName}
+          </span>
         </div>
         <div className="flex justify-between items-center text-xs sm:text-base text-stone-600 dark:text-stone-400">
           <span>{lang === "bn" ? "মোবাইল নম্বর:" : "Phone:"}</span>
-          <span className="font-mono font-semibold text-stone-900 dark:text-stone-100">
+          <span
+            data-clarity-mask="true"
+            className="font-mono font-semibold text-stone-900 dark:text-stone-100"
+          >
             {phone}
           </span>
         </div>

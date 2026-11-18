@@ -43,6 +43,7 @@ export interface SiteSettingsMap {
   "seo.youtube_url"?: string;
   "seo.google_verification"?: string;
   "seo.ga4_measurement_id"?: string;
+  "seo.clarity_project_id"?: string;
   "seo.allow_indexing"?: boolean;
 
   // Checkout & Orders
@@ -164,6 +165,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "seo.youtube_url",
   "seo.google_verification",
   "seo.ga4_measurement_id",
+  "seo.clarity_project_id",
   "seo.allow_indexing",
   "checkout.cod_enabled",
   "checkout.guest_checkout_enabled",

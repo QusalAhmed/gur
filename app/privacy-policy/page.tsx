@@ -171,7 +171,7 @@ export default async function PrivacyPolicyPage() {
                   <strong className="text-stone-900 dark:text-stone-100">অর্ডারের বিবরণ:</strong> নির্বাচিত পণ্যের নাম, পরিমাণ, ও অর্ডারের তারিখ।
                 </li>
                 <li>
-                  <strong className="text-stone-900 dark:text-stone-100">প্রযুক্তিগত তথ্য ও মেটা পিক্সেল:</strong> সাইটের কার্যকারিতা পরীক্ষা এবং প্রাসঙ্গিক বিজ্ঞাপন প্রদর্শনের জন্য আইপি অ্যাড্রেস, ব্রাউজার ও ডিভাইসের ধরন এবং ফেসবুক মেটা পিক্সেল ইভেন্ট ডেটা (যেমন: পেজভিউ, কার্ট আপডেট)।
+                  <strong className="text-stone-900 dark:text-stone-100">প্রযুক্তিগত তথ্য, মেটা পিক্সেল ও Microsoft Clarity:</strong> সাইটের কার্যকারিতা পরীক্ষা, ব্যবহারকারীর অভিজ্ঞতা উন্নত করা এবং প্রাসঙ্গিক বিজ্ঞাপন প্রদর্শনের জন্য আইপি অ্যাড্রেস, ব্রাউজার ও ডিভাইসের ধরন, ফেসবুক মেটা পিক্সেল ইভেন্ট ডেটা (যেমন: পেজভিউ, কার্ট আপডেট) এবং Microsoft Clarity-এর মাধ্যমে বেনামী আচরণগত অ্যানালিটিক্স (হিটম্যাপ, স্ক্রল ও ক্লিক প্যাটার্ন) সংগ্রহ করা হতে পারে। Clarity সেশনে আপনার নাম, মোবাইল নম্বর ও ঠিকানার মতো ব্যক্তিগত তথ্য স্বয়ংক্রিয়ভাবে মাস্ক (আড়াল) করা থাকে।
                 </li>
               </ul>
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-stone-800/60 border border-amber-200/80 dark:border-stone-700 text-amber-900 dark:text-amber-200 text-xs">
@@ -213,7 +213,16 @@ export default async function PrivacyPolicyPage() {
                 আমরা কোনো অবস্থাতেই আপনার ব্যক্তিগত তথ্য কোনো তৃতীয় পক্ষের কাছে বিক্রয়, ভাড়া বা অপব্যবহার করি না। তবে ডেলিভারি কার্যক্রম সম্পাদনের স্বার্থে শুধুমাত্র অনুমোদিত কুরিয়ার সার্ভিস (যেমন: Steadfast Courier, Pathao Courier) এর সাথে আপনার নাম, মোবাইল নম্বর ও ডেলিভারি ঠিকানা শেয়ার করা হয়।
               </p>
               <p>
-                এছাড়াও বিজ্ঞাপনের মানোন্নয়নের জন্য মেটা (Facebook) প্ল্যাটফর্মের সিকিউর কনভার্সন এপিআই (CAPI) এর সাথে স্ট্যান্ডার্ড ই-কমার্স ইভেন্ট ডেটা সংরক্ষিত উপায়ে পরিমাপ করা হয়।
+                এছাড়াও বিজ্ঞাপনের মানোন্নয়নের জন্য মেটা (Facebook) প্ল্যাটফর্মের সিকিউর কনভার্সন এপিআই (CAPI) এর সাথে স্ট্যান্ডার্ড ই-কমার্স ইভেন্ট ডেটা সংরক্ষিত উপায়ে পরিমাপ করা হয়, এবং ওয়েবসাইটের ব্যবহারযোগ্যতা ও মানোন্নয়নের জন্য আমরা <strong>Microsoft Clarity</strong> ব্যবহার করি (মাইক্রোসফট কীভাবে এই ডেটা সংগ্রহ ও ব্যবহার করে তা জানতে{" "}
+                <a
+                  href="https://www.microsoft.com/privacy/privacystatement"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-800 dark:text-amber-300 underline font-semibold"
+                >
+                  Microsoft Privacy Statement
+                </a>{" "}
+                দেখুন)।
               </p>
             </div>
           </section>

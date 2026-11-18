@@ -2,7 +2,6 @@ import type { StorefrontLang } from "@/lib/storefront-i18n";
 
 export const INTRO_STORAGE_KEYS = {
   productSeen: "gur_intro_product_seen_v1",
-  checkoutSeen: "gur_intro_checkout_seen_v1",
   returningCustomer: "gur_returning_customer_v1",
 } as const;
 
@@ -71,20 +70,8 @@ export function markProductIntroSeen(): void {
   writeStorageFlag(INTRO_STORAGE_KEYS.productSeen);
 }
 
-export function hasSeenCheckoutIntro(): boolean {
-  return readStorageFlag(INTRO_STORAGE_KEYS.checkoutSeen);
-}
-
-export function markCheckoutIntroSeen(): void {
-  writeStorageFlag(INTRO_STORAGE_KEYS.checkoutSeen);
-}
-
 export function shouldShowProductIntro(): boolean {
   return !isReturningCustomer() && !hasSeenProductIntro();
-}
-
-export function shouldShowCheckoutIntro(): boolean {
-  return !isReturningCustomer() && !hasSeenCheckoutIntro();
 }
 
 const BN_STEP_NUMS = ["১", "২", "৩", "৪", "৫", "৬"];
@@ -148,79 +135,6 @@ export function buildProductIntroSteps(params: {
   return steps;
 }
 
-export function buildCheckoutIntroSteps(params: {
-  lang: StorefrontLang;
-  hasCartItems: boolean;
-}): IntroStepBlueprint[] {
-  const { lang, hasCartItems } = params;
-
-  return [
-    {
-      selector: '#checkout [data-tour="checkout-summary"]',
-      title: hasCartItems
-        ? lang === "bn"
-          ? "১. নির্বাচিত পণ্য ও মোট হিসাব"
-          : "1. Review Selected Items"
-        : lang === "bn"
-          ? "১. পণ্য ছাড়াও সরাসরি ফোন অর্ডার"
-          : "1. Direct Phone Order Option",
-      intro: hasCartItems
-        ? lang === "bn"
-          ? "এখানে আপনার বেছে নেওয়া পণ্য, পরিমাণ (+/−) এবং ডেলিভারি চার্জসহ সর্বমোট মূল্য দেখে নিন।"
-          : "Review your selected items, adjust quantities (+/−) or remove items, and see the total with delivery fee."
-        : lang === "bn"
-          ? "কোনো পণ্য বেছে না থাকলে 'গুড় দেখতে উপরে যান' চাপুন, অথবা শুধু মোবাইল নম্বর দিলে আমরাই কল করে অর্ডার নেব।"
-          : "Haven't added a product yet? Tap 'Browse Our Collection' above, or simply submit your phone number and we will call to take your order.",
-      position: "bottom",
-    },
-    {
-      selector: '#checkout [data-tour="checkout-name"]',
-      title: lang === "bn" ? "২. আপনার নাম (ঐচ্ছিক)" : "2. Your Name (Optional)",
-      intro:
-        lang === "bn"
-          ? "এখানে আপনার নাম লিখতে পারেন। এটি ঐচ্ছিক—চাইলে খালি রেখেও অর্ডার করতে পারবেন।"
-          : "Enter your full name here if you'd like. This field is optional.",
-      position: "bottom",
-    },
-    {
-      selector: '#checkout [data-tour="checkout-phone"]',
-      title: lang === "bn" ? "৩. মোবাইল নম্বর (আবশ্যিক *)" : "3. Mobile Number (Required *)",
-      intro:
-        lang === "bn"
-          ? "আপনার সচল মোবাইল নম্বরটি লিখুন (যেমন: 017XXXXXXXX)। অর্ডার কনফার্ম করতে আমরা এই নম্বরে কল করব।"
-          : "Enter your active Bangladeshi mobile number (e.g. 017XXXXXXXX). We will call this number to confirm delivery.",
-      position: "bottom",
-    },
-    {
-      selector: '#checkout [data-tour="checkout-zone"]',
-      title: lang === "bn" ? "৪. ডেলিভারি এলাকা বেছে নিন" : "4. Choose Delivery Area",
-      intro:
-        lang === "bn"
-          ? "আপনার ঠিকানা অনুযায়ী 'ঢাকার ভিতরে' (৳৭০) বা 'ঢাকার বাইরে' (৳১৩০) নির্বাচন করুন।"
-          : "Select 'Inside Dhaka' (৳70) or 'Outside Dhaka' (৳130) to update your delivery charge.",
-      position: "top",
-    },
-    {
-      selector: '#checkout [data-tour="checkout-address"]',
-      title: lang === "bn" ? "৫. ডেলিভারি ঠিকানা (ঐচ্ছিক)" : "5. Delivery Address (Optional)",
-      intro:
-        lang === "bn"
-          ? "বাসা, রোড ও এলাকার নাম লিখুন। না লিখলেও সমস্যা নেই—ফোনে কথা বলে ঠিকানা জেনে নেওয়া হবে।"
-          : "Enter your house, road, area, or district. It's optional—our team can confirm it over the phone.",
-      position: "top",
-    },
-    {
-      selector: '#checkout [data-tour="checkout-submit"]',
-      title: lang === "bn" ? "৬. অর্ডার নিশ্চিত করুন" : "6. Confirm Order",
-      intro:
-        lang === "bn"
-          ? "সব তথ্য দেওয়া হলে এই বাটনে চাপ দিন! কোনো অগ্রিম টাকা লাগবে না—পণ্য হাতে পেয়ে দেখে টাকা দিন।"
-          : "Tap here to place your 100% Cash on Delivery order! No advance payment—inspect your jaggery upon delivery before paying.",
-      position: "top",
-    },
-  ];
-}
-
 export function isElementVisibleInViewport(el: Element | null): el is HTMLElement {
   if (!el || !(el instanceof HTMLElement)) return false;
   const style = window.getComputedStyle(el);
@@ -232,7 +146,7 @@ export function isElementVisibleInViewport(el: Element | null): el is HTMLElemen
 }
 
 /**
- * Scrolls the containing full-screen snap section (`#products` or `#checkout`)
+ * Scrolls the containing full-screen snap section (`#products`)
  * so that `targetElement` is positioned inside the safe visible zone (avoiding
  * fixed desktop header at top and fixed MobileDock at bottom, and leaving room
  * for the Intro.js tooltip).

@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import { getSiteUrl, normalizeSiteUrl } from "@/lib/site-url";
+import { resolveClarityProjectId } from "@/lib/clarity";
 import type { StorefrontProduct } from "@/components/storefront/product-card";
 
 export type SeoBusinessType =
@@ -43,6 +44,7 @@ export interface ResolvedSeoSettings {
   youtubeUrl: string;
   googleVerification: string;
   ga4MeasurementId: string;
+  clarityProjectId: string;
   allowIndexing: boolean;
   isFallback?: boolean;
 }
@@ -212,6 +214,10 @@ function resolveSeoSettingsFromMap(
     youtubeUrl: sanitizeHttpUrl(cleanString(rawMap.get("seo.youtube_url"))),
     googleVerification: cleanString(rawMap.get("seo.google_verification")),
     ga4MeasurementId: sanitizeGa4Id(cleanString(rawMap.get("seo.ga4_measurement_id"))),
+    clarityProjectId: resolveClarityProjectId(
+      cleanString(rawMap.get("seo.clarity_project_id")),
+      process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID
+    ),
     allowIndexing: cleanBoolean(rawMap.get("seo.allow_indexing"), allowIndexingDefault),
     isFallback,
   };

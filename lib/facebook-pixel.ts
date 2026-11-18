@@ -1,4 +1,9 @@
 import { parseBdPhone } from "@/lib/phone";
+import {
+  claritySetTag,
+  clarityTrackEvent,
+  clarityUpgrade,
+} from "@/lib/clarity";
 
 export const FB_PIXEL_ID =
   process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || "1234708877758735";
@@ -186,6 +191,8 @@ export const trackAddToCart = ({
     { eventID: eventId }
   );
 
+  clarityTrackEvent("add_to_cart");
+
   return eventId;
 };
 
@@ -286,6 +293,9 @@ export const trackInitiateCheckout = ({
 
   fbq("track", "InitiateCheckout", params, { eventID: eventId });
 
+  clarityTrackEvent("initiate_checkout");
+  clarityUpgrade("initiate_checkout");
+
   return { eventId, fired: true };
 };
 
@@ -356,6 +366,9 @@ export const trackContact = ({
   };
 
   fbq("track", "Contact", payload, { eventID: eventId });
+
+  claritySetTag("contact_channel", channel);
+  clarityTrackEvent("contact_click");
 
   if (typeof window !== "undefined") {
     const { fbp, fbc } = getClientFbpAndFbc();
@@ -502,6 +515,10 @@ export const trackPurchase = ({
   );
 
   fbq("track", "Purchase", payload, { eventID: effectiveEventId });
+
+  claritySetTag("order_placed", "true");
+  clarityTrackEvent("purchase");
+  clarityUpgrade("purchase");
 
   return { eventId: effectiveEventId, fired: true };
 };

@@ -13,13 +13,15 @@ const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
 
 const isProd = process.env.NODE_ENV === "production";
 
-const cspHeader = buildCspHeader({
-  nodeEnv: process.env.NODE_ENV,
-  imagekitUrlEndpoint: process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT,
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  facebookPixelId: process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || "1234708877758735",
-  metaPixelConnectOrigins: process.env.NEXT_PUBLIC_META_PIXEL_CONNECT_ORIGINS,
-});
+function resolveCspHeader(): string {
+  return buildCspHeader({
+    nodeEnv: process.env.NODE_ENV,
+    imagekitUrlEndpoint: process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    facebookPixelId: process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || "1234708877758735",
+    metaPixelConnectOrigins: process.env.NEXT_PUBLIC_META_PIXEL_CONNECT_ORIGINS,
+  });
+}
 
 const nextConfig: NextConfig = {
     /* config options here */
@@ -62,6 +64,7 @@ const nextConfig: NextConfig = {
         agentUpgrade: "security",
     },
     async headers() {
+      const cspHeader = resolveCspHeader();
       return [
         {
           source: "/(.*)",
