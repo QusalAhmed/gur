@@ -189,12 +189,6 @@ export function ContactSection({
         <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 dark:text-stone-50 tracking-tight leading-tight pt-0.5">
           {lang === "bn" ? "সরাসরি কথা বলে নিশ্চিত অর্ডার করুন" : "Direct Phone Order & Support"}
         </h1>
-
-        <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
-          {lang === "bn"
-            ? "গাছিদের সংগ্রহ করা আসল খাঁটি গুড় কিনতে নিচের যেকোনো মাধ্যমে সরাসরি কথা বলুন। কোনো অগ্রিম টাকা নেই।"
-            : "Have questions or want to place an order? Call us with 1-tap. No advance payment required."}
-        </p>
       </motion.div>
 
       {/* Contact Cards */}

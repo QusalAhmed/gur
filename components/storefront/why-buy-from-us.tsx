@@ -2,10 +2,7 @@
 
 import React from "react";
 import {
-  ShieldCheck,
-  PackageCheck,
-  Flame,
-  Sparkles,
+  BadgePercent,
   Box,
   Truck,
   CheckCircle2,
@@ -28,36 +25,12 @@ export function WhyBuyFromUs({
 
   const reasons = [
     {
-      icon: ShieldCheck,
-      iconColor: "text-emerald-700 dark:text-emerald-300",
-      iconBg: "bg-emerald-100 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800",
-      accentGlow: "from-emerald-500/10 dark:from-emerald-500/15",
-      title: t.whyBuyReason1Title,
-      desc: t.whyBuyReason1Desc,
-    },
-    {
-      icon: PackageCheck,
-      iconColor: "text-blue-700 dark:text-blue-300",
-      iconBg: "bg-blue-100 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800",
-      accentGlow: "from-blue-500/10 dark:from-blue-500/15",
-      title: t.whyBuyReason2Title,
-      desc: t.whyBuyReason2Desc,
-    },
-    {
-      icon: Flame,
+      icon: BadgePercent,
       iconColor: "text-amber-700 dark:text-amber-300",
       iconBg: "bg-amber-100 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800",
       accentGlow: "from-amber-500/10 dark:from-amber-500/15",
-      title: t.whyBuyReason3Title,
-      desc: t.whyBuyReason3Desc,
-    },
-    {
-      icon: Sparkles,
-      iconColor: "text-yellow-700 dark:text-yellow-300",
-      iconBg: "bg-yellow-100 dark:bg-yellow-950/80 border-yellow-300 dark:border-yellow-800",
-      accentGlow: "from-yellow-500/10 dark:from-yellow-500/15",
-      title: t.whyBuyReason4Title,
-      desc: t.whyBuyReason4Desc,
+      title: t.whyBuyReasonPriceTitle,
+      desc: t.whyBuyReasonPriceDesc,
     },
     {
       icon: Box,
@@ -84,13 +57,9 @@ export function WhyBuyFromUs({
         <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 dark:text-stone-50 tracking-tight leading-tight pt-0.5">
           {t.whyBuyTitle}
         </h2>
-
-        <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 max-w-lg mx-auto leading-relaxed">
-          {t.whyBuySubtitle}
-        </p>
       </div>
 
-      {/* 6 Core Reasons Grid - Instant rendering with smooth CSS micro-interactions */}
+      {/* Core Reasons Grid - 2 cards per row on desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 px-0.5">
         {reasons.map((item, idx) => {
           const Icon = item.icon;

@@ -121,7 +121,7 @@ export function buildProductIntroSteps(params: {
       selector: '#products [data-tour="product-plus-btn"]',
       title:
         lang === "bn"
-          ? `${n}. যোগ করতে (+) বাটনে চাপুন`
+          ? `${n}. কার্টে যোগ করতে (+) বাটনে চাপুন`
           : `${n}. Click + to Add to Cart`,
       intro:
         lang === "bn"

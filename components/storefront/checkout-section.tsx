@@ -450,13 +450,13 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                       })
                     )
                   }
-                  aria-label={lang === "bn" ? `${item.productNameBn || item.productName} পণ্যটি কার্ট থেকে মুছুন` : `Remove ${item.productName} from cart`}
+                  aria-label={lang === "bn" ? `${item.productNameBn || item.productName} পণ্যটি কার্ট থেকে বাদ দিন` : `Remove ${item.productName} from cart`}
                   className="inline-flex items-center gap-1 py-0.5 px-2 text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/80 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
-                  title={lang === "bn" ? "পণ্যটি মুছুন" : "Remove item"}
+                  title={lang === "bn" ? "পণ্যটি বাদ দিন" : "Remove item"}
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
                   <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
-                    {lang === "bn" ? "মুছুন" : "Delete"}
+                    {lang === "bn" ? "বাদ দিন" : "Remove"}
                   </span>
                 </button>
               </div>
@@ -867,14 +867,9 @@ return (
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-200 dark:border-stone-800">
             <div>
               <h3 className="font-black text-lg sm:text-xl text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <span>{lang === "bn" ? "ক্যাশ অন ডেলিভারি অর্ডার ফরম" : "Cash on Delivery Order Form"}</span>
+                <span>{lang === "bn" ? "অর্ডার ফরম" : "Order Form"}</span>
                 <Sparkles className="w-5 h-5 text-amber-600" />
               </h3>
-              <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1 font-medium">
-                {lang === "bn"
-                  ? "কোন অগ্রিম টাকা লাগবে না, পার্সেল হাতে পেয়ে গুড় দেখে টাকা পরিশোধ করবেন।"
-                  : "No advance payment required. Inspect your order and pay cash upon delivery."}
-              </p>
             </div>
           </div>
 

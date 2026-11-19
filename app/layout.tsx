@@ -13,6 +13,7 @@ import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
 import { getCachedSeoSettings } from "@/lib/seo-settings";
 import { SeoGlobalScripts } from "@/components/seo-global-scripts";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { TextCopier } from "@/components/text-copier";
 
 const roboto = Roboto({
   variable: "--font-roboto",
@@ -133,6 +134,7 @@ export default function RootLayout({
             {children}
             <InAppBrowserPrompt />
             <SpeedInsights />
+            {process.env.NODE_ENV === "development" && <TextCopier />}
             <Toaster position="top-right" richColors closeButton />
           </QueryProvider>
         </StoreProvider>
