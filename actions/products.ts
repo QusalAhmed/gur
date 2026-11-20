@@ -997,6 +997,11 @@ export async function getAdminProductsAction(): Promise<UiProductItem[]> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
+  const { data: rawTiersData } = await client
+    .from("price_tiers")
+    .select("variant_id");
+  const tierVariantIds = new Set((rawTiersData || []).map((t: { variant_id: string }) => t.variant_id));
+
   const variantListMap = new Map<string, UiProductVariantItem[]>();
   const variantCountMap = new Map<
     string,
@@ -1020,6 +1025,7 @@ export async function getAdminProductsAction(): Promise<UiProductItem[]> {
         compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
         stockStatus: (v.stock_status as UiProductVariantItem["stockStatus"]) || "in_stock",
         isActive: v.is_active ?? true,
+        hasPriceTiers: tierVariantIds.has(v.id),
         isDefault: Boolean(v.is_default),
         isCombo: Boolean(v.is_combo),
       };
@@ -1250,4 +1256,119 @@ export async function createDraftProductAction(payload: {
   }
 
   return data;
+}
+
+export interface QuickUpdateVariantPriceInput {
+  variantId: string;
+  price: number;
+  compareAtPrice?: number | null;
+}
+
+export async function quickUpdateVariantPriceAction(input: QuickUpdateVariantPriceInput): Promise<{
+  success: boolean;
+  data?: {
+    id: string;
+    productId: string;
+    price: number;
+    compareAtPrice: number | null;
+    name: string;
+  };
+  error?: string;
+}> {
+  try {
+    await assertStaffRole(["owner", "admin", "manager"]);
+
+    if (!input.variantId || !isValidUuid(input.variantId)) {
+      return { success: false, error: "Invalid variant ID provided." };
+    }
+
+    const priceNum = Number(input.price);
+    if (isNaN(priceNum) || priceNum < 0) {
+      return { success: false, error: "Price must be a valid non-negative number." };
+    }
+
+    let compareNum: number | null = null;
+    if (
+      input.compareAtPrice !== undefined &&
+      input.compareAtPrice !== null &&
+      String(input.compareAtPrice).trim() !== "" &&
+      !isNaN(Number(input.compareAtPrice))
+    ) {
+      const parsed = Number(input.compareAtPrice);
+      if (parsed > 0) {
+        if (parsed <= priceNum) {
+          return {
+            success: false,
+            error: "Original (compare-at) price must be strictly greater than the selling price.",
+          };
+        }
+        compareNum = parsed;
+      }
+    }
+
+    const client = getSupabaseAdmin();
+
+    const { data: updatedVariant, error: updateError } = await client
+      .from("product_variants")
+      .update({
+        price: priceNum,
+        compare_at_price: compareNum,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.variantId)
+      .select("id, product_id, price, compare_at_price, name, sku")
+      .single();
+
+    if (updateError || !updatedVariant) {
+      return {
+        success: false,
+        error: updateError?.message || "Failed to update variant price.",
+      };
+    }
+
+    // Revalidate storefront and admin paths
+    if (updatedVariant.product_id) {
+      const { data: prod } = await client
+        .from("products")
+        .select("id, slug")
+        .eq("id", updatedVariant.product_id)
+        .maybeSingle();
+
+      try {
+        revalidatePath("/admin/products");
+        revalidatePath("/products");
+        revalidatePath("/");
+        if (prod?.slug) {
+          revalidatePath(`/products/${prod.slug}`);
+          revalidatePath(`/product/${prod.slug}`);
+        }
+        if (prod?.id) {
+          revalidatePath(`/admin/products/${prod.id}/edit`);
+        }
+        try {
+          updateTag("storefront-products");
+          revalidateTag("storefront-products", "max");
+        } catch {}
+      } catch {
+        // Ignore outside request lifecycle
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        id: updatedVariant.id,
+        productId: updatedVariant.product_id,
+        price: Number(updatedVariant.price),
+        compareAtPrice: updatedVariant.compare_at_price ? Number(updatedVariant.compare_at_price) : null,
+        name: updatedVariant.name,
+      },
+    };
+  } catch (err: any) {
+    console.error("quickUpdateVariantPriceAction error:", err);
+    return {
+      success: false,
+      error: err.message || "An unexpected error occurred while updating price.",
+    };
+  }
 }

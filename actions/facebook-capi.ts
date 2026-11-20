@@ -136,14 +136,18 @@ export async function sendCapiPurchaseAction(params: {
  * Dispatched when visitor clicks Call, WhatsApp, Messenger, or submits call request.
  */
 export async function sendCapiContactAction(params: {
-  eventId: string;
-  channel: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
+  channel?: string;
   refCode?: string;
+  ref_code?: string;
   phone?: string | null;
   url?: string;
   fbp?: string | null;
   fbc?: string | null;
   customData?: Record<string, any>;
+  custom_data?: Record<string, any>;
 }) {
   return sendCapiContactInternal(params);
 }

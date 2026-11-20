@@ -87,6 +87,7 @@ export interface UiProductVariantItem {
   stockStatus: "in_stock" | "low_stock" | "out_of_stock" | "backorder";
   stockQty?: number;
   isActive: boolean;
+  hasPriceTiers?: boolean;
   isDefault?: boolean;
   isCombo?: boolean;
   comboItems?: Array<{

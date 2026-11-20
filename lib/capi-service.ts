@@ -206,6 +206,18 @@ export async function dispatchCapiEventWithQueue(
   event: CapiEventParams,
   options?: { testEventCode?: string }
 ): Promise<{ success: boolean; eventId?: string; queued?: boolean; error?: string }> {
+  const resolvedEventId =
+    (event.eventId && String(event.eventId).trim()) ||
+    ((event as any).event_id && String((event as any).event_id).trim()) ||
+    ((event as any).eventID && String((event as any).eventID).trim()) ||
+    (event.customData?.event_id && String(event.customData.event_id).trim()) ||
+    `evt_${String(event.eventName || "event").toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+  event.eventId = resolvedEventId;
+  if (event.customData && !event.customData.event_id) {
+    event.customData.event_id = resolvedEventId;
+  }
+
   try {
     await inngest.send({
       name: "meta.capi.event",
@@ -213,9 +225,9 @@ export async function dispatchCapiEventWithQueue(
         event,
         testEventCode: options?.testEventCode,
       },
-      id: `capi-${event.eventName.toLowerCase()}-${event.eventId}`,
+      id: `capi-${event.eventName.toLowerCase()}-${resolvedEventId}`,
     });
-    return { success: true, eventId: event.eventId, queued: true };
+    return { success: true, eventId: resolvedEventId, queued: true };
   } catch (queueErr) {
     console.warn(
       "[Facebook CAPI] Inngest queue dispatch failed, falling back to direct send:",
@@ -297,7 +309,9 @@ export async function getRequestContext(
 }
 
 export async function sendCapiPageViewInternal(params: {
-  eventId: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
   url?: string;
   fbp?: string | null;
   fbc?: string | null;
@@ -328,9 +342,15 @@ export async function sendCapiPageViewInternal(params: {
       params.url
     );
 
+    const effectiveEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      `evt_pageview_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
     return await dispatchCapiEventWithQueue({
       eventName: "PageView",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       userData,
     });
@@ -341,7 +361,9 @@ export async function sendCapiPageViewInternal(params: {
 }
 
 export async function sendCapiViewContentInternal(params: {
-  eventId: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
   productId: string;
   variantId?: string;
   productName: string;
@@ -364,9 +386,15 @@ export async function sendCapiViewContentInternal(params: {
       productName: params.productName,
     });
 
+    const effectiveEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      `evt_viewcontent_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
     return await dispatchCapiEventWithQueue({
       eventName: "ViewContent",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       userData,
       customData: {
@@ -382,6 +410,7 @@ export async function sendCapiViewContentInternal(params: {
         ],
         value: safePrice,
         currency: String(params.currency || "BDT").trim().toUpperCase(),
+        event_id: effectiveEventId,
       },
     });
   } catch (err: any) {
@@ -391,7 +420,9 @@ export async function sendCapiViewContentInternal(params: {
 }
 
 export async function sendCapiAddToCartInternal(params: {
-  eventId: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
   productId: string;
   variantId?: string;
   productName: string;
@@ -417,9 +448,15 @@ export async function sendCapiAddToCartInternal(params: {
       productName: params.productName,
     });
 
+    const effectiveEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      `evt_addtocart_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
     return await dispatchCapiEventWithQueue({
       eventName: "AddToCart",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       userData,
       customData: {
@@ -436,6 +473,7 @@ export async function sendCapiAddToCartInternal(params: {
         num_items: safeQuantity,
         value: lineTotal,
         currency: String(params.currency || "BDT").trim().toUpperCase(),
+        event_id: effectiveEventId,
       },
     });
   } catch (err: any) {
@@ -445,7 +483,9 @@ export async function sendCapiAddToCartInternal(params: {
 }
 
 export async function sendCapiInitiateCheckoutInternal(params: {
-  eventId: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
   items: {
     productId: string;
     variantId?: string;
@@ -492,9 +532,15 @@ export async function sendCapiInitiateCheckoutInternal(params: {
       0
     );
 
+    const effectiveEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      `evt_initiatecheckout_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
     return await dispatchCapiEventWithQueue({
       eventName: "InitiateCheckout",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       userData,
       customData: {
@@ -504,6 +550,7 @@ export async function sendCapiInitiateCheckoutInternal(params: {
         num_items: totalQuantity,
         value: Number(params.value) || 0,
         currency: String(params.currency || "BDT").trim().toUpperCase(),
+        event_id: effectiveEventId,
       },
     });
   } catch (err: any) {
@@ -563,7 +610,9 @@ export async function sendCapiPurchaseInternal(params: {
     );
 
     const effectiveEventId =
-      params.eventId ||
+      (params.eventId && String(params.eventId).trim()) ||
+      ((params as any).event_id && String((params as any).event_id).trim()) ||
+      ((params as any).eventID && String((params as any).eventID).trim()) ||
       (params.orderNumber ? String(params.orderNumber).trim() : undefined) ||
       (params.orderId ? String(params.orderId).trim() : undefined) ||
       "evt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
@@ -581,6 +630,7 @@ export async function sendCapiPurchaseInternal(params: {
         value: Number(params.value) || 0,
         currency: String(params.currency || "BDT").trim().toUpperCase(),
         order_id: params.orderNumber || params.orderId,
+        event_id: effectiveEventId,
       },
     });
   } catch (err: any) {
@@ -590,16 +640,33 @@ export async function sendCapiPurchaseInternal(params: {
 }
 
 export async function sendCapiContactInternal(params: {
-  eventId: string;
-  channel: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
+  channel?: string;
   refCode?: string;
+  ref_code?: string;
   phone?: string | null;
   url?: string;
   fbp?: string | null;
   fbc?: string | null;
   customData?: Record<string, any>;
+  custom_data?: Record<string, any>;
 }) {
   try {
+    const effectiveEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      (params.customData?.eventId && String(params.customData.eventId).trim()) ||
+      (params.customData?.event_id && String(params.customData.event_id).trim()) ||
+      (params.custom_data?.event_id && String(params.custom_data.event_id).trim()) ||
+      (params.refCode ? `evt_contact_${String(params.refCode).replace(/[^a-zA-Z0-9]/g, "")}` : "") ||
+      `evt_contact_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+    const cleanChannel = String(params.channel || params.customData?.channel || "other").toLowerCase();
+    const effectiveRefCode = params.refCode || params.ref_code;
+
     const { userData, eventSourceUrl } = await getRequestContext(
       {
         ph: params.phone,
@@ -609,9 +676,9 @@ export async function sendCapiContactInternal(params: {
       params.url
     );
 
-    if (params.refCode) {
+    if (effectiveRefCode) {
       try {
-        const cleanRef = params.refCode.replace(/^#/, "").trim().toUpperCase();
+        const cleanRef = effectiveRefCode.replace(/^#/, "").trim().toUpperCase();
         if (cleanRef) {
           const client = getSupabaseAdmin();
 
@@ -767,16 +834,18 @@ export async function sendCapiContactInternal(params: {
 
     return await dispatchCapiEventWithQueue({
       eventName: "Contact",
-      eventId: params.eventId,
+      eventId: effectiveEventId,
       eventSourceUrl,
       actionSource: "website",
       userData,
       customData: {
-        channel: params.channel,
-        content_name: `Contact via ${params.channel.toUpperCase()}`,
+        channel: cleanChannel,
+        content_name: `Contact via ${cleanChannel.toUpperCase()}`,
         content_category: "Direct Outreach",
-        ...(params.refCode ? { ref_code: params.refCode } : {}),
+        event_id: effectiveEventId,
+        ...(effectiveRefCode ? { ref_code: effectiveRefCode } : {}),
         ...(params.customData || {}),
+        ...(params.custom_data || {}),
       },
     });
   } catch (err: any) {

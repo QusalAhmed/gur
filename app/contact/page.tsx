@@ -17,6 +17,7 @@ import {
 import { StoreHeader } from "@/components/storefront/store-header";
 import { PhoneHelpForm } from "@/components/storefront/phone-help-form";
 import { CopyPhoneButton } from "@/components/storefront/copy-phone-button";
+import { ContactChannelLink } from "@/components/storefront/contact-channel-link";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
 import {
   buildBreadcrumbJsonLd,
@@ -148,13 +149,15 @@ export default async function ContactPage() {
             </div>
 
             <div className="mt-4 flex items-center gap-2">
-              <a
+              <ContactChannelLink
+                channel="phone"
+                phone={rawPhone}
                 href={`tel:${rawPhone}`}
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 px-3 rounded-xl shadow-sm transition-all"
               >
                 <Phone className="w-4 h-4" />
                 <span>এখনই কল করুন</span>
-              </a>
+              </ContactChannelLink>
               <CopyPhoneButton phone={hotline} lang="bn" variant="compact" />
             </div>
           </div>
@@ -178,7 +181,9 @@ export default async function ContactPage() {
               </div>
             </div>
 
-            <a
+            <ContactChannelLink
+              channel="whatsapp"
+              phone={intlPhone}
               href={`https://wa.me/${intlPhone}?text=${encodeURIComponent(
                 "আসসালামু আলাইকুম, আমি খাঁটি খেজুরের গুড় কিনতে চাই।"
               )}`}
@@ -188,7 +193,7 @@ export default async function ContactPage() {
             >
               <MessageSquare className="w-4 h-4" />
               <span>WhatsApp মেসেজ</span>
-            </a>
+            </ContactChannelLink>
           </div>
 
           {/* 3. Facebook Messenger */}
@@ -210,7 +215,8 @@ export default async function ContactPage() {
               </div>
             </div>
 
-            <a
+            <ContactChannelLink
+              channel="messenger"
               href={process.env.NEXT_PUBLIC_MESSENGER_URL || "https://m.me/"}
               target="_blank"
               rel="noopener noreferrer"
@@ -218,7 +224,7 @@ export default async function ContactPage() {
             >
               <MessageCircle className="w-4 h-4" />
               <span>মেসেঞ্জারে চ্যাট</span>
-            </a>
+            </ContactChannelLink>
           </div>
 
           {/* 4. SMS Booking */}
@@ -240,7 +246,9 @@ export default async function ContactPage() {
               </div>
             </div>
 
-            <a
+            <ContactChannelLink
+              channel="sms"
+              phone={rawPhone}
               href={`sms:${rawPhone}?body=${encodeURIComponent(
                 "নাম: \nঠিকানা: \nগুড়ের পরিমাণ: "
               )}`}
@@ -248,7 +256,7 @@ export default async function ContactPage() {
             >
               <Send className="w-4 h-4" />
               <span>এসএমএস পাঠান</span>
-            </a>
+            </ContactChannelLink>
           </div>
         </div>
 

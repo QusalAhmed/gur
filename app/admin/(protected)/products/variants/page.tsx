@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
+import { Taka } from "@/components/ui/taka";
 import { getAdminVariantsAction, AdminVariantItem } from "@/actions/products";
 
 const stockStyles: Record<string, string> = {
@@ -150,7 +151,16 @@ export default function VariantsPage() {
     {
       accessorKey: "retailPrice",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Retail Price" />,
-      cell: ({ row }) => <span className="font-bold text-xs text-foreground">{row.getValue("retailPrice")}</span>,
+      cell: ({ row }) => {
+        const raw = String(row.getValue("retailPrice") || "");
+        const num = raw.replace(/^৳\s*/, "");
+        return (
+          <span className="font-bold text-xs text-foreground inline-flex items-center">
+            <Taka size="xs" />
+            <span>{num}</span>
+          </span>
+        );
+      },
     },
     {
       accessorKey: "stock",

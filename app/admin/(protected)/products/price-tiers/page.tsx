@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
+import { Taka } from "@/components/ui/taka";
 import { getAdminPriceTiersAction, AdminPriceTierItem } from "@/actions/products";
 
 export default function PriceTiersPage() {
@@ -104,7 +105,16 @@ export default function PriceTiersPage() {
     {
       accessorKey: "unitPrice",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tier Unit Price" />,
-      cell: ({ row }) => <span className="font-bold text-xs text-foreground">{row.getValue("unitPrice")}</span>,
+      cell: ({ row }) => {
+        const raw = String(row.getValue("unitPrice") || "");
+        const num = raw.replace(/^৳\s*/, "");
+        return (
+          <span className="font-bold text-xs text-foreground inline-flex items-center">
+            <Taka size="xs" />
+            <span>{num}</span>
+          </span>
+        );
+      },
     },
     {
       accessorKey: "discount",

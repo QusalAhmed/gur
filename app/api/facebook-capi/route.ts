@@ -23,6 +23,17 @@ export async function POST(req: NextRequest) {
 
     const { eventType, ...params } = body as { eventType?: string; [key: string]: any };
 
+    const resolvedEventId =
+      (params.eventId && String(params.eventId).trim()) ||
+      (params.event_id && String(params.event_id).trim()) ||
+      (params.eventID && String(params.eventID).trim()) ||
+      undefined;
+
+    if (resolvedEventId) {
+      params.eventId = resolvedEventId;
+      params.event_id = resolvedEventId;
+    }
+
     let result;
     switch (eventType) {
       case "PageView":

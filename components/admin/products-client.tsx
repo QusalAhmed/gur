@@ -32,7 +32,10 @@ import {
   deleteProductAction,
   createDraftProductAction,
   updateProductStatusAction,
+  quickUpdateVariantPriceAction,
 } from "@/actions/products";
+import { QuickPricePopover } from "@/components/admin/quick-price-popover";
+import { Taka } from "@/components/ui/taka";
 import { fetchCategoriesListAction } from "@/actions/categories";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
@@ -237,6 +240,82 @@ export function ProductsClient() {
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Could not duplicate product."));
+    },
+  });
+
+  const [updatingVariantId, setUpdatingVariantId] = React.useState<string | null>(null);
+
+  const updatePriceMutation = useMutation({
+    mutationFn: async ({
+      variantId,
+      price,
+      compareAtPrice,
+    }: {
+      variantId: string;
+      price: number;
+      compareAtPrice?: number | null;
+    }) => {
+      setUpdatingVariantId(variantId);
+      const res = await quickUpdateVariantPriceAction({ variantId, price, compareAtPrice });
+      if (!res.success) {
+        throw new Error(res.error || "Failed to update price.");
+      }
+      return res.data;
+    },
+    onMutate: async ({ variantId, price, compareAtPrice }) => {
+      await queryClient.cancelQueries({ queryKey: ["admin", "products"] });
+      const previousProducts = queryClient.getQueryData<UiProductItem[]>(["admin", "products"]);
+
+      if (previousProducts) {
+        queryClient.setQueryData<UiProductItem[]>(["admin", "products"], (old) => {
+          if (!old) return [];
+          return old.map((product) => {
+            const hasVariant = product.variantList?.some((v) => v.id === variantId);
+            if (!hasVariant) return product;
+
+            const updatedVariants = (product.variantList || []).map((v) => {
+              if (v.id === variantId) {
+                return {
+                  ...v,
+                  price,
+                  compareAtPrice: compareAtPrice ?? null,
+                };
+              }
+              return v;
+            });
+
+            const validPrices = updatedVariants.map((v) => v.price).filter((p) => p > 0);
+            const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : price;
+            const maxPrice = validPrices.length > 0 ? Math.max(...validPrices) : price;
+
+            return {
+              ...product,
+              basePrice: minPrice,
+              maxPrice,
+              variantList: updatedVariants,
+            };
+          });
+        });
+      }
+
+      return { previousProducts };
+    },
+    onError: (err: unknown, _variables, context) => {
+      if (context?.previousProducts) {
+        queryClient.setQueryData(["admin", "products"], context.previousProducts);
+      }
+      toast.error(getErrorMessage(err, "Could not update price."));
+    },
+    onSuccess: (data) => {
+      toast.success(
+        data?.name
+          ? `Price updated to ৳${data.price.toLocaleString()} for "${data.name}"`
+          : `Price updated to ৳${data?.price.toLocaleString()}`
+      );
+    },
+    onSettled: () => {
+      setUpdatingVariantId(null);
+      invalidateProductQueries();
     },
   });
 
@@ -532,17 +611,61 @@ export function ProductsClient() {
               ? Math.max(...prices)
               : Number(p.maxPrice || p.basePrice || 0);
 
-          if (variants.length > 1 && min < max) {
+          // If product has exactly 1 packaging variant, allow instant quick price editing right from this cell
+          if (variants.length === 1) {
+            const v = variants[0];
             return (
-              <span className="font-semibold text-[13px] text-foreground tabular-nums whitespace-nowrap">
-                ৳{min.toLocaleString()}–৳{max.toLocaleString()}
-              </span>
+              <QuickPricePopover
+                variantId={v.id}
+                productId={p.id}
+                productName={p.name}
+                variantName={v.name}
+                currentPrice={v.price}
+                currentCompareAtPrice={v.compareAtPrice}
+                hasPriceTiers={v.hasPriceTiers}
+                onSave={async (payload) => {
+                  await updatePriceMutation.mutateAsync(payload);
+                }}
+                isLoading={updatePriceMutation.isPending && updatingVariantId === v.id}
+              />
+            );
+          }
+
+          // If multiple packaging variants, clicking auto-expands the sub-row to edit specific variants accurately
+          if (variants.length > 1) {
+            const isExpanded = expandedRowIds.has(p.id);
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleRowExpanded(p.id);
+                }}
+                className="group/range inline-flex items-center gap-1.5 px-2 py-1 -ml-2 rounded-md hover:bg-muted/80 transition-colors text-left"
+                title={isExpanded ? "Click to collapse variants" : "Click to view and edit packaging variant prices"}
+              >
+                <span className="font-semibold text-[13px] text-foreground tabular-nums whitespace-nowrap group-hover/range:text-amber-700 dark:group-hover/range:text-amber-400 transition-colors inline-flex items-center">
+                  <Taka className="text-foreground group-hover/range:text-amber-700 dark:group-hover/range:text-amber-400" />
+                  <span>{min.toLocaleString()}</span>
+                  {min < max && (
+                    <>
+                      <span className="text-muted-foreground mx-0.5">–</span>
+                      <Taka className="text-foreground group-hover/range:text-amber-700 dark:group-hover/range:text-amber-400" />
+                      <span>{max.toLocaleString()}</span>
+                    </>
+                  )}
+                </span>
+                <span className="text-[10px] text-muted-foreground bg-muted/60 px-1 py-0.2 rounded font-medium group-hover/range:bg-amber-500/15 group-hover/range:text-amber-700 dark:group-hover/range:text-amber-300 transition-colors">
+                  {variants.length} pkgs
+                </span>
+              </button>
             );
           }
 
           return (
-            <span className="font-semibold text-[13px] text-foreground tabular-nums whitespace-nowrap">
-              ৳{(min || 0).toLocaleString()}
+            <span className="font-semibold text-[13px] text-foreground tabular-nums whitespace-nowrap inline-flex items-center">
+              <Taka />
+              <span>{(min || 0).toLocaleString()}</span>
             </span>
           );
         },
@@ -636,7 +759,15 @@ export function ProductsClient() {
         enableHiding: false,
       },
     ],
-    [duplicateMutation, statusMutation, expandedRowIds, toggleRowExpanded, router]
+    [
+      duplicateMutation,
+      statusMutation,
+      expandedRowIds,
+      toggleRowExpanded,
+      router,
+      updatePriceMutation,
+      updatingVariantId,
+    ]
   );
 
   // Clean, compact inline variants panel (no ReactFlow canvas)
@@ -722,14 +853,19 @@ export function ProductsClient() {
                   </div>
 
                   <div className="sm:col-span-2 sm:text-right flex items-center sm:justify-end gap-1.5 tabular-nums">
-                    <span className="font-semibold text-foreground">
-                      ৳{v.price.toLocaleString()}
-                    </span>
-                    {hasDiscount && (
-                      <span className="text-[11px] text-muted-foreground line-through">
-                        ৳{v.compareAtPrice!.toLocaleString()}
-                      </span>
-                    )}
+                    <QuickPricePopover
+                      variantId={v.id}
+                      productId={product.id}
+                      productName={product.name}
+                      variantName={v.name}
+                      currentPrice={v.price}
+                      currentCompareAtPrice={v.compareAtPrice}
+                      hasPriceTiers={v.hasPriceTiers}
+                      onSave={async (payload) => {
+                        await updatePriceMutation.mutateAsync(payload);
+                      }}
+                      isLoading={updatePriceMutation.isPending && updatingVariantId === v.id}
+                    />
                   </div>
 
                   <div className="sm:col-span-1 flex sm:justify-end">
@@ -747,7 +883,7 @@ export function ProductsClient() {
         </div>
       </div>
     );
-  }, []);
+  }, [updatePriceMutation, updatingVariantId]);
 
   const totalCount = products.length;
   const activeCount = products.filter((p) => p.status === "active").length;

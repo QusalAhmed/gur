@@ -388,11 +388,13 @@ export const trackInitiateCheckout = ({
 };
 
 export interface TrackContactParams {
-  channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms";
+  channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms" | (string & {});
   refCode?: string;
   phone?: string | null;
   customData?: Record<string, any>;
   eventId?: string;
+  event_id?: string;
+  eventID?: string;
 }
 
 const INQUIRY_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -442,23 +444,32 @@ export const trackContact = ({
   phone,
   customData,
   eventId: customEventId,
+  event_id: customEventIdSnake,
+  eventID: customEventIdUpper,
 }: TrackContactParams): string => {
   if (typeof window !== "undefined" && isPixelAdminHostOrPath()) {
     return "";
   }
-  const eventId = customEventId || generateEventId();
+  const eventId =
+    customEventId ||
+    customEventIdSnake ||
+    customEventIdUpper ||
+    generateEventId();
 
+  const safeChannel = String(channel || "other");
   const payload: Record<string, any> = {
-    channel,
-    content_name: `Contact via ${channel.toUpperCase()}`,
+    channel: safeChannel,
+    content_name: `Contact via ${safeChannel.toUpperCase()}`,
     content_category: "Direct Outreach",
+    event_id: eventId,
+    eventID: eventId,
     ...(refCode ? { ref_code: refCode } : {}),
     ...(customData || {}),
   };
 
   fbq("track", "Contact", payload, { eventID: eventId });
 
-  claritySetTag("contact_channel", channel);
+  claritySetTag("contact_channel", safeChannel);
   clarityTrackEvent("contact_click");
 
   if (typeof window !== "undefined") {
@@ -467,7 +478,8 @@ export const trackContact = ({
 
     sendCapiClientEvent("Contact", {
       eventId,
-      channel,
+      event_id: eventId,
+      channel: safeChannel,
       refCode,
       phone: phone || null,
       url: currentUrl,

@@ -48,7 +48,9 @@ export interface CapiEventParams {
     | "Contact"
     | "Lead"
     | (string & {});
-  eventId: string;
+  eventId?: string;
+  event_id?: string;
+  eventID?: string;
   eventSourceUrl?: string;
   actionSource?: "website" | "phone_call" | "chat" | "email" | "other" | "system_generated";
   userData: CapiUserData;
@@ -177,10 +179,18 @@ export async function sendCapiEvents(
       formattedUserData.fbc = rawUserData.fbc;
     }
 
+    const effectiveEventId =
+      (event.eventId && String(event.eventId).trim()) ||
+      ((event as any).event_id && String((event as any).event_id).trim()) ||
+      ((event as any).eventID && String((event as any).eventID).trim()) ||
+      (event.customData?.event_id && String(event.customData.event_id).trim()) ||
+      (event.customData?.eventId && String(event.customData.eventId).trim()) ||
+      `evt_${String(event.eventName || "event").toLowerCase()}_${nowSeconds}_${crypto.randomBytes(6).toString("hex")}`;
+
     const payloadEvent: Record<string, any> = {
       event_name: event.eventName,
       event_time: nowSeconds,
-      event_id: event.eventId,
+      event_id: effectiveEventId,
       action_source: event.actionSource || "website",
       user_data: formattedUserData,
     };

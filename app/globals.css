@@ -145,6 +145,19 @@
     font-family: var(--font-bangla);
   }
 
+  .taka-sign,
+  .taka-symbol {
+    font-family: var(--font-bangla);
+    font-weight: 600;
+    font-variant-numeric: normal;
+    -webkit-text-stroke: 0.18px currentColor;
+    display: inline-block;
+    line-height: 1;
+    text-rendering: geometricPrecision;
+    transform: scaleY(1.16);
+    transform-origin: bottom;
+  }
+
   .font-english {
     font-family: var(--font-english);
   }

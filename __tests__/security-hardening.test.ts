@@ -272,7 +272,7 @@ import {
   getOrdersAction,
   getPublicOrderAction,
 } from "@/actions/orders";
-import { saveProductAction } from "@/actions/products";
+import { saveProductAction, quickUpdateVariantPriceAction } from "@/actions/products";
 import {
   getSiteSettingsAction,
   updateSiteSettingsAction,
@@ -662,6 +662,13 @@ describe("Server Action Authentication, RBAC & Public Order Token Enforcement", 
     expect(prodRes.success).toBe(false);
     expect(prodRes.error).toMatch(/LOGIN_REQUIRED/);
 
+    const quickRes = await quickUpdateVariantPriceAction({
+      variantId: VARIANT_ID_1,
+      price: 150,
+    });
+    expect(quickRes.success).toBe(false);
+    expect(quickRes.error).toMatch(/LOGIN_REQUIRED/);
+
     const settingsRes = await getSiteSettingsAction();
     expect(settingsRes.success).toBe(false);
     expect(settingsRes.settings).toEqual({});
@@ -698,6 +705,43 @@ describe("Server Action Authentication, RBAC & Public Order Token Enforcement", 
     });
     expect(prodRes.success).toBe(false);
     expect(prodRes.error).toMatch(/FORBIDDEN/);
+
+    const supportPriceRes = await quickUpdateVariantPriceAction({
+      variantId: VARIANT_ID_1,
+      price: 150,
+    });
+    expect(supportPriceRes.success).toBe(false);
+    expect(supportPriceRes.error).toMatch(/FORBIDDEN/);
+  });
+
+  it("enforces validation on quickUpdateVariantPriceAction inputs", async () => {
+    mockState.authUser = { id: STAFF_USER_UUID, email: "admin@example.com" };
+    mockState.staffRole = "admin";
+
+    // Invalid UUID
+    const res1 = await quickUpdateVariantPriceAction({
+      variantId: "not-a-uuid",
+      price: 100,
+    });
+    expect(res1.success).toBe(false);
+    expect(res1.error).toMatch(/Invalid variant ID/);
+
+    // Negative price
+    const res2 = await quickUpdateVariantPriceAction({
+      variantId: VARIANT_ID_1,
+      price: -10,
+    });
+    expect(res2.success).toBe(false);
+    expect(res2.error).toMatch(/non-negative number/);
+
+    // compare_at_price <= price
+    const res3 = await quickUpdateVariantPriceAction({
+      variantId: VARIANT_ID_1,
+      price: 200,
+      compareAtPrice: 150,
+    });
+    expect(res3.success).toBe(false);
+    expect(res3.error).toMatch(/strictly greater than/);
   });
 
   it("requires valid publicToken on getPublicOrderAction and strips internal fields", async () => {
