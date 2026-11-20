@@ -97,6 +97,7 @@ import {
   getOrderReprintDiff,
   formatOrderReprintDiffSummary,
 } from "@/lib/order-reprint";
+import { formatPhoneDisplay } from "@/lib/admin-format";
 import { SteadfastFailureDialog } from "@/components/admin/steadfast-failure-dialog";
 import { SteadfastBulkDialog } from "@/components/admin/steadfast-bulk-dialog";
 import { OrderChecklistDialog } from "@/components/admin/order-checklist-dialog";
@@ -2471,14 +2472,14 @@ export function OrdersClient() {
 
               {/* Phone with click-to-call and 1-click copy */}
               {order.phone && (
-                <div className="flex items-center gap-1 text-sm">
+                <div className="flex items-center gap-1.5">
                   <a
                     href={`tel:${order.phone}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="font-mono text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                    className="font-mono text-base font-semibold text-foreground hover:text-amber-600 flex items-center gap-1.5 transition-colors tracking-wide"
                   >
-                    <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                    <span>{order.phone}</span>
+                    <Phone className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>{formatPhoneDisplay(order.phone)}</span>
                   </a>
                   <motion.button
                     whileHover={{ scale: 1.15 }}
@@ -2530,14 +2531,14 @@ export function OrdersClient() {
               {/* Alternative phone with click-to-call and 1-click copy (exact same font, size & styling as primary phone) */}
               {order.alternative_phone && (
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-1 text-sm">
+                  <div className="flex items-center gap-1.5">
                     <a
                       href={`tel:${order.alternative_phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-mono text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                      className="font-mono text-base font-semibold text-foreground hover:text-amber-600 flex items-center gap-1.5 transition-colors tracking-wide"
                     >
-                      <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                      <span>{order.alternative_phone}</span>
+                      <Phone className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>{formatPhoneDisplay(order.alternative_phone)}</span>
                     </a>
                     <span className="text-xs text-muted-foreground font-normal">(Alt)</span>
                     <motion.button
@@ -2619,14 +2620,14 @@ export function OrdersClient() {
                       <span className="truncate">Ship to: {recipientName}</span>
                     </div>
                     {shipPhone && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <a
                           href={`tel:${shipPhone}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-mono text-xs sm:text-sm font-medium text-foreground/90 hover:text-amber-600 flex items-center gap-1 transition-colors"
+                          className="font-mono text-sm sm:text-base font-semibold text-foreground hover:text-amber-600 flex items-center gap-1.5 transition-colors tracking-wide"
                         >
-                          <Phone className="h-3 w-3 text-amber-600 shrink-0" />
-                          <span>{shipPhone}</span>
+                          <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                          <span>{formatPhoneDisplay(shipPhone)}</span>
                         </a>
                         <motion.button
                           whileHover={{ scale: 1.15 }}
@@ -3204,7 +3205,7 @@ export function OrdersClient() {
               const rPhone = order.address?.phone || order.shipping_phone;
               return (
                 <p className="text-xs sm:text-sm font-semibold text-amber-700 dark:text-amber-400">
-                  Ship to: {rName} {rPhone ? `(${rPhone})` : ""}
+                  Ship to: {rName} {rPhone ? `(${formatPhoneDisplay(rPhone)})` : ""}
                 </p>
               );
             })()}

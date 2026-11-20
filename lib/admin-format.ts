@@ -113,16 +113,20 @@ export function normalizeBDPhone(phone: string | null | undefined): string | nul
 }
 
 /**
- * Formats standard BD mobile number for UI display: `01712-345678`
+ * Formats standard BD mobile number for UI display with spaces for high readability: `01712 345 678`
  */
 export function formatPhoneDisplay(phone: string | null | undefined): string {
   if (!phone) return "—";
   const normalized = normalizeBDPhone(phone);
-  if (!normalized) return phone;
-  // E.164: +8801712345678 -> local: 01712-345678
+  if (!normalized) {
+    // If non-standard or international number, format cleanly with spaces
+    const cleaned = phone.trim();
+    return cleaned.replace(/(\d{3,4})(?=\d)/g, "$1 ");
+  }
+  // E.164: +8801712345678 -> local with spaces: 01712 345 678
   const local = "0" + normalized.slice(4);
   if (local.length === 11) {
-    return `${local.slice(0, 5)}-${local.slice(5)}`;
+    return `${local.slice(0, 5)} ${local.slice(5, 8)} ${local.slice(8)}`;
   }
   return local;
 }

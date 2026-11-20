@@ -675,7 +675,7 @@ export function OrderDetailView({
               {order.customer_phone && (
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{formatPhoneDisplay(order.customer_phone)}</span>
+                    <span className="font-mono text-base font-semibold text-foreground tracking-wide">{formatPhoneDisplay(order.customer_phone)}</span>
                     <div className="flex items-center gap-1">
                       <motion.button
                         whileHover={{ scale: 1.08 }}

@@ -100,6 +100,7 @@ import {
 import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-dialog";
 import { OrderSmsDialog } from "@/components/admin/order-sms-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
+import { formatPhoneDisplay } from "@/lib/admin-format";
 import { updateAdminOrderAction } from "@/actions/orders";
 import { useOrder } from "@/hooks/use-order";
 import {
@@ -815,9 +816,9 @@ export function OrderDetailsSheet({
                 <div className="space-y-1.5 pt-0.5">
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                      <a href={`tel:${order.phone}`} className="hover:underline text-foreground font-mono font-medium">
-                        {order.phone}
+                      <Phone className="h-4 w-4 text-amber-600 shrink-0" />
+                      <a href={`tel:${order.phone}`} className="hover:underline text-foreground font-mono text-base font-semibold tracking-wide">
+                        {formatPhoneDisplay(order.phone)}
                       </a>
                     </span>
                     <div className="flex items-center gap-1">
@@ -877,9 +878,9 @@ export function OrderDetailsSheet({
                     <div className="pt-2 border-t border-dashed mt-2 space-y-1.5">
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span className="flex items-center gap-1.5">
-                          <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                          <a href={`tel:${order.alternative_phone}`} className="hover:underline text-foreground font-mono font-medium">
-                            {order.alternative_phone}
+                          <Phone className="h-4 w-4 text-amber-600 shrink-0" />
+                          <a href={`tel:${order.alternative_phone}`} className="hover:underline text-foreground font-mono text-base font-semibold tracking-wide">
+                            {formatPhoneDisplay(order.alternative_phone)}
                           </a>
                           <span className="text-[11px] text-muted-foreground font-normal">(Alt)</span>
                         </span>
@@ -1047,9 +1048,9 @@ export function OrderDetailsSheet({
                         <div className="space-y-1.5 pt-1 border-t border-amber-500/10">
                           <div className="flex items-center justify-between text-muted-foreground">
                             <span className="flex items-center gap-1.5">
-                              <Phone className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                              <a href={`tel:${shipPhone}`} className="hover:underline text-foreground font-mono font-medium">
-                                {shipPhone}
+                              <Phone className="h-4 w-4 text-amber-600 shrink-0" />
+                              <a href={`tel:${shipPhone}`} className="hover:underline text-foreground font-mono text-base font-semibold tracking-wide">
+                                {formatPhoneDisplay(shipPhone)}
                               </a>
                               <span className="text-[10px] text-muted-foreground font-normal">(Shipping)</span>
                             </span>
