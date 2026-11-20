@@ -364,7 +364,7 @@ export function OrderChecklistDialog({
             background: #ffffff !important;
             color: #000000 !important;
             z-index: 999999 !important;
-            font-family: var(--font-roboto), Roboto, var(--font-hind-siliguri), "Hind Siliguri", "Noto Sans Bengali", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+            font-family: var(--font-roboto), Roboto, var(--font-noto-serif-bengali), "Noto Serif Bengali", "Noto Sans Bengali", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
