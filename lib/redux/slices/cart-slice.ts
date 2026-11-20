@@ -17,7 +17,6 @@ export interface CartItem {
   comboItems?: any[];
   weightGrams?: number;
   weightKg?: number;
-  pricePerKg?: number;
 }
 
 export interface CartState {

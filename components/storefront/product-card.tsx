@@ -77,7 +77,6 @@ export interface StorefrontProduct {
   origin?: string;
   ratingAvg?: number;
   ratingCount?: number;
-  pricePerKg?: number;
   variants: StorefrontVariant[];
 }
 
@@ -437,7 +436,6 @@ export function ProductCard({
             comboItems: selectedVariant.comboItems || [],
             weightGrams: selectedVariant.weightGrams || Math.round(variantWeightKg * 1000),
             weightKg: variantWeightKg,
-            pricePerKg: product.pricePerKg || Math.round(unitPrice / variantWeightKg),
           })
         );
       } else {
@@ -728,8 +726,6 @@ export function ProductCard({
                   </SelectTrigger>
                   <SelectContent className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border border-amber-200 dark:border-stone-800 rounded-xl shadow-xl z-50 p-1">
                     {sortedVariants.map((v) => {
-                      const vWeight = v.weightKg || (v.weightGrams ? v.weightGrams / 1000 : (v.netQuantity || 1));
-                      const vRatePerKg = product.pricePerKg || Math.round(v.price / vWeight);
                       const title = lang === "bn" ? v.nameBn || v.name : v.name;
                       return (
                         <SelectItem
@@ -738,14 +734,7 @@ export function ProductCard({
                           className="text-sm sm:text-base font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
                         >
                           <span className="flex items-center justify-between w-full gap-3">
-                            <span className="flex items-center gap-1.5 truncate">
-                              <span className="font-bold">{title}</span>
-                              {!v.isCombo && (
-                                <span className="text-xs sm:text-sm text-amber-700/80 dark:text-amber-400/80 font-normal">
-                                  ({formatStorePrice(vRatePerKg, lang)}/কেজি)
-                                </span>
-                              )}
-                            </span>
+                            <span className="font-bold truncate">{title}</span>
                             <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0">
                               {formatStorePrice(v.price, lang)}
                             </span>
@@ -788,21 +777,28 @@ export function ProductCard({
 
             {/* Price (displayed below the variation dropdown) */}
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
-              {/* Base Rate / Unit Price */}
+              {/* Unit Price */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
-                {!selectedVariant.isCombo ? (
-                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2.5 py-1 rounded-md font-mono text-sm sm:text-base font-black border border-amber-300/60 dark:border-amber-800/60">
-                    <span>{formatStorePrice(product.pricePerKg || Math.round(unitPrice / (selectedVariant.weightKg || 1)), lang)}</span>
-                    <span className="font-sans text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-300">/ {lang === "bn" ? "কেজি" : "kg"}</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 bg-amber-100/90 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 px-2.5 py-1 rounded-md font-mono text-sm sm:text-base font-black border border-amber-300/60 dark:border-amber-800/60">
-                    <span>{formatStorePrice(unitPrice, lang)}</span>
-                    <span className="font-sans text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-300">({lang === "bn" ? `${(selectedVariant.weightKg || 3).toLocaleString("bn-BD")} কেজি বান্ডিল` : `${selectedVariant.weightKg || 3} kg bundle`})</span>
-                  </span>
-                )}
+                <span className="text-stone-600 dark:text-stone-400 font-semibold">
+                  {displayUnit > 0
+                    ? lang === "bn"
+                      ? "একক দর:"
+                      : "Unit Price:"
+                    : lang === "bn"
+                      ? "মূল্য:"
+                      : "Price:"}
+                </span>
+                <span
+                  className={`font-mono ${
+                    displayUnit > 0
+                      ? "text-sm sm:text-base font-extrabold text-amber-950 dark:text-amber-200"
+                      : "text-base sm:text-xl font-black text-amber-950 dark:text-amber-100"
+                  }`}
+                >
+                  {formatStorePrice(unitPrice, lang)}
+                </span>
                 {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="line-through text-stone-400 dark:text-stone-500 text-sm sm:text-base font-semibold ml-1">
+                  <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
                     {formatStorePrice(selectedVariant.compareAtPrice, lang)}
                   </span>
                 )}

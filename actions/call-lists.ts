@@ -494,7 +494,7 @@ export async function logCallAttemptAction(payload: {
       called_by: actorUuid,
       outcome: payload.outcome,
       notes: payload.notes?.trim() || null,
-      callbackAt: callbackIso,
+      callback_at: callbackIso,
       created_at: nowIso,
     });
 

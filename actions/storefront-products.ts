@@ -155,7 +155,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const [prodRes, varRes, imgRes] = await Promise.all([
       client
         .from("products")
-        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order, price_per_kg")
+        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order")
         .eq("status", "active")
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -298,7 +298,6 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
             origin: p.origin,
             ratingAvg: Number(p.rating_avg) || 5,
             ratingCount: Number(p.rating_count) || 1,
-            pricePerKg: Number((p as any).price_per_kg) || undefined,
             variants,
           };
         })

@@ -67,7 +67,6 @@ export interface SaveProductInput {
     seo_description?: string;
     google_product_category?: string | null;
     product_type?: string | null;
-    price_per_kg?: number | null;
   };
   variants: SaveProductVariantInput[];
   images: SaveProductImageInput[];
@@ -196,10 +195,6 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
       seo_description: params.product.seo_description?.trim() || null,
       google_product_category: params.product.google_product_category?.trim() || null,
       product_type: params.product.product_type?.trim() || null,
-      price_per_kg:
-        typeof params.product.price_per_kg === "number" && !isNaN(params.product.price_per_kg)
-          ? params.product.price_per_kg
-          : null,
       updated_at: now,
     };
 
