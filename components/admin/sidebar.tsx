@@ -47,6 +47,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -306,7 +307,22 @@ export function AdminSidebar() {
   const { user, role, logout } = useAdminAuth();
   const { data: counts } = useAdminBadgeCounts();
   const { storeName, logoUrl } = useSiteSettings();
+  const { isMobile, setOpenMobile } = useSidebar();
   const mounted = useMounted();
+
+  // Close mobile slidebar when a link is clicked
+  const handleNavClick = React.useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+
+  // Safeguard: auto-close mobile sidebar whenever pathname or searchParams change
+  React.useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, searchParams, isMobile, setOpenMobile]);
 
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
 
@@ -414,6 +430,7 @@ export function AdminSidebar() {
                 >
                   <Link
                     href={toCleanPath(item.href)}
+                    onClick={handleNavClick}
                     className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center"
                   >
                     <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:gap-0 min-w-0">
@@ -468,6 +485,7 @@ export function AdminSidebar() {
       <SidebarHeader className="border-b border-border/60 px-3.5 py-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2.5">
         <Link
           href={toCleanPath("/admin")}
+          onClick={handleNavClick}
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
           title={brandName}
         >
@@ -543,7 +561,10 @@ export function AdminSidebar() {
             </div>
           </div>
           <button
-            onClick={() => logout()}
+            onClick={() => {
+              if (isMobile) setOpenMobile(false);
+              logout();
+            }}
             title="Sign out / লগ আউট"
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-zinc-200 hover:text-foreground dark:hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
           >

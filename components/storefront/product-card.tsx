@@ -511,6 +511,20 @@ export function ProductCard({
       ? product.summaryBn || product.summary || "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।"
       : product.summary || "Traditional pure artisanal jaggery crafted by village artisans.";
 
+  const variantWeightText = (() => {
+    if (selectedVariant.weightGrams && selectedVariant.weightGrams > 0) {
+      if (selectedVariant.weightGrams >= 1000) {
+        const kg = selectedVariant.weightGrams / 1000;
+        return lang === "bn" ? `${kg.toLocaleString("bn-BD")} কেজি` : `${kg} kg`;
+      }
+      return lang === "bn" ? `${selectedVariant.weightGrams.toLocaleString("bn-BD")} গ্রাম` : `${selectedVariant.weightGrams}g`;
+    }
+    if (selectedVariant.weightKg && selectedVariant.weightKg > 0) {
+      return lang === "bn" ? `${selectedVariant.weightKg.toLocaleString("bn-BD")} কেজি` : `${selectedVariant.weightKg} kg`;
+    }
+    return lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name;
+  })();
+
   return (
     <section
       ref={cardRef}
@@ -797,16 +811,14 @@ export function ProductCard({
                 >
                   {formatStorePrice(unitPrice, lang)}
                 </span>
-                {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
-                    {formatStorePrice(selectedVariant.compareAtPrice, lang)}
+                {variantWeightText && (
+                  <span className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-semibold">
+                    / {variantWeightText}
                   </span>
                 )}
                 {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="px-2 py-0.5 text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-md ml-1">
-                    {lang === "bn"
-                      ? `${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)} সাশ্রয়`
-                      : `Save ${formatStorePrice(selectedVariant.compareAtPrice - unitPrice, lang)}`}
+                  <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
+                    {formatStorePrice(selectedVariant.compareAtPrice, lang)}
                   </span>
                 )}
               </div>
