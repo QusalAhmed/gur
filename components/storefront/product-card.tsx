@@ -745,6 +745,7 @@ export function ProductCard({
                         <SelectItem
                           key={v.id}
                           value={v.id}
+                          hideIndicator
                           className="text-sm sm:text-base font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
                         >
                           <span className="flex items-center justify-between w-full gap-3">

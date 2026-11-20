@@ -354,7 +354,7 @@ export function CombosClient() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
                     onClick={() => handleOpenEdit(combo)}
-                    className="font-semibold text-sm text-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer line-clamp-1"
+                    className="font-semibold text-sm text-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer break-words leading-snug"
                   >
                     {combo.name}
                   </span>
@@ -363,14 +363,14 @@ export function CombosClient() {
                   </Badge>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
                   {combo.nameBn && (
                     <>
-                      <span className="font-bangla">{combo.nameBn}</span>
+                      <span className="font-bangla break-words">{combo.nameBn}</span>
                       <span className="text-[10px] text-muted-foreground/50">•</span>
                     </>
                   )}
-                  <span className="font-mono text-[11px] text-muted-foreground/80">{combo.sku}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground/80 break-all">{combo.sku}</span>
                 </div>
               </div>
             </div>
@@ -473,7 +473,7 @@ export function CombosClient() {
               </div>
 
               {c.bottleneckComponent && (
-                <p className="text-[11px] text-muted-foreground line-clamp-1" title={`Limited by: ${c.bottleneckComponent.productName} (${c.bottleneckComponent.availableStock} physical stock left)`}>
+                <p className="text-[11px] text-muted-foreground break-words mt-0.5" title={`Limited by: ${c.bottleneckComponent.productName} (${c.bottleneckComponent.availableStock} physical stock left)`}>
                   Limited by: <span className="font-medium text-foreground">{c.bottleneckComponent.productName}</span>
                 </p>
               )}

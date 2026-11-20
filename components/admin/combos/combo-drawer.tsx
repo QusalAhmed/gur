@@ -533,9 +533,9 @@ export function ComboDrawer({
                         <img
                           src={prod.imageUrl}
                           alt={prod.name}
-                          className="h-6 w-6 rounded object-cover"
+                          className="h-6 w-6 rounded object-cover shrink-0"
                         />
-                        <span className="truncate max-w-[120px] text-[11px]">{prod.name}</span>
+                        <span className="text-[11px] break-words text-left flex-1">{prod.name}</span>
                         {isSelected && <CheckCircle2 className="h-3 w-3 text-amber-600 shrink-0" />}
                       </button>
                     );
@@ -596,9 +596,9 @@ export function ComboDrawer({
                     className="p-3 rounded-xl border border-border/80 bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground truncate">{comp.productName}</span>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-foreground break-words">{comp.productName}</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
                           {comp.variantName}
                         </Badge>
                       </div>

@@ -502,7 +502,7 @@ export function ProductsClient() {
         cell: ({ row }) => {
           const p = row.original;
           return (
-            <div className="flex items-center gap-2.5 min-w-[210px] max-w-[320px]">
+            <div className="flex items-center gap-2.5 min-w-[240px]">
               <div className="h-9 w-9 rounded-lg bg-muted/60 border border-border/80 flex items-center justify-center shrink-0 overflow-hidden">
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -516,10 +516,10 @@ export function ProductsClient() {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <Link
                     href={`/admin/products/${p.id}/edit`}
-                    className="font-semibold text-[13px] leading-tight text-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors truncate"
+                    className="font-semibold text-[13px] leading-snug text-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors break-words"
                     title={p.name}
                   >
                     {p.name}
@@ -531,10 +531,10 @@ export function ProductsClient() {
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5 truncate">
-                  {p.nameBn && <span className="font-bangla truncate">{p.nameBn}</span>}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                  {p.nameBn && <span className="font-bangla break-words">{p.nameBn}</span>}
                   {p.nameBn && <span className="text-muted-foreground/40">·</span>}
-                  <span className="font-mono text-[10px] text-muted-foreground/80 truncate">
+                  <span className="font-mono text-[10px] text-muted-foreground/80 break-all">
                     /{p.slug}
                   </span>
                 </div>
@@ -654,9 +654,6 @@ export function ProductsClient() {
                       <span>{max.toLocaleString()}</span>
                     </>
                   )}
-                </span>
-                <span className="text-[10px] text-muted-foreground bg-muted/60 px-1 py-0.2 rounded font-medium group-hover/range:bg-amber-500/15 group-hover/range:text-amber-700 dark:group-hover/range:text-amber-300 transition-colors">
-                  {variants.length} pkgs
                 </span>
               </button>
             );
@@ -819,7 +816,7 @@ export function ProductsClient() {
                     >
                       {v.packType}
                     </Badge>
-                    <span className="font-medium text-foreground truncate" title={v.name}>
+                    <span className="font-medium text-foreground break-words" title={v.name}>
                       {v.name}
                     </span>
                     {v.isDefault && (
