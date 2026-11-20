@@ -164,3 +164,116 @@ export function formatDelta(percent: number | null | undefined): string {
   const sign = percent > 0 ? "+" : "";
   return `${sign}${percent.toFixed(1)}%`;
 }
+
+export interface FormattedCustomerAddress {
+  recipientName?: string;
+  phone?: string;
+  addressLine?: string;
+  areaLine?: string;
+  fullAddress: string;
+  district?: string;
+  division?: string;
+  upazila?: string;
+  postalCode?: string;
+  landmark?: string;
+  isHomeDelivery?: boolean;
+}
+
+/**
+ * Robust address parser for Bangladeshi e-commerce addresses.
+ * Gracefully parses and formats address_line, address, full_address, street, thana, upazila, district, city, division, postal_code, landmark, etc.
+ */
+export function formatCustomerAddress(raw: any): FormattedCustomerAddress | null {
+  if (!raw) return null;
+
+  let addr = raw;
+  if (typeof addr === "string") {
+    const trimmed = addr.trim();
+    if (!trimmed || trimmed === "null" || trimmed === "{}" || trimmed === "undefined") return null;
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        addr = JSON.parse(trimmed);
+      } catch {
+        return { fullAddress: trimmed, addressLine: trimmed };
+      }
+    } else {
+      return { fullAddress: trimmed, addressLine: trimmed };
+    }
+  }
+
+  if (typeof addr !== "object" || addr === null) return null;
+
+  const recipientName = (addr.recipient_name || addr.full_name || addr.name || "").trim();
+  const phone = (addr.phone || addr.alternative_phone || addr.shipping_phone || "").trim();
+
+  // Address line (street / house / road / village / market)
+  const rawStreet = (
+    addr.address_line ||
+    addr.address ||
+    addr.full_address ||
+    addr.street ||
+    addr.house_road ||
+    ""
+  ).trim();
+
+  // Thana / Upazila
+  const upazila = (addr.upazila || addr.thana || addr.police_station || "").trim();
+
+  // District / City
+  const district = (addr.district || addr.district_name || "").trim();
+  const rawCity = (addr.city || "").trim();
+  const city = rawCity && rawCity.toLowerCase() !== district.toLowerCase() ? rawCity : "";
+
+  // Division
+  const rawDivision = (addr.division || "").trim();
+  const division =
+    rawDivision &&
+    rawDivision.toLowerCase() !== district.toLowerCase() &&
+    rawDivision.toLowerCase() !== city.toLowerCase()
+      ? rawDivision
+      : "";
+
+  // Postal code
+  const postalCode = (addr.postal_code || addr.postcode || addr.zip || "").trim();
+
+  // Landmark
+  const landmark = (addr.landmark || "").trim();
+
+  // Home delivery flag
+  const isHomeDelivery =
+    typeof addr.is_home_delivery === "boolean"
+      ? addr.is_home_delivery
+      : typeof addr.home_delivery === "boolean"
+      ? addr.home_delivery
+      : undefined;
+
+  // Build area line: [upazila, city, district, division].filter(Boolean)
+  const areaParts = [upazila, city, district, division].filter(Boolean);
+  if (postalCode) {
+    areaParts.push(postalCode.startsWith("Postal") ? postalCode : `Postal: ${postalCode}`);
+  }
+  const areaLine = areaParts.join(", ");
+
+  // Full address
+  const fullParts = [rawStreet, areaLine].filter(Boolean);
+  const fullAddress = fullParts.join(", ").trim();
+
+  // If there's no actual address information
+  if (!fullAddress) {
+    return null;
+  }
+
+  return {
+    recipientName: recipientName || undefined,
+    phone: phone || undefined,
+    addressLine: rawStreet || undefined,
+    areaLine: areaLine || undefined,
+    fullAddress,
+    district: district || undefined,
+    division: division || rawDivision || undefined,
+    upazila: upazila || undefined,
+    postalCode: postalCode || undefined,
+    landmark: landmark || undefined,
+    isHomeDelivery,
+  };
+}

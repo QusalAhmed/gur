@@ -28,6 +28,7 @@ import {
   LogOut,
   Gift,
   ArrowUpDown,
+  PhoneCall,
   Image as ImageIcon,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
@@ -62,7 +63,7 @@ interface NavItem {
   titleBn: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  badgeKey?: "pendingOrders" | "incompleteOrders" | "pendingReviews" | "newQuotes" | "newMessages";
+  badgeKey?: "pendingOrders" | "incompleteOrders" | "pendingReviews" | "newQuotes" | "newMessages" | "dueCallbacks";
 }
 
 interface NavGroup {
@@ -71,7 +72,8 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
+// Tier 1: Daily Operations (Fulfillment, Inventory, Catalog, Customers)
+const tier1Groups: NavGroup[] = [
   {
     label: "Overview",
     labelBn: "ওভারভিউ",
@@ -85,7 +87,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Sales",
+    label: "Sales & Orders",
     labelBn: "বিক্রয় ও অর্ডার",
     items: [
       {
@@ -111,38 +113,8 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Inventory",
-    labelBn: "ইনভেন্টরি ও লট",
-    items: [
-      {
-        title: "Stock Levels",
-        titleBn: "স্টক ও লেজার",
-        href: "/admin/inventory",
-        icon: ClipboardList,
-      },
-      {
-        title: "Lots & Batches",
-        titleBn: "লট ও মান নিয়ন্ত্রণ",
-        href: "/admin/batches",
-        icon: ScrollText,
-      },
-      {
-        title: "Suppliers",
-        titleBn: "গাছি ও সরবরাহকারী",
-        href: "/admin/suppliers",
-        icon: Building2,
-      },
-      {
-        title: "Warehouses",
-        titleBn: "গুদাম",
-        href: "/admin/warehouses",
-        icon: Warehouse,
-      },
-    ],
-  },
-  {
-    label: "Catalog",
-    labelBn: "পণ্য ক্যাটালগ",
+    label: "Catalog & Stock",
+    labelBn: "পণ্য ও ইনভেন্টরি",
     items: [
       {
         title: "Products",
@@ -174,17 +146,48 @@ const navGroups: NavGroup[] = [
         href: "/admin/categories",
         icon: Layers,
       },
+      {
+        title: "Stock Levels",
+        titleBn: "স্টক ও লেজার",
+        href: "/admin/inventory",
+        icon: ClipboardList,
+      },
+      {
+        title: "Lots & Batches",
+        titleBn: "লট ও মান নিয়ন্ত্রণ",
+        href: "/admin/batches",
+        icon: ScrollText,
+      },
+      {
+        title: "Suppliers",
+        titleBn: "গাছি ও সরবরাহকারী",
+        href: "/admin/suppliers",
+        icon: Building2,
+      },
+      {
+        title: "Warehouses",
+        titleBn: "গুদাম",
+        href: "/admin/warehouses",
+        icon: Warehouse,
+      },
     ],
   },
   {
-    label: "Customers",
-    labelBn: "গ্রাহক ও B2B",
+    label: "Customers & CRM",
+    labelBn: "গ্রাহক ও যোগাযোগ",
     items: [
       {
         title: "Customers CRM",
         titleBn: "গ্রাহক তালিকা",
         href: "/admin/customers",
         icon: Users,
+      },
+      {
+        title: "Call Lists",
+        titleBn: "কল লিস্ট ও ট্র্যাকার",
+        href: "/admin/calls",
+        icon: PhoneCall,
+        badgeKey: "dueCallbacks",
       },
       {
         title: "B2B Accounts",
@@ -215,6 +218,10 @@ const navGroups: NavGroup[] = [
       },
     ],
   },
+];
+
+// Tier 2: Administration & Configuration (Finance, Settings, Security)
+const tier2Groups: NavGroup[] = [
   {
     label: "Finance",
     labelBn: "অর্থ ও পেমেন্ট",
@@ -228,8 +235,8 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Settings",
-    labelBn: "সেটিংস ও নিরাপত্তা",
+    label: "Store Settings",
+    labelBn: "স্টোর সেটিংস",
     items: [
       {
         title: "Store Settings",
@@ -249,6 +256,12 @@ const navGroups: NavGroup[] = [
         href: "/admin/coupons",
         icon: Tag,
       },
+    ],
+  },
+  {
+    label: "System & Security",
+    labelBn: "সিস্টেম ও অডিট",
+    items: [
       {
         title: "Staff Roles",
         titleBn: "স্টাফ পারমিশন",
@@ -298,10 +311,11 @@ export function AdminSidebar() {
   const roleConfig = role ? ROLE_CONFIG[role] : ROLE_CONFIG.support;
 
   // Set of all base item paths across all sidebar groups to prevent parent links
-  // (like /admin/products) from remaining highlighted when on a child page with its own sidebar item (like /admin/products/reorder)
+  // from remaining highlighted when on a child page with its own sidebar item
   const allItemPaths = React.useMemo(() => {
     const set = new Set<string>();
-    for (const group of navGroups) {
+    const allGroups = [...tier1Groups, ...tier2Groups];
+    for (const group of allGroups) {
       for (const item of group.items) {
         set.add(item.href.split("?")[0]);
       }
@@ -309,12 +323,141 @@ export function AdminSidebar() {
     return set;
   }, []);
 
-  // Always display the English business name and brand logo cleanly without hydration mismatch
   const brandName = mounted ? (storeName || "Gramayon") : "Gramayon";
-  const brandSubtitle = "Admin Panel";
   const effectiveLogoUrl = mounted && logoUrl ? logoUrl : "/admin-icon/icon-192.png";
-
   const brandInitial = brandName.slice(0, 1).toUpperCase();
+
+  const renderNavGroup = (group: NavGroup) => {
+    const visibleItems = group.items.filter((item) =>
+      !role ? true : canRoleAccessPath(role, item.href)
+    );
+
+    if (visibleItems.length === 0) return null;
+
+    return (
+      <SidebarGroup
+        key={group.label}
+        className="py-1 group-data-[collapsible=icon]:py-0.5"
+      >
+        <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-2 group-data-[collapsible=icon]:hidden">
+          {group.label}
+        </SidebarGroupLabel>
+        <SidebarMenu className="gap-0.5">
+          {visibleItems.map((item) => {
+            const Icon = item.icon;
+            const [itemPath, itemQuery] = item.href.split("?");
+            const normalizedPathname = pathname.startsWith("/admin")
+              ? pathname
+              : `/admin${pathname === "/" ? "" : pathname}`;
+
+            let isActive = false;
+            if (item.href === "/admin") {
+              isActive = normalizedPathname === "/admin";
+            } else if (itemQuery) {
+              const itemParams = new URLSearchParams(itemQuery);
+              const matchesPath = normalizedPathname === itemPath;
+              const matchesParams = Array.from(itemParams.entries()).every(
+                ([k, v]) => searchParams?.get(k) === v
+              );
+              isActive = matchesPath && matchesParams;
+            } else {
+              if (normalizedPathname === itemPath) {
+                const hasStatusIncomplete =
+                  normalizedPathname === "/admin/orders" &&
+                  searchParams?.get("status") === "incomplete_order";
+                isActive = !hasStatusIncomplete;
+              } else if (normalizedPathname.startsWith(itemPath + "/")) {
+                const hasSpecificSidebarMatch = allItemPaths.has(normalizedPathname);
+                isActive = !hasSpecificSidebarMatch;
+              }
+
+              // Explicit safeguard for specific subroutes
+              if (
+                (normalizedPathname.startsWith("/admin/products/reorder") ||
+                  normalizedPathname.startsWith("/admin/products/images")) &&
+                (itemPath === "/admin/products" || itemPath === "/admin/orders")
+              ) {
+                isActive = false;
+              }
+            }
+
+            const badgeCount = mounted && item.badgeKey && counts ? counts[item.badgeKey] : 0;
+
+            return (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={{
+                    children: (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <span>{item.title}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            ({item.titleBn})
+                          </span>
+                        </div>
+                        {badgeCount > 0 && (
+                          <span className="text-[10px] text-amber-500 font-semibold">
+                            {badgeCount} pending
+                          </span>
+                        )}
+                      </div>
+                    ),
+                  }}
+                  className={cn(
+                    "relative h-8.5 rounded-lg px-2 text-xs font-medium transition-all group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mx-auto",
+                    isActive
+                      ? "bg-amber-500/10 text-amber-800 dark:text-amber-300 font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-amber-600 dark:before:bg-amber-500 shadow-xs"
+                      : "text-muted-foreground hover:bg-zinc-200/60 hover:text-foreground dark:hover:bg-zinc-900/80"
+                  )}
+                >
+                  <Link
+                    href={toCleanPath(item.href)}
+                    className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center"
+                  >
+                    <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:gap-0 min-w-0">
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <Icon
+                          className={cn(
+                            "h-4 w-4 shrink-0 transition-colors",
+                            isActive
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          )}
+                        />
+                        {badgeCount > 0 && (
+                          <span className="absolute -top-1 -right-1.5 hidden group-data-[collapsible=icon]:flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-600 px-0.5 text-[8px] font-bold text-white shadow-xs">
+                            {badgeCount > 9 ? "•" : badgeCount}
+                          </span>
+                        )}
+                      </div>
+                      <span className="truncate group-data-[collapsible=icon]:hidden">
+                        {item.title}
+                      </span>
+                    </div>
+                    {badgeCount > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "h-4.5 px-1.5 text-[10px] font-bold rounded-full group-data-[collapsible=icon]:hidden shrink-0 border transition-all",
+                          isActive
+                            ? "bg-amber-600 text-white border-amber-700 shadow-xs"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                        )}
+                      >
+                        {badgeCount > 99 ? "99+" : badgeCount}
+                      </Badge>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroup>
+    );
+  };
 
   return (
     <Sidebar
@@ -322,14 +465,14 @@ export function AdminSidebar() {
       className="border-r border-border/80 bg-zinc-50/50 dark:bg-zinc-950/50 backdrop-blur-sm transition-[width] duration-200"
     >
       {/* Brand Header */}
-      <SidebarHeader className="border-b border-border/60 px-4 py-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2.5">
+      <SidebarHeader className="border-b border-border/60 px-3.5 py-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2.5">
         <Link
           href={toCleanPath("/admin")}
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center w-full"
           title={brandName}
         >
           {effectiveLogoUrl ? (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white dark:bg-zinc-900 border border-border/80 shadow-xs">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-white dark:bg-zinc-900 border border-border/80 shadow-xs ring-1 ring-border/30">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={effectiveLogoUrl}
@@ -347,7 +490,7 @@ export function AdminSidebar() {
               {brandName}
             </span>
             <span className="text-[11px] text-muted-foreground font-medium truncate">
-              {brandSubtitle}
+              Operations Console
             </span>
           </div>
         </Link>
@@ -355,134 +498,21 @@ export function AdminSidebar() {
 
       {/* Navigation Groups */}
       <SidebarContent className="px-2 py-2 group-data-[collapsible=icon]:px-1.5">
-        {navGroups.map((group) => {
-          // Filter items by role capability
-          const visibleItems = group.items.filter((item) =>
-            !role ? true : canRoleAccessPath(role, item.href)
-          );
+        {/* Tier 1: Daily Operations */}
+        {tier1Groups.map((group) => renderNavGroup(group))}
 
-          if (visibleItems.length === 0) return null;
+        {/* Distinct Visual Divider for Tier 2: Administration */}
+        <div className="my-2.5 border-t border-border/70 mx-2 group-data-[collapsible=icon]:my-2 group-data-[collapsible=icon]:mx-1" />
 
-          return (
-            <SidebarGroup
-              key={group.label}
-              className="py-1 group-data-[collapsible=icon]:py-0.5"
-            >
-              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 px-2 group-data-[collapsible=icon]:hidden">
-                {group.label}
-              </SidebarGroupLabel>
-              <SidebarMenu className="gap-0.5">
-                {visibleItems.map((item) => {
-                  const Icon = item.icon;
-                  const [itemPath, itemQuery] = item.href.split("?");
-                  const normalizedPathname = pathname.startsWith("/admin")
-                    ? pathname
-                    : `/admin${pathname === "/" ? "" : pathname}`;
+        <div className="px-2 pb-1 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/90 bg-muted/40 rounded-md border border-border/40">
+            <ShieldCheck className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+            <span>Administration & System</span>
+          </div>
+        </div>
 
-                  let isActive = false;
-                  if (item.href === "/admin") {
-                    isActive = normalizedPathname === "/admin";
-                  } else if (itemQuery) {
-                    const itemParams = new URLSearchParams(itemQuery);
-                    const matchesPath = normalizedPathname === itemPath;
-                    const matchesParams = Array.from(itemParams.entries()).every(
-                      ([k, v]) => searchParams?.get(k) === v
-                    );
-                    isActive = matchesPath && matchesParams;
-                  } else {
-                    if (normalizedPathname === itemPath) {
-                      const hasStatusIncomplete =
-                        normalizedPathname === "/admin/orders" &&
-                        searchParams?.get("status") === "incomplete_order";
-                      isActive = !hasStatusIncomplete;
-                    } else if (normalizedPathname.startsWith(itemPath + "/")) {
-                      // Only treat parent item as active if there is no other specific sidebar item matching pathname
-                      const hasSpecificSidebarMatch = allItemPaths.has(normalizedPathname);
-                      isActive = !hasSpecificSidebarMatch;
-                    }
-
-                    // Explicit safeguard: when on /admin/products/reorder or /admin/products/images, do not highlight /admin/products or /admin/orders
-                    if (
-                      (normalizedPathname.startsWith("/admin/products/reorder") ||
-                        normalizedPathname.startsWith("/admin/products/images")) &&
-                      (itemPath === "/admin/products" || itemPath === "/admin/orders")
-                    ) {
-                      isActive = false;
-                    }
-                  }
-
-                  const badgeCount = mounted && item.badgeKey && counts ? counts[item.badgeKey] : 0;
-
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={{
-                          children: (
-                            <div className="flex flex-col gap-0.5">
-                              <div className="flex items-center gap-1.5 font-medium">
-                                <span>{item.title}</span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  ({item.titleBn})
-                                </span>
-                              </div>
-                              {badgeCount > 0 && (
-                                <span className="text-[10px] text-amber-500 font-semibold">
-                                  {badgeCount} pending
-                                </span>
-                              )}
-                            </div>
-                          ),
-                        }}
-                        className={cn(
-                          "h-8.5 rounded-lg px-2 text-xs font-medium transition-colors group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mx-auto",
-                          isActive
-                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
-                            : "text-muted-foreground hover:bg-zinc-200/50 hover:text-foreground dark:hover:bg-zinc-900"
-                        )}
-                      >
-                        <Link
-                          href={toCleanPath(item.href)}
-                          className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center"
-                        >
-                          <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:gap-0 min-w-0">
-                            <div className="relative flex items-center justify-center shrink-0">
-                              <Icon
-                                className={cn(
-                                  "h-4 w-4 shrink-0",
-                                  isActive
-                                    ? "text-amber-600 dark:text-amber-400"
-                                    : "text-muted-foreground"
-                                )}
-                              />
-                              {badgeCount > 0 && (
-                                <span className="absolute -top-1 -right-1.5 hidden group-data-[collapsible=icon]:flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-600 px-0.5 text-[8px] font-bold text-white shadow-xs">
-                                  {badgeCount > 9 ? "•" : badgeCount}
-                                </span>
-                              )}
-                            </div>
-                            <span className="truncate group-data-[collapsible=icon]:hidden">
-                              {item.title}
-                            </span>
-                          </div>
-                          {badgeCount > 0 && (
-                            <Badge
-                              variant="secondary"
-                              className="h-4.5 px-1.5 text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 group-data-[collapsible=icon]:hidden shrink-0"
-                            >
-                              {badgeCount > 99 ? "99+" : badgeCount}
-                            </Badge>
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroup>
-          );
-        })}
+        {/* Tier 2: Administration & Configuration */}
+        {tier2Groups.map((group) => renderNavGroup(group))}
       </SidebarContent>
 
       {/* Footer: User profile & role badge */}

@@ -166,6 +166,7 @@ export const KNOWN_ADMIN_SECTIONS: ReadonlySet<string> = new Set([
   "analytics",
   "incomplete",
   "shipments",
+  "calls",
   "posts",
   "faqs",
 ]);
@@ -252,6 +253,7 @@ export function canRoleAccessPath(role: AdminRole, pathname: string): boolean {
     matchesRoute(path, "/admin/incomplete") ||
     matchesRoute(path, "/admin/shipments") ||
     matchesRoute(path, "/admin/customers") ||
+    matchesRoute(path, "/admin/calls") ||
     matchesRoute(path, "/admin/quotes") ||
     matchesRoute(path, "/admin/reviews") ||
     matchesRoute(path, "/admin/messages") ||

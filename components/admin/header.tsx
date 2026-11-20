@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Search,
   LogOut,
@@ -9,6 +10,9 @@ import {
   Save,
   Loader2,
   Download,
+  ArrowLeft,
+  ExternalLink,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminNotificationsPopover } from "@/components/admin/notifications-popover";
@@ -45,6 +49,7 @@ import { useAdminPwa } from "@/components/admin/admin-pwa-provider";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { ROLE_CONFIG } from "@/lib/admin-permissions";
 import { AdminLoadingBar } from "@/components/admin/admin-loading-bar";
+import { cn } from "@/lib/utils";
 
 const emptySubscribe = () => () => {};
 function useMounted() {
@@ -55,19 +60,141 @@ function useMounted() {
   );
 }
 
-function getBreadcrumb(pathname: string) {
+function toCleanPath(href: string): string {
+  if (href === "/admin") return "/";
+  if (href.startsWith("/admin?")) return href.replace(/^\/admin/, "");
+  if (href.startsWith("/admin/")) return href.replace(/^\/admin/, "");
+  return href;
+}
+
+function resolveStorefrontUrl(): string {
+  if (typeof window === "undefined") {
+    return process.env.NEXT_PUBLIC_SITE_URL || "/";
+  }
+
+  const { hostname, host, protocol } = window.location;
+
+  // 1. If currently on production admin subdomain
+  if (
+    hostname === "admin.khatikhejurgur.shop" ||
+    (hostname.endsWith(".khatikhejurgur.shop") && hostname.startsWith("admin."))
+  ) {
+    return "https://khatikhejurgur.shop/";
+  }
+
+  // 2. If on any admin.* subdomain (e.g. admin.localhost:3000, admin.staging.com)
+  if (hostname.startsWith("admin.")) {
+    const mainHost = host.replace(/^admin\./, "");
+    return `${protocol}//${mainHost}/`;
+  }
+
+  // 3. If on public site with configured NEXT_PUBLIC_SITE_URL
+  if (
+    process.env.NEXT_PUBLIC_SITE_URL &&
+    !hostname.includes("localhost") &&
+    !hostname.includes("127.0.0.1")
+  ) {
+    const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+    return `${base}/`;
+  }
+
+  // 4. Default to current origin's root path
+  return `${protocol}//${host}/`;
+}
+
+interface BreadcrumbSegment {
+  label: string;
+  href?: string;
+  isLast: boolean;
+}
+
+const SEGMENT_TITLES: Record<string, string> = {
+  admin: "Admin",
+  orders: "Orders",
+  shipments: "Shipments",
+  inventory: "Stock Levels",
+  batches: "Lots & Batches",
+  suppliers: "Suppliers",
+  warehouses: "Warehouses",
+  products: "Products",
+  images: "Media Gallery",
+  reorder: "Reorder",
+  variants: "Variants",
+  combos: "Combos",
+  categories: "Categories",
+  customers: "Customers",
+  calls: "Call Lists",
+  businesses: "B2B Accounts",
+  quotes: "Quotes",
+  reviews: "Reviews",
+  messages: "Messages",
+  payments: "Payments",
+  settings: "Settings",
+  shipping: "Shipping",
+  zones: "Delivery Zones",
+  coupons: "Coupons",
+  staff: "Staff Directory",
+  audit: "Audit Log",
+  outbox: "Outbox Queue",
+  new: "New",
+  edit: "Edit",
+  "price-tiers": "Price Tiers",
+};
+
+function formatSegmentLabel(segment: string): string {
+  const lower = segment.toLowerCase();
+  if (SEGMENT_TITLES[lower]) return SEGMENT_TITLES[lower];
+  if (/^\d+$/.test(segment)) return `#${segment}`;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(segment)) return `#${segment.slice(0, 6)}…`;
+  return segment
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function buildBreadcrumbs(pathname: string): { items: BreadcrumbSegment[]; hasBack: boolean; parentHref?: string } {
   const segments = pathname.split("/").filter(Boolean);
-  const relevantSegments = segments[0] === "admin" ? segments.slice(1) : segments;
-  if (relevantSegments.length === 0) return "Overview";
-  return relevantSegments
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " "))
-    .join(" › ");
+  const relevant = segments[0] === "admin" ? segments.slice(1) : segments;
+
+  if (relevant.length === 0) {
+    return {
+      items: [{ label: "Overview", isLast: true }],
+      hasBack: false,
+    };
+  }
+
+  const items: BreadcrumbSegment[] = [
+    { label: "Admin", href: toCleanPath("/admin"), isLast: false },
+  ];
+
+  let currentPath = "/admin";
+  for (let i = 0; i < relevant.length; i++) {
+    const seg = relevant[i];
+    currentPath += `/${seg}`;
+    const isLast = i === relevant.length - 1;
+    items.push({
+      label: formatSegmentLabel(seg),
+      href: isLast ? undefined : toCleanPath(currentPath),
+      isLast,
+    });
+  }
+
+  const hasBack = relevant.length > 1;
+  const parentSegments = relevant.slice(0, -1);
+  const parentHref = toCleanPath(
+    parentSegments.length === 0 ? "/admin" : `/admin/${parentSegments.join("/")}`
+  );
+
+  return { items, hasBack, parentHref };
 }
 
 export function AdminHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const breadcrumb = getBreadcrumb(pathname);
+  const { items: breadcrumbs, hasBack, parentHref } = React.useMemo(
+    () => buildBreadcrumbs(pathname),
+    [pathname]
+  );
+
   const { user, role, logout, saveProfile } = useAdminAuth();
   const { isStandalone, isIOS, canInstall, promptInstall } = useAdminPwa();
   const { email: storeEmail, storeName } = useSiteSettings();
@@ -77,7 +204,14 @@ export function AdminHeader() {
   const [profileName, setProfileName] = React.useState(user?.name || "Admin Staff");
   const [profileAvatarUrl, setProfileAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [isSaving, setIsSaving] = React.useState(false);
+  const [storefrontUrl, setStorefrontUrl] = React.useState<string>(() =>
+    process.env.NEXT_PUBLIC_SITE_URL || "/"
+  );
   const mounted = useMounted();
+
+  React.useEffect(() => {
+    setStorefrontUrl(resolveStorefrontUrl());
+  }, []);
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -90,6 +224,14 @@ export function AdminHeader() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else if (parentHref) {
+      router.push(parentHref);
+    }
+  };
 
   const handleSaveProfile = async () => {
     try {
@@ -125,21 +267,63 @@ export function AdminHeader() {
         <SbTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-1 h-4 hidden sm:block" />
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-          <span className="hidden sm:inline font-medium text-foreground/80">Admin</span>
-          <span className="hidden sm:inline">›</span>
-          <span className="truncate font-semibold text-foreground">{breadcrumb}</span>
-        </div>
+        {/* Smart Context-Aware Back Button (Auto-appears on subpages) */}
+        {hasBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleBack}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors shrink-0"
+            title="Go back / ফিরে যান"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
+
+        {/* Interactive Clickable Breadcrumbs */}
+        <nav aria-label="Breadcrumbs" className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+          {breadcrumbs.map((crumb, idx) => (
+            <React.Fragment key={crumb.label + idx}>
+              {idx > 0 && (
+                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60 mx-0.5" />
+              )}
+              {crumb.isLast || !crumb.href ? (
+                <span className="truncate font-semibold text-foreground max-w-[130px] sm:max-w-[200px]">
+                  {crumb.label}
+                </span>
+              ) : (
+                <Link
+                  href={crumb.href}
+                  className="truncate hover:text-amber-600 dark:hover:text-amber-400 hover:underline transition-colors max-w-[100px] sm:max-w-[160px]"
+                >
+                  {crumb.label}
+                </Link>
+              )}
+            </React.Fragment>
+          ))}
+        </nav>
 
         {/* Right side controls */}
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {/* View Live Storefront Button */}
+          <a
+            href={storefrontUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border/70 bg-muted/20 hover:bg-muted/70 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            title="Open customer storefront in a new tab / ওয়েবসাইট দেখুন"
+          >
+            <span>View Store</span>
+            <ExternalLink className="h-3 w-3 opacity-70" />
+          </a>
+
           {/* Global Search Button (⌘K) */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsCommandOpen(true)}
-            className="h-8 gap-2 bg-muted/30 px-2 sm:px-3 text-xs text-muted-foreground border-border/80 hover:bg-muted/70 hover:text-foreground font-normal"
+            className="h-8 gap-2 bg-muted/30 px-2 sm:px-3 text-xs text-muted-foreground border-border/80 hover:bg-muted/70 hover:text-foreground font-normal rounded-lg"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden md:inline">Search orders, products, pages...</span>
@@ -167,7 +351,7 @@ export function AdminHeader() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 gap-2 p-1 rounded-full ring-1 ring-border/80 hover:ring-amber-500/50 transition-all"
+                className="h-8 gap-2 p-1 rounded-full ring-1 ring-border/80 hover:ring-amber-500/50 transition-all cursor-pointer"
               >
                 <Avatar className="h-6 w-6">
                   {mounted && user?.avatarUrl && (
@@ -219,14 +403,14 @@ export function AdminHeader() {
               {role === "owner" || role === "admin" ? (
                 <>
                   <DropdownMenuItem
-                    onClick={() => router.push("/admin/staff")}
+                    onClick={() => router.push(toCleanPath("/admin/staff"))}
                     className="cursor-pointer text-xs flex items-center justify-between"
                   >
                     <span>Staff Directory / স্টাফ তালিকা</span>
                     <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => router.push("/admin/settings")}
+                    onClick={() => router.push(toCleanPath("/admin/settings"))}
                     className="cursor-pointer text-xs"
                   >
                     Store Settings / সেটিংস

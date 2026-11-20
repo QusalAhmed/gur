@@ -95,6 +95,7 @@ export interface AdminBadgeCounts {
   pendingReviews: number;
   newQuotes: number;
   newMessages: number;
+  dueCallbacks: number;
 }
 
 const VALID_SORT_COLUMNS: Record<string, string> = {
@@ -792,6 +793,7 @@ export async function getAdminBadgeCountsAction(): Promise<AdminBadgeCounts> {
     reviewsRes,
     quotesRes,
     messagesRes,
+    callbacksRes,
   ] = await Promise.all([
     client
       .from("orders")
@@ -813,6 +815,11 @@ export async function getAdminBadgeCountsAction(): Promise<AdminBadgeCounts> {
       .from("contact_messages")
       .select("id", { count: "exact", head: true })
       .eq("status", "new"),
+    client
+      .from("call_list_items")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "call_later")
+      .lte("callback_at", new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
   ]);
 
   return {
@@ -821,6 +828,7 @@ export async function getAdminBadgeCountsAction(): Promise<AdminBadgeCounts> {
     pendingReviews: reviewsRes.count || 0,
     newQuotes: quotesRes.count || 0,
     newMessages: messagesRes.count || 0,
+    dueCallbacks: callbacksRes.count || 0,
   };
 }
 
