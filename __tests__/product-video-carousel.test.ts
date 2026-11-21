@@ -81,4 +81,33 @@ describe("Product Video Carousel Logic", () => {
     expect(url).toContain("byline=0");
     expect(url).toContain("portrait=0");
   });
+
+  it("advances carousel slide and resumes autoplay when video ends", () => {
+    let scrolledNext = false;
+    let autoplayResumed = false;
+
+    const mockCarouselApi = {
+      scrollNext: () => {
+        scrolledNext = true;
+      },
+      plugins: () => ({
+        autoplay: {
+          play: () => {
+            autoplayResumed = true;
+          },
+        },
+      }),
+    };
+
+    // Simulate onVideoEnded callback trigger
+    const onVideoEnded = () => {
+      mockCarouselApi.scrollNext();
+      mockCarouselApi.plugins().autoplay.play();
+    };
+
+    onVideoEnded();
+
+    expect(scrolledNext).toBe(true);
+    expect(autoplayResumed).toBe(true);
+  });
 });

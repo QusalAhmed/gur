@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { Roboto, Noto_Serif_Bengali } from "next/font/google";
+import { Roboto, Anek_Bangla } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -21,10 +21,10 @@ const roboto = Roboto({
   display: "swap",
 });
 
-const notoSerifBengali = Noto_Serif_Bengali({
-  variable: "--font-noto-serif-bengali",
+const anekBangla = Anek_Bangla({
+  variable: "--font-anek-bangla",
   subsets: ["bengali"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -88,7 +88,7 @@ export default function RootLayout({
   return (
     <html
       lang="bn"
-      className={`${roboto.variable} ${notoSerifBengali.variable} h-full antialiased`}
+      className={`${roboto.variable} ${anekBangla.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">

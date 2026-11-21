@@ -53,6 +53,7 @@
     "react-dom": "19.3.0",
     "react-dropzone": "^20.1.4",
     "react-hook-form": "^7.91.0",
+    "react-player": "^3.4.0",
     "react-redux": "^9.3.1",
     "react-use-measure": "^2.1.7",
     "reactflow": "^11.11.4",

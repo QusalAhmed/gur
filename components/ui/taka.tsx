@@ -9,7 +9,7 @@ export interface TakaProps extends React.HTMLAttributes<HTMLSpanElement> {
 /**
  * High-visibility Bangladeshi Taka (৳) symbol component.
  * Solves the issue where system font fallback (e.g. Windows Segoe UI) renders ৳ as an ultra-thin hairline.
- * Enforces Bengali font family (Noto Serif Bengali), normal numeric variance, and crisp text-stroke bolding.
+ * Enforces Bengali font family (Anek Bangla), normal numeric variance, and crisp text-stroke bolding.
  */
 export function Taka({
   className,

@@ -335,6 +335,19 @@ export function ProductCard({
     } catch {}
   }, [carouselApi, isActive]);
 
+  const handleVideoEnded = useCallback(() => {
+    if (!carouselApi) return;
+    try {
+      setTimeout(() => {
+        carouselApi.scrollNext();
+        const autoplay = carouselApi.plugins()?.autoplay as
+          | { play: () => void }
+          | undefined;
+        autoplay?.play();
+      }, 300);
+    } catch {}
+  }, [carouselApi]);
+
   // Pause autoplay when product card is not active in the viewport to save CPU and main thread cycles
   useEffect(() => {
     if (!carouselApi || !hasMultipleMedia) return;
@@ -636,6 +649,7 @@ export function ProductCard({
                           isSectionActive={isActive}
                           onPauseCarousel={pauseCarouselAutoplay}
                           onResumeCarousel={resumeCarouselAutoplay}
+                          onVideoEnded={handleVideoEnded}
                         />
                       </CarouselItem>
                     )}

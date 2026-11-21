@@ -180,6 +180,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://ik.imagekit.io",
       "https://img.youtube.com",
       "https://i.ytimg.com",
+      "https://*.ytimg.com",
+      "https://*.vimeocdn.com",
       "https://www.google-analytics.com",
       "https://*.google-analytics.com",
       "https://www.googletagmanager.com",
@@ -212,6 +214,12 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://c.bing.com",
       "https://va.vercel-scripts.com",
       "https://vitals.vercel-insights.com",
+      "https://www.youtube.com",
+      "https://*.youtube.com",
+      "https://*.googlevideo.com",
+      "https://player.vimeo.com",
+      "https://*.vimeo.com",
+      "https://*.vimeocdn.com",
       ...metaConnectOrigins,
       ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
         ? [`https://${imagekitHost}`]
@@ -229,6 +237,9 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "https://www.clarity.ms",
     "https://scripts.clarity.ms",
     "https://va.vercel-scripts.com",
+    "https://www.youtube.com",
+    "https://s.ytimg.com",
+    "https://player.vimeo.com",
     ...(safePixelId ? ["https://connect.facebook.net"] : []),
   ];
 

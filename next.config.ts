@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import { buildCspHeader } from "./lib/security";
 
+// Force config reload for updated CSP allowances (YouTube, Vimeo)
+
 const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
   ? (() => {
       try {

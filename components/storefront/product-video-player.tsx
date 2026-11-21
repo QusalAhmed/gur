@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Volume2, VolumeX, Play, Pause, Film } from "lucide-react";
-import { parseVideoUrl, buildEmbedUrl, type ParsedVideo } from "@/lib/video";
+import { parseVideoUrl, type ParsedVideo } from "@/lib/video";
 import { cn } from "@/lib/utils";
+
+// Dynamically import ReactPlayer with SSR disabled to guarantee zero SSR hydration mismatches
+const ReactPlayer = dynamic(() => import("react-player"), {
+  ssr: false,
+});
 
 interface ProductVideoPlayerProps {
   videoUrl: string;
@@ -13,6 +19,7 @@ interface ProductVideoPlayerProps {
   isSectionActive?: boolean;
   onPauseCarousel?: () => void;
   onResumeCarousel?: () => void;
+  onVideoEnded?: () => void;
 }
 
 export function ProductVideoPlayer({
@@ -22,6 +29,7 @@ export function ProductVideoPlayer({
   isSectionActive = true,
   onPauseCarousel,
   onResumeCarousel,
+  onVideoEnded,
 }: ProductVideoPlayerProps) {
   const parsedVideo = useMemo<ParsedVideo | null>(() => parseVideoUrl(videoUrl), [videoUrl]);
   const [isDeferredLoaded, setIsDeferredLoaded] = useState(false);
@@ -29,8 +37,8 @@ export function ProductVideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
 
   // IntersectionObserver to verify product card is physically in the browser viewport
   useEffect(() => {
@@ -55,7 +63,7 @@ export function ProductVideoPlayer({
   const isCardVisible = Boolean(isSectionActive && isInViewport);
   const shouldPlay = Boolean(isCardVisible && isActive);
 
-  // 1. Defer loading of video iframe until after page is fully rendered and browser is idle
+  // 1. Defer loading of video player until after page is fully rendered and browser is idle
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -80,163 +88,54 @@ export function ProductVideoPlayer({
     }
   }, []);
 
-  // PostMessage helpers for YouTube and Vimeo iframe APIs
-  const postToPlayer = useCallback((command: "play" | "pause" | "mute" | "unmute") => {
-    if (!iframeRef.current?.contentWindow || !parsedVideo) return;
-
-    try {
-      if (parsedVideo.provider === "youtube") {
-        const cmdMap = {
-          play: { event: "command", func: "playVideo", args: [] },
-          pause: { event: "command", func: "pauseVideo", args: [] },
-          mute: { event: "command", func: "mute", args: [] },
-          unmute: { event: "command", func: "unMute", args: [] },
-        };
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify(cmdMap[command]),
-          "*"
-        );
-      } else if (parsedVideo.provider === "vimeo") {
-        const cmdMap = {
-          play: { method: "play" },
-          pause: { method: "pause" },
-          mute: { method: "setVolume", value: 0 },
-          unmute: { method: "setVolume", value: 1 },
-        };
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify(cmdMap[command]),
-          "*"
-        );
-      }
-    } catch {
-      // Safe guard against iframe cross-origin postMessage errors
-    }
-  }, [parsedVideo]);
-
   // 2. Control play/pause and carousel rotation based on slide and card visibility
   useEffect(() => {
     if (!isDeferredLoaded) return;
 
     if (shouldPlay) {
-      // Product card is visible AND on the video slide: pause carousel and play video
-      onPauseCarousel?.();
-      postToPlayer("play");
-      setIsPlaying(true);
-
-      if (!isMuted) {
-        postToPlayer("unmute");
+      if (playerRef.current) {
+        try {
+          if (typeof playerRef.current.currentTime === "number" && playerRef.current.ended) {
+            playerRef.current.currentTime = 0;
+          }
+        } catch {}
       }
-
-      // Safety retry tick in case player API was still initializing
-      const timer = setTimeout(() => {
-        postToPlayer("play");
-        if (!isMuted) {
-          postToPlayer("unmute");
-        }
-      }, 600);
-
-      return () => clearTimeout(timer);
+      setIsPlaying(true);
+      onPauseCarousel?.();
     } else {
-      // Product card is NOT visible or not on video slide: strictly pause playback
-      postToPlayer("pause");
       setIsPlaying(false);
       onResumeCarousel?.();
     }
-  }, [shouldPlay, isDeferredLoaded, onPauseCarousel, onResumeCarousel, postToPlayer, isMuted]);
-
-  // Listen for YouTube/Vimeo messages to detect state or blocked autoplay
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (!event.data) return;
-      let data: any = event.data;
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch {
-          return;
-        }
-      }
-
-      // YouTube event info
-      if (data?.event === "infoDelivery" && data.info) {
-        if (typeof data.info.muted === "boolean") {
-          setIsMuted(data.info.muted);
-        }
-        if (typeof data.info.volume === "number") {
-          if (data.info.volume === 0) {
-            setIsMuted(true);
-          } else if (data.info.volume > 0 && data.info.muted !== true) {
-            setIsMuted(false);
-          }
-        }
-      }
-
-      // Vimeo event info
-      if (data?.event === "volumechange" && data.data) {
-        const vol = Number(data.data.volume);
-        setIsMuted(vol === 0);
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [shouldPlay, isDeferredLoaded, onPauseCarousel, onResumeCarousel]);
 
   const handleToggleSound = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     setHasUserInteracted(true);
-    if (isMuted) {
-      postToPlayer("unmute");
-      setIsMuted(false);
-    } else {
-      postToPlayer("mute");
-      setIsMuted(true);
-    }
+    setIsMuted((prev) => !prev);
   };
 
   const handleTogglePlay = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (isPlaying) {
-      postToPlayer("pause");
-      setIsPlaying(false);
-    } else {
-      postToPlayer("play");
-      setIsPlaying(true);
-      if (!isMuted) {
-        postToPlayer("unmute");
-      }
-    }
+    setIsPlaying((prev) => !prev);
   };
 
-  if (!parsedVideo) return null;
-
-  // The embed URL loads with autoplay=false so third-party iframes never auto-start in background
-  const embedUrl = useMemo(() => {
-    if (!parsedVideo) return "";
-    return buildEmbedUrl(parsedVideo, {
-      autoplay: false,
-      muted: false,
-      loop: true,
-      controls: false,
-    });
-  }, [parsedVideo]);
+  if (!parsedVideo && !videoUrl) return null;
 
   return (
     <div
       ref={containerRef}
-      onClick={handleTogglePlay}
-      className="relative w-full h-full aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none flex items-center justify-center cursor-pointer"
+      className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none"
     >
-      {/* 3. Placeholder / Thumbnail before deferred iframe load */}
+      {/* 3. Placeholder / Thumbnail before deferred player load */}
       {!isDeferredLoaded && (
-        <div className="relative w-full aspect-video flex flex-col items-center justify-center bg-stone-900 text-amber-200 overflow-hidden">
-          {parsedVideo.thumbnailUrl ? (
+        <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-stone-900 text-amber-200 overflow-hidden">
+          {parsedVideo?.thumbnailUrl ? (
             <Image
               src={parsedVideo.thumbnailUrl}
               alt={`${productName} video preview`}
               fill
               unoptimized
-              className="object-cover opacity-80"
+              className="object-cover"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
             />
           ) : (
@@ -250,50 +149,62 @@ export function ProductVideoPlayer({
         </div>
       )}
 
-      {/* 4. Deferred Iframe */}
+      {/* 4. Deferred ReactPlayer (Fills 100% of container) */}
       {isDeferredLoaded && (
-        <div className="relative w-full aspect-video overflow-hidden">
-          <iframe
-            ref={iframeRef}
-            src={embedUrl}
-            title={`${productName} Showcase Video`}
-            className={cn(
-              "absolute inset-0 border-0 pointer-events-none",
-              parsedVideo.provider === "youtube"
-                ? "w-full h-full scale-[1.3] -translate-y-[4.5%]"
-                : "w-full h-full"
-            )}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            onLoad={() => {
-              try {
-                iframeRef.current?.contentWindow?.postMessage(
-                  JSON.stringify({ event: "listening" }),
-                  "*"
-                );
-                iframeRef.current?.contentWindow?.postMessage(
-                  JSON.stringify({ method: "addEventListener", value: "volumechange" }),
-                  "*"
-                );
-
-                // Strictly ensure video does not play if card is not visible or slide is not active
-                if (!shouldPlay) {
-                  postToPlayer("pause");
-                } else {
-                  postToPlayer("play");
-                  if (!isMuted) {
-                    postToPlayer("unmute");
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden [&>youtube-video]:w-full [&>youtube-video]:h-full [&>youtube-video]:block [&>vimeo-video]:w-full [&>vimeo-video]:h-full [&>vimeo-video]:block [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0 [&_video]:w-full [&_video]:h-full [&_video]:object-cover">
+          <ReactPlayer
+            ref={playerRef}
+            src={videoUrl}
+            playing={shouldPlay && isPlaying}
+            muted={isMuted}
+            volume={isMuted ? 0 : 1}
+            loop={false}
+            controls={false}
+            playsInline
+            width="100%"
+            height="100%"
+            className="w-full h-full pointer-events-auto"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+            }}
+            onPlay={() => {
+              setIsPlaying(true);
+              onPauseCarousel?.();
+            }}
+            onPause={() => {
+              setIsPlaying(false);
+            }}
+            onEnded={() => {
+              setIsPlaying(false);
+              if (playerRef.current) {
+                try {
+                  if (typeof playerRef.current.currentTime === "number") {
+                    playerRef.current.currentTime = 0;
                   }
-                }
-              } catch {}
+                } catch {}
+              }
+              onVideoEnded?.();
+              onResumeCarousel?.();
+            }}
+            onVolumeChange={(e: any) => {
+              const target = e?.target;
+              if (target) {
+                setIsMuted(Boolean(target.muted || target.volume === 0));
+              }
             }}
           />
 
           {/* Pause overlay icon when paused */}
           {!isPlaying && (
-            <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex items-center justify-center pointer-events-none transition-opacity">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform">
+            <div
+              onClick={handleTogglePlay}
+              className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex items-center justify-center cursor-pointer pointer-events-auto transition-opacity"
+            >
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
                 <Play className="w-6 h-6 ml-0.5 fill-current" />
               </div>
             </div>
