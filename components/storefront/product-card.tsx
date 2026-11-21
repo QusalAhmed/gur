@@ -61,6 +61,8 @@ export interface StorefrontVariant {
     variant_name_bn?: string;
     quantity: number;
     unit_price?: number;
+    weight_grams?: number;
+    weight_kg?: number;
   }>;
 }
 
@@ -84,6 +86,44 @@ export interface StorefrontProduct {
 }
 
 const emptySubscribe = () => () => {};
+
+export function parseGramsFromText(text?: string | null): number | undefined {
+  if (!text || typeof text !== "string") return undefined;
+  const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
+  if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
+  const gMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:g|gm|gms|gram|grams|গ্রাম)(?![a-z])/i);
+  if (gMatch) return Math.round(parseFloat(gMatch[1]));
+  return undefined;
+}
+
+export function formatComboComponentWeight(
+  ci: {
+    weight_grams?: number;
+    weight_kg?: number;
+    variant_name?: string;
+    variant_name_bn?: string;
+  },
+  lang: StorefrontLang
+): string | null {
+  const parsedGrams =
+    typeof ci.weight_grams === "number" && ci.weight_grams > 0
+      ? ci.weight_grams
+      : typeof ci.weight_kg === "number" && ci.weight_kg > 0
+      ? Math.round(ci.weight_kg * 1000)
+      : parseGramsFromText(ci.variant_name) ?? parseGramsFromText(ci.variant_name_bn);
+
+  if (parsedGrams && parsedGrams > 0) {
+    if (parsedGrams >= 1000) {
+      const kg = parsedGrams / 1000;
+      return lang === "bn" ? `${kg.toLocaleString("bn-BD")} কেজি` : `${kg} kg`;
+    }
+    return lang === "bn" ? `${parsedGrams.toLocaleString("bn-BD")} গ্রাম` : `${parsedGrams}g`;
+  }
+
+  const rawVariantName = lang === "bn" ? ci.variant_name_bn || ci.variant_name : ci.variant_name;
+  if (!rawVariantName) return null;
+  return rawVariantName.trim() || null;
+}
 
 interface ProductCardProps {
   product: StorefrontProduct;
@@ -456,11 +496,7 @@ export function ProductCard({
       }
 
       if (currentUnit === 0) {
-        const variantWeightKg =
-          selectedVariant.weightKg ||
-          (selectedVariant.weightGrams
-            ? selectedVariant.weightGrams / 1000
-            : selectedVariant.netQuantity || 1);
+        const variantWeightKg = effectiveVariantWeightKg;
         dispatch(
           addToCart({
             productId: product.id,
@@ -476,7 +512,7 @@ export function ProductCard({
             descriptionBn: product.summaryBn,
             isCombo: Boolean(selectedVariant.isCombo),
             comboItems: selectedVariant.comboItems || [],
-            weightGrams: selectedVariant.weightGrams || Math.round(variantWeightKg * 1000),
+            weightGrams: effectiveVariantWeightGrams || Math.round(variantWeightKg * 1000),
             weightKg: variantWeightKg,
           })
         );
@@ -553,16 +589,40 @@ export function ProductCard({
       ? product.summaryBn || product.summary || "গাছিদের সংগ্রহ করা খাঁটি ও নির্ভেজাল ঐতিহ্যবাহী গুড়।"
       : product.summary || "Traditional pure artisanal jaggery crafted by village artisans.";
 
+  const effectiveVariantWeightGrams = (() => {
+    if (selectedVariant.isCombo && selectedVariant.comboItems && selectedVariant.comboItems.length > 0) {
+      let sum = 0;
+      for (const ci of selectedVariant.comboItems) {
+        const g =
+          typeof ci.weight_grams === "number" && ci.weight_grams > 0
+            ? ci.weight_grams
+            : typeof ci.weight_kg === "number" && ci.weight_kg > 0
+            ? Math.round(ci.weight_kg * 1000)
+            : parseGramsFromText(ci.variant_name) ?? parseGramsFromText(ci.variant_name_bn);
+        if (g) sum += g * (Number(ci.quantity) || 1);
+      }
+      if (sum > 0) return sum;
+    }
+    return selectedVariant.weightGrams;
+  })();
+
+  const effectiveVariantWeightKg = (() => {
+    if (effectiveVariantWeightGrams && effectiveVariantWeightGrams > 0) {
+      return effectiveVariantWeightGrams / 1000;
+    }
+    return selectedVariant.weightKg || (selectedVariant.netQuantity ? Number(selectedVariant.netQuantity) : 1);
+  })();
+
   const variantWeightText = (() => {
-    if (selectedVariant.weightGrams && selectedVariant.weightGrams > 0) {
-      if (selectedVariant.weightGrams >= 1000) {
-        const kg = selectedVariant.weightGrams / 1000;
+    if (effectiveVariantWeightGrams && effectiveVariantWeightGrams > 0) {
+      if (effectiveVariantWeightGrams >= 1000) {
+        const kg = effectiveVariantWeightGrams / 1000;
         return lang === "bn" ? `${kg.toLocaleString("bn-BD")} কেজি` : `${kg} kg`;
       }
-      return lang === "bn" ? `${selectedVariant.weightGrams.toLocaleString("bn-BD")} গ্রাম` : `${selectedVariant.weightGrams}g`;
+      return lang === "bn" ? `${effectiveVariantWeightGrams.toLocaleString("bn-BD")} গ্রাম` : `${effectiveVariantWeightGrams}g`;
     }
-    if (selectedVariant.weightKg && selectedVariant.weightKg > 0) {
-      return lang === "bn" ? `${selectedVariant.weightKg.toLocaleString("bn-BD")} কেজি` : `${selectedVariant.weightKg} kg`;
+    if (effectiveVariantWeightKg && effectiveVariantWeightKg > 0) {
+      return lang === "bn" ? `${effectiveVariantWeightKg.toLocaleString("bn-BD")} কেজি` : `${effectiveVariantWeightKg} kg`;
     }
     return lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name;
   })();
@@ -825,22 +885,39 @@ export function ProductCard({
                   {lang === "bn" ? "প্যাকেজে যা যা থাকছে:" : "What's in this combo:"}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
-                  {selectedVariant.comboItems.map((ci, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between gap-1.5 bg-white/70 dark:bg-stone-900/60 px-2 py-1 rounded-md border border-amber-100 dark:border-stone-700"
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                        <span className="font-semibold text-foreground truncate">
-                          {lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name}
+                  {selectedVariant.comboItems.map((ci, idx) => {
+                    const prodName = lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name;
+                    const weightText = formatComboComponentWeight(ci, lang);
+                    const shouldShowWeight = Boolean(
+                      weightText &&
+                      prodName &&
+                      !prodName.toLowerCase().includes(weightText.toLowerCase())
+                    );
+                    const fullTitle = shouldShowWeight ? `${prodName} (${weightText})` : prodName;
+
+                    return (
+                      <div
+                        key={idx}
+                        title={fullTitle}
+                        className="flex items-center justify-between gap-1.5 bg-white/70 dark:bg-stone-900/60 px-2 py-1 rounded-md border border-amber-100 dark:border-stone-700 min-w-0"
+                      >
+                        <div className="flex items-center gap-1.5 truncate min-w-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span className="font-semibold text-foreground truncate">
+                            {prodName}
+                            {shouldShowWeight && (
+                              <span className="font-medium text-stone-600 dark:text-stone-400 ml-1">
+                                ({weightText})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <span className="text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0 ml-1">
+                          ×{ci.quantity}
                         </span>
                       </div>
-                      <span className="text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0 ml-1">
-                        ×{ci.quantity}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -896,7 +973,7 @@ export function ProductCard({
                       {formatStorePrice(unitPrice * displayUnit, lang)}
                     </span>
                     <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
-                      ({lang === "bn" ? `মোট ${((selectedVariant.weightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(selectedVariant.weightKg || 1) * displayUnit} kg`})
+                      ({lang === "bn" ? `মোট ${((effectiveVariantWeightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(effectiveVariantWeightKg || 1) * displayUnit} kg`})
                     </span>
                   </motion.div>
                 )}

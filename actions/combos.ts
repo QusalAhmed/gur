@@ -590,6 +590,33 @@ export async function saveComboAction(input: SaveComboInput): Promise<{
       throw new Error(`Failed to insert combo items: ${ciInsertErr.message}`);
     }
 
+    // Recalculate combo variant total weight and net quantity from component recipe
+    const { data: compVars } = await client
+      .from("product_variants")
+      .select("id, weight_grams, net_quantity")
+      .in("id", compIds);
+
+    let totalGrams = 0;
+    if (compVars) {
+      for (const c of input.components) {
+        const matched = compVars.find((v) => v.id === c.componentVariantId);
+        const g = matched?.weight_grams || (matched?.net_quantity ? Math.round(Number(matched.net_quantity) * 1000) : 1000);
+        totalGrams += g * Math.max(1, Number(c.quantity) || 1);
+      }
+    }
+
+    if (totalGrams > 0) {
+      await client
+        .from("product_variants")
+        .update({
+          weight_grams: totalGrams,
+          net_quantity: Math.round((totalGrams / 1000) * 1000) / 1000,
+          net_unit: "kg",
+          updated_at: now,
+        })
+        .eq("id", variantId);
+    }
+
     // 5. Calculate and synchronize virtual stock
     const { data: virtStock } = await client.rpc("get_combo_variant_available_stock", {
       p_combo_variant_id: variantId,

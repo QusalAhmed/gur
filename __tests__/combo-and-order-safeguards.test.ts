@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { extractRefToken } from "@/lib/utils";
+import { formatComboComponentWeight, parseGramsFromText } from "@/components/storefront/product-card";
 
 const { mockClient, mockState } = vi.hoisted(() => {
   const mockState: {
@@ -1527,5 +1528,113 @@ describe("Reference Token Normalization and Casing Preservation", () => {
     expect(extractRefToken("*someFormattedText*")).toBe("someFormattedText");
     expect(extractRefToken("_CamelCaseRef_")).toBe("CamelCaseRef");
     expect(extractRefToken("  plain-lowercase-token  ")).toBe("plain-lowercase-token");
+  });
+});
+
+describe("Combo Component Weight Formatting in 'What's in the combo' Section", () => {
+  it("formats weight from explicit weight_grams in English and Bengali", () => {
+    const item500g = {
+      product_name: "Patali Gur",
+      product_name_bn: "পাটালি গুড়",
+      weight_grams: 500,
+    };
+    expect(formatComboComponentWeight(item500g, "bn")).toBe("৫০০ গ্রাম");
+    expect(formatComboComponentWeight(item500g, "en")).toBe("500g");
+
+    const item1kg = {
+      product_name: "Patali Gur",
+      product_name_bn: "পাটালি গুড়",
+      weight_grams: 1000,
+    };
+    expect(formatComboComponentWeight(item1kg, "bn")).toBe("১ কেজি");
+    expect(formatComboComponentWeight(item1kg, "en")).toBe("1 kg");
+
+    const item2kg = {
+      product_name: "Liquid Gur",
+      product_name_bn: "পাতলা ঝোলা গুড়",
+      weight_grams: 2000,
+    };
+    expect(formatComboComponentWeight(item2kg, "bn")).toBe("২ কেজি");
+    expect(formatComboComponentWeight(item2kg, "en")).toBe("2 kg");
+  });
+
+  it("formats weight from weight_kg if weight_grams is not provided", () => {
+    const itemHalfKg = {
+      product_name: "Chocolate Gur",
+      product_name_bn: "চকলেট গুড়",
+      weight_kg: 0.5,
+    };
+    expect(formatComboComponentWeight(itemHalfKg, "bn")).toBe("৫০০ গ্রাম");
+    expect(formatComboComponentWeight(itemHalfKg, "en")).toBe("500g");
+
+    const item1Kg = {
+      product_name: "Chocolate Gur",
+      product_name_bn: "চকলেট গুড়",
+      weight_kg: 1,
+    };
+    expect(formatComboComponentWeight(item1Kg, "bn")).toBe("১ কেজি");
+    expect(formatComboComponentWeight(item1Kg, "en")).toBe("1 kg");
+  });
+
+  it("extracts and formats grams from textual variant_name when numeric weight is absent", () => {
+    const itemWithVariantName = {
+      product_name: "Grainy Liquid Gur",
+      product_name_bn: "দানাদার ঝোলা গুড়",
+      variant_name: "0.5 kg (500g)",
+      variant_name_bn: "৫০০ গ্রাম",
+    };
+    expect(parseGramsFromText("0.5 kg (500g)")).toBe(500);
+    expect(formatComboComponentWeight(itemWithVariantName, "bn")).toBe("৫০০ গ্রাম");
+    expect(formatComboComponentWeight(itemWithVariantName, "en")).toBe("500g");
+
+    const item1kgName = {
+      product_name: "Patali Gur",
+      variant_name: "1 kg",
+      variant_name_bn: "১ কেজি",
+    };
+    expect(parseGramsFromText("1 kg")).toBe(1000);
+    expect(formatComboComponentWeight(item1kgName, "bn")).toBe("১ কেজি");
+    expect(formatComboComponentWeight(item1kgName, "en")).toBe("1 kg");
+  });
+
+  it("falls back to raw variant_name or variant_name_bn when no weight pattern is found", () => {
+    const customItem = {
+      product_name: "Special Box",
+      variant_name: "Mini Gift Pack",
+      variant_name_bn: "মিনি উপহার প্যাক",
+    };
+    expect(formatComboComponentWeight(customItem, "bn")).toBe("মিনি উপহার প্যাক");
+    expect(formatComboComponentWeight(customItem, "en")).toBe("Mini Gift Pack");
+  });
+
+  it("computes accurate total combo weight (e.g. 2.5 kg) from component recipes even if variant row has stale 2kg", () => {
+    const staleComboVariant = {
+      id: "combo-var-1",
+      name: "Combo (Patali 1kg + Danadar 0.5kg + Liquid 0.5kg + Chocolate Gur 0.5kg)",
+      isCombo: true,
+      weightGrams: 2000,
+      weightKg: 2,
+      comboItems: [
+        { component_variant_id: "v1", product_name: "Patali Gur", weight_grams: 1000, quantity: 1 },
+        { component_variant_id: "v2", product_name: "Grainy Liquid Gur", weight_grams: 500, quantity: 1 },
+        { component_variant_id: "v3", product_name: "Liquid Gur", weight_grams: 500, quantity: 1 },
+        { component_variant_id: "v4", product_name: "Chocolate Gur", weight_grams: 500, quantity: 1 },
+      ],
+    };
+
+    let sum = 0;
+    for (const ci of staleComboVariant.comboItems) {
+      const g =
+        typeof ci.weight_grams === "number" && ci.weight_grams > 0
+          ? ci.weight_grams
+          : parseGramsFromText((ci as any).variant_name);
+      if (g) sum += g * (Number(ci.quantity) || 1);
+    }
+
+    expect(sum).toBe(2500);
+    const kg = sum / 1000;
+    expect(kg).toBe(2.5);
+    expect(`${kg.toLocaleString("bn-BD")} কেজি`).toBe("২.৫ কেজি");
+    expect(`${kg} kg`).toBe("2.5 kg");
   });
 });

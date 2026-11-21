@@ -199,6 +199,12 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
             variant_name_bn: row.component?.name_bn,
             quantity: Number(row.quantity) || 1,
             unit_price: Number(row.component?.price) || 0,
+            weight_grams: row.component?.weight_grams ? Number(row.component.weight_grams) : undefined,
+            weight_kg: row.component?.weight_grams
+              ? Number(row.component.weight_grams) / 1000
+              : row.component?.net_quantity
+              ? Number(row.component.net_quantity)
+              : undefined,
           });
           comboItemsMap.set(row.combo_variant_id, list);
         }
@@ -209,13 +215,38 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     if (varRes.data) {
       for (const v of varRes.data) {
         if (v.is_active === false) continue;
+        let computedWeightGrams = v.weight_grams ? Number(v.weight_grams) : undefined;
+        let computedWeightKg = computedWeightGrams
+          ? computedWeightGrams / 1000
+          : v.net_quantity
+          ? Number(v.net_quantity)
+          : 1;
+
         // Omit combo variant if recipe query failed or recipe data is missing
         if (v.is_combo) {
           const recipe = comboItemsMap.get(v.id);
           if (comboQueryFailed || !recipe || recipe.length === 0) {
             continue;
           }
+
+          let recipeGrams = 0;
+          for (const item of recipe) {
+            const itemGrams =
+              typeof item.weight_grams === "number" && item.weight_grams > 0
+                ? item.weight_grams
+                : typeof item.weight_kg === "number" && item.weight_kg > 0
+                ? Math.round(item.weight_kg * 1000)
+                : undefined;
+            if (itemGrams && itemGrams > 0) {
+              recipeGrams += itemGrams * (Number(item.quantity) || 1);
+            }
+          }
+          if (recipeGrams > 0) {
+            computedWeightGrams = recipeGrams;
+            computedWeightKg = recipeGrams / 1000;
+          }
         }
+
         const list = variantsByProduct.get(v.product_id) || [];
         list.push({
           id: v.id,
@@ -223,14 +254,10 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
           nameBn: v.name_bn || v.name,
           price: Number(v.price) || 0,
           compareAtPrice: v.compare_at_price ? Number(v.compare_at_price) : null,
-          netQuantity: v.net_quantity,
-          netUnit: v.net_unit,
-          weightGrams: v.weight_grams ? Number(v.weight_grams) : undefined,
-          weightKg: v.weight_grams
-            ? Number(v.weight_grams) / 1000
-            : v.net_quantity
-            ? Number(v.net_quantity)
-            : 1,
+          netQuantity: v.is_combo && computedWeightKg ? computedWeightKg : v.net_quantity,
+          netUnit: v.is_combo ? "kg" : v.net_unit,
+          weightGrams: computedWeightGrams,
+          weightKg: computedWeightKg,
           stockStatus: v.stock_status,
           isDefault: Boolean(v.is_default),
           sortOrder: typeof v.sort_order === "number" ? v.sort_order : 0,
