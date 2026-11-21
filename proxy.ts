@@ -131,7 +131,9 @@ export async function proxy(request: NextRequest) {
       pathname === "/sw.js" ||
       pathname === "/admin-offline.html" ||
       pathname.startsWith("/admin-icon/") ||
-      pathname.startsWith("/icons/")
+      pathname.startsWith("/icons/") ||
+      pathname.startsWith("/audio/") ||
+      pathname.startsWith("/images/")
     ) {
       return NextResponse.next();
     }
@@ -310,8 +312,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - static image/font assets
+     * - static image/font/audio/media assets
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mp3|wav|ogg|m4a|aac|mp4|webm|woff|woff2|ttf|eot)$).*)",
   ],
 };

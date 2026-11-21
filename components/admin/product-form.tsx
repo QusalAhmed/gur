@@ -21,7 +21,9 @@ import {
   Gift,
   Boxes,
   Percent,
+  Video,
 } from "lucide-react";
+import { parseVideoUrl, buildEmbedUrl } from "@/lib/video";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DbProduct,
@@ -156,6 +158,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
     initialData?.shelf_life_days ?? ""
   );
   const [taxRate, setTaxRate] = React.useState<number>(initialData?.tax_rate ?? 0);
+  const [videoUrl, setVideoUrl] = React.useState(initialData?.video_url || "");
   const [seoTitle, setSeoTitle] = React.useState(initialData?.seo_title || "");
   const [seoDescription, setSeoDescription] = React.useState(
     initialData?.seo_description || ""
@@ -166,6 +169,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
   const [productType, setProductType] = React.useState(
     initialData?.product_type || ""
   );
+
+  const parsedVideo = React.useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
   // Variants State
   const [variants, setVariants] = React.useState<FormVariant[]>(() => {
@@ -508,6 +513,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
           tax_rate: taxRate,
           is_featured: isFeatured,
           sort_order: sortOrder,
+          video_url: videoUrl.trim() || undefined,
           seo_title: seoTitle.trim() || undefined,
           seo_description: seoDescription.trim() || undefined,
           google_product_category: googleProductCategory.trim() || undefined,
@@ -1001,6 +1007,84 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
                 allowGallery={true}
                 onRemove={handleImageRemove}
               />
+            </CardContent>
+          </Card>
+
+          {/* Product Video Showcase (Optional) */}
+          <Card className="border shadow-xs">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Video className="w-4 h-4 text-amber-600" />
+                    Product Showcase Video (Optional)
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    Add a YouTube or Vimeo link to show a video at the end of the image carousel. Video will load after initial page render to keep load speed lightning fast.
+                  </CardDescription>
+                </div>
+                {videoUrl && parsedVideo && (
+                  <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200">
+                    Video Attached
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground">
+                  YouTube or Vimeo URL
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder="e.g. https://www.youtube.com/watch?v=... or https://youtu.be/... or https://vimeo.com/..."
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      className={cn(
+                        "pr-9",
+                        videoUrl && !parsedVideo && "border-destructive focus-visible:ring-destructive"
+                      )}
+                    />
+                    {videoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setVideoUrl("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1"
+                        title="Clear video URL"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {videoUrl && !parsedVideo ? (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    Invalid URL. Please enter a valid YouTube or Vimeo video link.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Supported: standard watch URLs, short links (youtu.be), YouTube Shorts, and Vimeo video links.
+                  </p>
+                )}
+              </div>
+
+              {parsedVideo && (
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Video Live Preview ({parsedVideo.provider})
+                  </span>
+                  <div className="relative aspect-video max-w-md w-full rounded-xl overflow-hidden border border-border shadow-xs bg-black/5">
+                    <iframe
+                      src={buildEmbedUrl(parsedVideo, { autoplay: false, controls: true })}
+                      title="Product Video Preview"
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -49,6 +49,16 @@ const nextConfig: NextConfig = {
                 hostname: "ik.imagekit.io",
                 pathname: "/**",
             },
+            {
+                protocol: "https",
+                hostname: "img.youtube.com",
+                pathname: "/**",
+            },
+            {
+                protocol: "https",
+                hostname: "i.ytimg.com",
+                pathname: "/**",
+            },
             ...(imagekitHost && imagekitHost !== "ik.imagekit.io"
                 ? [
                     {

@@ -155,7 +155,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     const [prodRes, varRes, imgRes] = await Promise.all([
       client
         .from("products")
-        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, origin, rating_avg, rating_count, sort_order")
+        .select("id, slug, name, name_bn, summary, summary_bn, seo_title, seo_description, video_url, origin, rating_avg, rating_count, sort_order")
         .eq("status", "active")
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -295,6 +295,7 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
             seoDescription: (p as any).seo_description || null,
             image: primaryImg,
             images: resolvedImgs,
+            videoUrl: (p as any).video_url || null,
             origin: p.origin,
             ratingAvg: Number(p.rating_avg) || 5,
             ratingCount: Number(p.rating_count) || 1,

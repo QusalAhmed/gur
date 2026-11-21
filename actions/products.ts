@@ -65,6 +65,7 @@ export interface SaveProductInput {
     sort_order?: number;
     seo_title?: string;
     seo_description?: string;
+    video_url?: string | null;
     google_product_category?: string | null;
     product_type?: string | null;
   };
@@ -191,6 +192,7 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
           ? params.product.tax_rate
           : 0,
       is_featured: Boolean(params.product.is_featured),
+      video_url: params.product.video_url?.trim() || null,
       seo_title: params.product.seo_title?.trim() || null,
       seo_description: params.product.seo_description?.trim() || null,
       google_product_category: params.product.google_product_category?.trim() || null,
@@ -1204,6 +1206,7 @@ export async function createDraftProductAction(payload: {
   shelf_life_days?: number | null;
   tax_rate?: number;
   is_featured?: boolean;
+  video_url?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
   sort_order?: number;
@@ -1237,6 +1240,7 @@ export async function createDraftProductAction(payload: {
         shelf_life_days: payload.shelf_life_days || null,
         tax_rate: payload.tax_rate ?? 0,
         is_featured: payload.is_featured ?? false,
+        video_url: payload.video_url || null,
         seo_title: payload.seo_title || null,
         seo_description: payload.seo_description || null,
         sort_order: payload.sort_order ?? 0,

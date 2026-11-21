@@ -84,6 +84,7 @@ export interface DbProduct {
   sort_order: number;
   rating_avg: number;
   rating_count: number;
+  video_url?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
   google_product_category?: string | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Minus, Sparkles, Check, ChevronDown, Award, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
@@ -28,6 +28,8 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
+import { ProductVideoPlayer } from "./product-video-player";
+import { parseVideoUrl } from "@/lib/video";
 import { SlidingNumber } from "@/components/ui/sliding-number";
 import {
   Select,
@@ -73,6 +75,7 @@ export interface StorefrontProduct {
   seoDescription?: string | null;
   image: string;
   images?: string[];
+  videoUrl?: string | null;
   category?: string;
   origin?: string;
   ratingAvg?: number;
@@ -303,16 +306,38 @@ export function ProductCard({
   const displayUnit = isMounted ? currentUnit : 0;
 
   const imagesList = product.images && product.images.length > 0 ? product.images : [product.image];
-  const hasMultipleImages = imagesList.length > 1;
+  const hasVideo = Boolean(product.videoUrl && parseVideoUrl(product.videoUrl));
+  const hasMultipleMedia = imagesList.length > 1 || hasVideo;
+  const videoSlideIndex = hasVideo ? imagesList.length : -1;
+  const totalSlides = imagesList.length + (hasVideo ? 1 : 0);
 
   // Autoplay plugin instance with 2 second interval and pause on touch/hover
   const [autoplayPlugin] = useState(() =>
     Autoplay({ delay: 2000, stopOnInteraction: false, stopOnMouseEnter: true })
   );
 
+  const pauseCarouselAutoplay = useCallback(() => {
+    try {
+      const autoplay = carouselApi?.plugins()?.autoplay as
+        | { stop: () => void }
+        | undefined;
+      autoplay?.stop();
+    } catch {}
+  }, [carouselApi]);
+
+  const resumeCarouselAutoplay = useCallback(() => {
+    if (!isActive) return;
+    try {
+      const autoplay = carouselApi?.plugins()?.autoplay as
+        | { play: () => void }
+        | undefined;
+      autoplay?.play();
+    } catch {}
+  }, [carouselApi, isActive]);
+
   // Pause autoplay when product card is not active in the viewport to save CPU and main thread cycles
   useEffect(() => {
-    if (!carouselApi || !hasMultipleImages) return;
+    if (!carouselApi || !hasMultipleMedia) return;
     const autoplay = carouselApi.plugins()?.autoplay as
       | { play: () => void; stop: () => void }
       | undefined;
@@ -321,7 +346,11 @@ export function ProductCard({
     try {
       if (typeof isActive === "boolean") {
         if (isActive) {
-          autoplay.play();
+          if (currentSlide === videoSlideIndex && hasVideo) {
+            autoplay.stop();
+          } else {
+            autoplay.play();
+          }
         } else {
           autoplay.stop();
         }
@@ -329,7 +358,7 @@ export function ProductCard({
     } catch {
       // Safe guard against race conditions during unmount or engine re-init
     }
-  }, [isActive, carouselApi, hasMultipleImages]);
+  }, [isActive, carouselApi, hasMultipleMedia, currentSlide, videoSlideIndex, hasVideo]);
 
   // Track active slide in carousel
   useEffect(() => {
@@ -569,13 +598,13 @@ export function ProductCard({
             whileInView={{ opacity: 1, scale: 1, y: 0 }}
             viewport={{ once: false, amount: "some" }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-md md:max-w-none aspect-[4/3] sm:aspect-square md:aspect-[4/3] lg:aspect-square max-h-[280px] xs:max-h-[320px] sm:max-h-[360px] md:max-h-[380px] lg:max-h-[460px] mx-auto"
+            className="relative w-full max-w-[360px] xs:max-w-[420px] sm:max-w-lg md:max-w-none aspect-video max-h-[280px] xs:max-h-[320px] sm:max-h-[360px] md:max-h-[400px] lg:max-h-[460px] mx-auto"
           >
             {/* Subtle Warm Glow Behind Jar */}
             <div className="absolute inset-0 bg-amber-400/20 dark:bg-amber-600/15 rounded-full blur-3xl transform scale-90 pointer-events-none" />
 
-            {/* Multiple Images with Shadcn Carousel */}
-            {hasMultipleImages ? (
+            {/* Multiple Media with Shadcn Carousel */}
+            {hasMultipleMedia ? (
               <div className="absolute inset-0 w-full h-full">
                 <Carousel
                   setApi={setCarouselApi}
@@ -585,7 +614,7 @@ export function ProductCard({
                 >
                   <CarouselContent className="-ml-0 h-full w-full">
                     {imagesList.map((imgSrc, imgIdx) => (
-                      <CarouselItem key={imgIdx} className="pl-0 h-full w-full">
+                      <CarouselItem key={`img-${imgIdx}`} className="pl-0 h-full w-full">
                         <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] bg-amber-100/50">
                           <Image
                             src={imgSrc}
@@ -598,6 +627,18 @@ export function ProductCard({
                         </div>
                       </CarouselItem>
                     ))}
+                    {hasVideo && product.videoUrl && (
+                      <CarouselItem key="video" className="pl-0 h-full w-full">
+                        <ProductVideoPlayer
+                          videoUrl={product.videoUrl}
+                          productName={displayName}
+                          isActive={currentSlide === videoSlideIndex}
+                          isSectionActive={isActive}
+                          onPauseCarousel={pauseCarouselAutoplay}
+                          onResumeCarousel={resumeCarouselAutoplay}
+                        />
+                      </CarouselItem>
+                    )}
                   </CarouselContent>
                   {/* Touch-Friendly Nav Arrows */}
                   <CarouselPrevious className="left-2 sm:-left-4 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
@@ -605,7 +646,7 @@ export function ProductCard({
                 </Carousel>
                 {/* Dot Indicators */}
                 <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-black/35 dark:bg-black/55 backdrop-blur-md px-2.5 py-1 rounded-full">
-                  {imagesList.map((_, dotIdx) => (
+                  {Array.from({ length: totalSlides }).map((_, dotIdx) => (
                     <button
                       key={dotIdx}
                       type="button"

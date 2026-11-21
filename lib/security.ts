@@ -178,6 +178,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "blob:",
       "https://images.unsplash.com",
       "https://ik.imagekit.io",
+      "https://img.youtube.com",
+      "https://i.ytimg.com",
       "https://www.google-analytics.com",
       "https://*.google-analytics.com",
       "https://www.googletagmanager.com",
@@ -232,6 +234,10 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
 
   const frameSources = [
     "'self'",
+    "https://www.youtube.com",
+    "https://www.youtube-nocookie.com",
+    "https://player.vimeo.com",
+    "https://vimeo.com",
     ...(safePixelId ? ["https://www.facebook.com"] : []),
   ];
 

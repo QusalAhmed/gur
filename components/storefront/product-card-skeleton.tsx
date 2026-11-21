@@ -23,7 +23,7 @@ export function ProductCardSkeleton() {
             <div className="h-7 w-28 bg-amber-200/70 dark:bg-stone-800 rounded-full animate-pulse border border-amber-300/40" />
           </div>
 
-          <div className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-md md:max-w-none aspect-[4/3] sm:aspect-square md:aspect-[4/3] lg:aspect-square max-h-[280px] sm:max-h-[360px] md:max-h-[380px] lg:max-h-[440px] rounded-3xl bg-amber-200/50 dark:bg-stone-800/80 border-2 border-amber-300/60 dark:border-stone-700 shadow-xl overflow-hidden flex items-center justify-center animate-pulse">
+          <div className="relative w-full max-w-[360px] xs:max-w-[420px] sm:max-w-lg md:max-w-none aspect-video max-h-[280px] sm:max-h-[360px] md:max-h-[400px] lg:max-h-[460px] rounded-3xl bg-amber-200/50 dark:bg-stone-800/80 border-2 border-amber-300/60 dark:border-stone-700 shadow-xl overflow-hidden flex items-center justify-center animate-pulse">
             <Sparkles className="w-12 h-12 sm:w-16 sm:h-16 text-amber-400/40 dark:text-amber-500/30 animate-pulse" />
           </div>
 
