@@ -671,7 +671,7 @@ export function ProductCard({
             whileInView={{ opacity: 1, scale: 1, y: 0 }}
             viewport={{ once: false, amount: "some" }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-md md:max-w-none aspect-square max-h-[340px] xs:max-h-[380px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
+            className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
           >
             {/* Subtle Warm Glow Behind Jar */}
             <div className="absolute inset-0 bg-amber-400/20 dark:bg-amber-600/15 rounded-full blur-3xl transform scale-90 pointer-events-none" />
@@ -715,8 +715,8 @@ export function ProductCard({
                     )}
                   </CarouselContent>
                   {/* Touch-Friendly Nav Arrows */}
-                  <CarouselPrevious className="left-2 sm:-left-4 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
-                  <CarouselNext className="right-2 sm:-right-4 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
+                  <CarouselPrevious className="-left-11 sm:-left-12 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
+                  <CarouselNext className="-right-11 sm:-right-12 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
                 </Carousel>
                 {/* Dot Indicators */}
                 <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-black/35 dark:bg-black/55 backdrop-blur-md px-2.5 py-1 rounded-full">
