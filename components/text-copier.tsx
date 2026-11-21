@@ -18,7 +18,7 @@ export function TextCopier() {
   const [isActive, setIsActive] = useState(false);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [justCopied, setJustCopied] = useState<string | null>(null);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
 
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);

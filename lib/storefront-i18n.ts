@@ -133,7 +133,7 @@ export const STOREFRONT_TEXT = {
     phoneHelpModalCallHotline: "হটলাইনে কল করুন",
     // Why Buy From Us Section
     whyBuyBadge: "কেন আমাদের গুড় সেরা?",
-    whyBuyTitle: "আমাদের থেকেই কেন খাঁটি গুড় কিনবেন?",
+    whyBuyTitle: "আমাদের থেকেই কেন গুড় কিনবেন?",
     whyBuyReasonPriceTitle: "গলাকাটা দাম মুক্ত",
     whyBuyReasonPriceDesc:
       "যেহেতু গুড় আমরা নিজেরাই বানাই, শুধু আমাদের থেকেই নিতে পারবেন নায্য মূল্যে।",
@@ -307,7 +307,7 @@ export const STOREFRONT_TEXT = {
     phoneHelpModalCallHotline: "Call Hotline",
     // Why Buy From Us Section
     whyBuyBadge: "Why Choose Us",
-    whyBuyTitle: "Why Buy Pure Jaggery From Us?",
+    whyBuyTitle: "Why Buy Jaggery From Us?",
     whyBuyReasonPriceTitle: "No Exorbitant Prices",
     whyBuyReasonPriceDesc:
       "Since we make the jaggery ourselves, you get authentic quality at a truly fair price directly from us.",
