@@ -9,6 +9,7 @@ import { ProductCardSkeleton } from "./product-card-skeleton";
 import dynamic from "next/dynamic";
 import { IntroSection } from "./intro-section";
 import { WhyBuyFromUs } from "./why-buy-from-us";
+import { ViewProductsButton } from "./view-products-button";
 import { ContactSection } from "./contact-section";
 import { MobileDock } from "./mobile-dock";
 import { trackContact } from "@/lib/facebook-pixel";
@@ -609,16 +610,12 @@ export function ProductShowcase({
           />
 
           {/* Bottom Action: "View Products & Order" button at bottom of overview area */}
-          <div className="relative z-10 w-full text-center pt-2 pb-8 sm:pb-6 space-y-2 px-4">
-            <button
-              type="button"
+          <div className="relative z-10 w-full text-center pt-2 pb-8 sm:pb-6 px-4">
+            <ViewProductsButton
               onClick={() => scrollToSection(productsStartIndex)}
-              aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
-            >
-              <span>{t.viewProductsBtn}</span>
-              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
-            </button>
+              lang={lang}
+              label={t.viewProductsBtn}
+            />
           </div>
         </section>
 

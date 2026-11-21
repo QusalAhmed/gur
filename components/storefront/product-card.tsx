@@ -912,11 +912,29 @@ export function ProductCard({
                   type="button"
                   data-tour={index === 0 ? "product-combo-buy" : undefined}
                   onClick={handleBuyNow}
-                  className="w-full h-12 sm:h-14 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:to-amber-700 active:from-amber-800 active:to-amber-800 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-amber-950/20 border-2 border-amber-300/80 dark:border-amber-500/50 flex items-center justify-center gap-2.5 transition-all touch-manipulation cursor-pointer group"
+                  className="relative overflow-hidden w-full h-12 sm:h-14 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:to-amber-700 active:from-amber-800 active:to-amber-800 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-amber-950/20 border-2 border-amber-300/80 dark:border-amber-500/50 flex items-center justify-center gap-2.5 transition-all touch-manipulation cursor-pointer group"
                 >
-                  <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" />
-                  <span>{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
-                  <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:translate-x-1" />
+                  {/* Shimmer Light Beam Effect */}
+                  <span
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"
+                    aria-hidden="true"
+                  >
+                    <motion.span
+                      className="absolute top-0 bottom-0 left-0 w-3/4 -skew-x-25 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none"
+                      initial={{ x: "-150%" }}
+                      animate={{ x: ["-150%", "280%"] }}
+                      transition={{
+                        repeat: Infinity,
+                        repeatDelay: 1.2,
+                        duration: 1.5,
+                        ease: [0.4, 0, 0.2, 1],
+                      }}
+                    />
+                  </span>
+
+                  <ShoppingBag className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" />
+                  <span className="relative z-10">{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
+                  <ArrowRight className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:translate-x-1" />
                 </motion.button>
               </div>
             ) : (

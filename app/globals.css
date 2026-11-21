@@ -225,6 +225,36 @@
   animation: tableShimmer 2s infinite linear;
 }
 
+@keyframes buttonShimmerSweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  48% {
+    transform: translateX(250%) skewX(-20deg);
+    opacity: 1;
+  }
+  49%,
+  100% {
+    transform: translateX(250%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+.animate-button-shimmer {
+  animation: buttonShimmerSweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-button-shimmer {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
 @media print {
   @page {
     size: A4;

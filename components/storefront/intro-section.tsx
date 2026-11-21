@@ -9,11 +9,11 @@ import {
   Truck,
   HeartHandshake,
   Clock,
-  ChevronDown,
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { RollingNumber } from "@/components/storefront/rolling-number";
 import { buildImageKitUrl } from "@/lib/imagekit/url";
+import { ViewProductsButton } from "./view-products-button";
 
 interface IntroSectionProps {
   lang?: StorefrontLang;
@@ -180,16 +180,12 @@ export function IntroSection({
       </div>
 
       {/* Bottom Action: "View Products & Order" */}
-      <div className="text-center pt-1 pb-1">
-        <button
-          type="button"
+      <div className="text-center pt-2 pb-1">
+        <ViewProductsButton
           onClick={handleScrollToProducts}
-          aria-label={lang === "bn" ? "পণ্য দেখুন ও অর্ডার করুন" : "View products and order"}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 via-amber-600 to-amber-700 hover:from-amber-800 hover:to-amber-800 text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 px-6 sm:px-8 rounded-full shadow-lg shadow-amber-900/15 active:scale-95 transition-all touch-manipulation group cursor-pointer"
-        >
-          <span>{t.viewProductsBtn}</span>
-          <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
-        </button>
+          lang={lang}
+          label={t.viewProductsBtn}
+        />
       </div>
     </div>
   );
