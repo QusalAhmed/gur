@@ -96,6 +96,8 @@ export function buildEmbedUrl(
       rel: "0",
       enablejsapi: "1",
       iv_load_policy: "3",
+      fs: "0",
+      disablekb: "1",
     });
 
     if (origin) {
@@ -113,6 +115,9 @@ export function buildEmbedUrl(
       controls: controls ? "1" : "0",
       playsinline: "1",
       dnt: "1",
+      title: "0",
+      byline: "0",
+      portrait: "0",
     });
 
     return `https://player.vimeo.com/video/${parsed.id}?${params.toString()}`;

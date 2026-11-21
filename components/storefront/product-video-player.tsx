@@ -224,7 +224,8 @@ export function ProductVideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none flex items-center justify-center"
+      onClick={handleTogglePlay}
+      className="relative w-full h-full aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none flex items-center justify-center cursor-pointer"
     >
       {/* 3. Placeholder / Thumbnail before deferred iframe load */}
       {!isDeferredLoaded && (
@@ -251,12 +252,17 @@ export function ProductVideoPlayer({
 
       {/* 4. Deferred Iframe */}
       {isDeferredLoaded && (
-        <div className="relative w-full aspect-video">
+        <div className="relative w-full aspect-video overflow-hidden">
           <iframe
             ref={iframeRef}
             src={embedUrl}
             title={`${productName} Showcase Video`}
-            className="absolute inset-0 w-full h-full border-0 pointer-events-auto"
+            className={cn(
+              "absolute inset-0 border-0 pointer-events-none",
+              parsedVideo.provider === "youtube"
+                ? "w-full h-full scale-[1.3] -translate-y-[4.5%]"
+                : "w-full h-full"
+            )}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             loading="lazy"
@@ -283,6 +289,15 @@ export function ProductVideoPlayer({
               } catch {}
             }}
           />
+
+          {/* Pause overlay icon when paused */}
+          {!isPlaying && (
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex items-center justify-center pointer-events-none transition-opacity">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform">
+                <Play className="w-6 h-6 ml-0.5 fill-current" />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

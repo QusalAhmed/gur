@@ -52,6 +52,8 @@ describe("Product Video Carousel Logic", () => {
     expect(url).toContain("controls=0");
     expect(url).toContain("playlist=dQw4w9WgXcQ");
     expect(url).toContain("enablejsapi=1");
+    expect(url).toContain("fs=0");
+    expect(url).toContain("disablekb=1");
   });
 
   it("creates clean paused embed URL with autoplay=0 so background playback never starts", () => {
@@ -65,5 +67,18 @@ describe("Product Video Carousel Logic", () => {
 
     expect(url).toContain("autoplay=0");
     expect(url).toContain("controls=0");
+    expect(url).toContain("fs=0");
+  });
+
+  it("strips title, byline, and portrait for Vimeo embeds", () => {
+    const parsed = parseVideoUrl("https://vimeo.com/123456789")!;
+    const url = buildEmbedUrl(parsed, {
+      autoplay: true,
+      controls: false,
+    });
+
+    expect(url).toContain("title=0");
+    expect(url).toContain("byline=0");
+    expect(url).toContain("portrait=0");
   });
 });
