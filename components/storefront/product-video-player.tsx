@@ -32,6 +32,15 @@ export function ProductVideoPlayer({
   onVideoEnded,
 }: ProductVideoPlayerProps) {
   const parsedVideo = useMemo<ParsedVideo | null>(() => parseVideoUrl(videoUrl), [videoUrl]);
+
+  // Use privacy-enhanced YouTube embed to suppress extraneous Google tracking & attestation calls
+  const effectiveVideoSrc = useMemo(() => {
+    if (parsedVideo?.provider === "youtube") {
+      return `https://www.youtube-nocookie.com/embed/${parsedVideo.id}`;
+    }
+    return videoUrl;
+  }, [parsedVideo, videoUrl]);
+
   const [isDeferredLoaded, setIsDeferredLoaded] = useState(false);
   const [isInViewport, setIsInViewport] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -154,7 +163,7 @@ export function ProductVideoPlayer({
         <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden [&>youtube-video]:w-full [&>youtube-video]:h-full [&>youtube-video]:block [&>vimeo-video]:w-full [&>vimeo-video]:h-full [&>vimeo-video]:block [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0 [&_video]:w-full [&_video]:h-full [&_video]:object-cover">
           <ReactPlayer
             ref={playerRef}
-            src={videoUrl}
+            src={effectiveVideoSrc}
             playing={shouldPlay && isPlaying}
             muted={isMuted}
             volume={isMuted ? 0 : 1}
@@ -164,6 +173,26 @@ export function ProductVideoPlayer({
             width="100%"
             height="100%"
             className="w-full h-full pointer-events-auto"
+            config={
+              parsedVideo?.provider === "youtube"
+                ? {
+                    youtube: {
+                      rel: 0,
+                      iv_load_policy: 3,
+                      enablejsapi: 1,
+                    },
+                  }
+                : parsedVideo?.provider === "vimeo"
+                ? {
+                    vimeo: {
+                      dnt: true,
+                      title: false,
+                      byline: false,
+                      portrait: false,
+                    },
+                  }
+                : undefined
+            }
             style={{
               position: "absolute",
               top: 0,

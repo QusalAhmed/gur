@@ -153,6 +153,9 @@ export function initClarity(projectId: string): boolean {
   script.id = CLARITY_SCRIPT_ELEMENT_ID;
   script.async = true;
   script.src = `https://www.clarity.ms/tag/${encodeURIComponent(safeId)}`;
+  script.onerror = () => {
+    // Ad-blocker or network blocked Clarity tag script; fail gracefully
+  };
 
   const firstScript = document.getElementsByTagName("script")[0];
   if (firstScript?.parentNode) {

@@ -468,6 +468,26 @@ describe("Security Sanitizers & Constant-Time Token Verification", () => {
     expect(imgDirective).toContain("https://*.clarity.ms");
     expect(imgDirective).toContain("https://c.bing.com");
   });
+
+  it("permits YouTube, YouTube NoCookie, and Google APIs in CSP", () => {
+    const csp = buildCspHeader({ nodeEnv: "production" });
+
+    const scriptDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("script-src "));
+    const connectDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("connect-src "));
+    const frameDirective = csp
+      .split("; ")
+      .find((part) => part.startsWith("frame-src "));
+
+    expect(scriptDirective).toContain("https://www.youtube.com");
+    expect(scriptDirective).toContain("https://www.youtube-nocookie.com");
+    expect(connectDirective).toContain("https://*.googleapis.com");
+    expect(connectDirective).toContain("https://*.youtube-nocookie.com");
+    expect(frameDirective).toContain("https://www.youtube-nocookie.com");
+  });
 });
 
 describe("HMAC Signed Admin Session Token Verification", () => {

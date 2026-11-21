@@ -1071,18 +1071,26 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
 
               {parsedVideo && (
                 <div className="space-y-2 pt-2 border-t border-border/60">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Video Live Preview ({parsedVideo.provider})
-                  </span>
-                  <div className="relative aspect-video max-w-md w-full rounded-xl overflow-hidden border border-border shadow-xs bg-black/5">
+                  <div className="flex items-center justify-between max-w-xs sm:max-w-sm">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Video Live Preview ({parsedVideo.provider})
+                    </span>
+                    <Badge variant="outline" className="text-[11px] font-medium text-amber-700 bg-amber-50 border-amber-200">
+                      1:1 Ratio
+                    </Badge>
+                  </div>
+                  <div className="relative aspect-square max-w-xs sm:max-w-sm w-full rounded-2xl overflow-hidden border border-border shadow-xs bg-black">
                     <iframe
                       src={buildEmbedUrl(parsedVideo, { autoplay: false, controls: true })}
                       title="Product Video Preview"
-                      className="w-full h-full border-0"
+                      className="absolute inset-0 w-full h-full border-0"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                     />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    1:1 square preview matching the storefront product carousel display.
+                  </p>
                 </div>
               )}
             </CardContent>
