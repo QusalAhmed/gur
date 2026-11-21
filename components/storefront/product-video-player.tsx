@@ -25,11 +25,35 @@ export function ProductVideoPlayer({
 }: ProductVideoPlayerProps) {
   const parsedVideo = useMemo<ParsedVideo | null>(() => parseVideoUrl(videoUrl), [videoUrl]);
   const [isDeferredLoaded, setIsDeferredLoaded] = useState(false);
+  const [isInViewport, setIsInViewport] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [showSoundPrompt, setShowSoundPrompt] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const userInteractedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver to verify product card is physically in the browser viewport
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setIsInViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInViewport(entry.isIntersecting && entry.intersectionRatio > 0.2);
+      },
+      { threshold: [0, 0.2, 0.5, 0.8] }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Both section state from container and viewport intersection must confirm card visibility
+  const isCardVisible = Boolean(isSectionActive && isInViewport);
+  const shouldPlay = Boolean(isCardVisible && isActive);
 
   // 1. Defer loading of video iframe until after page is fully rendered and browser is idle
   useEffect(() => {
@@ -89,45 +113,68 @@ export function ProductVideoPlayer({
     }
   }, [parsedVideo]);
 
-  // 2. Control play/pause and carousel rotation based on slide and section visibility
+  // 2. Control play/pause and carousel rotation based on slide and card visibility
   useEffect(() => {
     if (!isDeferredLoaded) return;
 
-    if (isActive && isSectionActive) {
-      // Slide is active: pause carousel rotation so user can watch video
+    if (shouldPlay) {
+      // Product card is visible AND on the video slide: pause carousel and play video
       onPauseCarousel?.();
       postToPlayer("play");
       setIsPlaying(true);
 
-      // Attempt unmuted play first if user interacted or initial attempt
       if (!isMuted) {
         postToPlayer("unmute");
       }
+
+      // Safety retry tick in case player API was still initializing
+      const timer = setTimeout(() => {
+        postToPlayer("play");
+        if (!isMuted) {
+          postToPlayer("unmute");
+        }
+      }, 600);
+
+      return () => clearTimeout(timer);
     } else {
-      // Not on video slide: pause video and resume normal carousel rotation
+      // Product card is NOT visible or not on video slide: strictly pause playback
       postToPlayer("pause");
       setIsPlaying(false);
       onResumeCarousel?.();
     }
-  }, [isActive, isSectionActive, isDeferredLoaded, onPauseCarousel, onResumeCarousel, postToPlayer, isMuted]);
+  }, [shouldPlay, isDeferredLoaded, onPauseCarousel, onResumeCarousel, postToPlayer, isMuted]);
 
   // Listen for YouTube/Vimeo messages to detect state or blocked autoplay
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (!event.data || typeof event.data !== "string") return;
-      try {
-        const data = JSON.parse(event.data);
-        // YouTube event info
-        if (data.event === "infoDelivery" && data.info) {
-          if (typeof data.info.muted === "boolean") {
-            setIsMuted(data.info.muted);
-            if (!data.info.muted) {
-              setShowSoundPrompt(false);
-            }
+      if (!event.data) return;
+      let data: any = event.data;
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+
+      // YouTube event info
+      if (data?.event === "infoDelivery" && data.info) {
+        if (typeof data.info.muted === "boolean") {
+          setIsMuted(data.info.muted);
+        }
+        if (typeof data.info.volume === "number") {
+          if (data.info.volume === 0) {
+            setIsMuted(true);
+          } else if (data.info.volume > 0 && data.info.muted !== true) {
+            setIsMuted(false);
           }
         }
-      } catch {
-        // Ignore unparseable messages from other windows/extensions
+      }
+
+      // Vimeo event info
+      if (data?.event === "volumechange" && data.data) {
+        const vol = Number(data.data.volume);
+        setIsMuted(vol === 0);
       }
     };
 
@@ -137,11 +184,10 @@ export function ProductVideoPlayer({
 
   const handleToggleSound = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    userInteractedRef.current = true;
-    if (isMuted || showSoundPrompt) {
+    setHasUserInteracted(true);
+    if (isMuted) {
       postToPlayer("unmute");
       setIsMuted(false);
-      setShowSoundPrompt(false);
     } else {
       postToPlayer("mute");
       setIsMuted(true);
@@ -164,19 +210,25 @@ export function ProductVideoPlayer({
 
   if (!parsedVideo) return null;
 
-  // Initial embed URL starts with autoplay=1, muted=0 (attempt unmuted autoplay)
-  const embedUrl = buildEmbedUrl(parsedVideo, {
-    autoplay: true,
-    muted: false,
-    loop: true,
-    controls: false,
-  });
+  // The embed URL loads with autoplay=false so third-party iframes never auto-start in background
+  const embedUrl = useMemo(() => {
+    if (!parsedVideo) return "";
+    return buildEmbedUrl(parsedVideo, {
+      autoplay: false,
+      muted: false,
+      loop: true,
+      controls: false,
+    });
+  }, [parsedVideo]);
 
   return (
-    <div className="relative w-full h-full aspect-video rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none flex items-center justify-center"
+    >
       {/* 3. Placeholder / Thumbnail before deferred iframe load */}
       {!isDeferredLoaded && (
-        <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-stone-900 text-amber-200">
+        <div className="relative w-full aspect-video flex flex-col items-center justify-center bg-stone-900 text-amber-200 overflow-hidden">
           {parsedVideo.thumbnailUrl ? (
             <Image
               src={parsedVideo.thumbnailUrl}
@@ -199,15 +251,39 @@ export function ProductVideoPlayer({
 
       {/* 4. Deferred Iframe */}
       {isDeferredLoaded && (
-        <iframe
-          ref={iframeRef}
-          src={embedUrl}
-          title={`${productName} Showcase Video`}
-          className="absolute inset-0 w-full h-full border-0 pointer-events-auto"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          loading="lazy"
-        />
+        <div className="relative w-full aspect-video">
+          <iframe
+            ref={iframeRef}
+            src={embedUrl}
+            title={`${productName} Showcase Video`}
+            className="absolute inset-0 w-full h-full border-0 pointer-events-auto"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            loading="lazy"
+            onLoad={() => {
+              try {
+                iframeRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: "listening" }),
+                  "*"
+                );
+                iframeRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ method: "addEventListener", value: "volumechange" }),
+                  "*"
+                );
+
+                // Strictly ensure video does not play if card is not visible or slide is not active
+                if (!shouldPlay) {
+                  postToPlayer("pause");
+                } else {
+                  postToPlayer("play");
+                  if (!isMuted) {
+                    postToPlayer("unmute");
+                  }
+                }
+              } catch {}
+            }}
+          />
+        </div>
       )}
 
       {/* 5. Minimal Interactive Controls Overlay (Sound Toggle & Play/Pause) */}
@@ -217,7 +293,7 @@ export function ProductVideoPlayer({
           onClick={handleToggleSound}
           className={cn(
             "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shadow-md transition-all touch-manipulation",
-            showSoundPrompt || isMuted
+            isMuted
               ? "bg-amber-500/95 text-stone-950 hover:bg-amber-400 ring-2 ring-amber-300/80 animate-pulse"
               : "bg-black/60 text-white hover:bg-black/80"
           )}
@@ -246,8 +322,8 @@ export function ProductVideoPlayer({
         </button>
       </div>
 
-      {/* 6. Animated "Tap for Sound" prominent pill if browser blocked unmuted autoplay */}
-      {showSoundPrompt && isActive && (
+      {/* 6. Animated "Tap for Sound" prominent pill ONLY if video is confirmed to be muted */}
+      {isMuted && isActive && !hasUserInteracted && (
         <div
           onClick={handleToggleSound}
           className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 cursor-pointer pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-stone-950 px-3.5 py-1.5 rounded-full shadow-lg border border-amber-300 flex items-center gap-2 text-xs font-bold transition-all transform hover:scale-105"

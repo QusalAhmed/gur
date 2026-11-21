@@ -598,7 +598,7 @@ export function ProductCard({
             whileInView={{ opacity: 1, scale: 1, y: 0 }}
             viewport={{ once: false, amount: "some" }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-[360px] xs:max-w-[420px] sm:max-w-lg md:max-w-none aspect-video max-h-[280px] xs:max-h-[320px] sm:max-h-[360px] md:max-h-[400px] lg:max-h-[460px] mx-auto"
+            className="relative w-full max-w-[340px] xs:max-w-[380px] sm:max-w-md md:max-w-none aspect-square max-h-[340px] xs:max-h-[380px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
           >
             {/* Subtle Warm Glow Behind Jar */}
             <div className="absolute inset-0 bg-amber-400/20 dark:bg-amber-600/15 rounded-full blur-3xl transform scale-90 pointer-events-none" />

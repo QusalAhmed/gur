@@ -53,4 +53,17 @@ describe("Product Video Carousel Logic", () => {
     expect(url).toContain("playlist=dQw4w9WgXcQ");
     expect(url).toContain("enablejsapi=1");
   });
+
+  it("creates clean paused embed URL with autoplay=0 so background playback never starts", () => {
+    const parsed = parseVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")!;
+    const url = buildEmbedUrl(parsed, {
+      autoplay: false,
+      muted: false,
+      loop: true,
+      controls: false,
+    });
+
+    expect(url).toContain("autoplay=0");
+    expect(url).toContain("controls=0");
+  });
 });
