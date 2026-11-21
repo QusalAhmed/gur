@@ -2,15 +2,82 @@
 
 import * as React from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, Dropdown } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+
+type DropdownProps = React.ComponentProps<typeof Dropdown>;
+
+function CalendarDropdown({
+  value,
+  onChange,
+  options,
+  disabled,
+  "aria-label": ariaLabel,
+}: DropdownProps) {
+  const selected = options?.find((option) => option.value === Number(value));
+  const isMonth = options && options.length === 12 && options[0]?.value === 0;
+
+  const handleValueChange = (newValue: string | null) => {
+    if (newValue === null || newValue === undefined) return;
+    if (onChange) {
+      const syntheticEvent = {
+        target: { value: newValue },
+      } as React.ChangeEvent<HTMLSelectElement>;
+      onChange(syntheticEvent);
+    }
+  };
+
+  return (
+    <Select
+      value={value !== undefined ? String(value) : undefined}
+      onValueChange={handleValueChange}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label={ariaLabel}
+        className={cn(
+          "h-7 text-xs font-medium px-2 py-0 gap-1 bg-background/80 hover:bg-muted border-border cursor-pointer shadow-2xs focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3",
+          isMonth ? "min-w-[92px]" : "min-w-[72px]"
+        )}
+      >
+        <SelectValue>
+          {selected?.label}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent
+        align="center"
+        className="z-[70] min-w-[100px] max-h-56 overflow-y-auto"
+      >
+        {options?.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={String(option.value)}
+            disabled={option.disabled}
+            className="text-xs cursor-pointer"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 function Calendar({
   className,
   classNames,
+  components,
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
@@ -24,11 +91,9 @@ function Calendar({
         month: "w-[260px] sm:w-[280px] space-y-3",
         month_caption: "flex justify-center items-center h-7 relative px-8 mb-2",
         caption_label: "flex items-center gap-1 text-xs sm:text-sm font-semibold text-foreground",
-        dropdowns: "flex items-center justify-center gap-1 z-10",
-        dropdown_root:
-          "relative inline-flex items-center rounded-md border border-border bg-background/70 hover:bg-muted/80 px-1.5 py-0.5 text-xs font-medium transition-colors cursor-pointer text-foreground focus-within:ring-1 focus-within:ring-ring shadow-2xs",
-        dropdown:
-          "absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 appearance-none bg-transparent",
+        dropdowns: "flex items-center justify-center gap-1.5 z-10",
+        dropdown_root: "relative inline-flex items-center",
+        dropdown: "hidden",
         months_dropdown: "",
         years_dropdown: "",
         nav: "flex items-center",
@@ -91,6 +156,8 @@ function Calendar({
             />
           );
         },
+        Dropdown: CalendarDropdown,
+        ...components,
       }}
       {...props}
     />

@@ -111,6 +111,11 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
+  const customZ =
+    typeof className === "string"
+      ? className.split(" ").find((c) => c.startsWith("z-") || c.startsWith("z-["))
+      : undefined
+
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -119,7 +124,7 @@ function SelectContent({
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-50"
+        className={cn("isolate z-50", customZ)}
       >
         <SelectPrimitive.Popup
           data-slot="select-content"
