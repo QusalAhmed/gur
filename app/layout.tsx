@@ -24,7 +24,7 @@ const roboto = Roboto({
 const anekBangla = Anek_Bangla({
   variable: "--font-anek-bangla",
   subsets: ["bengali"],
-  weight: ["400", "600", "700"],
+  weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -91,10 +91,6 @@ export default function RootLayout({
       className={`${roboto.variable} ${anekBangla.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        <link rel="preconnect" href="https://ik.imagekit.io" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://ik.imagekit.io" />
-      </head>
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">
         <Suspense fallback={null}>
           <SeoGlobalScripts />
@@ -102,7 +98,7 @@ export default function RootLayout({
         {safeFbPixelId && (
           <Script
             id="fb-pixel"
-            strategy="afterInteractive"
+            strategy="beforeInteractive"
             dangerouslySetInnerHTML={{
               __html: `
                 !function(f,b,e,v,n,t,s)

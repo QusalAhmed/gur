@@ -61,7 +61,7 @@ describe("PageView Browser & Server Event ID Deduplication", () => {
       "utf-8"
     );
 
-    expect(layoutSource).toContain('strategy="afterInteractive"');
+    expect(layoutSource).toContain('strategy="beforeInteractive"');
     expect(layoutSource).toContain("fbq.disablePushState = true;");
     expect(layoutSource).toContain("fbq.allowDuplicatePageViews = true;");
     expect(layoutSource).not.toMatch(/fbq\(\s*['"]track['"]\s*,\s*['"]PageView['"]\s*\)/);

@@ -63,7 +63,6 @@ export function parseVideoUrl(url?: string | null): ParsedVideo | null {
       provider: "vimeo",
       id: vimeoId,
       originalUrl: trimmed,
-      thumbnailUrl: `https://vumbnail.com/${vimeoId}.jpg`,
     };
   }
 

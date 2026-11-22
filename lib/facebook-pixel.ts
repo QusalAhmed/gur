@@ -141,18 +141,12 @@ export const fbq = (...args: any[]) => {
     );
   }
 
-  try {
-    if (typeof window.fbq === "function") {
-      window.fbq(...args);
-    } else {
-      const win = window as any;
-      win._fbqQueue = win._fbqQueue || [];
-      win._fbqQueue.push(args);
-    }
-  } catch (err) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[Facebook Pixel] Suppressed external caller/extension error:", err);
-    }
+  if (typeof window.fbq === "function") {
+    window.fbq(...args);
+  } else {
+    const win = window as any;
+    win._fbqQueue = win._fbqQueue || [];
+    win._fbqQueue.push(args);
   }
 };
 

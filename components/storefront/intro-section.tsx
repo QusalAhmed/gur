@@ -133,7 +133,8 @@ export function IntroSection({
                 alt={displayName}
                 width={128}
                 height={128}
-                priority
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-contain"
               />
             </div>
