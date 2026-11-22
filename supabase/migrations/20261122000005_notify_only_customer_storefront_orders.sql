@@ -284,7 +284,7 @@ BEGIN
     'Customer'
   );
 
-  SELECT user_id INTO v_matched_user_id
+  SELECT id INTO v_matched_user_id
     FROM public.profiles
    WHERE phone = v_phone
    LIMIT 1;

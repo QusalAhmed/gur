@@ -1130,6 +1130,26 @@ export async function placeStorefrontOrderAction(
 
       // Trigger Outbox Background Notification Job (Tier 2 fallback path)
       if (finalStatus === "pending") {
+        if (wasIncomplete || !existingOrder) {
+          createNotificationInternal({
+            type: "order_created",
+            title: "New order placed",
+            message: `${orderNumber} · ৳${cleanGrandTotal} from ${resolvedCustomerName || normalizedPhone || "Customer"}`,
+            data: {
+              order_id: orderDbId,
+              order_number: orderNumber,
+              amount: cleanGrandTotal,
+              customer_name: resolvedCustomerName,
+              customer_phone: normalizedPhone,
+              status: "pending",
+              channel: "web",
+              link: `/admin/orders?search=${orderNumber}`,
+            },
+          }).catch((notifErr) => {
+            console.warn("[Storefront Order] Failed to insert in-app notification (Tier 2):", notifErr);
+          });
+        }
+
         enqueueAndDispatch({
           eventName: "order.created",
           aggregateType: "order",
