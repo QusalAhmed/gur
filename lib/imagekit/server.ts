@@ -1,4 +1,4 @@
-import ImageKit from "imagekit";
+import ImageKit from "@imagekit/nodejs";
 
 let imagekitInstance: ImageKit | null = null;
 
@@ -20,9 +20,7 @@ export function getImageKitServer(): ImageKit {
   }
 
   imagekitInstance = new ImageKit({
-    publicKey,
     privateKey,
-    urlEndpoint,
   });
 
   return imagekitInstance;

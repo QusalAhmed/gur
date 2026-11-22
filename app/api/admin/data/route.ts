@@ -775,7 +775,7 @@ export async function GET(req: NextRequest) {
 
         const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
-        let staffList = (staff || []).map((st) => {
+        const staffList = (staff || []).map((st) => {
           const prof = profileMap.get(st.user_id);
           const name = prof?.full_name || "Staff Member";
           return {

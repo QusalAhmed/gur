@@ -241,7 +241,7 @@ export function resolveProductCatalogTaxonomy(product: {
   const categoryGpc = categoryObj?.google_product_category?.trim();
   const categoryProductType = categoryObj?.product_type?.trim();
 
-  let googleProductCategory = explicitGpc || categoryGpc || DEFAULT_GOOGLE_PRODUCT_CATEGORY;
+  const googleProductCategory = explicitGpc || categoryGpc || DEFAULT_GOOGLE_PRODUCT_CATEGORY;
   let productType = explicitProductType || categoryProductType || "";
 
   if (!productType) {

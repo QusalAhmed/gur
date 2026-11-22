@@ -103,7 +103,7 @@ const nextConfig: NextConfig = {
             },
             {
               key: "X-DNS-Prefetch-Control",
-              value: "off",
+              value: "on",
             },
             ...(isProd
               ? [

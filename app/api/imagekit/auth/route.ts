@@ -37,7 +37,7 @@ export async function GET() {
 
     // 3. Generate secure upload parameters (token, expire timestamp, HMAC-SHA1 signature)
     const ik = getImageKitServer();
-    const authParams = ik.getAuthenticationParameters();
+    const authParams = ik.helper.getAuthenticationParameters();
 
     return NextResponse.json(
       {

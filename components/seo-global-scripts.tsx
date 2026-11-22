@@ -32,11 +32,11 @@ export async function SeoGlobalScripts() {
             src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(
               seo.ga4MeasurementId
             )}`}
-            strategy="afterInteractive"
+            strategy="lazyOnload"
           />
           <Script
             id="ga4-init"
-            strategy="afterInteractive"
+            strategy="lazyOnload"
             dangerouslySetInnerHTML={{
               __html: `
                 window.dataLayer = window.dataLayer || [];

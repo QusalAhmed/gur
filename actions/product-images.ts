@@ -379,7 +379,7 @@ export async function fetchImageKitMediaAction(): Promise<{
     const supabaseAdmin = getSupabaseAdmin();
     const ik = getImageKitServer();
     const [rawFiles, dbImagesRes] = await Promise.all([
-      ik.listFiles({ limit: 100, sort: "DESC_CREATED" } as any),
+      ik.assets.list({ limit: 100, sort: "DESC_CREATED" } as any),
       supabaseAdmin
         .from("product_images")
         .select("id, product_id, storage_path, is_primary, product:products(id, name, slug)"),
@@ -446,7 +446,7 @@ export async function deleteImageKitFileAction(fileId: string): Promise<{ succes
     await assertStaffRole(["owner", "admin", "manager", "editor"]);
     if (!fileId || !fileId.trim()) return { success: false, error: "Missing fileId" };
     const ik = getImageKitServer();
-    await ik.deleteFile(fileId.trim());
+    await ik.files.delete(fileId.trim());
     revalidatePath("/admin/products/images");
     return { success: true };
   } catch (err: any) {

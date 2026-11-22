@@ -88,7 +88,7 @@ export function normalizeBdPhoneNumber(input?: string | null): string | null {
   if (!input || typeof input !== "string") return null;
 
   // Extract all digits
-  let digits = input.replace(/\D/g, "");
+  const digits = input.replace(/\D/g, "");
 
   // If starts with 8801 and is 13 digits long
   if (digits.length === 13 && digits.startsWith("8801")) {

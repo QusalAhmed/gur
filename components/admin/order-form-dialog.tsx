@@ -779,7 +779,7 @@ export function OrderFormDialog({
           };
 
           // Filter out customer notes from notes table array (customer note lives in customer_note column)
-          let updatedNotes: OrderNote[] = notesList.filter((n) => n.type !== "customer");
+          const updatedNotes: OrderNote[] = notesList.filter((n) => n.type !== "customer");
           if (newNoteClean && pendingType !== "customer") {
             updatedNotes.unshift({
               id: `note-${Date.now()}`,

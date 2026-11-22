@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       sort: "DESC_CREATED",
     };
 
-    const files = await ik.listFiles(listOptions as any);
+    const files = await ik.assets.list(listOptions as any);
     const rawList = Array.isArray(files) ? files : [];
 
     // Filter recursively by folder path prefix if folder is specified and not root ("/")

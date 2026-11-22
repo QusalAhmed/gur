@@ -32,19 +32,78 @@ function MicrosoftClarityInner({ projectId }: MicrosoftClarityProps) {
       return;
     }
 
-    const loaded = initClarity(projectId);
-    if (!loaded) return;
+    const startClarity = () => {
+      if (initializedRef.current) return;
+      const loaded = initClarity(projectId);
+      if (!loaded) return;
 
-    initializedRef.current = true;
+      initializedRef.current = true;
 
-    const iab = detectInAppBrowser();
-    claritySetTag(
-      "in_app_browser",
-      iab.isInApp ? iab.browserType || "true" : "false"
-    );
+      const iab = detectInAppBrowser();
+      claritySetTag(
+        "in_app_browser",
+        iab.isInApp ? iab.browserType || "true" : "false"
+      );
 
-    const docLang = document.documentElement.lang?.toLowerCase();
-    claritySetTag("lang", docLang === "en" ? "en" : "bn");
+      const docLang = document.documentElement.lang?.toLowerCase();
+      claritySetTag("lang", docLang === "en" ? "en" : "bn");
+    };
+
+    let idleId: number | undefined;
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+
+    const onUserInteraction = () => {
+      cleanup();
+      startClarity();
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("scroll", onUserInteraction);
+      window.removeEventListener("pointerdown", onUserInteraction);
+      window.removeEventListener("touchstart", onUserInteraction);
+      window.removeEventListener("keydown", onUserInteraction);
+    };
+
+    window.addEventListener("scroll", onUserInteraction, { passive: true, once: true });
+    window.addEventListener("pointerdown", onUserInteraction, { passive: true, once: true });
+    window.addEventListener("touchstart", onUserInteraction, { passive: true, once: true });
+    window.addEventListener("keydown", onUserInteraction, { passive: true, once: true });
+
+    if ("requestIdleCallback" in window) {
+      idleId = (
+        window as unknown as {
+          requestIdleCallback: (
+            cb: () => void,
+            opts?: { timeout: number }
+          ) => number;
+        }
+      ).requestIdleCallback(
+        () => {
+          cleanup();
+          startClarity();
+        },
+        { timeout: 3500 }
+      );
+    } else {
+      timerId = setTimeout(() => {
+        cleanup();
+        startClarity();
+      }, 2500);
+    }
+
+    return () => {
+      cleanup();
+      if (idleId !== undefined && "cancelIdleCallback" in window) {
+        (
+          window as unknown as {
+            cancelIdleCallback: (id: number) => void;
+          }
+        ).cancelIdleCallback(idleId);
+      }
+      if (timerId !== undefined) {
+        clearTimeout(timerId);
+      }
+    };
   }, [projectId, pathname]);
 
   return null;
