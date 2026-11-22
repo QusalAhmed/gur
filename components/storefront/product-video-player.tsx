@@ -133,7 +133,7 @@ export function ProductVideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none"
+      className="relative w-full h-full rounded-2xl overflow-hidden bg-black shadow-md border border-stone-200/40 dark:border-stone-800 select-none"
     >
       {/* 3. Placeholder / Thumbnail before deferred player load */}
       {!isDeferredLoaded && (
@@ -151,7 +151,7 @@ export function ProductVideoPlayer({
             <Film className="w-12 h-12 text-amber-400/60 animate-pulse" />
           )}
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/90 text-stone-900 flex items-center justify-center shadow-md backdrop-blur-xs hover:bg-white transition-colors">
               <Play className="w-6 h-6 ml-0.5 fill-current" />
             </div>
           </div>
@@ -233,7 +233,7 @@ export function ProductVideoPlayer({
               onClick={handleTogglePlay}
               className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex items-center justify-center cursor-pointer pointer-events-auto transition-opacity"
             >
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/90 text-stone-900 flex items-center justify-center shadow-md backdrop-blur-xs hover:bg-white transition-colors">
                 <Play className="w-6 h-6 ml-0.5 fill-current" />
               </div>
             </div>
@@ -247,21 +247,21 @@ export function ProductVideoPlayer({
           type="button"
           onClick={handleToggleSound}
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shadow-md transition-all touch-manipulation",
+            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium backdrop-blur-md shadow-md transition-colors touch-manipulation",
             isMuted
-              ? "bg-amber-500/95 text-stone-950 hover:bg-amber-400 ring-2 ring-amber-300/80 animate-pulse"
-              : "bg-black/60 text-white hover:bg-black/80"
+              ? "bg-stone-900/80 text-stone-200 hover:bg-stone-900 border border-white/20"
+              : "bg-black/60 text-white hover:bg-black/80 border border-white/10"
           )}
           aria-label={isMuted ? "Unmute video" : "Mute video"}
         >
           {isMuted ? (
             <>
-              <VolumeX className="w-4 h-4 text-stone-950" />
+              <VolumeX className="w-3.5 h-3.5 text-stone-300" />
               <span className="hidden xs:inline">সাউন্ড শুনুন</span>
             </>
           ) : (
             <>
-              <Volume2 className="w-4 h-4 text-emerald-400" />
+              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden xs:inline">সাউন্ড চালু</span>
             </>
           )}
@@ -277,13 +277,13 @@ export function ProductVideoPlayer({
         </button>
       </div>
 
-      {/* 6. Animated "Tap for Sound" prominent pill ONLY if video is confirmed to be muted */}
+      {/* 6. Tap for Sound pill if video is muted */}
       {isMuted && isActive && !hasUserInteracted && (
         <div
           onClick={handleToggleSound}
-          className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 cursor-pointer pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-stone-950 px-3.5 py-1.5 rounded-full shadow-lg border border-amber-300 flex items-center gap-2 text-xs font-bold transition-all transform hover:scale-105"
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 cursor-pointer pointer-events-auto bg-stone-900/90 hover:bg-stone-900 text-white px-3 py-1.5 rounded-full shadow-md border border-white/20 flex items-center gap-1.5 text-xs font-medium transition-colors backdrop-blur-xs"
         >
-          <Volume2 className="w-4 h-4 animate-bounce" />
+          <Volume2 className="w-3.5 h-3.5" />
           <span>সাউন্ড অন করতে ট্যাপ করুন</span>
         </div>
       )}

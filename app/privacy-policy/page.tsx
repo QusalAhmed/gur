@@ -13,7 +13,6 @@ import {
   MapPin,
   CheckCircle2,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/store-header";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";

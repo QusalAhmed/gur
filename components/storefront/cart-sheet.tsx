@@ -93,18 +93,18 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
             {/* Header */}
             <div className="p-4 sm:p-5 border-b border-amber-200/80 dark:border-stone-800 flex items-center justify-between bg-amber-100/70 dark:bg-stone-850">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-amber-600 text-amber-50 flex items-center justify-center shadow-md">
-                  <ShoppingBag className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-amber-800 text-amber-50 flex items-center justify-center shadow-xs">
+                  <ShoppingBag className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 id="cart-heading" className="text-base sm:text-lg font-black text-amber-950 dark:text-amber-100 leading-tight">
+                  <h2 id="cart-heading" className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100 leading-tight">
                     {t.cartTitle}
                   </h2>
-                  <p className="text-xs text-stone-700 dark:text-stone-300 font-semibold flex items-center gap-1.5">
-                    <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 font-medium flex items-center gap-1.5">
+                    <span className="font-semibold text-amber-900 dark:text-amber-200">
                       {lang === "bn" ? `মোট ${totalWeightKg.toLocaleString("bn-BD")} কেজি` : `Total ${totalWeightKg} kg`}
                     </span>
-                    <span className="text-stone-500 dark:text-stone-400 font-normal">
+                    <span className="text-stone-400 font-normal">
                       • ({totalQuantity} {t.itemsCount})
                     </span>
                   </p>
@@ -183,7 +183,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-1">
                             <div>
-                              <h4 className="font-extrabold text-sm text-amber-950 dark:text-amber-100 truncate">
+                              <h4 className="font-semibold text-sm text-stone-900 dark:text-stone-100 truncate">
                                 {itemTitle}
                               </h4>
                               <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
@@ -209,16 +209,16 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
 
                           <div className="flex items-center justify-between mt-2 pt-1">
                             {/* Stepper (+ / -) */}
-                            <div className="flex items-center bg-white dark:bg-stone-800 border border-amber-300 dark:border-stone-700 rounded-lg p-0.5 shadow-sm">
+                            <div className="flex items-center bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg p-0.5">
                               <button
                                 type="button"
                                 onClick={() => dispatch(decrementQuantity({ productId: item.productId, variantId: item.variantId }))}
-                                className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-950 dark:text-amber-100 flex items-center justify-center font-bold active:scale-95 transition-all touch-manipulation"
+                                className="w-7 h-7 rounded-md bg-white dark:bg-stone-700 hover:bg-stone-200/70 dark:hover:bg-stone-600 text-stone-800 dark:text-stone-200 flex items-center justify-center font-bold transition-colors touch-manipulation cursor-pointer"
                                 aria-label="Decrease quantity"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <span className="w-7 text-center font-bold text-xs text-amber-950 dark:text-amber-100">
+                              <span className="w-7 text-center font-bold text-xs text-stone-900 dark:text-stone-100 tabular-nums">
                                 {item.quantity}
                               </span>
                               <button
@@ -250,7 +250,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                                   });
                                 }}
                                 disabled={item.quantity >= 50}
-                                className="w-7 h-7 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-950 dark:text-amber-100 flex items-center justify-center font-bold active:scale-95 disabled:opacity-40 transition-all touch-manipulation"
+                                className="w-7 h-7 rounded-md bg-white dark:bg-stone-700 hover:bg-stone-200/70 dark:hover:bg-stone-600 text-stone-800 dark:text-stone-200 flex items-center justify-center font-bold disabled:opacity-40 transition-colors touch-manipulation cursor-pointer"
                                 aria-label="Increase quantity"
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -259,7 +259,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
 
                             {/* Price */}
                             <div className="text-right">
-                              <div className="font-black text-sm text-emerald-700 dark:text-emerald-400">
+                              <div className="font-bold text-sm text-amber-900 dark:text-amber-400 tabular-nums">
                                 {formatStorePrice(itemLineTotal, lang)}
                               </div>
                               <div className="text-[10px] text-stone-500 dark:text-stone-400">
@@ -277,43 +277,43 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
 
             {/* Footer Summary & Checkout CTA */}
             {items.length > 0 && (
-              <div className="p-4 sm:p-5 bg-amber-100/90 dark:bg-stone-850 border-t border-amber-200/90 dark:border-stone-800 space-y-3">
+              <div className="p-4 sm:p-5 bg-stone-50 dark:bg-stone-850 border-t border-stone-200 dark:border-stone-800 space-y-3">
                 <div className="space-y-1.5 text-xs sm:text-sm">
                   <div className="flex justify-between text-stone-700 dark:text-stone-300">
                     <span>{t.subtotal}</span>
-                    <span className="font-bold">{formatStorePrice(subtotal, lang)}</span>
+                    <span className="font-semibold tabular-nums">{formatStorePrice(subtotal, lang)}</span>
                   </div>
                   <div className="flex justify-between text-stone-700 dark:text-stone-300">
                     <span>{lang === "bn" ? "মোট পার্সেল ওজন:" : "Total Parcel Weight:"}</span>
-                    <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                    <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
                       {lang === "bn" ? `${totalWeightKg.toLocaleString("bn-BD")} কেজি` : `${totalWeightKg} kg`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-stone-600 dark:text-stone-400 text-xs">
                     <span>{t.deliveryCharge}</span>
                     {isFreeDelivery ? (
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-[11px] border border-emerald-200 dark:border-emerald-800">
+                      <span className="font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-[11px] border border-emerald-200 dark:border-emerald-800">
                         {lang === "bn" ? "ফ্রি ডেলিভারি" : "Free Delivery"}
                       </span>
                     ) : (
-                      <span className="font-medium">
+                      <span className="font-medium tabular-nums">
                         {lang === "bn"
                           ? `৳${config.insideDhakaFee} (ঢাকা) / ৳${config.outsideDhakaFee} (বাইরে)`
                           : `৳${config.insideDhakaFee} (Dhaka) / ৳${config.outsideDhakaFee} (Out)`}
                       </span>
                     )}
                   </div>
-                  <div className="pt-2 border-t border-amber-200 dark:border-stone-700 flex justify-between items-baseline">
-                    <span className="font-extrabold text-sm sm:text-base text-amber-950 dark:text-amber-100">
+                  <div className="pt-2 border-t border-stone-200 dark:border-stone-700 flex justify-between items-baseline">
+                    <span className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100">
                       {t.totalAmount}
                     </span>
-                    <span className="font-black text-lg sm:text-xl text-emerald-700 dark:text-emerald-400">
+                    <span className="font-bold text-lg sm:text-xl text-stone-900 dark:text-stone-100 tabular-nums">
                       {formatStorePrice(subtotal, lang)} <span className="text-xs font-normal text-stone-500">(+ডেলিভারি)</span>
                     </span>
                   </div>
                 </div>
 
-                <div className="text-[11px] text-amber-900/80 dark:text-amber-300/80 text-center font-medium bg-amber-200/60 dark:bg-stone-800/80 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5">
+                <div className="text-[11px] text-stone-700 dark:text-stone-300 text-center font-medium bg-stone-100 dark:bg-stone-800 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span>{t.codLabel}</span>
                 </div>
@@ -321,10 +321,10 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                 <button
                   type="button"
                   onClick={handleCheckoutClick}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-base py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-700/25 transition-all flex items-center justify-center gap-2 group touch-manipulation"
+                  className="w-full bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-base py-3.5 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 group touch-manipulation cursor-pointer"
                 >
                   <span>{t.checkoutNowBtn}</span>
-                  <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
               </div>
             )}

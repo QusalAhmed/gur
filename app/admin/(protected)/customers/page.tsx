@@ -156,7 +156,7 @@ export default function CustomersPage() {
     },
   });
 
-  const handleExportCustomersCSV = (selected: CustomerItem[]) => {
+  const handleExportCustomersCSV = React.useCallback((selected: CustomerItem[]) => {
     const list = selected.length > 0 ? selected : customers;
     const headers = ["ID", "Name", "Email", "Phone", "Type", "Orders", "Spent", "Joined", "LastOrder", "FBLink"];
     const rows = list.map((c) => [
@@ -176,9 +176,9 @@ export default function CustomersPage() {
     link.href = encodeURI(csv);
     link.download = `customers_${Date.now()}.csv`;
     link.click();
-  };
+  }, [customers]);
 
-  const handleExportBusinessesCSV = (selected: BusinessItem[]) => {
+  const handleExportBusinessesCSV = React.useCallback((selected: BusinessItem[]) => {
     const list = selected.length > 0 ? selected : businesses;
     const headers = ["ID", "Company", "Contact", "Industry", "TradeLic", "Status", "Members", "CreditLimit", "Terms"];
     const rows = list.map((b) => [
@@ -197,7 +197,7 @@ export default function CustomersPage() {
     link.href = encodeURI(csv);
     link.download = `b2b_businesses_${Date.now()}.csv`;
     link.click();
-  };
+  }, [businesses]);
 
   const customerColumns = React.useMemo<ColumnDef<CustomerItem>[]>(() => [
     {

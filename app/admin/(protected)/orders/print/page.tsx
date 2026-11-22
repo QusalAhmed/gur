@@ -666,6 +666,7 @@ function PrintContent() {
                   <header className={storeConfig.logoUrl ? "flex items-center justify-center gap-2 text-left" : "text-center"}>
                     {storeConfig.logoUrl && (
                       <div className="shrink-0 flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- synchronous raw img required for window.print() invoice rendering */}
                         <img
                           src={storeConfig.logoUrl}
                           alt={storeConfig.name}
@@ -820,6 +821,7 @@ function PrintContent() {
                     {/* QR Code */}
                     {showQrCode && qrDataUrl && (
                       <div className="flex flex-col items-center justify-center pt-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- synchronous data URL required for window.print() invoice rendering */}
                         <img
                           src={qrDataUrl}
                           alt="Store QR Code"

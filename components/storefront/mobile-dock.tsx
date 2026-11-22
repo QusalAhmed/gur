@@ -152,33 +152,27 @@ export function MobileDock({
         animate={{
           y: isVisible ? 0 : "100%",
         }}
-        transition={{ type: "spring", stiffness: 350, damping: 32 }}
-        className="pointer-events-auto relative w-full bg-[#FAF8F5]/95 dark:bg-[#141210]/95 backdrop-blur-xl border-t border-amber-900/10 dark:border-stone-800/90 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.5)] select-none"
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="pointer-events-auto relative w-full bg-[#faf8f5]/95 dark:bg-[#141210]/95 backdrop-blur-xl border-t border-stone-200/90 dark:border-stone-800 shadow-sm select-none"
         aria-label="Mobile Store Navigation"
       >
-        {/* Specular hairline top glow */}
-        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/40 dark:via-amber-500/30 to-transparent pointer-events-none" />
-
         <div className="grid grid-cols-3 items-center w-full max-w-sm mx-auto h-13 sm:h-14 px-2">
           {/* 1. Home Tab */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
+          <button
             type="button"
             onClick={handleHomeClick}
             aria-label={lang === "bn" ? `${displayName} - হোম` : `${displayName} - Home`}
             className={`flex flex-col items-center justify-center h-full py-1 relative touch-manipulation cursor-pointer transition-colors ${
               activeSection === "intro"
-                ? "text-amber-950 dark:text-amber-300 font-bold"
+                ? "text-stone-900 dark:text-stone-100 font-semibold"
                 : "text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
             <div className="relative flex items-center justify-center">
               {logoUrl ? (
                 <div
-                  className={`w-6 h-6 shrink-0 flex items-center justify-center transition-all ${
-                    activeSection === "intro"
-                      ? "scale-110 drop-shadow-xs"
-                      : "opacity-80"
+                  className={`w-6 h-6 shrink-0 flex items-center justify-center transition-opacity ${
+                    activeSection === "intro" ? "opacity-100" : "opacity-75"
                   }`}
                 >
                   <Image
@@ -191,23 +185,22 @@ export function MobileDock({
                 </div>
               ) : (
                 <Home
-                  className="w-5 h-5 transition-transform"
+                  className="w-5 h-5"
                   aria-hidden="true"
-                  strokeWidth={activeSection === "intro" ? 2.4 : 1.9}
+                  strokeWidth={activeSection === "intro" ? 2.2 : 1.75}
                 />
               )}
             </div>
-            <span className="text-[10px] mt-1 tracking-tight leading-none">
+            <span className="text-[11px] mt-1 tracking-tight leading-none">
               {lang === "bn" ? "হোম" : "Home"}
             </span>
             {activeSection === "intro" && (
-              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-600 dark:bg-amber-400" />
+              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-800 dark:bg-amber-400" />
             )}
-          </motion.button>
+          </button>
 
           {/* 2. Direct Hotline Call Tab */}
-          <motion.a
-            whileTap={{ scale: 0.9 }}
+          <a
             href={`tel:${rawHotlineDigits}`}
             onClick={() => trackContact({ channel: "phone", customData: { source: "mobile_dock" } })}
             aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
@@ -215,20 +208,18 @@ export function MobileDock({
             title={t.hotlineLabel}
           >
             <div className="relative flex items-center justify-center">
-              <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" strokeWidth={2} />
-              <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <Phone className="w-5 h-5 text-emerald-700 dark:text-emerald-400" aria-hidden="true" strokeWidth={1.75} />
+              <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5">
+                <span className="inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600" />
               </span>
             </div>
-            <span className="text-[10px] mt-1 font-semibold tracking-tight leading-none text-emerald-700 dark:text-emerald-400">
+            <span className="text-[11px] mt-1 font-medium tracking-tight leading-none text-emerald-700 dark:text-emerald-400">
               {lang === "bn" ? "কল" : "Call"}
             </span>
-          </motion.a>
+          </a>
 
           {/* 3. Cart / Order Tab */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
+          <button
             type="button"
             onClick={handleCartClick}
             aria-label={
@@ -238,31 +229,31 @@ export function MobileDock({
             }
             className={`flex flex-col items-center justify-center h-full py-1 relative touch-manipulation cursor-pointer transition-colors ${
               displayCartQuantity > 0 || activeSection === "checkout"
-                ? "text-amber-950 dark:text-amber-300 font-bold"
+                ? "text-stone-900 dark:text-stone-100 font-semibold"
                 : "text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
             <div className="relative flex items-center justify-center">
               <ShoppingBag
-                className={`w-5 h-5 transition-transform ${displayCartQuantity > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}
+                className={`w-5 h-5 ${displayCartQuantity > 0 ? "text-amber-800 dark:text-amber-400" : ""}`}
                 aria-hidden="true"
-                strokeWidth={displayCartQuantity > 0 || activeSection === "checkout" ? 2.4 : 1.9}
+                strokeWidth={displayCartQuantity > 0 || activeSection === "checkout" ? 2.2 : 1.75}
               />
               {displayCartQuantity > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs ring-2 ring-[#FAF8F5] dark:ring-[#141210]">
+                <span className="absolute -top-1.5 -right-2.5 bg-amber-800 dark:bg-amber-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs tabular-nums">
                   {displayCartQuantity}
                 </span>
               )}
             </div>
-            <span className="text-[10px] mt-1 tracking-tight leading-none">
+            <span className="text-[11px] mt-1 tracking-tight leading-none tabular-nums">
               {displayCartQuantity > 0
                 ? (lang === "bn" ? `৳${toBengaliNumber(displayCartSubtotal)}` : `৳${displayCartSubtotal.toLocaleString()}`)
                 : (lang === "bn" ? "কার্ট" : "Cart")}
             </span>
             {activeSection === "checkout" && (
-              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-600 dark:bg-amber-400" />
+              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-amber-800 dark:bg-amber-400" />
             )}
-          </motion.button>
+          </button>
         </div>
       </motion.nav>
     </div>

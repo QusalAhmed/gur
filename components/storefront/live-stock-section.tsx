@@ -3,7 +3,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence, useInView } from "motion/react";
 import {
-  Sparkles,
   Calendar,
   ArrowRight,
   RotateCw,
@@ -50,30 +49,23 @@ export function LiveStockSection({
     <section
       ref={sectionRef}
       id="live-stock-section"
-      className="w-full rounded-2xl bg-gradient-to-b from-amber-50/95 via-orange-50/60 to-amber-100/70 dark:from-stone-900/95 dark:via-[#1c1611]/85 dark:to-stone-900/95 border border-amber-200/90 dark:border-amber-900/50 p-4 sm:p-5 shadow-md shadow-amber-950/5 backdrop-blur-sm relative overflow-hidden"
+      className="w-full rounded-xl bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 p-4 sm:p-5 shadow-xs relative"
     >
-      {/* Background ambient glow */}
-      <div className="absolute -top-16 -right-16 w-36 h-36 bg-amber-400/10 dark:bg-amber-600/10 rounded-full blur-2xl pointer-events-none" />
-      <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-emerald-400/10 dark:bg-emerald-600/10 rounded-full blur-2xl pointer-events-none" />
-
-      {/* Header with Live Pulse Indicator */}
+      {/* Header with Live Status Indicator */}
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: -10 }}
-        transition={{ duration: 0.4 }}
+        initial={{ opacity: 0, y: -6 }}
+        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }}
+        transition={{ duration: 0.3 }}
         className="flex items-center justify-between gap-3 mb-3"
       >
         <div className="flex items-center gap-2">
-          {/* Animated live radar dot */}
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-          </span>
+          {/* Calm live status dot */}
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600" />
           <div className="flex items-center gap-1.5">
-            <h3 className="font-extrabold text-sm sm:text-base text-amber-950 dark:text-amber-100 tracking-tight">
+            <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 tracking-tight">
               {isBn ? "লাইভ স্টক ও ভবিষ্যৎ প্রাপ্যতা" : "Live Stock & Future Availability"}
             </h3>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               LIVE
             </span>
           </div>
@@ -250,7 +242,7 @@ export function LiveStockSection({
             <span>{isBn ? "স্টকে আছে" : "In Stock"}</span>
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
+            <span className="text-lg sm:text-xl font-bold text-rose-600 dark:text-rose-400 font-mono">
               0
             </span>
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
@@ -271,7 +263,7 @@ export function LiveStockSection({
             <span>{isBn ? "দৈনিক গড় উৎপাদন" : "Daily average Yield"}</span>
           </div>
           <div className="flex items-baseline gap-1">
-            <span className="text-lg sm:text-xl font-black text-amber-900 dark:text-amber-100 font-mono">
+            <span className="text-lg sm:text-xl font-bold text-amber-900 dark:text-amber-100 font-mono">
               {dailyProductionKg}
             </span>
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
@@ -317,12 +309,12 @@ export function LiveStockSection({
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs sm:text-sm font-extrabold text-emerald-950 dark:text-emerald-100">
+                    <span className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-100">
                       {isBn
                         ? `পরবর্তী উন্মুক্ত তারিখ: ${nextAvailableDay.dayNameBn} (${nextAvailableDay.dateFormattedBn}, ${nextAvailableDay.weekdayBn})`
                         : `Next Available Date: ${nextAvailableDay.dayNameEn} (${nextAvailableDay.dateFormattedEn}, ${nextAvailableDay.weekdayEn})`}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 text-white">
                       {isBn
                         ? `${nextAvailableDay.availableKg} কেজি বাকি`
                         : `${nextAvailableDay.availableKg} KG Open`}
@@ -473,14 +465,14 @@ function TimelineDayCard({
           </div>
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-extrabold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+              <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                 {isBn ? proj.dayNameBn : proj.dayNameEn}
               </span>
               <span className="text-[11px] text-stone-500 dark:text-stone-400">
                 ({isBn ? `${proj.dateFormattedBn}, ${proj.weekdayBn}` : `${proj.dateFormattedEn}, ${proj.weekdayEn}`})
               </span>
               {isAvailable && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs">
                   {isBn ? "উন্মুক্ত" : "Open"}
                 </span>
               )}
@@ -492,29 +484,29 @@ function TimelineDayCard({
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
           {hasRecentBooking && (
             <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500 text-white shadow-xs animate-pulse"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
             >
-              <Sparkles className="w-3 h-3" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               {isBn ? "লাইভ বুকিং" : "Live booking"}
             </motion.span>
           )}
           {proj.isToday ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
               <PackageX className="w-3 h-3 text-rose-500" />
               {isBn ? "মজুদ শেষ (০ কেজি)" : "Sold Out (0 KG)"}
             </span>
           ) : isAvailable ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold bg-emerald-600 text-white shadow-xs">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-emerald-600 text-white shadow-xs">
               <CheckCircle2 className="w-3 h-3" />
               {isBn
                 ? `${proj.availableKg} কেজি পাওয়া যাবে`
                 : `${proj.availableKg} KG Available`}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800">
               <CircleAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
               {isBn ? "১০০% প্রি-অর্ডার বুকড" : "100% Booked"}
             </span>

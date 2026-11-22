@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Minus, Sparkles, Check, ChevronDown, Award, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
+import { Plus, Minus, Check, ChevronDown, Award, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -633,12 +633,9 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-500"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-y-auto overflow-x-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300"
     >
-      {/* Subtle Rustic Texture Backdrop Lines */}
-      <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-multiply dark:opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:24px_24px]" />
-
-      {/* Safe Centering Wrapper: centers content when fits, starts at top with padding when content is tall */}
+      {/* Safe Centering Wrapper */}
       <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
         {/* Main Two-Column Container for Desktop & Tablet, Single Column on Mobile */}
         <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 pt-1 pb-0 sm:py-2">
@@ -646,20 +643,19 @@ export function ProductCard({
         <div className="w-full flex flex-col items-center justify-center">
           {/* Top Meta Header on Mobile Only (< md) */}
           {!selectedVariant.isCombo && (
-            <div className="md:hidden w-full max-w-md flex items-center justify-between text-sm font-semibold text-amber-900 dark:text-amber-300 mb-2">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-sm">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="md:hidden w-full max-w-md flex items-center justify-between text-xs font-medium text-stone-600 dark:text-stone-400 mb-2">
+              <div className="inline-flex items-center gap-1.5 bg-stone-100 dark:bg-stone-850 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
                 <span>
                   {t.productCounter}{" "}
-                  <span className="font-bold">
+                  <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
                     {index + 1}
                   </span>{" "}
                   / {totalProducts}
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 py-1 rounded-full shadow-xs text-sm">
-                <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
+                <Award className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                 <span>{t.authenticityBadge}</span>
               </div>
             </div>
@@ -667,14 +663,12 @@ export function ProductCard({
 
           {/* Full-width Responsive Showcase Container */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: false, amount: "some" }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
             className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
           >
-            {/* Subtle Warm Glow Behind Jar */}
-            <div className="absolute inset-0 bg-amber-400/20 dark:bg-amber-600/15 rounded-full blur-3xl transform scale-90 pointer-events-none" />
 
             {/* Multiple Media with Shadcn Carousel */}
             {hasMultipleMedia ? (
@@ -688,13 +682,13 @@ export function ProductCard({
                   <CarouselContent className="-ml-0 h-full w-full">
                     {imagesList.map((imgSrc, imgIdx) => (
                       <CarouselItem key={`img-${imgIdx}`} className="pl-0 h-full w-full">
-                        <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] bg-amber-100/50">
+                        <div className="relative w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
                           <Image
                             src={imgSrc}
                             alt={`${displayName} - ${imgIdx + 1}`}
                             fill
                             priority={priority && imgIdx === 0}
-                            className="object-cover transition-transform duration-700 hover:scale-105"
+                            className="object-cover"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                           />
                         </div>
@@ -715,20 +709,20 @@ export function ProductCard({
                     )}
                   </CarouselContent>
                   {/* Touch-Friendly Nav Arrows */}
-                  <CarouselPrevious className="-left-11 sm:-left-12 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
-                  <CarouselNext className="-right-11 sm:-right-12 h-9 w-9 sm:h-10 sm:w-10 bg-white/90 dark:bg-stone-800/90 backdrop-blur-sm border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-md touch-manipulation hover:bg-amber-100" />
+                  <CarouselPrevious className="-left-4 sm:-left-5 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
+                  <CarouselNext className="-right-4 sm:-right-5 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
                 </Carousel>
                 {/* Dot Indicators */}
-                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-black/35 dark:bg-black/55 backdrop-blur-md px-2.5 py-1 rounded-full">
+                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-stone-900/60 dark:bg-black/60 px-2.5 py-1 rounded-full">
                   {Array.from({ length: totalSlides }).map((_, dotIdx) => (
                     <button
                       key={dotIdx}
                       type="button"
                       onClick={() => carouselApi?.scrollTo(dotIdx)}
-                      className={`h-2 rounded-full transition-all touch-manipulation ${
+                      className={`h-1.5 rounded-full transition-all touch-manipulation ${
                         currentSlide === dotIdx
-                          ? "w-6 bg-amber-400"
-                          : "w-2 bg-white/60 hover:bg-white/90"
+                          ? "w-4 bg-amber-400"
+                          : "w-1.5 bg-white/60 hover:bg-white/90"
                       }`}
                       aria-label={`Go to slide ${dotIdx + 1}`}
                     />
@@ -737,13 +731,13 @@ export function ProductCard({
               </div>
             ) : (
               /* Single Image Showcase */
-              <div className="absolute inset-0 w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] bg-amber-100/50">
+              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
                 <Image
                   src={product.image}
                   alt={displayName}
                   fill
                   priority={priority}
-                  className="object-cover transition-transform duration-700 hover:scale-105"
+                  className="object-cover"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                 />
               </div>
@@ -755,16 +749,16 @@ export function ProductCard({
                 initial={{ scale: 0.8, opacity: 0, y: -6 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                className="absolute top-2.5 right-2.5 z-30 bg-emerald-600/95 dark:bg-emerald-700/95 backdrop-blur-md text-white px-3 py-1 rounded-full shadow-[0_6px_16px_rgba(5,150,105,0.4)] border border-emerald-300/80 flex items-center gap-1.5 select-none pointer-events-none"
+                className="absolute top-2.5 right-2.5 z-30 bg-emerald-700/95 dark:bg-emerald-800/95 backdrop-blur-xs text-white px-2.5 py-1 rounded-lg shadow-xs border border-emerald-500/40 flex items-center gap-1.5 select-none pointer-events-none"
               >
-                <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-200" />
-                <div className="flex items-center gap-1 font-black text-sm sm:text-base">
+                <Check className="w-3.5 h-3.5 stroke-[2.5] text-emerald-200" />
+                <div className="flex items-center gap-1 font-bold text-sm">
                   <SlidingNumber
                     value={displayUnit}
                     isBengali={false}
-                    className="font-mono font-black"
+                    className="font-mono font-bold"
                   />
-                  <span className="text-xs sm:text-sm font-bold text-emerald-100">
+                  <span className="text-xs font-medium text-emerald-100">
                     {lang === "bn" ? "টি কার্টে" : "in cart"}
                   </span>
                 </div>
@@ -775,28 +769,27 @@ export function ProductCard({
 
         {/* ================= RIGHT COLUMN: Info & Controls ================= */}
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: false, amount: "some" }}
-          transition={{ duration: 0.5, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5 md:space-y-4"
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5"
         >
           {/* Top Meta Header on Desktop & Tab (>= md) */}
           {!selectedVariant.isCombo && (
-            <div className="hidden md:flex items-center justify-between text-sm sm:text-base font-semibold text-amber-900 dark:text-amber-300">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300/80 dark:border-amber-700/60 px-3 py-1 rounded-full shadow-xs text-sm sm:text-base">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="hidden md:flex items-center justify-between text-xs font-medium text-stone-600 dark:text-stone-400">
+              <div className="inline-flex items-center gap-1.5 bg-stone-100 dark:bg-stone-850 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
                 <span>
                   {t.productCounter}{" "}
-                  <span className="font-bold">
+                  <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
                     {index + 1}
                   </span>{" "}
                   / {totalProducts}
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1 bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70 px-2.5 sm:px-3 py-1 rounded-full shadow-xs text-sm sm:text-base">
-                <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
+                <Award className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                 <span>{t.authenticityBadge}</span>
               </div>
             </div>
@@ -804,11 +797,11 @@ export function ProductCard({
 
           {/* Product Title & Short Bio */}
           <div className="text-center md:text-left px-1">
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-[#451a03] dark:text-amber-100 tracking-tight leading-tight">
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
               {displayName}
             </h2>
             {!selectedVariant.isCombo && displaySummary && (
-              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed">
+              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed font-normal">
                 {displaySummary}
               </p>
             )}
@@ -817,14 +810,14 @@ export function ProductCard({
           {/* Control Deck: Variation Selector, Price & Quantity Stepper */}
           <div
             data-tour-zone={index === 0 ? "product-controls" : undefined}
-            className="w-full bg-amber-100/90 dark:bg-stone-900/90 backdrop-blur-md border border-amber-300/80 dark:border-stone-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shadow-amber-950/10 space-y-2.5"
+            className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5"
           >
             {/* Variation Dropdown */}
             {sortedVariants.length > 1 && (
               <div className="space-y-1.5 px-1">
                 <label
                   htmlFor={`variant-select-${product.id}`}
-                  className="block text-xs sm:text-sm font-bold text-amber-900/80 dark:text-amber-300"
+                  className="block text-xs sm:text-sm font-semibold text-stone-700 dark:text-stone-300"
                 >
                   {t.packSizeLabel}
                 </label>
@@ -842,18 +835,18 @@ export function ProductCard({
                     id={`variant-select-${product.id}`}
                     data-tour={index === 0 ? "product-variant-select" : undefined}
                     aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
-                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-amber-300/80 dark:border-stone-700 shadow-xs hover:border-amber-400 dark:hover:border-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500/50"
+                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xs hover:border-amber-700/60 dark:hover:border-stone-600 focus-visible:ring-1 focus-visible:ring-amber-700/50"
                   >
                     <SelectValue>
                       <span className="flex items-center justify-between w-full pr-1.5">
                         <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
-                        <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-sm ml-2 shrink-0">
+                        <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm ml-2 shrink-0 tabular-nums">
                           {formatStorePrice(selectedVariant.price, lang)}
                         </span>
                       </span>
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border border-amber-200 dark:border-stone-800 rounded-xl shadow-xl z-50 p-1">
+                  <SelectContent className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-lg z-50 p-1">
                     {sortedVariants.map((v) => {
                       const title = lang === "bn" ? v.nameBn || v.name : v.name;
                       return (
@@ -861,11 +854,11 @@ export function ProductCard({
                           key={v.id}
                           value={v.id}
                           hideIndicator
-                          className="text-sm sm:text-base font-semibold py-2.5 px-3 cursor-pointer focus:bg-amber-100/80 dark:focus:bg-stone-800 text-stone-800 dark:text-stone-200 focus:text-amber-950 dark:focus:text-amber-100 rounded-lg my-0.5"
+                          className="text-sm sm:text-base font-medium py-2.5 px-3 cursor-pointer focus:bg-stone-100 dark:focus:bg-stone-800 text-stone-900 dark:text-stone-100 rounded-lg my-0.5"
                         >
                           <span className="flex items-center justify-between w-full gap-3">
-                            <span className="font-bold truncate">{title}</span>
-                            <span className="font-mono text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0">
+                            <span className="font-semibold truncate">{title}</span>
+                            <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm shrink-0 tabular-nums">
                               {formatStorePrice(v.price, lang)}
                             </span>
                           </span>
@@ -912,7 +905,7 @@ export function ProductCard({
                             )}
                           </span>
                         </div>
-                        <span className="text-amber-800 dark:text-amber-300 font-extrabold text-sm shrink-0 ml-1">
+                        <span className="text-amber-800 dark:text-amber-300 font-bold text-sm shrink-0 ml-1">
                           ×{ci.quantity}
                         </span>
                       </div>
@@ -936,10 +929,10 @@ export function ProductCard({
                       : "Price:"}
                 </span>
                 <span
-                  className={`font-mono ${
+                  className={`font-mono tabular-nums ${
                     displayUnit > 0
-                      ? "text-sm sm:text-base font-extrabold text-amber-950 dark:text-amber-200"
-                      : "text-base sm:text-xl font-black text-amber-950 dark:text-amber-100"
+                      ? "text-sm sm:text-base font-bold text-amber-950 dark:text-amber-200"
+                      : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
                   }`}
                 >
                   {formatStorePrice(unitPrice, lang)}
@@ -969,7 +962,7 @@ export function ProductCard({
                     <span className="text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300">
                       {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
                     </span>
-                    <span className="font-mono text-lg sm:text-2xl font-extrabold text-amber-950 dark:text-amber-100">
+                    <span className="font-mono text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 tabular-nums">
                       {formatStorePrice(unitPrice * displayUnit, lang)}
                     </span>
                     <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
@@ -981,176 +974,83 @@ export function ProductCard({
             </div>
 
             {selectedVariant.isCombo ? (
-              /* Dedicated High-Converting Buy Now Button for Combo Packages */
+              /* Dedicated Buy Now Button for Combo Packages */
               <div className="pt-1.5 space-y-2">
-                <motion.button
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   type="button"
                   data-tour={index === 0 ? "product-combo-buy" : undefined}
                   onClick={handleBuyNow}
-                  className="relative overflow-hidden w-full h-12 sm:h-14 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:to-amber-700 active:from-amber-800 active:to-amber-800 text-white font-extrabold text-base sm:text-lg shadow-lg shadow-amber-950/20 border-2 border-amber-300/80 dark:border-amber-500/50 flex items-center justify-center gap-2.5 transition-all touch-manipulation cursor-pointer group"
+                  className="w-full h-12 rounded-xl bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-base shadow-sm flex items-center justify-center gap-2.5 transition-colors touch-manipulation cursor-pointer group"
                 >
-                  {/* Shimmer Light Beam Effect */}
-                  <span
-                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"
-                    aria-hidden="true"
-                  >
-                    <motion.span
-                      className="absolute top-0 bottom-0 left-0 w-3/4 -skew-x-25 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none"
-                      initial={{ x: "-150%" }}
-                      animate={{ x: ["-150%", "280%"] }}
-                      transition={{
-                        repeat: Infinity,
-                        repeatDelay: 1.2,
-                        duration: 1.5,
-                        ease: [0.4, 0, 0.2, 1],
-                      }}
-                    />
-                  </span>
-
-                  <ShoppingBag className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" />
-                  <span className="relative z-10">{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
-                  <ArrowRight className="relative z-10 w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:translate-x-1" />
-                </motion.button>
+                  <ShoppingBag className="w-5 h-5" />
+                  <span>{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
               </div>
             ) : (
               <div className="space-y-2.5">
                 {/* Quantity Stepper with Minus, Counter, Plus */}
                 <div className="relative">
-                  {/* Flying Miniature Product Animation into Bag */}
-                  <AnimatePresence>
-                    {flyingItems.map((item) => (
-                      <motion.div
-                        key={item.id}
-                        initial={{ x: 0, y: 0, scale: 0.8, opacity: 1, rotate: 0 }}
-                        animate={{
-                          x: [0, item.dx * 0.45, item.dx],
-                          y: [0, -54, 2],
-                          scale: [0.8, 1.35, 0.2],
-                          rotate: [0, -22, 28],
-                          opacity: [1, 1, 0.1],
-                        }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.95, ease: [0.25, 1, 0.35, 1] }}
-                        className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-50 pointer-events-none"
-                      >
-                        <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-300 dark:border-amber-400 shadow-[0_4px_16px_rgba(217,119,6,0.65)] bg-white relative flex items-center justify-center">
-                          <Image
-                            src={imagesList[currentSlide] || product.image}
-                            alt="flying product"
-                            fill
-                            sizes="36px"
-                            className="object-cover"
-                          />
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  <div
-                    className={`w-full rounded-2xl p-2 sm:p-2.5 border-2 transition-all flex items-center justify-between gap-2 shadow-lg ${
-                      displayUnit > 0
-                        ? "bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 text-white border-emerald-400 shadow-emerald-950/20"
-                        : "bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white border-amber-300/80 shadow-amber-950/20"
-                    }`}
-                  >
+                  <div className="w-full rounded-xl p-1.5 border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800/70 flex items-center justify-between gap-2 shadow-xs">
                     {/* Left: Minus Button */}
                     {displayUnit === 0 ? (
                       <button
                         type="button"
                         disabled
                         aria-disabled="true"
-                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-black/15 text-white/40 flex items-center justify-center font-black text-xl shrink-0 cursor-not-allowed select-none"
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-stone-200/50 dark:bg-stone-800 text-stone-400 dark:text-stone-600 flex items-center justify-center font-bold text-lg shrink-0 cursor-not-allowed select-none"
                         aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                       >
-                        <Minus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+                        <Minus className="w-4 h-4 stroke-[2.5]" />
                       </button>
                     ) : (
-                      <motion.button
-                        whileTap={{ scale: 0.85 }}
+                      <button
                         type="button"
                         onClick={() => handleSetUnit(currentUnit - 1)}
-                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white font-black text-xl transition-all touch-manipulation cursor-pointer shrink-0 shadow-sm"
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-50 active:bg-stone-100 flex items-center justify-center text-stone-800 dark:text-stone-100 font-bold text-lg transition-colors touch-manipulation cursor-pointer shrink-0 border border-stone-200/80 dark:border-stone-600 shadow-xs"
                         aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                       >
-                        <Minus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-                      </motion.button>
+                        <Minus className="w-4 h-4 stroke-[2.5]" />
+                      </button>
                     )}
 
                     {/* Middle: Large Quantity Display & Instruction Text */}
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-1 min-w-0">
                       <div ref={bagRef} className="relative flex items-center justify-center">
-                        {/* Impact Ripple Shockwave */}
-                        {isBagAnimating && (
-                          <motion.div
-                            initial={{ scale: 0.7, opacity: 0.95 }}
-                            animate={{ scale: 2.2, opacity: 0 }}
-                            transition={{ duration: 0.7, ease: "easeOut" }}
-                            className="absolute inset-0 rounded-2xl border-2 border-amber-300 bg-amber-300/30 pointer-events-none"
-                          />
-                        )}
-
-                        {/* Floating +1 indicator */}
-                        {isBagAnimating && (
-                          <motion.span
-                            initial={{ y: 0, opacity: 1, scale: 0.7 }}
-                            animate={{ y: -30, opacity: 0, scale: 1.3 }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="absolute -top-3 font-mono font-black text-xs sm:text-sm text-amber-200 pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
-                          >
-                            +1
-                          </motion.span>
-                        )}
-
                         {/* Large Quantity Box with SlidingNumber */}
-                        <motion.div
-                          animate={
-                            isBagAnimating
-                              ? {
-                                  scale: [1, 1.22, 0.92, 1.06, 1],
-                                }
-                              : { scale: 1 }
-                          }
-                          transition={{ duration: 0.6 }}
-                          className={`px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl border transition-all flex items-center justify-center min-w-[56px] sm:min-w-[68px] ${
+                        <div
+                          className={`px-4 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[54px] sm:min-w-[64px] ${
                             displayUnit > 0
-                              ? "bg-black/35 border-white/25 text-white shadow-inner"
-                              : "bg-amber-900/40 border-amber-300/40 text-white"
+                              ? "bg-amber-800 text-white border-amber-900"
+                              : "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 border-stone-200 dark:border-stone-600"
                           }`}
                         >
                           <SlidingNumber
                             value={displayUnit}
                             isBengali={false}
-                            className="text-2xl sm:text-3xl font-black font-mono tracking-tight flex items-center justify-center"
+                            className="text-xl sm:text-2xl font-bold font-mono tracking-tight flex items-center justify-center tabular-nums"
                           />
-                        </motion.div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Right: Plus Button */}
-                    <motion.button
+                    <button
                       ref={plusRef}
                       data-tour={index === 0 ? "product-plus-btn" : undefined}
-                      whileTap={{ scale: 0.85 }}
-                      whileHover={{ scale: 1.05 }}
                       type="button"
                       onClick={handleAddQuantityWithAnimation}
-                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white flex items-center justify-center font-black text-xl shadow-md transition-all touch-manipulation cursor-pointer shrink-0 ${
-                        displayUnit > 0
-                          ? "text-emerald-800 hover:bg-emerald-50 active:bg-emerald-100"
-                          : "text-amber-900 hover:bg-amber-50 active:bg-amber-100"
-                      }`}
+                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white flex items-center justify-center font-bold text-lg shadow-sm transition-colors touch-manipulation cursor-pointer shrink-0"
                       aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
                     >
-                      <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-                    </motion.button>
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
                   </div>
                 </div>
 
                 {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
                 <div className="flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
-                  <span className="text-xs sm:text-sm font-semibold text-amber-900/80 dark:text-amber-400 mr-1">
+                  <span className="text-xs sm:text-sm font-medium text-stone-500 dark:text-stone-400 mr-1">
                     {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
                   </span>
                   {[1, 2, 3, 5, 10].map((preset) => (
@@ -1161,10 +1061,10 @@ export function ProductCard({
                       onClick={() => handlePresetClick(preset)}
                       aria-label={lang === "bn" ? `${preset}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
                       aria-pressed={displayUnit === preset}
-                      className={`px-3 py-1 rounded-lg text-sm font-bold border transition-all touch-manipulation cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-xs sm:text-sm font-semibold border transition-colors touch-manipulation cursor-pointer ${
                         displayUnit === preset
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                          : "bg-white/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-amber-200 dark:border-stone-700 hover:bg-amber-100"
+                          ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-xs"
+                          : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750"
                       }`}
                     >
                       {preset}

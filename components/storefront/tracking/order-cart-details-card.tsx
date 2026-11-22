@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { ShoppingBag, Truck, ShieldCheck, Sparkles, Package } from "lucide-react";
+import { ShoppingBag, Truck, ShieldCheck, CheckCircle2, Package } from "lucide-react";
 import type { ParcelTrackingData } from "@/types/tracking";
 import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ export function OrderCartDetailsCard({
   return (
     <div
       className={cn(
-        "bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between",
+        "bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/90 dark:border-stone-800 p-4 sm:p-5 shadow-xs flex flex-col justify-between",
         className
       )}
     >
@@ -37,8 +37,8 @@ export function OrderCartDetailsCard({
         {/* Header Bar */}
         <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-stone-200 dark:border-stone-800">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-amber-700 dark:text-amber-400" />
-            <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100">
+            <ShoppingBag className="w-5 h-5 text-amber-800 dark:text-amber-400" />
+            <h3 className="font-bold text-base sm:text-lg text-stone-900 dark:text-stone-100">
               {lang === "bn" ? "নির্বাচিত পণ্যসমূহ (অর্ডার বিবরণ)" : "Selected Items & Details"}
             </h3>
           </div>
@@ -126,9 +126,9 @@ export function OrderCartDetailsCard({
 
                           {/* Quantity Pill */}
                           <div className="pt-0.5">
-                            <span className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700 font-bold text-[11px]">
+                            <span className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700 font-medium text-[11px]">
                               <span>{lang === "bn" ? "পরিমাণ:" : "Qty:"}</span>
-                              <span className="font-mono font-black text-amber-950 dark:text-amber-200">
+                              <span className="font-mono font-bold text-amber-950 dark:text-amber-200">
                                 {lang === "bn" ? toBnNumber(item.quantity) : item.quantity}
                               </span>
                               <span className="text-[10px] text-stone-500 font-normal">
@@ -142,7 +142,7 @@ export function OrderCartDetailsCard({
 
                     {/* Right Column: Total Price with Weight Badge & Calculation Subtitle */}
                     <td className="py-2.5 pl-2 text-right align-top whitespace-nowrap">
-                      <span className="block font-mono text-xs sm:text-sm md:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
+                      <span className="block font-mono text-xs sm:text-sm md:text-base font-bold text-amber-950 dark:text-amber-100 leading-tight tabular-nums">
                         {formatStorePrice(total, lang)}
                       </span>
                       <span className="inline-block font-mono text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40 mt-1 whitespace-nowrap">
@@ -196,12 +196,12 @@ export function OrderCartDetailsCard({
             </span>
           </div>
           {displayShipping === 0 ? (
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full text-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 font-sans shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md text-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 font-sans">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               <span>{lang === "bn" ? "ফ্রি ডেলিভারি" : "Free Delivery"}</span>
             </span>
           ) : (
-            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
+            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base tabular-nums">
               {formatStorePrice(displayShipping, lang)}
             </span>
           )}
@@ -213,18 +213,18 @@ export function OrderCartDetailsCard({
             <span className="font-semibold text-emerald-700 dark:text-emerald-400">
               {lang === "bn" ? "অগ্রিম পরিশোধিত:" : "Advance Paid:"}
             </span>
-            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm">
+            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm tabular-nums">
               {formatStorePrice(data.amountPaid, lang)}
             </span>
           </div>
         )}
 
         {/* Total Payable / COD Grand Total */}
-        <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-black text-amber-950 dark:text-amber-100">
+        <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-bold text-amber-950 dark:text-amber-100">
           <span>
             {lang === "bn" ? "সর্বমোট প্রদেয় (ক্যাশ অন ডেলিভারি):" : "Total Payable (COD):"}
           </span>
-          <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
+          <span className="font-mono text-base sm:text-xl text-amber-900 dark:text-amber-300 font-bold tabular-nums">
             {formatStorePrice(displayCodPayable, lang)}
           </span>
         </div>

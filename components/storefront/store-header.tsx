@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Phone, ShoppingBag, ArrowLeft } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -52,26 +53,27 @@ export function StoreHeader({
 
           <Link
             href="/"
-            className="flex items-center gap-2 min-w-0 pr-2 group"
+            className="flex items-center gap-2.5 min-w-0 pr-2 group"
             title="হোমপেইজ"
           >
-            <div className="w-8 h-8 rounded-full bg-white dark:bg-stone-800 border border-amber-300/80 dark:border-stone-700 flex items-center justify-center overflow-hidden shadow-md shrink-0 group-hover:scale-105 transition-transform">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            <div className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center overflow-hidden shadow-xs shrink-0">
+              <Image
                 src={
                   logoUrl
                     ? buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })
                     : "/admin-icon/icon-192.png"
                 }
                 alt={storeName}
+                width={32}
+                height={32}
                 className="w-full h-full object-contain p-0.5"
               />
             </div>
             <div className="min-w-0">
-              <span className="text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 tracking-tight block leading-tight truncate">
+              <span className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 tracking-tight block leading-tight truncate">
                 {storeName}
               </span>
-              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold block leading-tight">
+              <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium block leading-tight">
                 ১০০% খাঁটি ও প্রাকৃতিক
               </span>
             </div>
@@ -79,28 +81,28 @@ export function StoreHeader({
         </div>
 
         {/* Center / Navigation Links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-2 bg-amber-200/50 dark:bg-stone-800/60 p-1 rounded-full border border-amber-300/60 dark:border-stone-700 text-xs font-bold text-amber-950 dark:text-amber-100">
+        <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-xl text-xs font-medium text-stone-600 dark:text-stone-300">
           <Link
             href="/"
-            className="px-3 py-1 rounded-full hover:bg-white/70 dark:hover:bg-stone-700 transition-colors"
+            className="px-3 py-1.5 rounded-lg hover:text-stone-900 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
           >
             হোম
           </Link>
           <Link
             href="/products"
-            className="px-3 py-1 rounded-full hover:bg-white/70 dark:hover:bg-stone-700 transition-colors"
+            className="px-3 py-1.5 rounded-lg hover:text-stone-900 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
           >
             পণ্যসমূহ
           </Link>
           <Link
             href="/contact"
-            className="px-3 py-1 rounded-full bg-white text-amber-900 shadow-xs"
+            className="px-3 py-1.5 rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 font-semibold shadow-xs"
           >
             যোগাযোগ
           </Link>
           <Link
             href="/privacy-policy"
-            className="px-3 py-1 rounded-full hover:bg-white/70 dark:hover:bg-stone-700 transition-colors"
+            className="px-3 py-1.5 rounded-lg hover:text-stone-900 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
           >
             প্রাইভেসি পলিসি
           </Link>
@@ -112,9 +114,9 @@ export function StoreHeader({
           <a
             href={`tel:${rawHotlineDigits}`}
             onClick={() => trackContact({ channel: "phone", customData: { source: "header_hotline" } })}
-            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs sm:text-sm py-1.5 sm:py-2 px-3 sm:px-4 rounded-full shadow-md transition-all touch-manipulation"
+            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs sm:text-sm py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl shadow-2xs transition-colors touch-manipulation"
           >
-            <Phone className="w-3.5 h-3.5 animate-pulse shrink-0" />
+            <Phone className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">হটলাইন:</span>
             <span className="font-mono text-xs sm:text-sm">{hotline}</span>
           </a>
@@ -124,12 +126,12 @@ export function StoreHeader({
             type="button"
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
-            className="relative inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white dark:bg-stone-800 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 shadow-xs hover:bg-amber-50 active:scale-95 transition-all cursor-pointer"
+            className="relative inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors cursor-pointer"
             aria-label="শপিং কার্ট"
           >
-            <ShoppingBag className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+            <ShoppingBag className="w-4 h-4 text-amber-800 dark:text-amber-400" />
             {displayCartQuantity > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-[10px] font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center shadow-md animate-bounce ring-2 ring-white dark:ring-stone-900">
+              <span className="absolute -top-1.5 -right-1.5 bg-amber-800 text-white text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center tabular-nums shadow-xs">
                 {displayCartQuantity}
               </span>
             )}

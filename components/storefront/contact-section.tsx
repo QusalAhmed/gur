@@ -10,7 +10,6 @@ import {
   MapPin,
   Copy,
   Check,
-  Sparkles,
   ExternalLink,
   ShieldCheck,
   Truck,
@@ -173,20 +172,19 @@ export function ContactSection({
     <div className="relative z-10 w-full max-w-2xl sm:max-w-3xl mx-auto my-auto py-2">
       {/* Top Heritage Pill & Title */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 10 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: false, amount: "some" }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
         className="text-center mb-3 sm:mb-4 px-2 space-y-1 sm:space-y-1.5"
       >
-        <div className="inline-flex items-center gap-1.5 bg-amber-100/90 dark:bg-stone-850 border border-amber-300/80 dark:border-stone-700 px-3.5 py-1 rounded-full text-amber-950 dark:text-amber-200 text-sm font-bold shadow-xs">
-          <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+        <div className="inline-flex items-center gap-1.5 bg-stone-100 dark:bg-stone-850 border border-stone-200/80 dark:border-stone-800 px-3 py-1 rounded-lg text-stone-800 dark:text-stone-200 text-xs sm:text-sm font-medium shadow-xs">
           <span>{displayName}</span>
           <span className="opacity-40">•</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{t.authenticityBadge}</span>
+          <span className="text-amber-800 dark:text-amber-400 font-semibold">{t.authenticityBadge}</span>
         </div>
 
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 dark:text-stone-50 tracking-tight leading-tight pt-0.5">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight pt-0.5">
           {lang === "bn" ? "সরাসরি কথা বলে নিশ্চিত অর্ডার করুন" : "Direct Phone Order & Support"}
         </h1>
       </motion.div>
@@ -194,23 +192,19 @@ export function ContactSection({
       {/* Contact Cards */}
       <div className="space-y-2 sm:space-y-2.5 px-0.5">
         {/* 1. Hero Direct Calling Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 16, scale: 0.98 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: false, amount: "some" }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
-          className="bg-white dark:bg-stone-900 border-2 border-emerald-500/90 dark:border-emerald-500/70 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-lg shadow-emerald-950/5 flex flex-col sm:flex-row items-center justify-between gap-3"
+        <div
+          className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 rounded-2xl p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3"
         >
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-inner">
-              <Phone className="w-6 h-6 sm:w-7 sm:h-7 animate-pulse" aria-hidden="true" />
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Phone className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                <span className="text-xs sm:text-sm font-semibold text-stone-700 dark:text-stone-300">
                   {t.phoneCallTitle}
                 </span>
-                <span className="inline-block bg-emerald-100/90 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs px-2 py-0.5 rounded">
+                <span className="inline-block bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-medium text-xs px-2 py-0.5 rounded">
                   {lang === "bn" ? "হটলাইন" : "Hotline"}
                 </span>
               </div>
@@ -221,24 +215,17 @@ export function ContactSection({
                 title={lang === "bn" ? "হটলাইন নম্বর কপি করতে ক্লিক করুন" : "Click to copy hotline number"}
                 aria-label={`${hotline} - ${lang === "bn" ? "কপি করতে ক্লিক করুন" : "click to copy"}`}
               >
-                <motion.span
-                  animate={copied ? { scale: [1, 1.05, 0.98, 1] } : {}}
-                  transition={{ duration: 0.35 }}
-                  className={`font-mono text-xl sm:text-2xl font-black tracking-wider leading-none transition-colors duration-200 block ${
+                <span
+                  className={`font-mono text-xl sm:text-2xl font-bold tracking-tight leading-none transition-colors duration-150 block ${
                     copied
                       ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-stone-900 dark:text-stone-50 group-hover/phone:text-emerald-600 dark:group-hover/phone:text-emerald-400"
+                      : "text-stone-900 dark:text-stone-100 group-hover/phone:text-amber-800 dark:group-hover/phone:text-amber-400"
                   }`}
                 >
                   {hotline}
-                </motion.span>
-                <motion.span
-                  initial={false}
-                  animate={{ width: copied ? "100%" : "0%" }}
-                  className="h-0.5 bg-emerald-500 rounded-full block group-hover/phone:w-full transition-all duration-300 mt-0.5"
-                />
+                </span>
               </button>
-              <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1">
+              <span className="block text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1 font-normal">
                 {lang === "bn" ? "প্রতিদিন সকাল ৮:০০টা - রাত ১০:০০টা" : "Daily 8:00 AM - 10:00 PM"}
               </span>
             </div>
@@ -249,7 +236,7 @@ export function ContactSection({
               href={`tel:${rawPhone}`}
               onClick={() => handleContactClick("phone")}
               aria-label={`${t.phoneCallTitle}: ${hotline} - ${t.callNowBtn}`}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm sm:text-base py-3 sm:py-3.5 px-5 sm:px-6 rounded-xl sm:rounded-2xl shadow-md transition-all touch-manipulation cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base py-3 px-5 sm:px-6 rounded-xl shadow-xs transition-colors touch-manipulation cursor-pointer"
             >
               <Phone className="w-4 h-4" aria-hidden="true" />
               <span>{t.callNowBtn}</span>
@@ -332,7 +319,7 @@ export function ContactSection({
               </span>
             </motion.button>
           </div>
-        </motion.div>
+        </div>
 
         {/* 2. Direct Channels Grid: WhatsApp, Messenger, IMO, SMS */}
         <motion.div
@@ -352,11 +339,11 @@ export function ContactSection({
             className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
           >
             <div className="flex items-center gap-2.5 min-w-0 w-full">
-              <div className="w-9 h-9 rounded-xl bg-[#25D366]/15 text-[#128C7E] dark:text-[#25D366] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-[#25D366]/15 text-[#128C7E] dark:text-[#25D366] flex items-center justify-center shrink-0">
                 <MessageCircle className="w-5 h-5 fill-current" aria-hidden="true" />
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
                   {t.whatsappTitle}
                 </span>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
@@ -364,7 +351,7 @@ export function ContactSection({
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+            <span className="inline-flex items-center justify-center gap-1 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1">
               <span>{t.whatsappChatBtn}</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
             </span>
@@ -377,10 +364,10 @@ export function ContactSection({
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${t.messengerTitle} - ${t.messengerChatBtn}`}
-            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
+            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2 touch-manipulation"
           >
             <div className="flex items-center gap-2.5 min-w-0 w-full">
-              <div className="w-9 h-9 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center shrink-0">
                 <svg
                   className="w-5 h-5 fill-current"
                   viewBox="0 0 24 24"
@@ -390,7 +377,7 @@ export function ContactSection({
                 </svg>
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
                   {t.messengerTitle}
                 </span>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
@@ -398,20 +385,20 @@ export function ContactSection({
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1">
+            <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1">
               <span>{t.messengerChatBtn}</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
             </span>
           </a>
 
           {/* IMO */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0 w-full">
-              <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-black text-xs" aria-hidden="true">
+              <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-bold text-xs" aria-hidden="true">
                 imo
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
                   {t.imoTitle}
                 </span>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
@@ -423,7 +410,7 @@ export function ContactSection({
               href={`imo://call?phone=${intlPhone}`}
               onClick={() => handleContactClick("imo")}
               aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
-              className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-all touch-manipulation w-full mt-1"
+              className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1"
             >
               <span>{t.imoLaunchBtn}</span>
             </a>
@@ -434,14 +421,14 @@ export function ContactSection({
             href={`sms:${rawPhone}?body=${smsMsg}`}
             onClick={() => handleContactClick("sms")}
             aria-label={`${t.smsTitle} - ${t.smsSendBtn}`}
-            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all flex flex-col items-start justify-between gap-2 touch-manipulation"
+            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2 touch-manipulation"
           >
             <div className="flex items-center gap-2.5 min-w-0 w-full">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <MessageSquare className="w-4 h-4" aria-hidden="true" />
               </div>
               <div className="min-w-0 text-left">
-                <span className="block text-sm font-black text-stone-900 dark:text-stone-100 truncate">
+                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
                   {t.smsTitle}
                 </span>
                 <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
@@ -495,10 +482,8 @@ export function ContactSection({
     <section
       id="contact"
       data-section-index="contact"
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
     >
-      {/* Soft Ambient Warm Glow (Clean & Elegant, no noisy dots) */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-80 bg-gradient-to-b from-amber-200/40 via-amber-100/15 to-transparent dark:from-amber-950/25 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
       {sectionContent}
     </section>
   );

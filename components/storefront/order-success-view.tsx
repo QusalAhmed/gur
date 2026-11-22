@@ -47,13 +47,13 @@ export function OrderSuccessView({
         initial={{ scale: 0, rotate: -45 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: "spring", damping: 14, stiffness: 180, delay: 0.1 }}
-        className="w-16 h-16 sm:w-22 sm:h-22 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border-4 border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg mb-3 sm:mb-4 shrink-0"
+        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs mb-3 sm:mb-4 shrink-0"
       >
-        <CheckCircle2 className="w-10 h-10 sm:w-13 sm:h-13 stroke-[2.2]" />
+        <CheckCircle2 className="w-9 h-9 sm:w-11 sm:h-11 stroke-[2]" />
       </motion.div>
 
       {/* Main Success Title */}
-      <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-amber-950 dark:text-amber-100 tracking-tight mb-1.5 leading-snug">
+      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight mb-1.5 leading-snug">
         {t.successTitle}
       </h2>
 
@@ -105,8 +105,8 @@ export function OrderSuccessView({
           </span>
         </div>
         <div className="border-t border-stone-200 dark:border-stone-700/80 pt-2 flex justify-between items-center text-sm sm:text-lg">
-          <span className="font-bold text-amber-950 dark:text-amber-100">{t.amountDueOnDelivery}</span>
-          <span className="font-extrabold text-lg sm:text-2xl text-emerald-700 dark:text-emerald-400">
+          <span className="font-semibold text-stone-900 dark:text-stone-100">{t.amountDueOnDelivery}</span>
+          <span className="font-bold text-lg sm:text-2xl text-amber-900 dark:text-amber-400 tabular-nums">
             {formatStorePrice(grandTotal, lang)}
           </span>
         </div>
@@ -116,7 +116,7 @@ export function OrderSuccessView({
       <div className="w-full flex flex-col sm:flex-row gap-2.5 sm:gap-3 mb-4 sm:mb-6">
         <a
           href={`tel:${rawHotlineDigits}`}
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-3 sm:py-3.5 px-4 rounded-xl shadow-md transition-all text-sm sm:text-base touch-manipulation"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-xs transition-colors text-sm sm:text-base touch-manipulation"
         >
           <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
           <span>{t.callHotlineBtn}</span>
@@ -127,7 +127,7 @@ export function OrderSuccessView({
           )}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:scale-[0.98] text-white font-bold py-3 sm:py-3.5 px-4 rounded-xl shadow-md transition-all text-sm sm:text-base touch-manipulation"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] text-white font-semibold py-3 px-4 rounded-xl shadow-xs transition-colors text-sm sm:text-base touch-manipulation"
         >
           <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
           <span>{t.whatsappBtn}</span>

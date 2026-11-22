@@ -132,7 +132,7 @@ export default function CouponsPage() {
 
   const activeCount = coupons.filter((c) => c.status === "active").length;
 
-  const handleExportCouponsCSV = (selected: CouponItem[]) => {
+  const handleExportCouponsCSV = React.useCallback((selected: CouponItem[]) => {
     const list = selected.length > 0 ? selected : coupons;
     const headers = ["ID", "Code", "Type", "Value", "MinOrder", "MaxDiscount", "Usage", "Status", "B2BOnly", "ValidUntil"];
     const rows = list.map((c) => [
@@ -152,7 +152,7 @@ export default function CouponsPage() {
     link.href = encodeURI(csv);
     link.download = `coupons_${Date.now()}.csv`;
     link.click();
-  };
+  }, [coupons]);
 
   const couponColumns = React.useMemo<ColumnDef<CouponItem>[]>(() => [
     {

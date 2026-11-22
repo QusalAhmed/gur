@@ -125,7 +125,7 @@ export function RollingNumber({
   if (!isHydrated) {
     return (
       <span
-        className={`inline-flex items-center align-middle font-mono font-black tabular-nums ${className}`}
+        className={`inline-flex items-center align-middle font-mono font-bold tabular-nums ${className}`}
         aria-label={stringValue}
       >
         <span className="sr-only">{stringValue}</span>
@@ -134,26 +134,21 @@ export function RollingNumber({
     );
   }
 
-  const isCulminated = shouldAnimate && isComplete;
   const formattedDisplay = `${prefix}${formatNumberWithCommas(currentValue, isBengali)}${suffix}`;
 
   return (
     <span
       ref={containerRef}
-      className={`inline-flex items-center align-middle font-mono font-black tabular-nums ${className}`}
+      className={`inline-flex items-center align-middle font-mono font-bold tabular-nums ${className}`}
       aria-label={stringValue}
     >
       <span className="sr-only">{stringValue}</span>
-      <motion.span
-        animate={{
-          scale: isCulminated ? [1, 1.1, 1] : 1,
-        }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
+      <span
         className="inline-block tabular-nums"
         aria-hidden="true"
       >
         {formattedDisplay}
-      </motion.span>
+      </span>
     </span>
   );
 }

@@ -13,7 +13,6 @@ import {
   Check,
   ExternalLink,
   ArrowLeft,
-  Sparkles,
   RefreshCw,
   ShieldCheck,
   ChevronDown,
@@ -282,7 +281,7 @@ export function ParcelTrackingView({
                 ) : isReturned ? (
                   <RotateCcw className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.2]" />
                 ) : (
-                  <Truck className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.2] animate-pulse" />
+                  <Truck className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.2]" />
                 )}
               </div>
 
@@ -324,7 +323,7 @@ export function ParcelTrackingView({
                   </Badge>
                 </div>
 
-                <h1 className="text-lg sm:text-2xl font-black text-amber-950 dark:text-amber-100 tracking-tight mt-0.5">
+                <h1 className="text-lg sm:text-2xl font-bold text-stone-900 dark:text-stone-100 tracking-tight mt-0.5">
                   {isDelivered
                     ? lang === "bn"
                       ? "আপনার পার্সেল সফলভাবে ডেলিভারি হয়েছে!"
@@ -453,7 +452,7 @@ export function ParcelTrackingView({
                             isDone
                               ? "bg-amber-600 dark:bg-amber-500 text-white ring-amber-100 dark:ring-amber-950/60"
                               : isCurrent
-                              ? "bg-white dark:bg-stone-900 text-amber-700 dark:text-amber-300 border-2 border-amber-600 ring-amber-200/80 dark:ring-amber-900/50 animate-pulse"
+                              ? "bg-white dark:bg-stone-900 text-amber-800 dark:text-amber-300 border-2 border-amber-700 ring-2 ring-amber-200/80 dark:ring-amber-900/50"
                               : "bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 ring-transparent"
                           )}
                         >

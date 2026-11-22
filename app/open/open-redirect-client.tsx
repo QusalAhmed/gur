@@ -9,7 +9,7 @@ import {
   tryEscapeAndroidInAppBrowser,
   InAppBrowserInfo,
 } from "@/lib/in-app-browser";
-import { ExternalLink, Copy, Check, Compass, ArrowUpRight, ShieldCheck, Sparkles } from "lucide-react";
+import { ExternalLink, Copy, Check, Compass, ArrowUpRight, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export function OpenRedirectClient() {
@@ -110,8 +110,8 @@ export function OpenRedirectClient() {
               খাঁটি খেজুর গুড়
             </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200/60">
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-stone-100 text-stone-800 border border-stone-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
             {browserInfo.browserName} এ আছেন
           </span>
         </div>
@@ -119,7 +119,7 @@ export function OpenRedirectClient() {
 
       {/* Main Content Card */}
       <div className="w-full max-w-md mx-auto my-auto py-6">
-        <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xl shadow-amber-950/5 border border-amber-100/80 space-y-6">
+        <div className="bg-white rounded-2xl p-6 sm:p-7 shadow-xs border border-stone-200/90 space-y-6">
           <div className="text-center space-y-2">
             <div className="inline-flex p-3 bg-amber-500/10 rounded-2xl text-amber-800 mb-1">
               <ExternalLink className="w-7 h-7" />

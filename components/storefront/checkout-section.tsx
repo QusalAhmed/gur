@@ -28,7 +28,6 @@ import {
   ArrowRight,
   ArrowUp,
   ChevronUp,
-  Sparkles,
   AlertCircle,
   Leaf,
   CheckCircle2,
@@ -474,13 +473,13 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                         })
                       )
                     }
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-200/70 dark:hover:bg-stone-600 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-colors shadow-2xs touch-manipulation cursor-pointer"
                     aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                   >
                     <Minus className="w-3.5 h-3.5 stroke-[3]" />
                   </button>
 
-                  <div className="min-w-[28px] text-center font-mono font-black text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center justify-center px-1">
+                  <div className="min-w-[28px] text-center font-mono font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center justify-center px-1">
                     <SlidingNumber value={item.quantity} isBengali={false} />
                   </div>
 
@@ -517,7 +516,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                         fbc,
                       });
                     }}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-amber-100 dark:hover:bg-stone-600 active:scale-95 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-all shadow-xs touch-manipulation cursor-pointer"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-200/70 dark:hover:bg-stone-600 flex items-center justify-center text-stone-800 dark:text-stone-200 font-bold transition-colors shadow-2xs touch-manipulation cursor-pointer"
                     aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[3]" />
@@ -552,7 +551,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
         const lineWeightKg = wKg * item.quantity;
         return (
           <div className="text-right py-2.5 pl-2">
-            <span className="block font-mono text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-tight">
+            <span className="block font-mono text-sm sm:text-base font-bold text-amber-950 dark:text-amber-100 leading-tight">
               {formatStorePrice(total, lang)}
             </span>
             <span className="inline-block font-mono text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40 mt-1 whitespace-nowrap">
@@ -690,7 +689,7 @@ return (
   <section
     id="checkout"
     data-section-index="checkout"
-    className="h-[100dvh] max-h-[100dvh] min-h-[620px] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+    className="h-[100dvh] max-h-[100dvh] min-h-[620px] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
   >
     {/* Background Watcher for Incomplete Order Syncing (zero UI re-renders on keystrokes) */}
     <AutoSyncOrderWatcher
@@ -709,16 +708,16 @@ return (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
         {/* Left Column (5 Cols): Either Selected Items Table OR Direct Phone Order Assistance */}
         {displayCartItems.length > 0 ? (
-          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+          <div className="lg:col-span-5 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/90 dark:border-stone-800 p-3.5 sm:p-5 shadow-xs flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-stone-200 dark:border-stone-800">
                 <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-amber-700 dark:text-amber-400" />
-                  <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100">
+                  <ShoppingBag className="w-5 h-5 text-amber-800 dark:text-amber-400" />
+                  <h3 className="font-bold text-base sm:text-lg text-stone-900 dark:text-stone-100">
                     {lang === "bn" ? "নির্বাচিত পণ্যসমূহ" : "Selected Items"}
                   </h3>
                 </div>
-                <span className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-bold">
+                <span className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-medium">
                   {lang === "bn" ? `${displayCartItems.length} পদের গুড়` : `${displayCartItems.length} products`}
                 </span>
               </div>
@@ -730,7 +729,7 @@ return (
                     {table.getHeaderGroups().map((headerGroup) => (
                       <tr
                         key={headerGroup.id}
-                        className="border-b border-stone-200 dark:border-stone-800 text-xs font-bold text-stone-500 uppercase tracking-wider"
+                        className="border-b border-stone-200 dark:border-stone-800 text-xs font-semibold text-stone-500 tracking-normal"
                       >
                         {headerGroup.headers.map((header) => (
                           <th key={header.id} className="pb-2 pr-2">
@@ -789,20 +788,19 @@ return (
                   </span>
                 </div>
                 {isFreeDelivery ? (
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full text-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 font-sans shadow-sm">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-xs border border-emerald-200 dark:border-emerald-800">
                     {lang === "bn" ? "ফ্রি ডেলিভারি" : "Free Delivery"}
                   </span>
                 ) : (
-                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm sm:text-base">
+                  <span className="font-mono font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base tabular-nums">
                     {formatStorePrice(deliveryCharge, lang)}
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-black text-amber-950 dark:text-amber-100">
+              <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-200 dark:border-stone-800 text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100">
                 <span>{lang === "bn" ? "সর্বমোট প্রদেয়:" : "Total Payable (COD):"}</span>
-                <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
+                <span className="font-mono text-base sm:text-xl text-amber-900 dark:text-amber-300 font-bold tabular-nums">
                   {formatStorePrice(grandTotal, lang)}
                 </span>
               </div>
@@ -810,20 +808,20 @@ return (
           </div>
         ) : (
           /* When 0 products selected: Helpful direct order prompt */
-          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5 flex flex-col justify-between">
+          <div className="lg:col-span-5 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl border border-stone-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-stone-200 dark:border-stone-800">
-                <ShoppingBag className="w-5 h-5 text-amber-600" />
-                <h3 className="font-black text-base sm:text-lg text-stone-900 dark:text-stone-100">
+                <ShoppingBag className="w-5 h-5 text-amber-800 dark:text-amber-400" />
+                <h3 className="font-bold text-base sm:text-lg text-stone-900 dark:text-stone-100">
                   {lang === "bn" ? "সরাসরি ফোন অর্ডার" : "Direct Phone Order"}
                 </h3>
               </div>
 
               <div className="text-center py-2 sm:py-4 px-1">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full bg-gradient-to-tr from-amber-200 to-amber-100 dark:from-stone-800 dark:to-stone-700 flex items-center justify-center text-amber-800 dark:text-amber-200 shadow-md mb-3">
-                  <PhoneCall className="w-7 h-7 sm:w-8 sm:h-8" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-xl bg-amber-50 dark:bg-stone-800 flex items-center justify-center text-amber-800 dark:text-amber-200 shadow-2xs mb-3 border border-amber-200/50 dark:border-stone-700">
+                  <PhoneCall className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
-                <h4 className="font-black text-base sm:text-xl text-amber-950 dark:text-amber-100">
+                <h4 className="font-bold text-base sm:text-xl text-stone-900 dark:text-stone-100">
                   {lang === "bn" ? "কোনো পণ্য নির্বাচন করেননি?" : "No products selected yet?"}
                 </h4>
                 <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 mt-2 leading-relaxed font-medium">
@@ -862,22 +860,21 @@ return (
           </div>
         )}
 
-        {/* Right Column (7 Cols): Responsive TanStack Checkout Form (Larger Senior-Friendly Typography) */}
-        <div className="lg:col-span-7 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-200/90 dark:border-stone-800 p-4 sm:p-6 shadow-xl shadow-amber-950/5">
+        {/* Right Column (7 Cols): Responsive TanStack Checkout Form */}
+        <div className="lg:col-span-7 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/90 dark:border-stone-800 p-4 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-200 dark:border-stone-800">
             <div>
-              <h3 className="font-black text-lg sm:text-xl text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <span>{lang === "bn" ? "অর্ডার ফরম" : "Order Form"}</span>
-                <Sparkles className="w-5 h-5 text-amber-600" />
+              <h3 className="font-bold text-lg sm:text-xl text-stone-900 dark:text-stone-100">
+                {lang === "bn" ? "অর্ডার ফরম" : "Order Form"}
               </h3>
             </div>
           </div>
 
           {submissionSuccess && (
-            <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border-2 border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 text-sm font-bold flex items-center gap-3">
+            <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 text-sm font-bold flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div className="flex-1">
-                <p className="font-extrabold text-emerald-800 dark:text-emerald-300">
+                <p className="font-bold text-emerald-800 dark:text-emerald-300">
                   {lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে!" : "Order Confirmed!"}
                 </p>
                 <p className="text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-200 mt-0.5">
@@ -936,7 +933,7 @@ return (
                         if (!isOrderProcessing) triggerSyncNowRef.current?.();
                       }}
                       placeholder={lang === "bn" ? "উদা: মোঃ আব্দুর রহিম (ঐচ্ছিক)" : "e.g. Md. Abdur Rahim (optional)"}
-                      className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
+                      className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-medium rounded-xl border border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-amber-800 focus:border-amber-800 transition-colors"
                     />
                     <FormFieldError field={field} />
                   </div>
@@ -957,7 +954,7 @@ return (
                     <div>
                       <label
                         htmlFor="customerPhone"
-                        className="block text-sm sm:text-base font-bold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
+                        className="block text-sm sm:text-base font-semibold text-stone-800 dark:text-stone-200 mb-1.5 flex items-center gap-1.5"
                       >
                         <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400" />
                         <span>{lang === "bn" ? "মোবাইল নম্বর *" : "Mobile Number *"}</span>
@@ -981,9 +978,9 @@ return (
                           if (!isOrderProcessing) triggerSyncNowRef.current?.();
                         }}
                         placeholder="01XXXXXXXXX / 1XXXXXXXXX"
-                        className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-2xl border-2 px-3.5 sm:px-4 py-3 sm:py-3.5 focus:outline-none focus:ring-2 shadow-inner transition-colors ${hasError
-                            ? "border-rose-500 focus:border-rose-600 focus:ring-rose-400/40 ring-1 ring-rose-400/40"
-                            : "border-stone-300 dark:border-stone-700 focus:ring-amber-500"
+                        className={`w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-mono text-base sm:text-lg font-bold rounded-xl border px-3.5 sm:px-4 py-2.5 sm:py-3 focus:outline-none focus:ring-1 transition-colors ${hasError
+                            ? "border-rose-500 focus:border-rose-600 focus:ring-rose-400/40"
+                            : "border-stone-300 dark:border-stone-700 focus:ring-amber-800 focus:border-amber-800"
                           }`}
                       />
                       <FormFieldError field={field} />
@@ -1008,18 +1005,17 @@ return (
                     setDeliveryZone("inside_dhaka");
                     claritySetTag("delivery_zone", "inside_dhaka");
                   }}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
-                    ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
-                    : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+                  className={`p-3 rounded-xl border text-left transition-colors touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "inside_dhaka"
+                    ? "border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 shadow-xs"
+                    : "border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
                     }`}
                 >
-                  <span className="font-extrabold text-sm sm:text-base">
+                  <span className="font-semibold text-sm sm:text-base">
                     {lang === "bn" ? "ঢাকার ভিতরে" : "Inside Dhaka"}
                   </span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                  <span className="text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
                     {isFreeDelivery ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">
-                        <Sparkles className="w-3 h-3" />
+                      <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
                         {lang === "bn" ? "চার্জ ফ্রি" : "Free"}
                       </span>
                     ) : (
@@ -1038,18 +1034,17 @@ return (
                     setDeliveryZone("outside_dhaka");
                     claritySetTag("delivery_zone", "outside_dhaka");
                   }}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition-all touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
-                    ? "border-emerald-600 bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-950 dark:text-emerald-100 shadow-sm"
-                    : "border-stone-200 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-800/70 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
+                  className={`p-3 rounded-xl border text-left transition-colors touch-manipulation cursor-pointer flex flex-col justify-between ${deliveryZone === "outside_dhaka"
+                    ? "border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 shadow-xs"
+                    : "border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100"
                     }`}
                 >
-                  <span className="font-extrabold text-sm sm:text-base">
+                  <span className="font-semibold text-sm sm:text-base">
                     {lang === "bn" ? "ঢাকার বাইরে" : "Outside Dhaka"}
                   </span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                  <span className="text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
                     {isFreeDelivery ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">
-                        <Sparkles className="w-3 h-3" />
+                      <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
                         {lang === "bn" ? "চার্জ ফ্রি" : "Free"}
                       </span>
                     ) : (
@@ -1094,7 +1089,7 @@ return (
                         ? "বাড়ি নং, রোড নং, এলাকা বা থানা ও জেলার নাম (ঐচ্ছিক)..."
                         : "House, Road, Area, Thana or District name (optional)..."
                     }
-                    className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-semibold rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner resize-none"
+                    className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-normal rounded-xl border border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-amber-800 focus:border-amber-800 transition-colors resize-none"
                   />
                   <FormFieldError field={field} />
                 </div>
@@ -1107,7 +1102,7 @@ return (
                 <div>
                   <label
                     htmlFor="customerNote"
-                    className="block text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300 mb-1.5 flex items-center gap-1.5"
+                    className="block text-sm sm:text-base font-semibold text-stone-700 dark:text-stone-300 mb-1.5 flex items-center gap-1.5"
                   >
                     <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                     <span>{lang === "bn" ? "বিশেষ নির্দেশনা (ঐচ্ছিক)" : "Special Note (Optional)"}</span>
@@ -1131,7 +1126,7 @@ return (
                     placeholder={
                       lang === "bn" ? "উদা: জরুরি ডেলিভারি প্রয়োজন বা কল করার সুবিধাজনক সময়" : "e.g. Preferred delivery time"
                     }
-                    className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base rounded-2xl border-2 border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-sm sm:text-base font-normal rounded-xl border border-stone-300 dark:border-stone-700 px-3.5 sm:px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-amber-800 focus:border-amber-800 transition-colors"
                   />
                 </div>
               )}
@@ -1154,11 +1149,10 @@ return (
               {(isSubmittingState) => {
                 const isProcessing = isSubmitting || isSubmittingState || isRedirecting;
                 return (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
+                  <button
                     type="submit"
                     disabled={isProcessing}
-                    className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-600 hover:from-emerald-700 hover:via-emerald-800 hover:to-emerald-700 disabled:opacity-85 text-white font-black py-4 sm:py-4.5 px-6 rounded-2xl shadow-[0_10px_24px_rgba(5,150,105,0.32)] border-2 border-emerald-400 transition-all flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
+                    className="w-full bg-amber-800 hover:bg-amber-900 active:bg-amber-950 disabled:opacity-80 text-white font-semibold py-3.5 sm:py-4 px-6 rounded-xl shadow-sm border border-amber-900/10 transition-colors flex items-center justify-center gap-2 text-base sm:text-lg touch-manipulation cursor-pointer"
                   >
                     {isRedirecting ? (
                       <>
@@ -1197,7 +1191,7 @@ return (
                         )}
                       </span>
                     )}
-                  </motion.button>
+                  </button>
                 );
               }}
             </form.Subscribe>

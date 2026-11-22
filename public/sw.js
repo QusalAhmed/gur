@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 // Gur Admin Lite PWA Service Worker
 // - Zero caching of authenticated admin pages or API responses (preserves no-store & PII safety)
 // - Minimal offline fallback screen when network navigation fails

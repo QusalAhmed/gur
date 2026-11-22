@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import Image from "next/image";
-import { Phone, Globe, ShoppingBag, ShoppingCart, Sparkles, Package, ChevronDown } from "lucide-react";
+import { Phone, Globe, ShoppingBag, ShoppingCart, Package, ChevronDown } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { ProductCard, StorefrontProduct } from "./product-card";
 import { ProductCardSkeleton } from "./product-card-skeleton";
@@ -338,13 +338,13 @@ export function ProductShowcase({
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-amber-50 dark:bg-stone-950 font-sans select-none">
       {/* Sticky Header: Desktop / Tablet Only (Hidden on mobile phones to maximize vertical space) */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-14 sm:h-16 px-3 sm:px-6 md:px-8 bg-amber-100/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-amber-200/70 dark:border-stone-800 hidden sm:flex items-center justify-between shadow-sm select-none">
+      <header className="fixed top-0 left-0 right-0 z-40 h-14 sm:h-16 px-3 sm:px-6 md:px-8 bg-[#faf8f5]/95 dark:bg-[#141210]/95 backdrop-blur-md border-b border-stone-200/90 dark:border-stone-800 hidden sm:flex items-center justify-between shadow-xs select-none">
         {/* Logo & Store Title */}
         <button
           type="button"
           onClick={() => scrollToSection(0)}
           aria-label={lang === "bn" ? `${displayStoreName} - হোমপেইজ` : `${displayStoreName} - Homepage`}
-          className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2 text-left cursor-pointer active:scale-95 transition-transform"
+          className="flex items-center gap-2 sm:gap-2.5 min-w-0 pr-2 text-left cursor-pointer transition-opacity hover:opacity-90"
           title={lang === "bn" ? "পরিচিতি ও হোমপেইজ" : "About & Homepage"}
         >
           {logoUrl ? (
@@ -360,41 +360,40 @@ export function ProductShowcase({
               />
             </div>
           ) : (
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-700 to-amber-500 text-amber-50 flex items-center justify-center font-black shadow-md shrink-0">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100" aria-hidden="true" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-amber-800 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+              গ
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-sm sm:text-base md:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight truncate">
+            <h1 className="text-sm sm:text-base md:text-lg font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight truncate">
               {displayStoreName}
             </h1>
-            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-medium hidden md:block truncate">
+            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-normal hidden md:block truncate">
               {storeSubtitle || t.storeSubtitle}
             </p>
           </div>
         </button>
 
         {/* Desktop Navigation Links: Intro, Products, Checkout & Contact */}
-        <nav className="hidden lg:flex items-center gap-1 bg-amber-200/60 dark:bg-stone-800/70 p-1 rounded-full border border-amber-300/60 dark:border-stone-700">
+        <nav className="hidden lg:flex items-center gap-1 bg-stone-100 dark:bg-stone-800/80 p-1 rounded-xl border border-stone-200/80 dark:border-stone-700">
           <button
             type="button"
             onClick={() => scrollToSection(0)}
-            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === 0
-                ? "bg-white text-amber-900 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+                ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs"
+                : "text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
             <span>{t.navIntro}</span>
           </button>
           <button
             type="button"
             onClick={() => scrollToSection(productsStartIndex)}
-            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex >= productsStartIndex && activeSectionIndex < checkoutSectionIndex
-                ? "bg-white text-amber-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+                ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs"
+                : "text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
             <Package className="w-3.5 h-3.5" />
@@ -403,16 +402,16 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => scrollToSection(checkoutSectionIndex)}
-            className={`px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeSectionIndex === checkoutSectionIndex
-                ? "bg-white text-emerald-800 shadow-xs"
-                : "text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+                ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs"
+                : "text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             <span>{t.navCheckout}</span>
             {displayCartQuantity > 0 && (
-              <span className="bg-amber-600 text-white text-xs font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs">
+              <span className="bg-amber-800 text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-xs tabular-nums">
                 {displayCartQuantity}
               </span>
             )}
@@ -420,9 +419,9 @@ export function ProductShowcase({
           <button
             type="button"
             onClick={() => handleScrollToElement("contact")}
-            className="px-3.5 py-1 rounded-full text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 text-amber-950 dark:text-amber-100 hover:bg-white/70 dark:hover:bg-stone-700"
+            className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
           >
-            <Phone className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+            <Phone className="w-3.5 h-3.5" />
             <span>{lang === "bn" ? "যোগাযোগ" : "Contact"}</span>
           </button>
         </nav>
@@ -434,34 +433,34 @@ export function ProductShowcase({
             type="button"
             suppressHydrationWarning
             onClick={() => dispatch(openCart())}
-            className="relative inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-stone-800 hover:bg-amber-100 dark:hover:bg-stone-700 active:scale-95 border-2 border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-100 font-bold text-sm sm:text-base py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
+            className="relative inline-flex items-center gap-1.5 bg-white dark:bg-stone-850 hover:bg-stone-50 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 font-semibold text-xs sm:text-sm py-1.5 sm:py-2 px-3 sm:px-3.5 rounded-xl transition-colors shadow-xs touch-manipulation cursor-pointer"
             aria-label={lang === "bn" ? `কার্ট খুলুন, ${displayCartQuantity}টি পণ্য রয়েছে` : `Open cart, ${displayCartQuantity} items`}
           >
-            <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" aria-hidden="true" />
+            <ShoppingBag className="w-4 h-4 text-amber-800 dark:text-amber-400 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.cartTitle}</span>
             {displayCartQuantity > 0 && (
-              <span className="bg-amber-600 text-white text-xs font-black rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center animate-bounce shadow">
+              <span className="bg-amber-800 text-white text-[10px] font-bold rounded-full h-4 min-w-[18px] px-1 flex items-center justify-center shadow-xs tabular-nums">
                 {displayCartQuantity}
               </span>
             )}
             {displayCartSubtotal > 0 && (
-              <span className="hidden md:inline font-mono text-emerald-700 dark:text-emerald-400 text-xs sm:text-sm">
+              <span className="hidden md:inline font-mono text-stone-700 dark:text-stone-300 text-xs sm:text-sm tabular-nums">
                 ({formatStorePrice(displayCartSubtotal, lang)})
               </span>
             )}
           </button>
 
-          {/* Direct Call Button (Specially optimized for aged shoppers on mobile) */}
+          {/* Direct Call Button */}
           <a
             href={`tel:${rawHotlineDigits}`}
             onClick={() => trackContact({ channel: "phone", customData: { source: "showcase_header" } })}
             aria-label={`${t.hotlineLabel}: ${defaultHotline}`}
-            className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm sm:text-base py-1.5 sm:py-2 px-2.5 sm:px-3.5 rounded-full shadow-md transition-all touch-manipulation"
+            className="inline-flex items-center gap-1 sm:gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs sm:text-sm py-1.5 sm:py-2 px-3 sm:px-3.5 rounded-xl shadow-2xs transition-colors touch-manipulation"
             title={t.hotlineLabel}
           >
-            <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" aria-hidden="true" />
+            <Phone className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{t.hotlineLabel}:</span>
-            <span className="font-mono text-sm sm:text-base">{defaultHotline}</span>
+            <span className="font-mono text-xs sm:text-sm">{defaultHotline}</span>
           </a>
 
           {/* 1-Tap Language Switcher */}
@@ -469,9 +468,9 @@ export function ProductShowcase({
             type="button"
             onClick={toggleLanguage}
             aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
-            className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-800 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300 dark:border-stone-700 text-amber-950 dark:text-amber-200 font-bold text-sm sm:text-base py-1.5 px-2.5 sm:px-3 rounded-full transition-all shadow-sm touch-manipulation cursor-pointer"
+            className="inline-flex items-center gap-1 bg-white/90 dark:bg-stone-850 hover:bg-white dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 font-medium text-xs sm:text-sm py-1.5 px-2.5 sm:px-3 rounded-xl transition-colors shadow-2xs touch-manipulation cursor-pointer"
           >
-            <Globe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
+            <Globe className="w-3.5 h-3.5 text-stone-600 dark:text-stone-400 shrink-0" aria-hidden="true" />
             <span>{t.langToggle}</span>
           </button>
         </div>
@@ -562,10 +561,8 @@ export function ProductShowcase({
         <section
           id="storefront-overview"
           data-section-index="0"
-          className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-gradient-to-b from-[#FAF8F5] via-[#FFFDF9] to-[#F5EEDB] dark:from-[#141210] dark:via-[#181512] dark:to-[#1e1711] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+          className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
         >
-          {/* Soft Ambient Warm Glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-gradient-to-b from-amber-300/35 via-amber-200/15 to-transparent dark:from-amber-950/30 dark:via-transparent dark:to-transparent pointer-events-none blur-3xl" />
 
           {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
           <div
@@ -576,7 +573,7 @@ export function ProductShowcase({
               type="button"
               onClick={toggleLanguage}
               aria-label={lang === "bn" ? "Switch language to English" : "ভাষা বাংলায় পরিবর্তন করুন"}
-              className="inline-flex items-center gap-1.5 bg-white/90 dark:bg-stone-800/90 hover:bg-white dark:hover:bg-stone-700 active:scale-95 border border-amber-300/80 dark:border-stone-700/80 text-amber-950 dark:text-amber-200 font-bold text-xs py-1.5 px-3 rounded-full transition-all shadow-xs touch-manipulation cursor-pointer select-none"
+              className="inline-flex items-center gap-1.5 bg-white/90 dark:bg-stone-850 hover:bg-white dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 font-medium text-xs py-1.5 px-3 rounded-xl transition-colors shadow-2xs touch-manipulation cursor-pointer select-none"
             >
               <Globe className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" aria-hidden="true" />
               <span className="font-mono text-[11px] tracking-tight">{t.langToggle}</span>
@@ -638,9 +635,9 @@ export function ProductShowcase({
             <a
               href={`tel:${rawHotlineDigits}`}
               onClick={() => trackContact({ channel: "phone", customData: { source: "showcase_preorder" } })}
-              className="mt-6 inline-flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-3.5 px-6 rounded-full shadow-lg transition-all text-base sm:text-lg touch-manipulation"
+              className="mt-6 inline-flex items-center gap-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-6 rounded-xl shadow-xs transition-colors text-base touch-manipulation"
             >
-              <Phone className="w-5 h-5 animate-pulse" />
+              <Phone className="w-5 h-5" />
               <span>{t.hotlineLabel}: {defaultHotline}</span>
             </a>
           </section>

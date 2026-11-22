@@ -5,7 +5,7 @@ import {
   MessageSquare,
   MapPin,
   Clock,
-  Sparkles,
+  Package,
   ShieldCheck,
   Truck,
   CheckCircle2,
@@ -113,12 +113,12 @@ export default async function ContactPage() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-12 space-y-10 sm:space-y-14">
         {/* Hero Section */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-200/80 dark:bg-stone-800 text-amber-900 dark:text-amber-200 text-xs font-bold border border-amber-300 dark:border-stone-700 shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-100 dark:bg-stone-850 text-amber-900 dark:text-amber-200 text-xs font-semibold border border-amber-300/80 dark:border-stone-700 shadow-2xs">
+            <Phone className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
             <span>২৪/৭ গ্রাহক সেবা ও সরাসরি অর্ডার</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-amber-950 dark:text-amber-100 tracking-tight leading-tight">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
             আমাদের সাথে যোগাযোগ করুন
           </h1>
 
@@ -357,9 +357,9 @@ export default async function ContactPage() {
               </p>
             </div>
 
-            <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-900 border border-amber-200/80 dark:border-stone-800 space-y-2">
-              <h3 className="font-bold text-sm sm:text-base text-amber-950 dark:text-amber-100 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 space-y-2">
+              <h3 className="font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                <Package className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>পাইকারি বা বড় অর্ডারের সুবিধা আছে কি?</span>
               </h3>
               <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
