@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ShoppingCart, ArrowUpRight, Plus, Eye } from "lucide-react";
+import { ShoppingCart, ArrowUpRight, Plus, Eye, Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,8 @@ interface RecentOrdersCardProps {
     payment_status: string;
     fulfillment_status: string;
     channel: string;
+    printed_at?: string | null;
+    reprint_required?: boolean;
     order_items: Array<{
       id: string;
       product_name: string;
@@ -182,12 +184,41 @@ export function RecentOrdersCard({ orders }: RecentOrdersCardProps) {
                         {formatBDT(o.grand_total)}
                       </td>
                       <td className="py-2.5 px-4 text-center">
-                        <Badge
-                          variant="outline"
-                          className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", statusBadge.className)}
-                        >
-                          {statusBadge.label}
-                        </Badge>
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge
+                            variant="outline"
+                            className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", statusBadge.className)}
+                          >
+                            {statusBadge.label}
+                          </Badge>
+
+                          {/* Print tag rendered in a new line below status */}
+                          {o.reprint_required ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-amber-400 bg-amber-500/15 text-amber-800 dark:text-amber-300 dark:border-amber-700 inline-flex items-center gap-1 cursor-pointer hover:bg-amber-500/25"
+                              onClick={() =>
+                                window.open(
+                                  `/admin/orders/print?ids=${encodeURIComponent(o.order_number || o.id)}&format=58mm`,
+                                  "_blank"
+                                )
+                              }
+                              title="Courier details changed after printing. Click to reprint label."
+                            >
+                              <Printer className="h-2.5 w-2.5 text-amber-600 animate-pulse" />
+                              Needs Reprint
+                            </Badge>
+                          ) : o.printed_at ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-emerald-300 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 dark:border-emerald-800 inline-flex items-center gap-1"
+                              title={`Printed at ${formatDhakaDateTime(o.printed_at, "dd MMM, hh:mm a")}`}
+                            >
+                              <Printer className="h-2.5 w-2.5 text-emerald-600" />
+                              Printed
+                            </Badge>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-2.5 px-4 text-center">
                         <Badge
@@ -198,11 +229,38 @@ export function RecentOrdersCard({ orders }: RecentOrdersCardProps) {
                         </Badge>
                       </td>
                       <td className="py-2.5 px-4 text-right">
-                        <Button asChild size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                          <Link href={`/admin/orders/${o.id}`} title="View Order">
-                            <Eye className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-amber-600 cursor-pointer"
+                            title={
+                              o.reprint_required
+                                ? "Reprint 58mm Label"
+                                : o.printed_at
+                                ? "Reprint Thermal Label"
+                                : "Print Thermal Label"
+                            }
+                            onClick={() =>
+                              window.open(
+                                `/admin/orders/print?ids=${encodeURIComponent(o.order_number || o.id)}&format=58mm`,
+                                "_blank"
+                              )
+                            }
+                          >
+                            <Printer
+                              className={cn(
+                                "h-3.5 w-3.5",
+                                o.reprint_required && "text-amber-600 animate-pulse"
+                              )}
+                            />
+                          </Button>
+                          <Button asChild size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                            <Link href={`/admin/orders/${o.id}`} title="View Order">
+                              <Eye className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

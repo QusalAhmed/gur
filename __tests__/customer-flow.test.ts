@@ -101,7 +101,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (table === "orders") {
         return {
           select: vi.fn().mockImplementation((sel: string) => {
-            if (sel === "status, grand_total") {
+            if (sel.includes("status") && sel.includes("grand_total")) {
               const filterObj: any = {
                 gte: vi.fn().mockImplementation((...args) => {
                   orderQueryCalls.statsGte.push(args);

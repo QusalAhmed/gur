@@ -255,6 +255,7 @@ const statusStyles: Record<string, string> = {
 
 const validStatusTabs = [
   "all",
+  "reprint_required",
   "incomplete_order",
   "pending",
   "confirmed",
@@ -530,6 +531,7 @@ export function OrdersClient() {
   const pageCount = ordersResult?.pageCount ?? 1;
   const counts = ordersResult?.statusCounts || {
     all: 0,
+    reprint_required: 0,
     incomplete_order: 0,
     pending: 0,
     confirmed: 0,
@@ -2713,12 +2715,12 @@ export function OrdersClient() {
         header: ({ column }) => <DataTableColumnHeader column={column} title="Status & Courier" />,
         cell: ({ row }) => {
           const order = row.original;
-          const needsReprint = isOrderReprintRequired(order);
+          const needsReprint = !!(order.reprint_required || isOrderReprintRequired(order));
           const reprintDiffs = needsReprint ? getOrderReprintDiff(order) : [];
           return (
             <div className="space-y-1.5 min-w-[125px] max-w-[165px]">
               {/* Order Status Badge */}
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2733,22 +2735,35 @@ export function OrdersClient() {
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
                   {order.status.replace(/_/g, " ")}
                 </button>
-
-                {needsReprint && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleBulkPrintInvoices([order]);
-                    }}
-                    title={`Courier details changed after printing (${formatOrderReprintDiffSummary(reprintDiffs)}). Click to reprint label.`}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border border-amber-400 bg-amber-500/15 text-amber-800 dark:text-amber-300 dark:border-amber-700/80 hover:bg-amber-500/25 transition-colors cursor-pointer shadow-2xs"
-                  >
-                    <Printer className="h-2.5 w-2.5 text-amber-600 animate-pulse shrink-0" />
-                    <span>Needs Reprint</span>
-                  </button>
-                )}
               </div>
+
+              {/* Print Tag (Rendered on a new line) */}
+              {(needsReprint || order.printed_at) && (
+                <div>
+                  {needsReprint ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBulkPrintInvoices([order]);
+                      }}
+                      title={`Courier details changed after printing (${formatOrderReprintDiffSummary(reprintDiffs)}). Click to reprint label.`}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border border-amber-400 bg-amber-500/15 text-amber-800 dark:text-amber-300 dark:border-amber-700/80 hover:bg-amber-500/25 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <Printer className="h-2.5 w-2.5 text-amber-600 animate-pulse shrink-0" />
+                      <span>Needs Reprint</span>
+                    </button>
+                  ) : order.printed_at ? (
+                    <span
+                      title={`Printed at ${order.printed_at}`}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border border-emerald-300 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 dark:border-emerald-800 shrink-0"
+                    >
+                      <Printer className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                      <span>Printed</span>
+                    </span>
+                  ) : null}
+                </div>
+              )}
 
               {/* Fulfillment Status */}
               <div>
@@ -2919,7 +2934,11 @@ export function OrdersClient() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])} className="text-xs">
                       <Printer className="h-4 w-4 mr-2 text-amber-600" />
-                      Print
+                      {order.reprint_required || isOrderReprintRequired(order)
+                        ? "Reprint Label (Changes Detected)"
+                        : order.printed_at
+                        ? "Reprint Label"
+                        : "Print 58mm Label"}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -3407,6 +3426,23 @@ export function OrdersClient() {
                     <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-bold text-foreground shrink-0">
                       {counts.all}
                     </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="reprint_required"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-amber-600 data-[state=active]:text-white data-[state=active]:shadow-xs data-[state=active]:border-amber-700 cursor-pointer text-amber-800 dark:text-amber-300"
+                  >
+                    <Printer className="h-3.5 w-3.5 mr-1.5 shrink-0 text-amber-600 dark:text-amber-400 group-data-[state=active]:text-white" />
+                    <span>Needs Reprint</span>
+                    {counts.reprint_required > 0 ? (
+                      <span className="ml-1.5 rounded-full bg-amber-500/25 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 text-[10px] font-bold shrink-0 animate-pulse">
+                        {counts.reprint_required}
+                      </span>
+                    ) : (
+                      <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                        0
+                      </span>
+                    )}
                   </TabsTrigger>
 
                   <TabsTrigger

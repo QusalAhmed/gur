@@ -64,10 +64,12 @@ export interface GetOrdersParams {
   endDate?: string;
   from?: string;
   to?: string;
+  reprint_required?: boolean;
 }
 
 export interface StatusCounts {
   all: number;
+  reprint_required: number;
   incomplete_order: number;
   pending: number;
   confirmed: number;
@@ -468,8 +470,14 @@ export async function getOrdersAction(
   const buildQuery = (selectString: string) => {
     let q = client.from("orders").select(selectString, { count: "exact" });
 
-    if (status && status !== "all") {
+    if (status === "reprint_required") {
+      q = q.eq("reprint_required", true).not("status", "in", '("cancelled","returned")');
+    } else if (status && status !== "all") {
       q = q.eq("status", status);
+    }
+
+    if (params.reprint_required !== undefined) {
+      q = q.eq("reprint_required", params.reprint_required);
     }
 
     if (channel && channel !== "all") {
@@ -549,7 +557,7 @@ export async function getOrdersAction(
       return res;
     }),
     (() => {
-      let sq = client.from("orders").select("status, grand_total");
+      let sq = client.from("orders").select("status, grand_total, reprint_required");
       if (cleanSearch) {
         sq = sq.or(
           `order_number.ilike.%${cleanSearch}%,customer_name.ilike.%${cleanSearch}%,customer_phone.ilike.%${cleanSearch}%,customer_alternative_phone.ilike.%${cleanSearch}%,shipping_phone.ilike.%${cleanSearch}%,customer_note.ilike.%${cleanSearch}%,shipping_method_name.ilike.%${cleanSearch}%`
@@ -602,6 +610,7 @@ export async function getOrdersAction(
 
   const initialStatusCounts: StatusCounts = {
     all: 0,
+    reprint_required: 0,
     incomplete_order: 0,
     pending: 0,
     confirmed: 0,
@@ -618,7 +627,14 @@ export async function getOrdersAction(
   if (statsRes.data && Array.isArray(statsRes.data)) {
     initialStatusCounts.all = statsRes.data.length;
     for (const row of statsRes.data) {
-      const st = row.status as keyof Omit<StatusCounts, "all">;
+      if (
+        row.reprint_required &&
+        row.status !== "cancelled" &&
+        row.status !== "returned"
+      ) {
+        initialStatusCounts.reprint_required = (initialStatusCounts.reprint_required || 0) + 1;
+      }
+      const st = row.status as keyof Omit<StatusCounts, "all" | "reprint_required">;
       if (st in initialStatusCounts) {
         initialStatusCounts[st] = (initialStatusCounts[st] || 0) + 1;
       }

@@ -10,6 +10,7 @@ import { NeedsAttentionStrip } from "@/components/admin/overview/needs-attention
 import { TopProductsCard } from "@/components/admin/overview/top-products-card";
 import { SourcesCampaignsCard } from "@/components/admin/overview/sources-campaigns-card";
 import { RecentOrdersCard } from "@/components/admin/overview/recent-orders-card";
+import { OrdersNeedingReprintCard } from "@/components/admin/overview/orders-needing-reprint-card";
 import { DateRangePicker } from "@/components/admin/date-range-picker";
 
 export const metadata = {
@@ -54,6 +55,9 @@ async function AdminOverviewContent({ searchParams }: AdminPageProps) {
 
       {/* Needs Attention Strip */}
       <NeedsAttentionStrip items={overviewData.needsAttention} />
+
+      {/* Orders Requiring Reprint Alert Card */}
+      <OrdersNeedingReprintCard orders={overviewData.reprintOrders} />
 
       {/* KPI Stats Cards */}
       <KpiCards kpis={overviewData.kpis} deltas={overviewData.deltas} />

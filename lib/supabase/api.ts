@@ -444,6 +444,7 @@ export function formatDbOrderRecord(data: any): Order {
     courier_payload_snapshot: data.courier_payload_snapshot || null,
     printed_at: data.printed_at || null,
     printed_courier_snapshot: data.printed_courier_snapshot || null,
+    reprint_required: !!data.reprint_required,
     total_weight_kg: (() => {
       if (data.total_weight_kg !== undefined && data.total_weight_kg !== null && Number(data.total_weight_kg) > 0) {
         return Number(Number(data.total_weight_kg).toFixed(2));

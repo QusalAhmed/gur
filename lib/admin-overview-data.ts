@@ -1,5 +1,6 @@
 import { assertStaffRole } from "@/lib/admin-guard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { formatDbOrderRecord } from "@/lib/supabase/api";
 import { toZonedTime, format as formatZoned } from "date-fns-tz";
 import { subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
 import { DHAKA_TIMEZONE } from "@/lib/admin-format";
@@ -78,6 +79,7 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     quarantinedLotsRes,
     newQuotesRes,
     pendingReviewsRes,
+    reprintOrdersRes,
     recentOrdersRes,
   ] = await Promise.all([
     supabase.rpc("admin_kpis", { p_from: fromIso, p_to: toIso }),
@@ -111,10 +113,18 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
       .from("product_reviews")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
-    // Recent 10 orders with line item summary
+    // Orders requiring reprint (printed + courier modified, active status)
     supabase
       .from("orders")
-      .select("id, order_number, created_at, customer_name, customer_phone, grand_total, status, payment_status, fulfillment_status, channel, order_items(id, product_name, quantity, unit_price)")
+      .select("id, order_number, created_at, customer_name, customer_phone, customer_alternative_phone, grand_total, amount_paid, status, payment_status, fulfillment_status, channel, printed_at, printed_courier_snapshot, reprint_required, shipping_address, customer_note, order_items(id, product_name, quantity, unit_price)")
+      .eq("reprint_required", true)
+      .not("status", "in", '("cancelled","returned")')
+      .order("updated_at", { ascending: false })
+      .limit(20),
+    // Recent 10 orders with line item summary and print flags
+    supabase
+      .from("orders")
+      .select("id, order_number, created_at, customer_name, customer_phone, grand_total, amount_paid, status, payment_status, fulfillment_status, channel, printed_at, reprint_required, printed_courier_snapshot, shipping_address, order_items(id, product_name, quantity, unit_price)")
       .order("created_at", { ascending: false })
       .limit(10),
   ]);
@@ -165,6 +175,19 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
 
   // Build Needs Attention Strip
   const needsAttention: NeedsAttentionItem[] = [];
+
+  const reprintOrders = (reprintOrdersRes.data || []).map((d: any) => formatDbOrderRecord(d));
+  if (reprintOrders.length > 0) {
+    needsAttention.push({
+      id: "orders_needing_reprint",
+      title: "Orders Needing Reprint",
+      titleBn: "রিপ্রিন্ট প্রয়োজন এমন অর্ডার",
+      count: reprintOrders.length,
+      href: "#reprint-orders-card",
+      severity: "urgent",
+      description: "Courier details modified after physical thermal stickers were printed",
+    });
+  }
 
   const pendingCount = pendingOrdersRes.count || 0;
   const incompleteCount = incompleteOrdersRes.count || 0;
@@ -251,6 +274,7 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     sourceBreakdown: sourceBreakdownData,
     needsAttention,
     recentOrders: recentOrdersData,
+    reprintOrders,
     period: {
       from: fromParam || formatZoned(fromDate, "yyyy-MM-dd", { timeZone: DHAKA_TIMEZONE }),
       to: toParam || formatZoned(toDate, "yyyy-MM-dd", { timeZone: DHAKA_TIMEZONE }),

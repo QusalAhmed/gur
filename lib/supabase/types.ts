@@ -321,6 +321,7 @@ export interface DbOrder {
   courier_payload_snapshot?: any;
   printed_at?: string | null;
   printed_courier_snapshot?: any;
+  reprint_required?: boolean;
   channel: string;
   created_at: string;
   updated_at: string;

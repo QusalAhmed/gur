@@ -112,6 +112,7 @@ export interface Order {
   courier_payload_snapshot?: Record<string, any> | null;
   printed_at?: string | null;
   printed_courier_snapshot?: Record<string, any> | null;
+  reprint_required?: boolean;
   total_weight_kg?: number;
   items: OrderItem[];
   notes: OrderNote[];
