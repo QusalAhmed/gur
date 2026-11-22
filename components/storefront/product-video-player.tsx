@@ -33,19 +33,24 @@ export function ProductVideoPlayer({
 }: ProductVideoPlayerProps) {
   const parsedVideo = useMemo<ParsedVideo | null>(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-  // Use privacy-enhanced YouTube embed to suppress extraneous Google tracking & attestation calls
+  // Normalize source URL for YouTube & Vimeo
   const effectiveVideoSrc = useMemo(() => {
     if (parsedVideo?.provider === "youtube") {
       return `https://www.youtube-nocookie.com/embed/${parsedVideo.id}`;
     }
+    if (parsedVideo?.provider === "vimeo") {
+      return `https://vimeo.com/${parsedVideo.id}`;
+    }
     return videoUrl;
   }, [parsedVideo, videoUrl]);
 
-  // Only attach the video player to the DOM when the user navigates to the video slide or clicks Play
+  // Video player DOM attachment state (deferred until user navigates to slide or taps Play)
   const [isPlayerAttached, setIsPlayerAttached] = useState(false);
   const [isInViewport, setIsInViewport] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Default to muted: strictly required by mobile and desktop browsers to allow autoplay
+  const [isMuted, setIsMuted] = useState(true);
+  // Track whether user explicitly tapped pause
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -73,18 +78,18 @@ export function ProductVideoPlayer({
   const isCardVisible = Boolean(isSectionActive && isInViewport);
   const shouldPlay = Boolean(isCardVisible && isActive);
 
-  // 1. Attach player to DOM only when slide becomes active while card is in viewport
+  // 1. Attach player to DOM when slide becomes active while card is in viewport
   useEffect(() => {
     if (shouldPlay && !isPlayerAttached) {
       setIsPlayerAttached(true);
     }
   }, [shouldPlay, isPlayerAttached]);
 
-  // 2. Control play/pause and carousel rotation based on slide and card visibility
+  // 2. Control carousel autoplay pausing when video slide is active
   useEffect(() => {
     if (!isPlayerAttached) return;
 
-    if (shouldPlay) {
+    if (shouldPlay && !isManuallyPaused) {
       if (playerRef.current) {
         try {
           if (typeof playerRef.current.currentTime === "number" && playerRef.current.ended) {
@@ -92,20 +97,21 @@ export function ProductVideoPlayer({
           }
         } catch {}
       }
-      setIsPlaying(true);
       onPauseCarousel?.();
     } else {
-      setIsPlaying(false);
       onResumeCarousel?.();
     }
-  }, [shouldPlay, isPlayerAttached, onPauseCarousel, onResumeCarousel]);
+  }, [shouldPlay, isManuallyPaused, isPlayerAttached, onPauseCarousel, onResumeCarousel]);
+
+  // Calculate whether player should be commanded to play
+  const shouldActuallyPlay = Boolean(shouldPlay && !isManuallyPaused);
 
   // Handle direct click on thumbnail poster to attach and start playing
   const handlePosterClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setHasUserInteracted(true);
     setIsPlayerAttached(true);
-    setIsPlaying(true);
+    setIsManuallyPaused(false);
     onPauseCarousel?.();
   };
 
@@ -117,14 +123,13 @@ export function ProductVideoPlayer({
 
   const handleTogglePlay = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setIsPlaying((prev) => !prev);
+    setIsManuallyPaused((prev) => !prev);
   };
 
-  // If unmuted autoplay fails due to browser policy, automatically fall back to muted autoplay
+  // If unmuted playback ever encounters an error, automatically fall back to muted
   const handlePlayerError = () => {
-    if (!isMuted && !hasUserInteracted) {
+    if (!isMuted) {
       setIsMuted(true);
-      setIsPlaying(true);
     }
   };
 
@@ -168,7 +173,7 @@ export function ProductVideoPlayer({
           <ReactPlayer
             ref={playerRef}
             src={effectiveVideoSrc}
-            playing={shouldPlay && isPlaying}
+            playing={shouldActuallyPlay}
             muted={isMuted}
             volume={isMuted ? 0 : 1}
             loop={false}
@@ -193,6 +198,9 @@ export function ProductVideoPlayer({
                       title: false,
                       byline: false,
                       portrait: false,
+                      transparent: false,
+                      chromecast: false,
+                      autopause: false,
                     },
                   }
                 : undefined
@@ -205,15 +213,11 @@ export function ProductVideoPlayer({
               height: "100%",
             }}
             onPlay={() => {
-              setIsPlaying(true);
               onPauseCarousel?.();
-            }}
-            onPause={() => {
-              setIsPlaying(false);
             }}
             onError={handlePlayerError}
             onEnded={() => {
-              setIsPlaying(false);
+              setIsManuallyPaused(true);
               if (playerRef.current) {
                 try {
                   if (typeof playerRef.current.currentTime === "number") {
@@ -232,8 +236,8 @@ export function ProductVideoPlayer({
             }}
           />
 
-          {/* Pause overlay icon when paused */}
-          {!isPlaying && (
+          {/* Pause overlay icon when manually paused */}
+          {!shouldActuallyPlay && (
             <div
               onClick={handleTogglePlay}
               className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex items-center justify-center cursor-pointer pointer-events-auto transition-opacity"
@@ -274,13 +278,13 @@ export function ProductVideoPlayer({
               type="button"
               onClick={handleTogglePlay}
               className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all touch-manipulation"
-              aria-label={isPlaying ? "Pause video" : "Play video"}
+              aria-label={shouldActuallyPlay ? "Pause video" : "Play video"}
             >
-              {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />}
+              {shouldActuallyPlay ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />}
             </button>
           </div>
 
-          {/* Animated "Tap for Sound" prominent pill ONLY if video is confirmed to be muted */}
+          {/* Animated "Tap for Sound" prominent pill when muted */}
           {isMuted && isActive && !hasUserInteracted && (
             <div
               onClick={handleToggleSound}

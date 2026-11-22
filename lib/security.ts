@@ -185,6 +185,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
       "https://www.youtube-nocookie.com",
       "https://*.youtube-nocookie.com",
       "https://*.vimeocdn.com",
+      "https://vumbnail.com",
       "https://www.google-analytics.com",
       "https://*.google-analytics.com",
       "https://www.googletagmanager.com",
@@ -247,6 +248,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "https://www.youtube-nocookie.com",
     "https://s.ytimg.com",
     "https://player.vimeo.com",
+    "https://*.vimeocdn.com",
+    "https://*.vimeo.com",
     ...(safePixelId ? ["https://connect.facebook.net"] : []),
   ];
 
@@ -256,6 +259,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "https://www.youtube-nocookie.com",
     "https://player.vimeo.com",
     "https://vimeo.com",
+    "https://*.vimeo.com",
     ...(safePixelId ? ["https://www.facebook.com"] : []),
   ];
 
@@ -271,6 +275,7 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     `img-src ${imgSources.join(" ")}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     `connect-src ${connectSources.join(" ")}`,
+    "media-src 'self' blob: data: https://*.vimeocdn.com https://*.akamaized.net https://*.googlevideo.com https://*.youtube.com https://*.vimeo.com",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
     "manifest-src 'self'",
