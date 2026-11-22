@@ -41,7 +41,8 @@ export function ProductVideoPlayer({
     return videoUrl;
   }, [parsedVideo, videoUrl]);
 
-  const [isDeferredLoaded, setIsDeferredLoaded] = useState(false);
+  // Only attach the video player to the DOM when the user navigates to the video slide or clicks Play
+  const [isPlayerAttached, setIsPlayerAttached] = useState(false);
   const [isInViewport, setIsInViewport] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -72,34 +73,16 @@ export function ProductVideoPlayer({
   const isCardVisible = Boolean(isSectionActive && isInViewport);
   const shouldPlay = Boolean(isCardVisible && isActive);
 
-  // 1. Defer loading of video player until after page is fully rendered and browser is idle
+  // 1. Attach player to DOM only when slide becomes active while card is in viewport
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-    if ("requestIdleCallback" in window) {
-      const idleHandle = (window as any).requestIdleCallback(
-        () => {
-          setIsDeferredLoaded(true);
-        },
-        { timeout: 3500 }
-      );
-      return () => {
-        if ("cancelIdleCallback" in window) {
-          (window as any).cancelIdleCallback(idleHandle);
-        }
-      };
-    } else {
-      timeoutId = setTimeout(() => {
-        setIsDeferredLoaded(true);
-      }, 1500);
-      return () => clearTimeout(timeoutId);
+    if (shouldPlay && !isPlayerAttached) {
+      setIsPlayerAttached(true);
     }
-  }, []);
+  }, [shouldPlay, isPlayerAttached]);
 
   // 2. Control play/pause and carousel rotation based on slide and card visibility
   useEffect(() => {
-    if (!isDeferredLoaded) return;
+    if (!isPlayerAttached) return;
 
     if (shouldPlay) {
       if (playerRef.current) {
@@ -115,7 +98,16 @@ export function ProductVideoPlayer({
       setIsPlaying(false);
       onResumeCarousel?.();
     }
-  }, [shouldPlay, isDeferredLoaded, onPauseCarousel, onResumeCarousel]);
+  }, [shouldPlay, isPlayerAttached, onPauseCarousel, onResumeCarousel]);
+
+  // Handle direct click on thumbnail poster to attach and start playing
+  const handlePosterClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHasUserInteracted(true);
+    setIsPlayerAttached(true);
+    setIsPlaying(true);
+    onPauseCarousel?.();
+  };
 
   const handleToggleSound = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -128,6 +120,14 @@ export function ProductVideoPlayer({
     setIsPlaying((prev) => !prev);
   };
 
+  // If unmuted autoplay fails due to browser policy, automatically fall back to muted autoplay
+  const handlePlayerError = () => {
+    if (!isMuted && !hasUserInteracted) {
+      setIsMuted(true);
+      setIsPlaying(true);
+    }
+  };
+
   if (!parsedVideo && !videoUrl) return null;
 
   return (
@@ -135,31 +135,35 @@ export function ProductVideoPlayer({
       ref={containerRef}
       className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black drop-shadow-[0_15px_22px_rgba(120,53,15,0.22)] select-none"
     >
-      {/* 3. Placeholder / Thumbnail before deferred player load */}
-      {!isDeferredLoaded && (
-        <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-stone-900 text-amber-200 overflow-hidden">
+      {/* 3. Lightweight Thumbnail Poster: Displayed before the player attaches to the DOM */}
+      {!isPlayerAttached && (
+        <div
+          onClick={handlePosterClick}
+          className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-stone-900 text-amber-200 overflow-hidden cursor-pointer group"
+        >
           {parsedVideo?.thumbnailUrl ? (
             <Image
               src={parsedVideo.thumbnailUrl}
               alt={`${productName} video preview`}
               fill
+              loading="lazy"
               unoptimized
-              className="object-cover"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
             />
           ) : (
             <Film className="w-12 h-12 text-amber-400/60 animate-pulse" />
           )}
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center transition-colors group-hover:bg-black/30">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500/90 text-amber-950 flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110">
               <Play className="w-6 h-6 ml-0.5 fill-current" />
             </div>
           </div>
         </div>
       )}
 
-      {/* 4. Deferred ReactPlayer (Fills 100% of container) */}
-      {isDeferredLoaded && (
+      {/* 4. Video Player: Attached into DOM only on-demand */}
+      {isPlayerAttached && (
         <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden [&>youtube-video]:w-full [&>youtube-video]:h-full [&>youtube-video]:block [&>vimeo-video]:w-full [&>vimeo-video]:h-full [&>vimeo-video]:block [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:border-0 [&_video]:w-full [&_video]:h-full [&_video]:object-cover">
           <ReactPlayer
             ref={playerRef}
@@ -207,6 +211,7 @@ export function ProductVideoPlayer({
             onPause={() => {
               setIsPlaying(false);
             }}
+            onError={handlePlayerError}
             onEnded={() => {
               setIsPlaying(false);
               if (playerRef.current) {
@@ -238,53 +243,53 @@ export function ProductVideoPlayer({
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* 5. Minimal Interactive Controls Overlay (Sound Toggle & Play/Pause) */}
-      <div className="absolute top-3 left-3 z-30 flex items-center gap-2 pointer-events-auto">
-        <button
-          type="button"
-          onClick={handleToggleSound}
-          className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shadow-md transition-all touch-manipulation",
-            isMuted
-              ? "bg-amber-500/95 text-stone-950 hover:bg-amber-400 ring-2 ring-amber-300/80 animate-pulse"
-              : "bg-black/60 text-white hover:bg-black/80"
+          {/* Minimal Interactive Controls Overlay (Sound Toggle & Play/Pause) */}
+          <div className="absolute top-3 left-3 z-30 flex items-center gap-2 pointer-events-auto">
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md shadow-md transition-all touch-manipulation",
+                isMuted
+                  ? "bg-amber-500/95 text-stone-950 hover:bg-amber-400 ring-2 ring-amber-300/80 animate-pulse"
+                  : "bg-black/60 text-white hover:bg-black/80"
+              )}
+              aria-label={isMuted ? "Unmute video" : "Mute video"}
+            >
+              {isMuted ? (
+                <>
+                  <VolumeX className="w-4 h-4 text-stone-950" />
+                  <span className="hidden xs:inline">সাউন্ড শুনুন</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                  <span className="hidden xs:inline">সাউন্ড চালু</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleTogglePlay}
+              className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all touch-manipulation"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />}
+            </button>
+          </div>
+
+          {/* Animated "Tap for Sound" prominent pill ONLY if video is confirmed to be muted */}
+          {isMuted && isActive && !hasUserInteracted && (
+            <div
+              onClick={handleToggleSound}
+              className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 cursor-pointer pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-stone-950 px-3.5 py-1.5 rounded-full shadow-lg border border-amber-300 flex items-center gap-2 text-xs font-bold transition-all transform hover:scale-105"
+            >
+              <Volume2 className="w-4 h-4 animate-bounce" />
+              <span>সাউন্ড অন করতে ট্যাপ করুন</span>
+            </div>
           )}
-          aria-label={isMuted ? "Unmute video" : "Mute video"}
-        >
-          {isMuted ? (
-            <>
-              <VolumeX className="w-4 h-4 text-stone-950" />
-              <span className="hidden xs:inline">সাউন্ড শুনুন</span>
-            </>
-          ) : (
-            <>
-              <Volume2 className="w-4 h-4 text-emerald-400" />
-              <span className="hidden xs:inline">সাউন্ড চালু</span>
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleTogglePlay}
-          className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all touch-manipulation"
-          aria-label={isPlaying ? "Pause video" : "Play video"}
-        >
-          {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />}
-        </button>
-      </div>
-
-      {/* 6. Animated "Tap for Sound" prominent pill ONLY if video is confirmed to be muted */}
-      {isMuted && isActive && !hasUserInteracted && (
-        <div
-          onClick={handleToggleSound}
-          className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 cursor-pointer pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-stone-950 px-3.5 py-1.5 rounded-full shadow-lg border border-amber-300 flex items-center gap-2 text-xs font-bold transition-all transform hover:scale-105"
-        >
-          <Volume2 className="w-4 h-4 animate-bounce" />
-          <span>সাউন্ড অন করতে ট্যাপ করুন</span>
         </div>
       )}
     </div>
