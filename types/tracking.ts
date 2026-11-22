@@ -24,6 +24,7 @@ export interface ParcelTrackingItem {
 export interface ParcelTrackingData {
   orderId: string;
   orderNumber: string;
+  publicToken?: string;
   status: string;
   fulfillmentStatus: string;
   paymentStatus: string;

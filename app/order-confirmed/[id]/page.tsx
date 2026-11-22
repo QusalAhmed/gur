@@ -1023,11 +1023,13 @@ function OrderConfirmedContent() {
                   </div>
                 </div>
 
-                {/* Direct Link to Track Parcel */}
-                {Boolean(order?.public_token || order?.id) && (
+                {/* Direct Link to Track Parcel (requires secure receiptToken) */}
+                {Boolean(receiptToken) && (
                   <div className="pt-2 pl-1">
                     <Link
-                      href={`/track/${order?.public_token || order?.id}`}
+                      href={`/track/${encodeURIComponent(receiptToken!)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-700 via-amber-800 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all text-xs sm:text-sm group"
                     >
                       <Truck className="w-4 h-4 text-amber-300 animate-pulse" />

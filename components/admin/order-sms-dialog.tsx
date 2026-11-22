@@ -166,10 +166,10 @@ export function OrderSmsDialog({
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const targetId = order.public_token || order.id || order.order_number || "";
+    const targetId = order.public_token || "";
     const trackingUrl =
       (order.attribution as any)?.short_tracking_url ||
-      (origin ? `${origin}/track/${encodeURIComponent(targetId)}` : `/track/${encodeURIComponent(targetId)}`);
+      (targetId ? (origin ? `${origin}/track/${encodeURIComponent(targetId)}` : `/track/${encodeURIComponent(targetId)}`) : "");
 
     const rendered = renderSmsTemplate(rawTemplate, {
       customer_name: order.customer || order.address?.recipient_name || "সম্মানিত গ্রাহক",

@@ -523,8 +523,8 @@ export async function dispatchOrderStatusSms(
   const confirmationUrl = `${baseUrl}/order-confirmed/${orderNumber || orderId}${tokenParam}`;
 
   // Website's parcel tracking URL (using unguessable public_token for guest privacy & security)
-  const targetIdentifier = orderRow?.public_token || orderRow?.id || orderId;
-  const rawWebsiteTrackingUrl = `${baseUrl}/track/${encodeURIComponent(targetIdentifier)}`;
+  const targetIdentifier = orderRow?.public_token || "";
+  const rawWebsiteTrackingUrl = targetIdentifier ? `${baseUrl}/track/${encodeURIComponent(targetIdentifier)}` : "";
 
   let finalTrackingUrl = "";
   if (hasCourierTracking) {

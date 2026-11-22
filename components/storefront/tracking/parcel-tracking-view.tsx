@@ -170,7 +170,8 @@ export function ParcelTrackingView({
 
   const handleRefresh = () => {
     startTransition(async () => {
-      const res = await getParcelTrackingAction(data.orderId);
+      const token = data.publicToken || data.orderId;
+      const res = await getParcelTrackingAction(token);
       if (res.success) {
         setData(res.data);
       }

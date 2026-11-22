@@ -119,10 +119,10 @@ export async function getParcelTrackingAction(
   orderId: string
 ): Promise<ParcelTrackingResult> {
   const cleanId = (orderId || "").trim();
-  if (!cleanId) {
+  if (!cleanId || !isValidUuid(cleanId)) {
     return {
       success: false,
-      error: "Invalid tracking link or Order ID.",
+      error: "Invalid or expired tracking link.",
       notFound: true,
     };
   }
@@ -130,8 +130,8 @@ export async function getParcelTrackingAction(
   try {
     const supabase = getSupabaseAdmin();
 
-    // 1. Fetch Order details by public_token, id, or order_number
-    let query = supabase
+    // 1. Fetch Order details strictly by public_token for guest order privacy
+    const { data: order, error: orderErr } = await supabase
       .from("orders")
       .select(`
         id,
@@ -159,17 +159,9 @@ export async function getParcelTrackingAction(
         shipped_at,
         delivered_at,
         created_at
-      `);
-
-    if (isValidUuid(cleanId)) {
-      query = query.or(`public_token.eq.${cleanId},id.eq.${cleanId}`);
-    } else {
-      query = query.or(
-        `order_number.eq.${cleanId},courier_consignment_id.eq.${cleanId},courier_tracking_code.eq.${cleanId}`
-      );
-    }
-
-    const { data: order, error: orderErr } = await query.maybeSingle();
+      `)
+      .eq("public_token", cleanId)
+      .maybeSingle();
 
     if (orderErr) {
       console.error("[TrackingAction] Order query error:", orderErr);
@@ -427,6 +419,7 @@ export async function getParcelTrackingAction(
     const trackingData: ParcelTrackingData = {
       orderId: order.id,
       orderNumber: order.order_number,
+      publicToken: order.public_token,
       status: order.status,
       fulfillmentStatus: order.fulfillment_status,
       paymentStatus: order.payment_status,
