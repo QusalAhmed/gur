@@ -91,6 +91,7 @@ import {
   orderCustomerNoteSchema,
   orderCourierNameSchema,
   BANGLADESH_COURIERS,
+  sanitizeCourierName,
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
@@ -542,15 +543,15 @@ export function OrderFormDialog({
       fulfillment: (mode === "edit" ? (order?.fulfillment || "unfulfilled") : "unfulfilled") as Order["fulfillment"],
       shipping_total:
         mode === "edit"
-          ? (order?.shipping_total ?? 70)
-          : (order?.address?.district && (order.address.district.toLowerCase() === "dhaka" || order.address.district === "ঢাকা") ? 70 : 130),
+          ? (order?.shipping_total ?? 0)
+          : ("" as any),
       discount_total: mode === "edit" ? (order?.discount_total ?? 0) : 0,
       amount_paid: mode === "edit" ? (order?.amount_paid ?? 0) : 0,
       customer_note: mode === "edit" ? (order?.customer_note || "") : "",
       staff_note: "",
       delivery_note: "",
       packaging_note: "",
-      courier_name: mode === "edit" ? (order?.courier_name || "") : "",
+      courier_name: mode === "edit" ? sanitizeCourierName(order?.courier_name) : "",
       cancel_reason: mode === "edit" ? (order?.cancel_reason || "") : "",
       order_date: mode === "edit" && order?.date
         ? toDatetimeLocalString(order.date)
@@ -958,14 +959,14 @@ export function OrderFormDialog({
           status: order.status || "confirmed",
           payment: order.payment || "unpaid",
           fulfillment: order.fulfillment || "unfulfilled",
-          shipping_total: order.shipping_total ?? 70,
+          shipping_total: order.shipping_total ?? 0,
           discount_total: order.discount_total ?? 0,
           amount_paid: order.amount_paid ?? 0,
           customer_note: order.customer_note || "",
           staff_note: "",
           delivery_note: "",
           packaging_note: "",
-          courier_name: order.courier_name || "",
+          courier_name: sanitizeCourierName(order.courier_name),
           cancel_reason: order.cancel_reason || "",
           order_date: toDatetimeLocalString(order.date || new Date()),
           items: order.items
@@ -993,7 +994,7 @@ export function OrderFormDialog({
           status: defaultStatus || "confirmed",
           payment: "unpaid",
           fulfillment: "unfulfilled",
-          shipping_total: 130,
+          shipping_total: "" as any,
           discount_total: 0,
           amount_paid: 0,
           customer_note: "",
@@ -1747,12 +1748,6 @@ export function OrderFormDialog({
                             value={field.state.value}
                             onChange={(val) => {
                               field.handleChange(val);
-                              if (mode !== "edit") {
-                                const isDhaka =
-                                  (val || "").trim().toLowerCase() === "dhaka" ||
-                                  (val || "").trim() === "ঢাকা";
-                                form.setFieldValue("shipping_total", isDhaka ? 70 : 130);
-                              }
                             }}
                             onBlur={field.handleBlur}
                             divisionId={currentDivObj?.id}
@@ -2862,22 +2857,25 @@ export function OrderFormDialog({
                           onBlurListenTo: ["status"],
                           onChange: ({ value }) => {
                             const status = form.getFieldValue("status");
-                            if (!isFieldRequiredForStatus("shipping_total", status) && (value === undefined || value === null || isNaN(value))) {
-                              return undefined;
+                            const isReq = isFieldRequiredForStatus("shipping_total", status);
+                            if (value === "" || value === undefined || value === null || (typeof value === "number" && isNaN(value))) {
+                              return isReq ? "Please enter the delivery charge (enter 0 for free delivery or pickup)" : undefined;
                             }
                             return validateWithZod(orderShippingTotalSchema)({ value });
                           },
                           onBlur: ({ value }) => {
                             const status = form.getFieldValue("status");
-                            if (!isFieldRequiredForStatus("shipping_total", status) && (value === undefined || value === null || isNaN(value))) {
-                              return undefined;
+                            const isReq = isFieldRequiredForStatus("shipping_total", status);
+                            if (value === "" || value === undefined || value === null || (typeof value === "number" && isNaN(value))) {
+                              return isReq ? "Please enter the delivery charge (enter 0 for free delivery or pickup)" : undefined;
                             }
                             return validateWithZod(orderShippingTotalSchema)({ value });
                           },
                           onSubmit: ({ value }) => {
                             const status = form.getFieldValue("status");
-                            if (!isFieldRequiredForStatus("shipping_total", status) && (value === undefined || value === null || isNaN(value))) {
-                              return undefined;
+                            const isReq = isFieldRequiredForStatus("shipping_total", status);
+                            if (value === "" || value === undefined || value === null || (typeof value === "number" && isNaN(value))) {
+                              return isReq ? "Please enter the delivery charge (enter 0 for free delivery or pickup)" : undefined;
                             }
                             return validateWithZod(orderShippingTotalSchema)({ value });
                           },
@@ -2903,8 +2901,19 @@ export function OrderFormDialog({
                                 id="order_form_shipping_total"
                                 type="number"
                                 min="0"
-                                value={field.state.value}
-                                onChange={(e) => field.handleChange(Number(e.target.value) || 0)}
+                                placeholder="Delivery fee (BDT)"
+                                value={
+                                  field.state.value === "" ||
+                                  field.state.value === undefined ||
+                                  field.state.value === null
+                                    ? ""
+                                    : field.state.value
+                                }
+                                onChange={(e) =>
+                                  field.handleChange(
+                                    e.target.value === "" ? ("" as any) : Number(e.target.value)
+                                  )
+                                }
                                 onBlur={field.handleBlur}
                                 className="pl-7 font-mono font-medium h-9"
                               />
@@ -2913,8 +2922,8 @@ export function OrderFormDialog({
                             <div className="flex flex-wrap gap-1.5 pt-0.5">
                               {[
                                 { label: "Depot (৳0)", val: 0 },
-                                { label: "Dhaka (৳120)", val: 120 },
-                                { label: "Outside (৳200)", val: 200 },
+                                { label: "Dhaka (৳80)", val: 80 },
+                                { label: "Outside (৳130)", val: 130 },
                                 { label: "Bulk (৳1,500)", val: 1500 },
                               ].map((preset) => (
                                 <button

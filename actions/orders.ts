@@ -21,6 +21,7 @@ import {
   type BulkCourierUpdateResult,
   type BulkDeleteResult,
 } from "@/lib/supabase/api";
+import { sanitizeCourierName } from "@/lib/validations/order";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import {
   validateOrderStatusTransition,
@@ -1075,8 +1076,9 @@ async function updateOrderStatusWithSession(
       updated_at: nowIso,
     };
 
-    if (courierName) {
-      updatePayload.shipping_method_name = courierName;
+    const cleanCourierForUpdate = sanitizeCourierName(courierName);
+    if (cleanCourierForUpdate) {
+      updatePayload.shipping_method_name = cleanCourierForUpdate;
     }
 
     if (bookingResult?.success && bookingResult.consignment) {
@@ -1406,516 +1408,353 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
   ).trim();
   const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
 
-  const shouldUseDirectInsert = isDraft || !customerName || !normalizedPhone;
+  const subtotal = (savedOrder.items || []).reduce(
+    (sum, item) =>
+      sum +
+      (Number(item.line_total) ||
+        Number(item.quantity) * Number(item.unit_price) ||
+        0),
+    0
+  );
+  const shippingTotal = Number(savedOrder.shipping_total) || 0;
+  const discountTotal = Number(savedOrder.discount_total) || 0;
+  const grandTotal = Math.max(0, subtotal - discountTotal + shippingTotal);
 
-  if (shouldUseDirectInsert) {
+  let orderNumber = savedOrder.id;
+  if (
+    orderNumber &&
+    !orderNumber.startsWith("preview") &&
+    !orderNumber.startsWith("order-")
+  ) {
+    const { data: existingOrder } = await client
+      .from("orders")
+      .select("id")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (existingOrder) {
+      orderNumber = undefined as any;
+    }
+  } else {
+    orderNumber = undefined as any;
+  }
+
+  if (!orderNumber) {
     const prefix = await getOrderNumberPrefixInternal(client);
-    const orderNumber =
-      savedOrder.id ||
-      `${prefix}-2610-0${1085 + Date.now().toString().slice(-4)}`;
+    orderNumber = `${prefix}-${new Date().toISOString().slice(2, 4)}${new Date().toISOString().slice(5, 7)}-${Date.now().toString().slice(-5)}`;
+  }
 
-    const subtotal = (savedOrder.items || []).reduce(
-      (sum, item) =>
-        sum +
-        (Number(item.line_total) ||
-          Number(item.quantity) * Number(item.unit_price) ||
-          0),
-      0
-    );
-    const shippingTotal = Number(savedOrder.shipping_total) || 0;
-    const discountTotal = Number(savedOrder.discount_total) || 0;
-    const grandTotal = Math.max(0, subtotal - discountTotal + shippingTotal);
-
-    const createdOrder: Order = {
-      id: orderNumber,
-      customer: customerName,
-      phone: normalizedPhone,
-      alternative_phone: normalizedAltPhone,
-      shipping_phone: normalizedShippingPhone || normalizedPhone,
-      recipient_name: recipientName || customerName,
-      email: savedOrder.email ? savedOrder.email.trim() : "",
-      address: {
-        division: savedOrder.address?.division || "",
-        district: savedOrder.address?.district || "",
-        address_line: savedOrder.address?.address_line || "",
-        recipient_name: recipientName || customerName,
-        phone: normalizedShippingPhone || normalizedPhone,
-      },
-      status: savedOrder.status,
-      payment: savedOrder.payment || "unpaid",
-      fulfillment: savedOrder.fulfillment || "unfulfilled",
-      method: savedOrder.method || "cod",
-      channel: savedOrder.channel || "phone",
-      subtotal,
-      discount_total: discountTotal,
-      shipping_total: shippingTotal,
-      grand_total: grandTotal,
-      amount_paid: Number(savedOrder.amount_paid) || 0,
-      currency: "BDT",
-      date: savedOrder.date || nowStr,
-      customer_note: savedOrder.customer_note || "",
-      courier_name: savedOrder.courier_name || "",
-      cancel_reason: savedOrder.cancel_reason || "",
-      items: savedOrder.items || [],
-      notes:
-        savedOrder.notes && savedOrder.notes.length > 0
-          ? savedOrder.notes
-          : [
-              {
-                id: `note-${Date.now()}`,
-                author: actorName,
-                text: `Order recorded via ${savedOrder.channel?.toUpperCase() || "ADMIN"}.`,
-                type: "internal",
-                created_at: formatDateTime(nowStr),
-              },
-            ],
-      events:
-        savedOrder.events && savedOrder.events.length > 0
-          ? savedOrder.events
-          : [
-              {
-                id: `ev-${Date.now()}`,
-                event_type: "placed",
-                message: `Order created (${savedOrder.status.replace(/_/g, " ")})`,
-                actor: actorName,
-                created_at: formatDateTime(nowStr),
-              },
-            ],
-      isFromDb: false,
-    };
-
+  let matchedCustomerId: string | null = null;
+  if (normalizedPhone) {
     try {
-      const dbInsertPayload: Record<string, any> = {
-        order_number: orderNumber,
-        status: savedOrder.status,
-        channel: savedOrder.channel || "phone",
-        payment_status: savedOrder.payment || "unpaid",
-        fulfillment_status: savedOrder.fulfillment || "unfulfilled",
-        payment_method: savedOrder.method || "cod",
-        currency: "BDT",
-        placed_at: savedOrder.date || nowStr,
-        customer_name: customerName || null,
-        customer_phone: normalizedPhone || null,
-        customer_alternative_phone: normalizedAltPhone || null,
-        shipping_phone: normalizedShippingPhone || normalizedPhone || null,
-        customer_email: savedOrder.email ? savedOrder.email.trim() : null,
-        shipping_address: {
-          division: savedOrder.address?.division || "",
-          district: savedOrder.address?.district || "",
-          address_line: savedOrder.address?.address_line || "",
-          phone: normalizedShippingPhone || normalizedPhone || "",
-          alternative_phone: normalizedAltPhone || "",
-          recipient_name: recipientName || customerName || "",
-        },
-        subtotal,
-        discount_total: discountTotal,
-        shipping_total: shippingTotal,
-        tax_total: 0,
-        grand_total: grandTotal,
-        amount_paid: Number(savedOrder.amount_paid) || 0,
-        customer_note: savedOrder.customer_note || null,
-        attribution: savedOrder.attribution || {},
-        cancel_reason: savedOrder.cancel_reason || null,
-        shipping_method_name: savedOrder.courier_name || null,
-      };
-
-      const { data: dbData, error: dbErr } = await client
-        .from("orders")
-        .insert(dbInsertPayload)
-        .select()
+      const { data: existingCust } = await client
+        .from("customers")
+        .select("id")
+        .eq("phone", normalizedPhone)
         .maybeSingle();
-
-      if (dbErr) {
-        throw new Error(dbErr.message || "Failed to create order in database");
-      }
-
-      createdOrder.id = dbData?.order_number || orderNumber;
-      createdOrder.isFromDb = true;
-      createdOrder.public_token = dbData?.public_token;
-
-      let orderDbId = dbData?.id;
-      if (!orderDbId) {
-        const { data: fetchedOrder } = await client
-          .from("orders")
+      if (existingCust?.id) {
+        matchedCustomerId = existingCust.id;
+      } else {
+        const { data: newCust } = await client
+          .from("customers")
+          .insert({
+            phone: normalizedPhone,
+            full_name: customerName || null,
+          })
           .select("id")
-          .eq("order_number", orderNumber)
           .maybeSingle();
-        orderDbId = fetchedOrder?.id;
+        if (newCust?.id) matchedCustomerId = newCust.id;
       }
-
-      if (orderDbId && savedOrder.items && savedOrder.items.length > 0) {
-        try {
-          const candidateVarIds = savedOrder.items
-            .map((it) => it.variant_id || (it as any).variantId)
-            .filter((id) => isValidUuid(id));
-
-          const varToProdMap = new Map<string, string>();
-          if (candidateVarIds.length > 0) {
-            const { data: varsData } = await client
-              .from("product_variants")
-              .select("id, product_id")
-              .in("id", candidateVarIds);
-            (varsData || []).forEach((v: any) => {
-              if (v.id && v.product_id) varToProdMap.set(v.id, v.product_id);
-            });
-          }
-
-          const itemRows = savedOrder.items.map((it) => {
-            const isVarUuid = isValidUuid(it.variant_id);
-            const rawProdId = it.product_id || (it as any).productId;
-            const isProdUuid = isValidUuid(rawProdId);
-            const resolvedProdId = isProdUuid
-              ? rawProdId
-              : isVarUuid && it.variant_id
-              ? varToProdMap.get(it.variant_id) || null
-              : null;
-
-            return {
-              order_id: orderDbId,
-              product_id: resolvedProdId,
-              variant_id: isVarUuid ? it.variant_id : null,
-              sku: it.sku || "SKU-ITEM",
-              product_name: it.product_name || "Molasses Product",
-              variant_name: it.variant_name || "Standard",
-              quantity: Math.max(1, Number(it.quantity) || 1),
-              unit_price: Math.max(0, Number(it.unit_price) || 0),
-            };
-          });
-          const { error: itemInsertErr } = await client
-            .from("order_items")
-            .insert(itemRows);
-          if (itemInsertErr) {
-            console.error("Direct order_items insert error:", itemInsertErr);
-          }
-        } catch (itemErr) {
-          console.warn("Could not insert order items directly:", itemErr);
-        }
-      }
-
-      if (orderDbId && savedOrder.notes && savedOrder.notes.length > 0) {
-        try {
-          const nonCustomerNotes = savedOrder.notes.filter(
-            (n) => n && n.text && n.text.trim() && n.type !== "customer"
-          );
-          if (nonCustomerNotes.length > 0) {
-            const noteRows = nonCustomerNotes.map((n) => {
-              const dbType =
-                n.type === "delivery" || n.type === "delivery_note"
-                  ? "delivery"
-                  : n.type === "packaging" || n.type === "packaging_note"
-                  ? "packaging"
-                  : n.type === "system" || n.type === "system_note"
-                  ? "system"
-                  : "internal";
-              return {
-                order_id: orderDbId,
-                order_number: orderNumber,
-                type: dbType,
-                author: n.author || actorName,
-                note: n.text
-                  .trim()
-                  .replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, ""),
-                created_at: n.created_at || new Date().toISOString(),
-              };
-            });
-            await client.from("order_notes").insert(noteRows);
-          }
-        } catch (noteInsErr) {
-          console.warn("Notice inserting notes into order_notes:", noteInsErr);
-        }
-      }
-
-      await convertStorefrontInquiryForOrderInternal(client, {
-        orderId: orderDbId,
-        attribution: savedOrder.attribution,
-        normalizedPhone,
-        flowContext: "direct insert flow",
-      });
-    } catch (insertErr: any) {
-      console.error("Error attempting order insert:", insertErr);
-      throw new Error(insertErr?.message || "Failed to save order in database");
+    } catch (custErr) {
+      console.warn("Could not match or create customer for manual order:", custErr);
     }
-
-    if (
-      [
-        "confirmed",
-        "processing",
-        "shipped",
-        "delivered",
-        "partially_delivered",
-      ].includes(createdOrder.status)
-    ) {
-      triggerCapiPurchaseInternal(createdOrder.id).catch(() => {});
-    }
-
-    return createdOrder;
   }
 
-  let districtId = 30;
-  try {
-    const targetDistrictName = (savedOrder.address?.district || "")
-      .trim()
-      .toLowerCase();
-    const { data: distData } = await client
-      .from("geo_districts")
-      .select("id, name");
-
-    const exactDbMatch = (distData || []).find(
-      (d: any) => String(d.name || "").trim().toLowerCase() === targetDistrictName
-    );
-    if (exactDbMatch) {
-      districtId = exactDbMatch.id;
-    } else {
-      const found = fallbackDistricts.find(
-        (d) => d.name.toLowerCase() === targetDistrictName
-      );
-      if (found) districtId = found.id;
-    }
-  } catch (e) {
-    console.warn("District resolution warning:", e);
-  }
-
-  const shippingMethods = await fetchRawShippingMethodsInternal(client);
+  let resolvedShippingMethodId: string | null = null;
   const isPickup =
     (savedOrder.address?.address_line || "").toLowerCase().includes("pickup") ||
-    Number(savedOrder.shipping_total) === 0;
+    shippingTotal === 0;
 
-  const matchedMethod =
-    shippingMethods.find((m) => m.is_pickup === isPickup) ||
-    shippingMethods.find((m) => !m.is_pickup) ||
-    shippingMethods[0];
+  try {
+    const { data: methods } = await client
+      .from("shipping_methods")
+      .select("id, code, is_pickup")
+      .eq("is_active", true);
 
-  const shippingMethodId = matchedMethod.id;
-
-  const { data: dbVariants } = await client
-    .from("product_variants")
-    .select("id, sku, price")
-    .eq("is_active", true);
-
-  const variantSkuMap = new Map<string, string>();
-  if (dbVariants) {
-    dbVariants.forEach((v: any) =>
-      variantSkuMap.set(String(v.sku || "").toLowerCase(), v.id)
-    );
-  }
-  const defaultVariantId =
-    dbVariants && dbVariants.length > 0
-      ? dbVariants[0].id
-      : "0c696f68-7bc2-4006-befa-0540dd24dc5b";
-
-  const pItems = savedOrder.items.map((it) => {
-    let vId = it.variant_id;
-    if (!vId || vId.length < 32) {
-      vId = variantSkuMap.get(it.sku.toLowerCase()) || defaultVariantId;
+    if (methods && methods.length > 0) {
+      const matched =
+        methods.find((m) => m.is_pickup === isPickup) ||
+        methods.find((m) => !m.is_pickup) ||
+        methods[0];
+      resolvedShippingMethodId = matched?.id || null;
     }
-    return {
-      variant_id: vId,
-      quantity: Math.max(1, Number(it.quantity) || 1),
-    };
-  });
-
-  const validMethods = [
-    "cod",
-    "bkash",
-    "nagad",
-    "rocket",
-    "card",
-    "bank_transfer",
-    "credit_terms",
-    "cash",
-  ];
-  let paymentMethod = (savedOrder.method || "cod") as any;
-  if (!validMethods.includes(paymentMethod)) {
-    paymentMethod = "cod";
+  } catch (mErr) {
+    console.warn("Could not look up shipping method:", mErr);
   }
 
-  const { data: placeData, error: placeError } = await client.rpc(
-    "place_order",
-    {
-      p_items: pItems,
-      p_customer: {
-        name: customerName,
-        phone: normalizedPhone,
-        email: savedOrder.email ? savedOrder.email.trim() : undefined,
-      },
-      p_shipping_address: {
-        recipient_name: recipientName || customerName,
-        phone: normalizedShippingPhone || normalizedPhone,
-        district_id: districtId,
-        address_line: savedOrder.address?.address_line?.trim() || "",
-      },
-      p_shipping_method_id: shippingMethodId,
-      p_payment_method: paymentMethod,
-      p_customer_note: savedOrder.customer_note?.trim() || undefined,
-      p_attribution: savedOrder.attribution
-        ? (savedOrder.attribution as any)
-        : undefined,
-      p_channel: savedOrder.channel || "phone",
-    }
-  );
-
-  if (placeError) {
-    console.error("Supabase place_order RPC error:", placeError);
-    let msg = placeError.message;
-    if (msg.includes("OUT_OF_STOCK"))
-      msg = "Selected molasses product is currently out of stock in warehouse.";
-    else if (msg.includes("CUSTOMER_PHONE_INVALID"))
-      msg = "Please enter a valid mobile number (+880...)";
-    else if (msg.includes("ADDRESS_REQUIRED"))
-      msg = "Please provide delivery district and street address.";
-    else if (msg.includes("FORBIDDEN"))
-      msg = "Access restricted for this channel or customer action.";
-    throw new Error(msg);
-  }
-
-  let orderDetails: any = null;
-  if (placeData?.public_token) {
-    try {
-      const { data: tokenData } = await client.rpc("get_order_by_token", {
-        p_token: placeData.public_token,
-      });
-      if (tokenData) {
-        orderDetails = tokenData;
-      }
-    } catch (e) {
-      console.warn("Could not immediately fetch order token details:", e);
-    }
-  }
-
-  const prefix = await getOrderNumberPrefixInternal(client);
-  const orderNumber =
-    orderDetails?.order_number ||
-    placeData?.order_number ||
-    `${prefix}-2610-${Date.now().toString().slice(-5)}`;
-
-  const createdResult: Order = {
+  const createdOrder: Order = {
     id: orderNumber,
-    customer: orderDetails?.customer_name || customerName || "",
+    customer: customerName,
     phone: normalizedPhone,
-    alternative_phone:
-      orderDetails?.shipping_address?.alternative_phone ||
-      orderDetails?.customer_alternative_phone ||
-      normalizedAltPhone ||
-      "",
+    alternative_phone: normalizedAltPhone,
     shipping_phone: normalizedShippingPhone || normalizedPhone,
     recipient_name: recipientName || customerName,
-    email: savedOrder.email || "",
+    email: savedOrder.email ? savedOrder.email.trim() : "",
     address: {
-      division:
-        orderDetails?.shipping_address?.division ||
-        savedOrder.address?.division ||
-        "",
-      district:
-        orderDetails?.shipping_address?.district ||
-        savedOrder.address?.district ||
-        "",
-      address_line:
-        orderDetails?.shipping_address?.address_line ||
-        savedOrder.address?.address_line ||
-        "",
+      division: savedOrder.address?.division || "",
+      district: savedOrder.address?.district || "",
+      address_line: savedOrder.address?.address_line || "",
       recipient_name: recipientName || customerName,
       phone: normalizedShippingPhone || normalizedPhone,
     },
-    status: savedOrder.status || (orderDetails?.status as any) || "pending",
-    payment:
-      (orderDetails?.payment_status as any) || savedOrder.payment || "unpaid",
-    fulfillment:
-      (orderDetails?.fulfillment_status as any) ||
-      savedOrder.fulfillment ||
-      "unfulfilled",
-    method: (orderDetails?.payment_method as any) || paymentMethod,
-    channel: savedOrder.channel || "web",
-    subtotal:
-      Number(orderDetails?.subtotal) ||
-      Number(placeData?.grand_total) ||
-      savedOrder.subtotal,
-    discount_total: Number(orderDetails?.discount_total) || 0,
-    shipping_total:
-      Number(orderDetails?.shipping_total) || savedOrder.shipping_total,
-    grand_total:
-      Number(orderDetails?.grand_total) ||
-      Number(placeData?.grand_total) ||
-      savedOrder.grand_total,
-    amount_paid: Number(orderDetails?.amount_paid) || 0,
-    currency: orderDetails?.currency || "BDT",
-    date: orderDetails?.placed_at || orderDetails?.created_at || nowStr,
-    customer_note: savedOrder.customer_note,
-    items:
-      orderDetails?.items && orderDetails.items.length > 0
-        ? orderDetails.items.map((it: any, idx: number) => ({
-            id: `item-db-${idx}-${it.sku}`,
-            sku: it.sku,
-            product_name: it.product_name,
-            variant_name: it.variant_name,
-            quantity: Number(it.quantity) || 1,
-            unit_price: Number(it.unit_price) || 0,
-            line_total:
-              Number(it.line_total) ||
-              Number(it.quantity) * Number(it.unit_price),
-            variant_id: savedOrder.items[idx]?.variant_id,
-          }))
-        : savedOrder.items,
-    notes: [
-      {
-        id: `note-${Date.now()}`,
-        author: "System",
-        text: `Order created and confirmed.`,
-        type: "system",
-        created_at: formatDateTime(nowStr),
-      },
-    ],
+    status: savedOrder.status,
+    payment: savedOrder.payment || "unpaid",
+    fulfillment: savedOrder.fulfillment || "unfulfilled",
+    method: savedOrder.method || "cod",
+    channel: savedOrder.channel || "phone",
+    subtotal,
+    discount_total: discountTotal,
+    shipping_total: shippingTotal,
+    grand_total: grandTotal,
+    amount_paid: Number(savedOrder.amount_paid) || 0,
+    currency: "BDT",
+    date: savedOrder.date || nowStr,
+    customer_note: savedOrder.customer_note || "",
+    courier_name: savedOrder.courier_name || "",
+    cancel_reason: savedOrder.cancel_reason || "",
+    items: savedOrder.items || [],
+    notes:
+      savedOrder.notes && savedOrder.notes.length > 0
+        ? savedOrder.notes
+        : [
+            {
+              id: `note-${Date.now()}`,
+              author: actorName,
+              text: `Order recorded via ${savedOrder.channel?.toUpperCase() || "ADMIN"}.`,
+              type: "internal",
+              created_at: formatDateTime(nowStr),
+            },
+          ],
     events:
-      orderDetails?.timeline && orderDetails.timeline.length > 0
-        ? orderDetails.timeline.map((ev: any, idx: number) => ({
-            id: `ev-db-${idx}`,
-            event_type: ev.event || "placed",
-            message: ev.message || "Order placed",
-            actor: "System Checkout",
-            created_at: formatDateTime(ev.at) || formatDateTime(nowStr),
-          }))
+      savedOrder.events && savedOrder.events.length > 0
+        ? savedOrder.events
         : [
             {
               id: `ev-${Date.now()}`,
               event_type: "placed",
-              message: "Order placed",
-              actor: "System Checkout",
+              message: `Order created (${savedOrder.status.replace(/_/g, " ")})`,
+              actor: actorName,
               created_at: formatDateTime(nowStr),
             },
           ],
-    isFromDb: true,
-    public_token: placeData?.public_token,
+    isFromDb: false,
   };
 
-  const postRpcUpdate: Record<string, any> = {};
-  if (normalizedAltPhone) {
-    postRpcUpdate.customer_alternative_phone = normalizedAltPhone;
-  }
-  if (normalizedShippingPhone) {
-    postRpcUpdate.shipping_phone = normalizedShippingPhone;
-  }
-  if (savedOrder.attribution && Object.keys(savedOrder.attribution).length > 0) {
-    postRpcUpdate.attribution = savedOrder.attribution;
-  }
-  if (savedOrder.channel) {
-    postRpcUpdate.channel = savedOrder.channel;
-  }
-  if (Object.keys(postRpcUpdate).length > 0 && orderNumber) {
-    try {
-      await client
-        .from("orders")
-        .update(postRpcUpdate)
-        .eq("order_number", orderNumber);
-    } catch (e) {
-      console.warn("Could not set phone/attribution fields on newly created RPC order:", e);
-    }
-  }
+  try {
+    const dbInsertPayload: Record<string, any> = {
+      order_number: orderNumber,
+      customer_id: matchedCustomerId,
+      status: savedOrder.status,
+      channel: savedOrder.channel || "phone",
+      payment_status: savedOrder.payment || "unpaid",
+      fulfillment_status: savedOrder.fulfillment || "unfulfilled",
+      payment_method: savedOrder.method || "cod",
+      currency: "BDT",
+      placed_at: savedOrder.date || nowStr,
+      customer_name: customerName || null,
+      customer_phone: normalizedPhone || null,
+      customer_alternative_phone: normalizedAltPhone || null,
+      shipping_phone: normalizedShippingPhone || normalizedPhone || null,
+      customer_email: savedOrder.email ? savedOrder.email.trim() : null,
+      shipping_address: {
+        division: savedOrder.address?.division || "",
+        district: savedOrder.address?.district || "",
+        address_line: savedOrder.address?.address_line || "",
+        phone: normalizedShippingPhone || normalizedPhone || "",
+        alternative_phone: normalizedAltPhone || "",
+        recipient_name: recipientName || customerName || "",
+      },
+      shipping_method_id: resolvedShippingMethodId,
+      shipping_method_name: sanitizeCourierName(savedOrder.courier_name) || null,
+      subtotal,
+      discount_total: discountTotal,
+      shipping_total: shippingTotal,
+      tax_total: 0,
+      grand_total: grandTotal,
+      amount_paid: Number(savedOrder.amount_paid) || 0,
+      customer_note: savedOrder.customer_note || null,
+      attribution: savedOrder.attribution || {},
+      cancel_reason: savedOrder.cancel_reason || null,
+    };
 
-  await convertStorefrontInquiryForOrderInternal(client, {
-    orderId: placeData?.order_id,
-    attribution: savedOrder.attribution,
-    normalizedPhone,
-    flowContext: "place_order flow",
-  });
+    const { data: dbData, error: dbErr } = await client
+      .from("orders")
+      .insert(dbInsertPayload)
+      .select()
+      .maybeSingle();
+
+    if (dbErr) {
+      throw new Error(dbErr.message || "Failed to create order in database");
+    }
+
+    createdOrder.id = dbData?.order_number || orderNumber;
+    createdOrder.isFromDb = true;
+    createdOrder.public_token = dbData?.public_token;
+
+    let orderDbId = dbData?.id;
+    if (!orderDbId) {
+      const { data: fetchedOrder } = await client
+        .from("orders")
+        .select("id")
+        .eq("order_number", orderNumber)
+        .maybeSingle();
+      orderDbId = fetchedOrder?.id;
+    }
+
+    if (orderDbId && savedOrder.items && savedOrder.items.length > 0) {
+      try {
+        const candidateVarIds = savedOrder.items
+          .map((it) => it.variant_id || (it as any).variantId)
+          .filter((id) => isValidUuid(id));
+
+        const varToProdMap = new Map<string, string>();
+        const varStockMap = new Map<string, number>();
+
+        if (candidateVarIds.length > 0) {
+          const { data: varsData } = await client
+            .from("product_variants")
+            .select("id, product_id")
+            .in("id", candidateVarIds);
+          (varsData || []).forEach((v: any) => {
+            if (v.id && v.product_id) varToProdMap.set(v.id, v.product_id);
+          });
+
+          // Fetch stock levels to detect out-of-stock items
+          const { data: invData } = await client
+            .from("inventory_levels")
+            .select("variant_id, on_hand, reserved, available")
+            .in("variant_id", candidateVarIds);
+          (invData || []).forEach((inv: any) => {
+            const avail = Number(
+              inv.available ?? (Number(inv.on_hand || 0) - Number(inv.reserved || 0))
+            );
+            varStockMap.set(inv.variant_id, avail);
+          });
+        }
+
+        const itemRows = savedOrder.items.map((it) => {
+          const isVarUuid = isValidUuid(it.variant_id);
+          const rawProdId = it.product_id || (it as any).productId;
+          const isProdUuid = isValidUuid(rawProdId);
+          const resolvedProdId = isProdUuid
+            ? rawProdId
+            : isVarUuid && it.variant_id
+            ? varToProdMap.get(it.variant_id) || null
+            : null;
+
+          return {
+            order_id: orderDbId,
+            product_id: resolvedProdId,
+            variant_id: isVarUuid ? it.variant_id : null,
+            sku: it.sku || "SKU-ITEM",
+            product_name: it.product_name || "Molasses Product",
+            variant_name: it.variant_name || "Standard",
+            quantity: Math.max(1, Number(it.quantity) || 1),
+            unit_price: Math.max(0, Number(it.unit_price) || 0),
+          };
+        });
+
+        const { error: itemInsertErr } = await client
+          .from("order_items")
+          .insert(itemRows);
+        if (itemInsertErr) {
+          console.error("Direct order_items insert error:", itemInsertErr);
+        }
+
+        // Atomically reserve warehouse stock for active order statuses
+        if (!["incomplete_order", "cancelled"].includes(savedOrder.status)) {
+          try {
+            await client.rpc("reserve_order_stock", { p_order_id: orderDbId });
+          } catch (stockErr) {
+            console.warn("Could not reserve stock for manual order:", stockErr);
+          }
+        }
+
+        // Record an alert note if any item had low or zero available warehouse stock
+        const lowStockWarnings: string[] = [];
+        for (const it of savedOrder.items) {
+          const vId = it.variant_id || (it as any).variantId;
+          if (vId && varStockMap.has(vId)) {
+            const avail = varStockMap.get(vId) ?? 0;
+            const reqQty = Number(it.quantity) || 1;
+            if (avail <= 0 || avail < reqQty) {
+              lowStockWarnings.push(
+                `${it.product_name || "Product"} (${it.variant_name || it.sku}): available ${avail}, ordered ${reqQty}`
+              );
+            }
+          }
+        }
+        if (lowStockWarnings.length > 0) {
+          try {
+            await client.from("order_notes").insert({
+              order_id: orderDbId,
+              order_number: orderNumber,
+              type: "internal",
+              author: "Stock Alert",
+              note: `[Low/Out-of-Stock Alert]: ${lowStockWarnings.join("; ")}. Inventory has been reserved.`,
+              created_at: new Date().toISOString(),
+            });
+          } catch (alertErr) {
+            console.warn("Could not log low stock alert note:", alertErr);
+          }
+        }
+      } catch (itemErr) {
+        console.warn("Could not insert order items directly:", itemErr);
+      }
+    }
+
+    if (orderDbId && savedOrder.notes && savedOrder.notes.length > 0) {
+      try {
+        const nonCustomerNotes = savedOrder.notes.filter(
+          (n) => n && n.text && n.text.trim() && n.type !== "customer"
+        );
+        if (nonCustomerNotes.length > 0) {
+          const noteRows = nonCustomerNotes.map((n) => {
+            const dbType =
+              n.type === "delivery" || n.type === "delivery_note"
+                ? "delivery"
+                : n.type === "packaging" || n.type === "packaging_note"
+                ? "packaging"
+                : n.type === "system" || n.type === "system_note"
+                ? "system"
+                : "internal";
+            return {
+              order_id: orderDbId,
+              order_number: orderNumber,
+              type: dbType,
+              author: n.author || actorName,
+              note: n.text
+                .trim()
+                .replace(/^\[(Delivery|Packaging|Internal|System) Note\]\s*/i, ""),
+              created_at: n.created_at || new Date().toISOString(),
+            };
+          });
+          await client.from("order_notes").insert(noteRows);
+        }
+      } catch (noteInsErr) {
+        console.warn("Notice inserting notes into order_notes:", noteInsErr);
+      }
+    }
+
+    await convertStorefrontInquiryForOrderInternal(client, {
+      orderId: orderDbId,
+      attribution: savedOrder.attribution,
+      normalizedPhone,
+      flowContext: "direct insert flow",
+    });
+  } catch (insertErr: any) {
+    console.error("Error attempting order insert:", insertErr);
+    throw new Error(insertErr?.message || "Failed to save order in database");
+  }
 
   if (
     [
@@ -1924,12 +1763,12 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
       "shipped",
       "delivered",
       "partially_delivered",
-    ].includes(createdResult.status)
+    ].includes(createdOrder.status)
   ) {
-    triggerCapiPurchaseInternal(createdResult.id).catch(() => {});
+    triggerCapiPurchaseInternal(createdOrder.id).catch(() => {});
   }
 
-  return createdResult;
+  return createdOrder;
 }
 
 /**
@@ -2538,7 +2377,7 @@ export async function bulkAssignCourierAction(
     };
   }
 
-  const cleanCourier = (courierName || "").trim();
+  const cleanCourier = sanitizeCourierName(courierName);
   if (cleanCourier.length < 2) {
     throw new DatabaseOperationError(
       parseDatabaseError({

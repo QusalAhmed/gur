@@ -4,6 +4,7 @@ import { formatDateTime } from "@/lib/utils";
 import { isValidUuid } from "@/lib/security";
 import { parseDatabaseError, DatabaseOperationError } from "@/lib/supabase/error-handler";
 import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
+import { sanitizeCourierName } from "@/lib/validations/order";
 import type { Order, OrderNote, OrderNoteType } from "@/types/order";
 
 export function parseDbNoteToDomainInternal(
@@ -115,7 +116,7 @@ export async function persistOrderUpdateInternal(
     ...(updatedOrder.date ? { placed_at: updatedOrder.date } : {}),
     ...(updatedOrder.attribution ? { attribution: updatedOrder.attribution } : {}),
     cancel_reason: updatedOrder.cancel_reason || null,
-    shipping_method_name: updatedOrder.courier_name || null,
+    shipping_method_name: sanitizeCourierName(updatedOrder.courier_name) || null,
     ...(updatedOrder.courier_consignment_id !== undefined
       ? { courier_consignment_id: updatedOrder.courier_consignment_id || null }
       : {}),

@@ -196,11 +196,15 @@ export const orderFulfillmentSchema = z.enum([
 /**
  * Shipping Fee: Non-negative number.
  */
-export const orderShippingTotalSchema = z.coerce
-  .number({
-    message: "Shipping fee must be a number",
-  })
-  .min(0, "Shipping fee cannot be negative");
+export const orderShippingTotalSchema = z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? undefined : val),
+  z.coerce
+    .number({
+      message: "Shipping fee must be a number",
+    })
+    .min(0, "Shipping fee cannot be negative")
+    .optional()
+);
 
 /**
  * Discount Total: Non-negative number.
@@ -267,9 +271,34 @@ export const BANGLADESH_COURIERS = [
   "Warehouse Pickup",
 ] as const;
 
+export const GENERIC_COURIER_PLACEHOLDERS = [
+  "courier delivery",
+  "courier",
+  "courier service",
+  "home delivery",
+  "standard delivery",
+  "delivery",
+  "inside dhaka home delivery",
+  "outside dhaka delivery",
+  "কুরিয়ার ডেলিভারি",
+] as const;
+
+export function isGenericCourierName(name?: string | null): boolean {
+  if (!name) return false;
+  const clean = name.trim().toLowerCase();
+  return GENERIC_COURIER_PLACEHOLDERS.some((p) => p === clean);
+}
+
+export function sanitizeCourierName(name?: string | null): string {
+  if (!name) return "";
+  const clean = name.trim();
+  if (isGenericCourierName(clean)) return "";
+  return clean;
+}
+
 export const orderCourierNameSchema = z
   .string()
-  .transform((v) => (v || "").trim())
+  .transform((v) => sanitizeCourierName(v))
   .optional()
   .default("");
 
@@ -477,7 +506,7 @@ export const orderFormSchema = z
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Delivery charge must be a valid non-negative number",
+          message: "Please enter delivery charge (enter 0 for free delivery or pickup)",
           path: ["shipping_total"],
         });
       }

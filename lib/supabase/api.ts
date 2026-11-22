@@ -26,6 +26,7 @@ import {
   toLocalBdPhone,
   BD_PHONE_REGEX,
 } from "@/lib/phone";
+import { sanitizeCourierName } from "@/lib/validations/order";
 
 export {
   parseDatabaseError,
@@ -431,7 +432,7 @@ export function formatDbOrderRecord(data: any): Order {
         return "";
       })(),
     cancel_reason: data.cancel_reason || "",
-    courier_name: data.shipping_method_name || "",
+    courier_name: sanitizeCourierName(data.shipping_method_name),
     courier_consignment_id: data.courier_consignment_id ? String(data.courier_consignment_id) : undefined,
     courier_tracking_code: data.courier_tracking_code || undefined,
     courier_tracking_url: data.courier_tracking_url || undefined,

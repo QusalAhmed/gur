@@ -170,6 +170,8 @@ import {
   recordPaymentFormSchema,
   orderAmountPaidSchema,
   BANGLADESH_COURIERS,
+  sanitizeCourierName,
+  isGenericCourierName,
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
@@ -1382,7 +1384,7 @@ export function OrdersClient() {
 
   const [isBulkStatusOpen, setIsBulkStatusOpen] = React.useState(false);
   const [bulkTargetStatus, setBulkTargetStatus] = React.useState<Order["status"]>("confirmed");
-  const [bulkTargetCourierForStatus, setBulkTargetCourierForStatus] = React.useState("Steadfast Courier");
+  const [bulkTargetCourierForStatus, setBulkTargetCourierForStatus] = React.useState("");
   const [bulkStatusNote, setBulkStatusNote] = React.useState("");
   const [bulkStatusError, setBulkStatusError] = React.useState<ParsedDatabaseError | null>(null);
 
@@ -1485,7 +1487,7 @@ export function OrdersClient() {
       effectiveStatusOrder.phone,
       effectiveStatusOrder.address?.address_line,
       effectiveStatusOrder.items?.length,
-      selectedCourier || effectiveStatusOrder.courier_name,
+      sanitizeCourierName(selectedCourier) || sanitizeCourierName(effectiveStatusOrder.courier_name),
       cancelReason,
       effectiveStatusOrder.address?.division,
       effectiveStatusOrder.address?.district
@@ -1522,7 +1524,14 @@ export function OrdersClient() {
     setBulkTargetStatus(status);
     setBulkStatusNote("");
     setBulkStatusError(null);
-    const existingCourier = freshOrders.find((o) => o.courier_name)?.courier_name || "Steadfast Courier";
+    const nonBlankCouriers = freshOrders
+      .map((o) => sanitizeCourierName(o.courier_name))
+      .filter(Boolean);
+    const allHaveSameCourier =
+      freshOrders.length > 0 &&
+      nonBlankCouriers.length === freshOrders.length &&
+      nonBlankCouriers.every((c) => c === nonBlankCouriers[0]);
+    const existingCourier = allHaveSameCourier ? nonBlankCouriers[0] : "";
     setBulkTargetCourierForStatus(existingCourier);
     setClearSelectionFn(() => clearFn);
     setIsBulkStatusOpen(true);
@@ -1542,8 +1551,8 @@ export function OrdersClient() {
 
     for (const o of effectiveBulkSelectedOrders) {
       const effectiveCourier = isAdvancingToDispatch
-        ? (bulkTargetCourierForStatus || o.courier_name)
-        : o.courier_name;
+        ? (sanitizeCourierName(bulkTargetCourierForStatus) || sanitizeCourierName(o.courier_name))
+        : sanitizeCourierName(o.courier_name);
 
       const val = validateOrderStatusTransition(
         o.status,
@@ -1574,11 +1583,13 @@ export function OrdersClient() {
       bulkTargetStatus === "delivered" ||
       bulkTargetStatus === "partially_delivered";
 
+    const cleanBulkCourier = sanitizeCourierName(bulkTargetCourierForStatus);
+
     bulkStatusMutation.mutate({
       orderIds: effectiveBulkSelectedOrders.map((o) => o.id),
       targetStatus: bulkTargetStatus,
       batchNote: bulkStatusNote,
-      courierName: isAdvancingToDispatch ? bulkTargetCourierForStatus : undefined,
+      courierName: isAdvancingToDispatch ? (cleanBulkCourier || undefined) : undefined,
     });
   };
 
@@ -2058,7 +2069,7 @@ export function OrdersClient() {
     setStatusOrder(freshOrder);
     setNewStatus(targetStatus || freshOrder.status);
     setCancelReason(freshOrder.cancel_reason || "");
-    setSelectedCourier(freshOrder.courier_name || "");
+    setSelectedCourier(sanitizeCourierName(freshOrder.courier_name));
     setStatusError(null);
     setIsStatusOpen(true);
   };
@@ -2127,7 +2138,9 @@ export function OrdersClient() {
       }
     }
 
-    if (requiresCourier && (!selectedCourier || selectedCourier.trim().length < 2)) {
+    const cleanSelectedCourier = sanitizeCourierName(selectedCourier);
+
+    if (requiresCourier && (!cleanSelectedCourier || cleanSelectedCourier.length < 2)) {
       showToast("Courier Service is required for processing or dispatched orders.", "destructive");
       return;
     }
@@ -2142,7 +2155,7 @@ export function OrdersClient() {
 
     const eventMsg = `Status changed from ${fromStatus.replace(/_/g, " ")} to ${updatedStatus.replace(/_/g, " ")}${
       isTerminated && cancelReason ? `: ${cancelReason}` : ""
-    }${requiresCourier && selectedCourier ? ` (Courier: ${selectedCourier})` : ""}${
+    }${requiresCourier && cleanSelectedCourier ? ` (Courier: ${cleanSelectedCourier})` : ""}${
       notifyCustomer ? " (Customer notified via SMS)" : ""
     }`;
 
@@ -2152,7 +2165,7 @@ export function OrdersClient() {
       cancelReason,
       eventMsg,
       currentOrder: targetOrder,
-      courierName: selectedCourier,
+      courierName: cleanSelectedCourier || undefined,
     });
   };
 
@@ -4192,9 +4205,9 @@ export function OrdersClient() {
                 <div className="grid grid-cols-1 gap-2">
                   <Select
                     value={
-                      (BANGLADESH_COURIERS as readonly string[]).includes(selectedCourier)
-                        ? selectedCourier
-                        : selectedCourier
+                      (BANGLADESH_COURIERS as readonly string[]).includes(sanitizeCourierName(selectedCourier))
+                        ? sanitizeCourierName(selectedCourier)
+                        : sanitizeCourierName(selectedCourier)
                         ? "other"
                         : "none"
                     }
@@ -4202,7 +4215,7 @@ export function OrdersClient() {
                       if (!val || val === "none") {
                         setSelectedCourier("");
                       } else if (val !== "other") {
-                        setSelectedCourier(val);
+                        setSelectedCourier(sanitizeCourierName(val));
                       }
                     }}
                   >
@@ -4222,7 +4235,7 @@ export function OrdersClient() {
 
                   <Input
                     id="status_courier_name"
-                    value={selectedCourier}
+                    value={sanitizeCourierName(selectedCourier)}
                     onChange={(e) => setSelectedCourier(e.target.value)}
                     placeholder="Courier name (e.g. Steadfast, Pathao, RedX)..."
                     className="h-8 text-xs bg-background"
@@ -5291,15 +5304,20 @@ export function OrdersClient() {
                   Courier Partner for Dispatched Orders:
                 </label>
                 <Select
-                  value={bulkTargetCourierForStatus}
+                  value={
+                    bulkTargetCourierForStatus && !isGenericCourierName(bulkTargetCourierForStatus)
+                      ? bulkTargetCourierForStatus
+                      : "none"
+                  }
                   onValueChange={(val) => {
-                    if (val) setBulkTargetCourierForStatus(val);
+                    setBulkTargetCourierForStatus(!val || val === "none" ? "" : sanitizeCourierName(val));
                   }}
                 >
                   <SelectTrigger className="w-full h-8 text-xs bg-background font-medium">
-                    <SelectValue />
+                    <SelectValue placeholder="-- Choose Courier Partner --" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">-- Choose Courier Partner --</SelectItem>
                     {[
                       "Steadfast Courier",
                       "Pathao Courier",
@@ -5314,9 +5332,15 @@ export function OrdersClient() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Applied to all orders being moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()} if unassigned.
-                </p>
+                {!bulkTargetCourierForStatus ? (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                    * Courier partner selection is required before advancing orders to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()}.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Applied to all orders being moved to {bulkTargetStatus.replace(/_/g, " ").toUpperCase()} if unassigned.
+                  </p>
+                )}
               </div>
             )}
 
