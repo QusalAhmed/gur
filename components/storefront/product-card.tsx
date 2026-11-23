@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from "motion/react";
 import { Plus, Minus, Check, ChevronDown, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -174,6 +174,43 @@ export function ProductCard({
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
   const cardRef = useRef<HTMLElement>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // Framer Motion scroll animation: ensure only the currently centered card is visible and focused
+  const { scrollYProgress } = useScroll({
+    target: cardRef,
+    offset: ["start end", "end start"],
+  });
+
+  const scrollOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
+    [0, 0, 1, 1, 0, 0]
+  );
+  const scrollScale = useTransform(
+    scrollYProgress,
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
+    [0.92, 0.92, 1, 1, 0.92, 0.92]
+  );
+  const scrollY = useTransform(
+    scrollYProgress,
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
+    [28, 28, 0, 0, -28, -28]
+  );
+  const pointerEvents = useTransform(
+    scrollYProgress,
+    (val) => (val >= 0.35 && val <= 0.65 ? "auto" : "none")
+  );
+
+  const cardOpacity = !hasMounted || prefersReducedMotion ? 1 : scrollOpacity;
+  const cardScale = !hasMounted || prefersReducedMotion ? 1 : scrollScale;
+  const cardY = !hasMounted || prefersReducedMotion ? 0 : scrollY;
+  const cardPointerEvents = hasMounted && !prefersReducedMotion ? pointerEvents : "auto";
   const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant>(initialVariant);
   const prevProductIdRef = useRef(product.id);
   const prevDefaultVariantIdRef = useRef(defaultVariant.id);
@@ -636,9 +673,18 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="min-h-[100dvh] w-full snap-start snap-always shrink-0 relative bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300 flex flex-col justify-center"
+      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none flex flex-col justify-center"
     >
-      {/* Floating Product Number Tag at Top Left Corner of Product Card */}
+      <motion.div
+        style={{
+          opacity: cardOpacity,
+          scale: cardScale,
+          y: cardY,
+          pointerEvents: cardPointerEvents,
+        }}
+        className="w-full h-full flex flex-col justify-center"
+      >
+        {/* Floating Product Number Tag at Top Left Corner of Product Card */}
       <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">
         <div className="max-w-5xl lg:max-w-6xl mx-auto flex items-center justify-start">
           <div className="inline-flex items-center gap-1.5 bg-stone-100/95 dark:bg-stone-850/95 backdrop-blur-md border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-700 dark:text-stone-300 shadow-2xs select-none">
@@ -1091,6 +1137,7 @@ export function ProductCard({
         </motion.div>
       </div>
     </div>
-  </section>
+  </motion.div>
+</section>
 );
 }

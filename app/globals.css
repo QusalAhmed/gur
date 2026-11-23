@@ -145,12 +145,6 @@
     scroll-snap-type: y mandatory;
   }
 
-  @media (max-width: 640px) {
-    html:has([data-storefront-root]) {
-      scroll-snap-type: y proximity;
-    }
-  }
-
   .font-bangla {
     font-family: var(--font-bangla);
   }
