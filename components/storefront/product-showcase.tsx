@@ -115,24 +115,30 @@ export function ProductShowcase({
       const sections = Array.from(container.children) as HTMLElement[];
       if (sections.length === 0) return;
 
-      const viewportCenter = window.scrollY + window.innerHeight / 2;
-      let closestIdx = 0;
-      let minDistance = Infinity;
+      const scrollY = window.scrollY;
+      const focalPoint = scrollY + window.innerHeight * 0.35;
 
-      sections.forEach((sec, idx) => {
+      let currentIdx = sections.length - 1;
+      for (let i = 0; i < sections.length; i++) {
+        const sec = sections[i];
         const top = sec.offsetTop;
-        const center = top + sec.offsetHeight / 2;
-        const dist = Math.abs(viewportCenter - center);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestIdx = idx;
+        const bottom = top + sec.offsetHeight;
+        if (focalPoint >= top && focalPoint < bottom) {
+          currentIdx = i;
+          break;
         }
-      });
+      }
 
-      setActiveSectionIndex(closestIdx);
+      // If user has scrolled to the bottom of the page, ensure the last section is marked active
+      if (window.innerHeight + scrollY >= document.documentElement.scrollHeight - 60) {
+        currentIdx = sections.length - 1;
+      }
+
+      setActiveSectionIndex(currentIdx);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, [totalSections, products.length, isLoading]);
 
@@ -198,110 +204,6 @@ export function ProductShowcase({
       cancelAnimationFrame(rafId);
     };
   }, [autoScrollToProduct, featuredIdentifier, isLoading, products.length, productsStartIndex]);
-
-  // Discrete 1-step scroll for desktop mouse wheels so 1 tick smoothly changes product
-  useEffect(() => {
-    let isScrolling = false;
-    let scrollTimeout: NodeJS.Timeout;
-
-    const handleWheel = (e: WheelEvent) => {
-      // Only handle discrete stepping on desktop/laptop with mouse (width >= 1024)
-      if (typeof window !== "undefined" && window.innerWidth < 1024) return;
-      if (isTourActiveRef.current) {
-        e.preventDefault();
-        return;
-      }
-      if (Math.abs(e.deltaY) < 25) return;
-      if (isScrolling) {
-        e.preventDefault();
-        return;
-      }
-
-      const container = containerRef.current;
-      if (!container) return;
-      const sections = Array.from(container.children) as HTMLElement[];
-      const currentSection = sections[activeSectionIndex];
-
-      // If the current section is taller than viewport (e.g. Overview or Checkout), allow normal scroll within it
-      if (currentSection && currentSection.offsetHeight > window.innerHeight + 10) {
-        const rect = currentSection.getBoundingClientRect();
-        // If scrolling down and haven't reached the bottom of section
-        if (e.deltaY > 0 && rect.bottom > window.innerHeight + 10) {
-          return;
-        }
-        // If scrolling up and haven't reached the top of section
-        if (e.deltaY < 0 && rect.top < -10) {
-          return;
-        }
-      }
-
-      if (e.deltaY > 0 && activeSectionIndex < totalSections - 1) {
-        e.preventDefault();
-        isScrolling = true;
-        scrollToSection(activeSectionIndex + 1);
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          isScrolling = false;
-        }, 600);
-      } else if (e.deltaY < 0 && activeSectionIndex > 0) {
-        e.preventDefault();
-        isScrolling = true;
-        scrollToSection(activeSectionIndex - 1);
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          isScrolling = false;
-        }, 600);
-      }
-    };
-
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      window.removeEventListener("wheel", handleWheel);
-      clearTimeout(scrollTimeout);
-    };
-  }, [totalSections, activeSectionIndex, isTourActiveRef]);
-
-  // Keyboard Up/Down arrow keys support for changing full-screen products
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTourActiveRef.current) return;
-      // Don't intercept if user is typing in an input
-      if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
-
-      const container = containerRef.current;
-      if (!container) return;
-      const sections = Array.from(container.children) as HTMLElement[];
-      const currentSection = sections[activeSectionIndex];
-
-      // If current section is taller than viewport, let arrow keys scroll the content first
-      if (currentSection && currentSection.offsetHeight > window.innerHeight + 10) {
-        const rect = currentSection.getBoundingClientRect();
-        if ((e.key === "ArrowDown" || e.key === "PageDown") && rect.bottom > window.innerHeight + 10) {
-          return;
-        }
-        if ((e.key === "ArrowUp" || e.key === "PageUp") && rect.top < -10) {
-          return;
-        }
-      }
-
-      if (e.key === "ArrowDown" || e.key === "PageDown") {
-        if (activeSectionIndex < totalSections - 1) {
-          e.preventDefault();
-          scrollToSection(activeSectionIndex + 1);
-        }
-      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
-        if (activeSectionIndex > 0) {
-          e.preventDefault();
-          scrollToSection(activeSectionIndex - 1);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [totalSections, activeSectionIndex, isTourActiveRef]);
 
   const handleCheckoutFromCart = () => {
     scrollToSection(checkoutSectionIndex);
@@ -540,7 +442,7 @@ export function ProductShowcase({
         <section
           id="storefront-overview"
           data-section-index="0"
-          className="min-h-[100dvh] w-full snap-start shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+          className="min-h-[100dvh] w-full shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
         >
 
           {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
