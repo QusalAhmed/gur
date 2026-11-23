@@ -189,22 +189,22 @@ export function ProductCard({
 
   const scrollOpacity = useTransform(
     scrollYProgress,
-    [0, 0.18, 0.4, 0.6, 0.82, 1],
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
     [0, 0, 1, 1, 0, 0]
   );
   const scrollScale = useTransform(
     scrollYProgress,
-    [0, 0.18, 0.4, 0.6, 0.82, 1],
-    [0.94, 0.94, 1, 1, 0.94, 0.94]
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
+    [0.92, 0.92, 1, 1, 0.92, 0.92]
   );
   const scrollY = useTransform(
     scrollYProgress,
-    [0, 0.18, 0.4, 0.6, 0.82, 1],
-    [20, 20, 0, 0, -20, -20]
+    [0, 0.22, 0.44, 0.56, 0.78, 1],
+    [28, 28, 0, 0, -28, -28]
   );
   const pointerEvents = useTransform(
     scrollYProgress,
-    (val) => (val > 0.15 && val < 0.85 ? "auto" : "none")
+    (val) => (val >= 0.35 && val <= 0.65 ? "auto" : "none")
   );
 
   const cardOpacity = !hasMounted || prefersReducedMotion ? 1 : scrollOpacity;
