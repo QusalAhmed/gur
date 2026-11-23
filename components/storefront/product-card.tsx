@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback, useMemo } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from "motion/react";
-import { Plus, Minus, Check, ChevronDown, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion, type MotionValue } from "motion/react";
+import { Plus, Minus, Check, ChevronDown, Boxes, ShoppingBag, ArrowRight, Sparkles } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -125,7 +125,7 @@ export function formatComboComponentWeight(
   return rawVariantName.trim() || null;
 }
 
-interface ProductCardProps {
+export interface ProductCardProps {
   product: StorefrontProduct;
   index: number;
   totalProducts: number;
@@ -134,6 +134,9 @@ interface ProductCardProps {
   pauseViewTracking?: boolean;
   priority?: boolean;
   initialVariantId?: string;
+  trackProgress?: MotionValue<number>;
+  onScrollToNext?: () => void;
+  onScrollToOrder?: () => void;
 }
 
 export function ProductCard({
@@ -145,6 +148,9 @@ export function ProductCard({
   pauseViewTracking = false,
   priority = false,
   initialVariantId,
+  trackProgress,
+  onScrollToNext,
+  onScrollToOrder,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
 
@@ -173,7 +179,7 @@ export function ProductCard({
 
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
-  const cardRef = useRef<HTMLElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
   const [hasMounted, setHasMounted] = useState(false);
 
@@ -181,36 +187,77 @@ export function ProductCard({
     setHasMounted(true);
   }, []);
 
-  // Framer Motion scroll animation: ensure only the currently centered card is visible and focused
-  const { scrollYProgress } = useScroll({
+  // Framer Motion scroll animation: ensure only one product card is in view and focused at a time
+  const { scrollYProgress: fallbackProgress } = useScroll({
     target: cardRef,
     offset: ["start end", "end start"],
   });
+  const effectiveProgress = trackProgress || fallbackProgress;
 
-  const scrollOpacity = useTransform(
-    scrollYProgress,
-    [0, 0.22, 0.44, 0.56, 0.78, 1],
-    [0, 0, 1, 1, 0, 0]
-  );
-  const scrollScale = useTransform(
-    scrollYProgress,
-    [0, 0.22, 0.44, 0.56, 0.78, 1],
-    [0.92, 0.92, 1, 1, 0.92, 0.92]
-  );
-  const scrollY = useTransform(
-    scrollYProgress,
-    [0, 0.22, 0.44, 0.56, 0.78, 1],
-    [28, 28, 0, 0, -28, -28]
-  );
-  const pointerEvents = useTransform(
-    scrollYProgress,
-    (val) => (val >= 0.25 && val <= 0.75 ? "auto" : "none")
+  const { inputRange, opacityRange, scaleRange, yRange, activeMin, activeMax } = useMemo(() => {
+    if (totalProducts <= 1) {
+      return {
+        inputRange: [0, 1],
+        opacityRange: [1, 1],
+        scaleRange: [1, 1],
+        yRange: [0, 0],
+        activeMin: -0.01,
+        activeMax: 1.01,
+      };
+    }
+
+    const step = 1 / (totalProducts - 1);
+    const center = index * step;
+    const fadeSpan = step * 0.38;
+
+    if (index === 0) {
+      return {
+        inputRange: [0, step - fadeSpan, step],
+        opacityRange: [1, 1, 0],
+        scaleRange: [1, 1, 0.94],
+        yRange: [0, 0, -24],
+        activeMin: -0.01,
+        activeMax: step * 0.5,
+      };
+    }
+
+    if (index === totalProducts - 1) {
+      return {
+        inputRange: [center - step, center - step + fadeSpan, 1],
+        opacityRange: [0, 1, 1],
+        scaleRange: [0.94, 1, 1],
+        yRange: [24, 0, 0],
+        activeMin: center - step * 0.5,
+        activeMax: 1.01,
+      };
+    }
+
+    return {
+      inputRange: [
+        center - step,
+        center - step + fadeSpan,
+        center + step - fadeSpan,
+        center + step,
+      ],
+      opacityRange: [0, 1, 1, 0],
+      scaleRange: [0.94, 1, 1, 0.94],
+      yRange: [24, 0, 0, -24],
+      activeMin: center - step * 0.5,
+      activeMax: center + step * 0.5,
+    };
+  }, [index, totalProducts]);
+
+  const scrollOpacity = useTransform(effectiveProgress, inputRange, opacityRange);
+  const scrollScale = useTransform(effectiveProgress, inputRange, scaleRange);
+  const scrollY = useTransform(effectiveProgress, inputRange, yRange);
+  const pointerEvents = useTransform(effectiveProgress, (val) =>
+    val >= activeMin && val <= activeMax ? "auto" : "none"
   );
 
-  const cardOpacity = !hasMounted || prefersReducedMotion ? 1 : scrollOpacity;
+  const cardOpacity = !hasMounted || prefersReducedMotion ? (isActive ? 1 : 0) : scrollOpacity;
   const cardScale = !hasMounted || prefersReducedMotion ? 1 : scrollScale;
   const cardY = !hasMounted || prefersReducedMotion ? 0 : scrollY;
-  const cardPointerEvents = hasMounted && !prefersReducedMotion ? pointerEvents : "auto";
+  const cardPointerEvents = hasMounted && !prefersReducedMotion ? pointerEvents : (isActive ? "auto" : "none");
   const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant>(initialVariant);
   const prevProductIdRef = useRef(product.id);
   const prevDefaultVariantIdRef = useRef(defaultVariant.id);
@@ -668,12 +715,12 @@ export function ProductCard({
   })();
 
   return (
-    <section
+    <div
       ref={cardRef}
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none flex flex-col justify-center"
+      className="absolute inset-0 w-full h-full flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8 pointer-events-none select-none"
     >
       <motion.div
         style={{
@@ -682,462 +729,450 @@ export function ProductCard({
           y: cardY,
           pointerEvents: cardPointerEvents,
         }}
-        className="w-full h-full flex flex-col justify-center"
+        className="relative w-full max-w-5xl lg:max-w-6xl mx-auto rounded-3xl bg-white/92 dark:bg-stone-900/92 backdrop-blur-md border border-amber-200/70 dark:border-stone-800 shadow-xl overflow-hidden flex flex-col justify-center max-h-[92dvh]"
       >
-        {/* Floating Product Number Tag at Top Left Corner of Product Card */}
-      <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">
-        <div className="max-w-5xl lg:max-w-6xl mx-auto flex items-center justify-start">
-          <div className="inline-flex items-center gap-1.5 bg-stone-100/95 dark:bg-stone-850/95 backdrop-blur-md border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-700 dark:text-stone-300 shadow-2xs select-none">
+        {/* Subtle amber gradient line on top edge */}
+        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-600/50 to-transparent" />
+
+        {/* Top Header Bar inside the card: Counter on left, Authenticity badge on right */}
+        <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-1 flex items-center justify-between shrink-0 select-none">
+          <div className="inline-flex items-center gap-1.5 bg-stone-100/90 dark:bg-stone-800/90 border border-stone-200/80 dark:border-stone-750 px-2.5 py-1 rounded-full text-xs font-semibold text-stone-700 dark:text-stone-300 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
             <span>
               {t.productCounter}{" "}
-              <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
+              <span className="font-bold text-stone-900 dark:text-stone-100 tabular-nums">
                 {index + 1}
               </span>{" "}
               / {totalProducts}
             </span>
           </div>
+
+          <div className="inline-flex items-center gap-1.5 bg-emerald-50/90 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/60 px-2.5 py-1 rounded-full text-xs font-semibold text-emerald-800 dark:text-emerald-300 shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>{lang === "bn" ? "১০০% খাঁটি ও প্রাকৃতিক" : "100% Pure & Artisanal"}</span>
+          </div>
         </div>
-      </div>
 
-      {/* Safe Centering Wrapper */}
-      <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
-        {/* Main Two-Column Container for Desktop & Tablet, Single Column on Mobile */}
-        <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 pt-1 pb-0 sm:py-2">
-        {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
-        <div className="w-full flex flex-col items-center justify-center">
-          {/* Full-width Responsive Showcase Container */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: false, amount: "some" }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
-          >
-
-            {/* Multiple Media with Shadcn Carousel */}
-            {hasMultipleMedia ? (
-              <div className="absolute inset-0 w-full h-full">
-                <Carousel
-                  setApi={setCarouselApi}
-                  plugins={[autoplayPlugin]}
-                  opts={{ loop: true }}
-                  className="w-full h-full"
-                >
-                  <CarouselContent className="-ml-0 h-full w-full">
-                    {imagesList.map((imgSrc, imgIdx) => (
-                      <CarouselItem key={`img-${imgIdx}`} className="pl-0 h-full w-full">
-                        <div className="relative w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
-                          <Image
-                            src={imgSrc}
-                            alt={`${displayName} - ${imgIdx + 1}`}
-                            fill
-                            priority={priority && imgIdx === 0}
-                            className="object-cover"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
+        {/* Main Two-Column Grid: Left Media Carousel, Right Details & Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 items-center gap-3.5 sm:gap-6 md:gap-8 lg:gap-10 px-4 sm:px-6 pb-3 sm:pb-4 pt-1 overflow-y-auto max-h-[calc(92dvh-54px)]">
+          {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
+          <div className="w-full flex flex-col items-center justify-center">
+            <div className="relative w-full max-w-[240px] sm:max-w-[340px] md:max-w-none aspect-square max-h-[240px] sm:max-h-[360px] md:max-h-[420px] lg:max-h-[460px] mx-auto rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800/80 shadow-md">
+              {hasMultipleMedia ? (
+                <div className="absolute inset-0 w-full h-full">
+                  <Carousel
+                    setApi={setCarouselApi}
+                    plugins={[autoplayPlugin]}
+                    opts={{ loop: true }}
+                    className="w-full h-full"
+                  >
+                    <CarouselContent className="-ml-0 h-full w-full">
+                      {imagesList.map((imgSrc, imgIdx) => (
+                        <CarouselItem key={`img-${imgIdx}`} className="pl-0 h-full w-full">
+                          <div className="relative w-full h-full">
+                            <Image
+                              src={imgSrc}
+                              alt={`${displayName} - ${imgIdx + 1}`}
+                              fill
+                              priority={priority && imgIdx === 0}
+                              className="object-cover"
+                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
+                            />
+                          </div>
+                        </CarouselItem>
+                      ))}
+                      {hasVideo && product.videoUrl && (
+                        <CarouselItem key="video" className="pl-0 h-full w-full">
+                          <ProductVideoPlayer
+                            videoUrl={product.videoUrl}
+                            productName={displayName}
+                            isActive={currentSlide === videoSlideIndex}
+                            isSectionActive={isActive}
+                            onPauseCarousel={pauseCarouselAutoplay}
+                            onResumeCarousel={resumeCarouselAutoplay}
+                            onVideoEnded={handleVideoEnded}
                           />
-                        </div>
-                      </CarouselItem>
+                        </CarouselItem>
+                      )}
+                    </CarouselContent>
+                    <CarouselPrevious className="-left-3 sm:-left-4 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
+                    <CarouselNext className="-right-3 sm:-right-4 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
+                  </Carousel>
+
+                  <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-stone-900/60 dark:bg-black/60 px-2.5 py-1 rounded-full">
+                    {Array.from({ length: totalSlides }).map((_, dotIdx) => (
+                      <button
+                        key={dotIdx}
+                        type="button"
+                        onClick={() => carouselApi?.scrollTo(dotIdx)}
+                        className={`h-1.5 rounded-full transition-all touch-manipulation ${
+                          currentSlide === dotIdx
+                            ? "w-4 bg-amber-400"
+                            : "w-1.5 bg-white/60 hover:bg-white/90"
+                        }`}
+                        aria-label={`Go to slide ${dotIdx + 1}`}
+                      />
                     ))}
-                    {hasVideo && product.videoUrl && (
-                      <CarouselItem key="video" className="pl-0 h-full w-full">
-                        <ProductVideoPlayer
-                          videoUrl={product.videoUrl}
-                          productName={displayName}
-                          isActive={currentSlide === videoSlideIndex}
-                          isSectionActive={isActive}
-                          onPauseCarousel={pauseCarouselAutoplay}
-                          onResumeCarousel={resumeCarouselAutoplay}
-                          onVideoEnded={handleVideoEnded}
-                        />
-                      </CarouselItem>
-                    )}
-                  </CarouselContent>
-                  {/* Touch-Friendly Nav Arrows */}
-                  <CarouselPrevious className="-left-4 sm:-left-5 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
-                  <CarouselNext className="-right-4 sm:-right-5 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
-                </Carousel>
-                {/* Dot Indicators */}
-                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-stone-900/60 dark:bg-black/60 px-2.5 py-1 rounded-full">
-                  {Array.from({ length: totalSlides }).map((_, dotIdx) => (
-                    <button
-                      key={dotIdx}
-                      type="button"
-                      onClick={() => carouselApi?.scrollTo(dotIdx)}
-                      className={`h-1.5 rounded-full transition-all touch-manipulation ${
-                        currentSlide === dotIdx
-                          ? "w-4 bg-amber-400"
-                          : "w-1.5 bg-white/60 hover:bg-white/90"
-                      }`}
-                      aria-label={`Go to slide ${dotIdx + 1}`}
-                    />
-                  ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              /* Single Image Showcase */
-              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
-                <Image
-                  src={product.image}
-                  alt={displayName}
-                  fill
-                  priority={priority}
-                  className="object-cover"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
-                />
-              </div>
-            )}
-
-            {/* Floating Selected Quantity Badge on Image */}
-            {displayUnit > 0 && (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0, y: -6 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                className="absolute top-2.5 right-2.5 z-30 bg-emerald-700/95 dark:bg-emerald-800/95 backdrop-blur-xs text-white px-2.5 py-1 rounded-lg shadow-xs border border-emerald-500/40 flex items-center gap-1.5 select-none pointer-events-none"
-              >
-                <Check className="w-3.5 h-3.5 stroke-[2.5] text-emerald-200" />
-                <div className="flex items-center gap-1 font-bold text-sm">
-                  <SlidingNumber
-                    value={displayUnit}
-                    isBengali={false}
-                    className="font-mono font-bold"
+              ) : (
+                <div className="relative w-full h-full">
+                  <Image
+                    src={product.image}
+                    alt={displayName}
+                    fill
+                    priority={priority}
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                   />
-                  <span className="text-xs font-medium text-emerald-100">
-                    {lang === "bn" ? "টি কার্টে" : "in cart"}
-                  </span>
                 </div>
-              </motion.div>
-            )}
-          </motion.div>
-        </div>
+              )}
 
-        {/* ================= RIGHT COLUMN: Info & Controls ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: false, amount: "some" }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5"
-        >
-          {/* Product Title & Short Bio */}
-          <div className="text-center md:text-left px-1">
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
-              {displayName}
-            </h2>
-            {!selectedVariant.isCombo && displaySummary && (
-              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed font-normal">
-                {displaySummary}
-              </p>
-            )}
+              {/* Floating Selected Quantity Badge on Image */}
+              {displayUnit > 0 && (
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0, y: -6 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 350, damping: 22 }}
+                  className="absolute top-2.5 right-2.5 z-30 bg-emerald-700/95 dark:bg-emerald-800/95 backdrop-blur-xs text-white px-2.5 py-1 rounded-lg shadow-xs border border-emerald-500/40 flex items-center gap-1.5 select-none pointer-events-none"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[2.5] text-emerald-200" />
+                  <div className="flex items-center gap-1 font-bold text-sm">
+                    <SlidingNumber
+                      value={displayUnit}
+                      isBengali={false}
+                      className="font-mono font-bold"
+                    />
+                    <span className="text-xs font-medium text-emerald-100">
+                      {lang === "bn" ? "টি কার্টে" : "in cart"}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </div>
 
-          {/* Control Deck: Variation Selector, Price & Quantity Stepper */}
-          <div
-            data-tour-zone={index === 0 ? "product-controls" : undefined}
-            className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5"
-          >
-            {/* Variation Dropdown */}
-            {sortedVariants.length > 1 && (
-              <div className="space-y-1.5 px-1">
-                <label
-                  htmlFor={`variant-select-${product.id}`}
-                  className="block text-xs sm:text-sm font-semibold text-stone-700 dark:text-stone-300"
-                >
-                  {t.packSizeLabel}
-                </label>
-                <Select
-                  value={selectedVariant.id}
-                  onValueChange={(val) => {
-                    if (!val) return;
-                    const found = sortedVariants.find((v) => v.id === val);
-                    if (found) {
-                      handleSelectVariant(found);
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    id={`variant-select-${product.id}`}
+          {/* ================= RIGHT COLUMN: Info & Controls ================= */}
+          <div className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5">
+            {/* Product Title & Short Bio */}
+            <div className="text-center md:text-left px-1">
+              <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
+                {displayName}
+              </h2>
+              {!selectedVariant.isCombo && displaySummary && (
+                <p className="text-xs sm:text-sm md:text-base text-stone-600 dark:text-stone-300 mt-1 sm:mt-1.5 leading-relaxed font-normal">
+                  {displaySummary}
+                </p>
+              )}
+            </div>
+
+            {/* Control Deck: Visual Variant Chips, Price & Quantity Stepper */}
+            <div
+              data-tour-zone={index === 0 ? "product-controls" : undefined}
+              className="w-full bg-stone-50/90 dark:bg-stone-850/90 border border-stone-200/90 dark:border-stone-800 rounded-2xl p-3 sm:p-4 shadow-2xs space-y-2.5"
+            >
+              {/* Visual Pill Chips for Variant Selection */}
+              {sortedVariants.length > 1 && (
+                <div className="space-y-1.5 px-0.5">
+                  <div className="flex items-center justify-between text-xs sm:text-sm">
+                    <span className="font-bold text-stone-700 dark:text-stone-300">
+                      {t.packSizeLabel}
+                    </span>
+                    <span className="text-[11px] sm:text-xs text-amber-800/90 dark:text-amber-400/90 font-medium">
+                      {lang === "bn" ? "পছন্দের সাইজ চাপুন" : "Tap to choose"}
+                    </span>
+                  </div>
+                  <div
                     data-tour={index === 0 ? "product-variant-select" : undefined}
-                    aria-label={lang === "bn" ? `${displayName}-এর সাইজ বা ওজন নির্বাচন করুন` : `Select weight or size for ${displayName}`}
-                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xs hover:border-amber-700/60 dark:hover:border-stone-600 focus-visible:ring-1 focus-visible:ring-amber-700/50"
+                    className="flex flex-wrap gap-1.5 sm:gap-2"
                   >
-                    <SelectValue>
-                      <span className="flex items-center justify-between w-full pr-1.5">
-                        <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
-                        <span className="flex items-center gap-1.5 ml-2 shrink-0">
-                          {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > selectedVariant.price && (
-                            <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
-                              {formatStorePrice(selectedVariant.compareAtPrice, lang)}
-                            </span>
-                          )}
-                          <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm tabular-nums">
-                            {formatStorePrice(selectedVariant.price, lang)}
-                          </span>
-                        </span>
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-lg z-50 p-1">
                     {sortedVariants.map((v) => {
+                      const isSelected = selectedVariant.id === v.id;
                       const title = lang === "bn" ? v.nameBn || v.name : v.name;
                       return (
-                        <SelectItem
+                        <button
                           key={v.id}
-                          value={v.id}
-                          hideIndicator
-                          className="text-sm sm:text-base font-medium py-2.5 px-3 cursor-pointer focus:bg-stone-100 dark:focus:bg-stone-800 text-stone-900 dark:text-stone-100 rounded-lg my-0.5"
+                          type="button"
+                          onClick={() => handleSelectVariant(v)}
+                          className={`group relative flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all touch-manipulation cursor-pointer border ${
+                            isSelected
+                              ? "bg-amber-800 dark:bg-amber-700 text-white border-amber-900 dark:border-amber-600 shadow-xs ring-2 ring-amber-600/30"
+                              : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750"
+                          }`}
                         >
-                          <span className="flex items-center justify-between w-full gap-3">
-                            <span className="font-semibold truncate">{title}</span>
-                            <span className="flex items-center gap-1.5 shrink-0">
-                              {v.compareAtPrice && v.compareAtPrice > v.price && (
-                                <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
-                                  {formatStorePrice(v.compareAtPrice, lang)}
-                                </span>
-                              )}
-                              <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm tabular-nums">
-                                {formatStorePrice(v.price, lang)}
-                              </span>
-                            </span>
+                          <span>{title}</span>
+                          <span
+                            className={`font-mono text-xs sm:text-sm tabular-nums ${
+                              isSelected
+                                ? "text-amber-100"
+                                : "text-amber-900 dark:text-amber-300 font-bold"
+                            }`}
+                          >
+                            {formatStorePrice(v.price, lang)}
                           </span>
-                        </SelectItem>
+                          {v.compareAtPrice && v.compareAtPrice > v.price && (
+                            <span className={`line-through text-[10px] sm:text-xs font-normal ${isSelected ? "text-amber-200/80" : "text-stone-400 dark:text-stone-500"}`}>
+                              {formatStorePrice(v.compareAtPrice, lang)}
+                            </span>
+                          )}
+                        </button>
                       );
                     })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                  </div>
+                </div>
+              )}
 
-            {/* Combo Contents Breakdown Box */}
-            {selectedVariant.isCombo && selectedVariant.comboItems && selectedVariant.comboItems.length > 0 && (
-              <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/80 border border-amber-200/90 dark:border-stone-700/80 space-y-1.5 text-left">
-                <span className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                  <Boxes className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                  {lang === "bn" ? "প্যাকেজে যা যা থাকছে:" : "What's in this combo:"}
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
-                  {selectedVariant.comboItems.map((ci, idx) => {
-                    const prodName = lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name;
-                    const weightText = formatComboComponentWeight(ci, lang);
-                    const shouldShowWeight = Boolean(
-                      weightText &&
-                      prodName &&
-                      !prodName.toLowerCase().includes(weightText.toLowerCase())
-                    );
-                    const fullTitle = shouldShowWeight ? `${prodName} (${weightText})` : prodName;
+              {/* Combo Contents Breakdown Box */}
+              {selectedVariant.isCombo && selectedVariant.comboItems && selectedVariant.comboItems.length > 0 && (
+                <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/80 border border-amber-200/90 dark:border-stone-700/80 space-y-1.5 text-left">
+                  <span className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                    <Boxes className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    {lang === "bn" ? "প্যাকেজে যা যা থাকছে:" : "What's in this combo:"}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
+                    {selectedVariant.comboItems.map((ci, idx) => {
+                      const prodName = lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name;
+                      const weightText = formatComboComponentWeight(ci, lang);
+                      const shouldShowWeight = Boolean(
+                        weightText &&
+                        prodName &&
+                        !prodName.toLowerCase().includes(weightText.toLowerCase())
+                      );
+                      const fullTitle = shouldShowWeight ? `${prodName} (${weightText})` : prodName;
 
-                    return (
-                      <div
-                        key={idx}
-                        title={fullTitle}
-                        className="flex items-center justify-between gap-1.5 bg-white/70 dark:bg-stone-900/60 px-2 py-1 rounded-md border border-amber-100 dark:border-stone-700 min-w-0"
-                      >
-                        <div className="flex items-center gap-1.5 truncate min-w-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                          <span className="font-semibold text-foreground truncate">
-                            {prodName}
-                            {shouldShowWeight && (
-                              <span className="font-medium text-stone-600 dark:text-stone-400 ml-1">
-                                ({weightText})
-                              </span>
-                            )}
+                      return (
+                        <div
+                          key={idx}
+                          title={fullTitle}
+                          className="flex items-center justify-between gap-1.5 bg-white/80 dark:bg-stone-900/60 px-2 py-1 rounded-md border border-amber-100 dark:border-stone-700 min-w-0"
+                        >
+                          <div className="flex items-center gap-1.5 truncate min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span className="font-semibold text-foreground truncate">
+                              {prodName}
+                              {shouldShowWeight && (
+                                <span className="font-medium text-stone-600 dark:text-stone-400 ml-1">
+                                  ({weightText})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <span className="text-amber-800 dark:text-amber-300 font-bold text-sm shrink-0 ml-1">
+                            ×{ci.quantity}
                           </span>
                         </div>
-                        <span className="text-amber-800 dark:text-amber-300 font-bold text-sm shrink-0 ml-1">
-                          ×{ci.quantity}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Price section: unit price is hidden when product has multiple variants because variation dropdown already displays unit price */}
-            {(sortedVariants.length <= 1 || displayUnit > 0) && (
-              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
-                {/* Unit Price (only shown for single-variant products) */}
-                {sortedVariants.length <= 1 && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
-                    <span className="text-stone-600 dark:text-stone-400 font-semibold">
-                      {displayUnit > 0
-                        ? lang === "bn"
-                          ? "একক দর:"
-                          : "Unit Price:"
-                        : lang === "bn"
-                          ? "মূল্য:"
-                          : "Price:"}
-                    </span>
-                    <span
-                      className={`font-mono tabular-nums ${
-                        displayUnit > 0
-                          ? "text-sm sm:text-base font-bold text-amber-950 dark:text-amber-200"
-                          : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
-                      }`}
-                    >
-                      {formatStorePrice(unitPrice, lang)}
-                    </span>
-                    {variantWeightText && (
-                      <span className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-semibold">
-                        / {variantWeightText}
-                      </span>
-                    )}
-                    {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                      <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
-                        {formatStorePrice(selectedVariant.compareAtPrice, lang)}
-                      </span>
-                    )}
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Total Price: Hidden when quantity is 0 */}
+              {/* Price section: unit price and dynamic total price */}
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 px-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
+                  <span className="text-stone-600 dark:text-stone-400 font-semibold">
+                    {displayUnit > 0
+                      ? lang === "bn"
+                        ? "একক দর:"
+                        : "Unit Price:"
+                      : lang === "bn"
+                        ? "মূল্য:"
+                        : "Price:"}
+                  </span>
+                  <span
+                    className={`font-mono tabular-nums ${
+                      displayUnit > 0
+                        ? "text-sm sm:text-base font-bold text-amber-950 dark:text-amber-200"
+                        : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
+                    }`}
+                  >
+                    {formatStorePrice(unitPrice, lang)}
+                  </span>
+                  {variantWeightText && (
+                    <span className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-semibold">
+                      / {variantWeightText}
+                    </span>
+                  )}
+                  {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
+                    <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
+                      {formatStorePrice(selectedVariant.compareAtPrice, lang)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Total Price: Animated when quantity > 0 */}
                 <AnimatePresence>
                   {displayUnit > 0 && (
                     <motion.div
                       initial={{ opacity: 0, height: 0, y: -4 }}
                       animate={{ opacity: 1, height: "auto", y: 0 }}
                       exit={{ opacity: 0, height: 0, y: -4 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      transition={{ duration: 0.22, ease: "easeOut" }}
                       className="flex items-baseline gap-1.5 overflow-hidden"
                     >
-                      <span className="text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300">
-                        {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
+                      <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
+                        {lang === "bn" ? "মোট:" : "Total:"}
                       </span>
-                      <span className="font-mono text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 tabular-nums">
+                      <span className="font-mono text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100 tabular-nums">
                         {formatStorePrice(unitPrice * displayUnit, lang)}
                       </span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
+                      <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
                         ({lang === "bn" ? `মোট ${((effectiveVariantWeightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(effectiveVariantWeightKg || 1) * displayUnit} kg`})
                       </span>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-            )}
 
-            {selectedVariant.isCombo ? (
-              /* Dedicated Buy Now Button for Combo Packages */
-              <div className="pt-1.5 space-y-2">
-                <button
-                  type="button"
-                  data-tour={index === 0 ? "product-combo-buy" : undefined}
-                  onClick={handleBuyNow}
-                  className="w-full h-12 rounded-xl bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-base shadow-sm flex items-center justify-center gap-2.5 transition-colors touch-manipulation cursor-pointer group"
-                >
-                  <ShoppingBag className="w-5 h-5" />
-                  <span>{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {/* Quantity Stepper with Minus, Counter, Plus */}
-                <div className="relative">
-                  <div className="w-full rounded-xl p-1.5 border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800/70 flex items-center justify-between gap-2 shadow-xs">
-                    {/* Left: Minus Button */}
-                    {displayUnit === 0 ? (
-                      <button
-                        type="button"
-                        disabled
-                        aria-disabled="true"
-                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-stone-200/50 dark:bg-stone-800 text-stone-400 dark:text-stone-600 flex items-center justify-center font-bold text-lg shrink-0 cursor-not-allowed select-none"
-                        aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
-                      >
-                        <Minus className="w-4 h-4 stroke-[2.5]" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleSetUnit(currentUnit - 1)}
-                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-50 active:bg-stone-100 flex items-center justify-center text-stone-800 dark:text-stone-100 font-bold text-lg transition-colors touch-manipulation cursor-pointer shrink-0 border border-stone-200/80 dark:border-stone-600 shadow-xs"
-                        aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
-                      >
-                        <Minus className="w-4 h-4 stroke-[2.5]" />
-                      </button>
-                    )}
-
-                    {/* Middle: Large Quantity Display & Instruction Text */}
-                    <div className="flex-1 flex flex-col items-center justify-center text-center px-1 min-w-0">
-                      <div ref={bagRef} className="relative flex items-center justify-center">
-                        {/* Large Quantity Box with SlidingNumber */}
-                        <div
-                          className={`px-4 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[54px] sm:min-w-[64px] ${
-                            displayUnit > 0
-                              ? "bg-amber-800 text-white border-amber-900"
-                              : "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 border-stone-200 dark:border-stone-600"
-                          }`}
+              {selectedVariant.isCombo ? (
+                /* Dedicated Buy Now Button for Combo Packages */
+                <div className="pt-1 space-y-2">
+                  <button
+                    type="button"
+                    data-tour={index === 0 ? "product-combo-buy" : undefined}
+                    onClick={handleBuyNow}
+                    className="w-full h-11 sm:h-12 rounded-xl bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-sm sm:text-base shadow-sm flex items-center justify-center gap-2.5 transition-colors touch-manipulation cursor-pointer group"
+                  >
+                    <ShoppingBag className="w-5 h-5" />
+                    <span>{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {/* Quantity Stepper with Minus, Counter, Plus */}
+                  <div className="relative">
+                    <div className="w-full rounded-xl p-1.5 border border-stone-200 dark:border-stone-700 bg-stone-100/90 dark:bg-stone-800/70 flex items-center justify-between gap-2 shadow-2xs">
+                      {/* Left: Minus Button */}
+                      {displayUnit === 0 ? (
+                        <button
+                          type="button"
+                          disabled
+                          aria-disabled="true"
+                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-stone-200/50 dark:bg-stone-800 text-stone-400 dark:text-stone-600 flex items-center justify-center font-bold text-lg shrink-0 cursor-not-allowed select-none"
+                          aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                         >
-                          <SlidingNumber
-                            value={displayUnit}
-                            isBengali={false}
-                            className="text-xl sm:text-2xl font-bold font-mono tracking-tight flex items-center justify-center tabular-nums"
-                          />
+                          <Minus className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetUnit(currentUnit - 1)}
+                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-50 active:bg-stone-100 flex items-center justify-center text-stone-800 dark:text-stone-100 font-bold text-lg transition-colors touch-manipulation cursor-pointer shrink-0 border border-stone-200/80 dark:border-stone-600 shadow-2xs"
+                          aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
+                        >
+                          <Minus className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                      )}
+
+                      {/* Middle: Large Quantity Display */}
+                      <div className="flex-1 flex flex-col items-center justify-center text-center px-1 min-w-0">
+                        <div ref={bagRef} className="relative flex items-center justify-center">
+                          <div
+                            className={`px-4 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[54px] sm:min-w-[64px] ${
+                              displayUnit > 0
+                                ? "bg-amber-800 text-white border-amber-900"
+                                : "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 border-stone-200 dark:border-stone-600"
+                            }`}
+                          >
+                            <SlidingNumber
+                              value={displayUnit}
+                              isBengali={false}
+                              className="text-xl sm:text-2xl font-bold font-mono tracking-tight flex items-center justify-center tabular-nums"
+                            />
+                          </div>
                         </div>
                       </div>
+
+                      {/* Right: Plus Button */}
+                      <button
+                        ref={plusRef}
+                        data-tour={index === 0 ? "product-plus-btn" : undefined}
+                        type="button"
+                        onClick={handleAddQuantityWithAnimation}
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white flex items-center justify-center font-bold text-lg shadow-sm transition-colors touch-manipulation cursor-pointer shrink-0"
+                        aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
+                  <div className="flex items-center justify-between gap-1 pt-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-medium text-stone-500 dark:text-stone-400 mr-0.5">
+                        {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick:"}
+                      </span>
+                      {[1, 2, 3, 5, 10].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          suppressHydrationWarning
+                          onClick={() => handlePresetClick(preset)}
+                          aria-label={lang === "bn" ? `${preset}টি নির্বাচন করুন` : `Select ${preset}`}
+                          aria-pressed={displayUnit === preset}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors touch-manipulation cursor-pointer ${
+                            displayUnit === preset
+                              ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-2xs"
+                              : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Right: Plus Button */}
-                    <button
-                      ref={plusRef}
-                      data-tour={index === 0 ? "product-plus-btn" : undefined}
-                      type="button"
-                      onClick={handleAddQuantityWithAnimation}
-                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white flex items-center justify-center font-bold text-lg shadow-sm transition-colors touch-manipulation cursor-pointer shrink-0"
-                      aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
-                    >
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                    </button>
+                    {/* Direct Buy Now / Order Button if unit > 0 */}
+                    {displayUnit > 0 && (
+                      <motion.button
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        type="button"
+                        onClick={onScrollToOrder || handleBuyNow}
+                        className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-colors touch-manipulation cursor-pointer shrink-0"
+                      >
+                        <span>{lang === "bn" ? "অর্ডার করুন" : "Order"}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </motion.button>
+                    )}
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
-                <div className="flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
-                  <span className="text-xs sm:text-sm font-medium text-stone-500 dark:text-stone-400 mr-1">
-                    {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
-                  </span>
-                  {[1, 2, 3, 5, 10].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      suppressHydrationWarning
-                      onClick={() => handlePresetClick(preset)}
-                      aria-label={lang === "bn" ? `${preset}টি নির্বাচন করুন` : `Select ${preset}`}
-                      aria-pressed={displayUnit === preset}
-                      className={`px-2.5 py-1 rounded-md text-xs sm:text-sm font-semibold border transition-colors touch-manipulation cursor-pointer ${
-                        displayUnit === preset
-                          ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-xs"
-                          : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750"
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Bottom Scroll Cue */}
+            <div className="text-center md:text-left pt-1">
+              {index < totalProducts - 1 ? (
+                <button
+                  type="button"
+                  onClick={onScrollToNext}
+                  className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-400 hover:text-amber-900 transition-colors touch-manipulation cursor-pointer group"
+                >
+                  <span>{t.scrollHint}</span>
+                  <motion.span
+                    animate={{ y: [0, 4, 0] }}
+                    transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                    className="inline-flex items-center justify-center"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </motion.span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onScrollToOrder}
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-400 hover:text-amber-900 transition-colors touch-manipulation cursor-pointer group"
+                >
+                  <span>{lang === "bn" ? "অর্ডার সম্পন্ন করতে নিচে যান" : "Proceed down to order"}</span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              )}
+            </div>
           </div>
-
-          {/* Bottom Scroll Hint / Guarantee */}
-          <div className="text-center md:text-left pt-0.5">
-            {index < totalProducts - 1 ? (
-              <motion.div
-                animate={{ y: [0, 4, 0] }}
-                transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-amber-800/80 dark:text-amber-400/80 cursor-pointer"
-              >
-                <span>{t.scrollHint}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </motion.div>
-            ) : (
-              <div className="text-xs sm:text-sm text-amber-900/70 dark:text-amber-400/70 font-medium">
-                {t.guaranteeBadge}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
-  </motion.div>
-</section>
-);
+  );
 }
