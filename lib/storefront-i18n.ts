@@ -12,6 +12,96 @@ export function formatStorePrice(amount: number, lang: StorefrontLang = "bn"): s
   return `৳ ${Math.round(amount).toLocaleString("en-US")}`;
 }
 
+export interface UnitItemLike {
+  isCombo?: boolean | null;
+  is_combo?: boolean | null;
+  weightGrams?: number | null;
+  weight_grams?: number | null;
+  weightKg?: number | null;
+  weight_kg?: number | null;
+  netQuantity?: number | string | null;
+  net_quantity?: number | string | null;
+  netUnit?: string | null;
+  net_unit?: string | null;
+  variantName?: string | null;
+  variant_name?: string | null;
+  variantNameBn?: string | null;
+  variant_name_bn?: string | null;
+  productName?: string | null;
+  product_name?: string | null;
+}
+
+export function parseGramsFromText(text?: string | null): number | undefined {
+  if (!text || typeof text !== "string") return undefined;
+  const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|k\.g|kgs|কেজি|কিলো)/i);
+  if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
+  const gMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:g|gm|gms|gram|grams|গ্রাম)(?![a-z])/i);
+  if (gMatch) return Math.round(parseFloat(gMatch[1]));
+  return undefined;
+}
+
+export function formatStoreItemUnit(item: UnitItemLike, lang: StorefrontLang = "bn"): string {
+  const isCombo =
+    item.isCombo ||
+    item.is_combo ||
+    (item.variantName && item.variantName.toLowerCase().includes("combo")) ||
+    (item.variant_name && item.variant_name.toLowerCase().includes("combo")) ||
+    (item.productName && item.productName.toLowerCase().includes("combo")) ||
+    (item.product_name && item.product_name.toLowerCase().includes("combo")) ||
+    (item.variantNameBn && item.variantNameBn.includes("কম্বো")) ||
+    (item.variant_name_bn && item.variant_name_bn.includes("কম্বো"));
+
+  if (isCombo) {
+    return lang === "bn" ? "কম্বো" : "combo";
+  }
+
+  // 1. Direct weight grams
+  const grams =
+    (typeof item.weightGrams === "number" && item.weightGrams > 0 ? item.weightGrams : undefined) ??
+    (typeof item.weight_grams === "number" && item.weight_grams > 0 ? item.weight_grams : undefined);
+
+  if (grams && grams > 0) {
+    if (grams >= 1000) {
+      const kg = grams / 1000;
+      return lang === "bn" ? `${kg.toLocaleString("bn-BD")} কেজি` : `${kg} kg`;
+    }
+    return lang === "bn" ? `${grams.toLocaleString("bn-BD")} গ্রাম` : `${grams}g`;
+  }
+
+  // 2. Direct weight kg
+  const kg =
+    (typeof item.weightKg === "number" && item.weightKg > 0 ? item.weightKg : undefined) ??
+    (typeof item.weight_kg === "number" && item.weight_kg > 0 ? item.weight_kg : undefined);
+
+  if (kg && kg > 0) {
+    if (kg < 1) {
+      const g = Math.round(kg * 1000);
+      return lang === "bn" ? `${g.toLocaleString("bn-BD")} গ্রাম` : `${g}g`;
+    }
+    return lang === "bn" ? `${kg.toLocaleString("bn-BD")} কেজি` : `${kg} kg`;
+  }
+
+  // 3. Try parsing from variant name or product name
+  const parsedFromText =
+    parseGramsFromText(item.variantName) ??
+    parseGramsFromText(item.variant_name) ??
+    parseGramsFromText(item.variantNameBn) ??
+    parseGramsFromText(item.variant_name_bn) ??
+    parseGramsFromText(item.productName) ??
+    parseGramsFromText(item.product_name);
+
+  if (parsedFromText && parsedFromText > 0) {
+    if (parsedFromText >= 1000) {
+      const parsedKg = parsedFromText / 1000;
+      return lang === "bn" ? `${parsedKg.toLocaleString("bn-BD")} কেজি` : `${parsedKg} kg`;
+    }
+    return lang === "bn" ? `${parsedFromText.toLocaleString("bn-BD")} গ্রাম` : `${parsedFromText}g`;
+  }
+
+  // 4. Fallback to 1 kg default
+  return lang === "bn" ? "১ কেজি" : "1 kg";
+}
+
 export const STOREFRONT_TEXT = {
   bn: {
     storeName: "Gramayon",
@@ -22,7 +112,7 @@ export const STOREFRONT_TEXT = {
     authenticityBadge: "১০০% খাঁটি ও নির্ভেজাল",
     heritageBadge: "গাছিদের সংগ্রহ করা তাজা রস",
     guaranteeBadge: "পণ্য দেখে মূল্য পরিশোধের সুবিধা",
-    packSizeLabel: "পরিমাণ বা সাইজ পছন্দ করুন:",
+    packSizeLabel: "ওজন বা পরিমাণ পছন্দ করুন:",
     quantityLabel: "কয়টি নিবেন:",
     priceLabel: "মূল্য:",
     orderNowBtn: "অর্ডার করুন",
@@ -196,7 +286,7 @@ export const STOREFRONT_TEXT = {
     authenticityBadge: "100% Pure & Natural",
     heritageBadge: "Artisanal Village Harvest",
     guaranteeBadge: "Inspect before paying COD",
-    packSizeLabel: "Select Pack Size:",
+    packSizeLabel: "Select Weight or Size:",
     quantityLabel: "Quantity:",
     priceLabel: "Price:",
     orderNowBtn: "Order Now",

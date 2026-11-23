@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "motion/react";
 import { ShoppingBag, Truck, ShieldCheck, CheckCircle2, Package } from "lucide-react";
 import type { ParcelTrackingData } from "@/types/tracking";
-import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { formatStorePrice, toBnNumber, formatStoreItemUnit } from "@/lib/storefront-i18n";
 import { cn } from "@/lib/utils";
 
 interface OrderCartDetailsCardProps {
@@ -121,7 +121,7 @@ export function OrderCartDetailsCard({
                             <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
                               {formatStorePrice(item.unitPrice, lang)}
                             </span>
-                            <span className="text-[10px] text-stone-500"> / {lang === "bn" ? "প্যাক" : "pack"}</span>
+                            <span className="text-[10px] text-stone-500"> / {formatStoreItemUnit(item, lang)}</span>
                           </div>
 
                           {/* Quantity Pill */}
@@ -132,7 +132,7 @@ export function OrderCartDetailsCard({
                                 {lang === "bn" ? toBnNumber(item.quantity) : item.quantity}
                               </span>
                               <span className="text-[10px] text-stone-500 font-normal">
-                                {lang === "bn" ? "প্যাক" : "pack"}
+                                {lang === "bn" ? "টি" : "items"}
                               </span>
                             </span>
                           </div>

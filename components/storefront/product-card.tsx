@@ -164,8 +164,8 @@ export function ProductCard({
     variants.find((v) => v.isDefault) ||
     sortedVariants[0] || {
       id: "var-default",
-      name: "1 Pack",
-      nameBn: "১ প্যাক",
+      name: "1 kg",
+      nameBn: "১ কেজি",
       price: 700,
       isDefault: true,
     };
@@ -614,6 +614,9 @@ export function ProductCard({
   })();
 
   const variantWeightText = (() => {
+    if (selectedVariant.isCombo) {
+      return lang === "bn" ? "কম্বো" : "combo";
+    }
     if (effectiveVariantWeightGrams && effectiveVariantWeightGrams > 0) {
       if (effectiveVariantWeightGrams >= 1000) {
         const kg = effectiveVariantWeightGrams / 1000;
@@ -834,7 +837,7 @@ export function ProductCard({
                   <SelectTrigger
                     id={`variant-select-${product.id}`}
                     data-tour={index === 0 ? "product-variant-select" : undefined}
-                    aria-label={lang === "bn" ? `${displayName}-এর প্যাক সাইজ নির্বাচন করুন` : `Select pack size for ${displayName}`}
+                    aria-label={lang === "bn" ? `${displayName}-এর সাইজ বা ওজন নির্বাচন করুন` : `Select weight or size for ${displayName}`}
                     className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xs hover:border-amber-700/60 dark:hover:border-stone-600 focus-visible:ring-1 focus-visible:ring-amber-700/50"
                   >
                     <SelectValue>
@@ -1059,7 +1062,7 @@ export function ProductCard({
                       type="button"
                       suppressHydrationWarning
                       onClick={() => handlePresetClick(preset)}
-                      aria-label={lang === "bn" ? `${preset}টি প্যাক নির্বাচন করুন` : `Select ${preset} packs`}
+                      aria-label={lang === "bn" ? `${preset}টি নির্বাচন করুন` : `Select ${preset}`}
                       aria-pressed={displayUnit === preset}
                       className={`px-2.5 py-1 rounded-md text-xs sm:text-sm font-semibold border transition-colors touch-manipulation cursor-pointer ${
                         displayUnit === preset

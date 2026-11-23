@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck } from "lucide-react";
-import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
+import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, formatStoreItemUnit } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
   selectCartItems,
@@ -263,7 +263,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                                 {formatStorePrice(itemLineTotal, lang)}
                               </div>
                               <div className="text-[10px] text-stone-500 dark:text-stone-400">
-                                {formatStorePrice(item.unitPrice, lang)} / {lang === "bn" ? "প্রতিটি" : "each"}
+                                {formatStorePrice(item.unitPrice, lang)} / {formatStoreItemUnit(item, lang)}
                               </div>
                             </div>
                           </div>

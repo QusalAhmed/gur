@@ -37,6 +37,7 @@ import {
   StorefrontLang,
   STOREFRONT_TEXT,
   formatStorePrice,
+  formatStoreItemUnit,
 } from "@/lib/storefront-i18n";
 import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useAppDispatch, useAppSelector, useAppStore } from "@/lib/redux/hooks";
@@ -434,7 +435,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
                 <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
                   {formatStorePrice(item.unitPrice, lang)}
                 </span>
-                <span className="text-[10px] text-stone-500"> / {lang === "bn" ? "প্যাক" : "pack"}</span>
+                <span className="text-[10px] text-stone-500"> / {formatStoreItemUnit(item, lang)}</span>
               </div>
 
               {/* Delete Button (Displayed above the quantity section) */}
@@ -827,7 +828,7 @@ return (
                 <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 mt-2 leading-relaxed font-medium">
                   {lang === "bn"
                     ? "কোনো সমস্যা নেই! শুধু আপনার মোবাইল নম্বর লিখে নিচের বাটনে চাপ দিন। আমাদের প্রতিনিধি সরাসরি ফোন করে আপনার পছন্দের গুড় ও পরিমাণ জেনে নিবেন।"
-                    : "No problem! Just enter your mobile number and submit. Our team will call you to confirm your desired molasses and pack size."}
+                    : "No problem! Just enter your mobile number and submit. Our team will call you to confirm your desired molasses and weight/quantity."}
                 </p>
 
                 <button

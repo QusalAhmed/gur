@@ -95,11 +95,11 @@ export function buildProductIntroSteps(params: {
     const n = stepPrefix(steps.length, lang);
     steps.push({
       selector: '#products [data-tour="product-variant-select"]',
-      title: lang === "bn" ? `${n}. প্যাক বা সাইজ বেছে নিন` : `${n}. Choose Pack Size`,
+      title: lang === "bn" ? `${n}. ওজন বা সাইজ বেছে নিন` : `${n}. Choose Weight or Size`,
       intro:
         lang === "bn"
-          ? "এখানে ট্যাপ করে আপনার পছন্দের ওজন বা প্যাক সাইজ নির্বাচন করুন।"
-          : "Tap here to pick your preferred weight or pack size before adding to your cart.",
+          ? "এখানে ট্যাপ করে আপনার পছন্দের ওজন নির্বাচন করুন।"
+          : "Tap here to pick your preferred weight before adding to your cart.",
       position: "bottom",
     });
   }
@@ -125,8 +125,8 @@ export function buildProductIntroSteps(params: {
           : `${n}. Click + to Add to Cart`,
       intro:
         lang === "bn"
-          ? "পণ্যটি কার্টে যোগ করতে চিহ্নিত + বাটনে ক্লিক করুন। প্রতিবার ক্লিকে ১টি করে প্যাক যোগ হবে।"
-          : "Click this highlighted + button to add 1 pack to your cart.",
+          ? "পণ্যটি কার্টে যোগ করতে চিহ্নিত + বাটনে ক্লিক করুন। প্রতিবার ক্লিকে ১টি করে যোগ হবে।"
+          : "Click this highlighted + button to add 1 to your cart.",
       position: "top",
       highlightClass: "gur-intro-plus-highlight",
     });

@@ -27,7 +27,7 @@ import {
   FileText,
   ExternalLink,
 } from "lucide-react";
-import { formatStorePrice, toBnNumber } from "@/lib/storefront-i18n";
+import { formatStorePrice, toBnNumber, formatStoreItemUnit } from "@/lib/storefront-i18n";
 import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useOrder } from "@/hooks/use-order";
 import { useStorefrontProducts } from "@/hooks/use-storefront-products";
@@ -720,7 +720,7 @@ function OrderConfirmedContent() {
                                       <span className="font-mono font-bold text-stone-900 dark:text-stone-200">
                                         {formatStorePrice(item.unit_price, "bn")}
                                       </span>
-                                      <span className="text-[10px] text-stone-500"> / প্যাক</span>
+                                      <span className="text-[10px] text-stone-500"> / {formatStoreItemUnit(item, "bn")}</span>
                                     </div>
 
                                     {/* Quantity displayed below the price */}
@@ -730,7 +730,7 @@ function OrderConfirmedContent() {
                                         <span className="font-mono font-black text-amber-950 dark:text-amber-200">
                                           {item.quantity}
                                         </span>
-                                        <span className="text-[10px] text-stone-500 font-normal">প্যাক</span>
+                                        <span className="text-[10px] text-stone-500 font-normal">টি</span>
                                       </span>
                                     </div>
                                   </div>
@@ -743,7 +743,7 @@ function OrderConfirmedContent() {
                                   {formatStorePrice(total, "bn")}
                                 </span>
                                 <span className="block font-mono text-[10.5px] font-bold text-stone-600 dark:text-stone-300 mt-0.5">
-                                  {item.quantity} প্যাক
+                                  {item.quantity} টি
                                 </span>
                                 <span className="block font-mono text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
                                   ({formatStorePrice(item.unit_price, "bn")} × {item.quantity})
