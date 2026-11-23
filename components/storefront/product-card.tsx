@@ -843,8 +843,15 @@ export function ProductCard({
                     <SelectValue>
                       <span className="flex items-center justify-between w-full pr-1.5">
                         <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
-                        <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm ml-2 shrink-0 tabular-nums">
-                          {formatStorePrice(selectedVariant.price, lang)}
+                        <span className="flex items-center gap-1.5 ml-2 shrink-0">
+                          {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > selectedVariant.price && (
+                            <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
+                              {formatStorePrice(selectedVariant.compareAtPrice, lang)}
+                            </span>
+                          )}
+                          <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm tabular-nums">
+                            {formatStorePrice(selectedVariant.price, lang)}
+                          </span>
                         </span>
                       </span>
                     </SelectValue>
@@ -861,8 +868,15 @@ export function ProductCard({
                         >
                           <span className="flex items-center justify-between w-full gap-3">
                             <span className="font-semibold truncate">{title}</span>
-                            <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm shrink-0 tabular-nums">
-                              {formatStorePrice(v.price, lang)}
+                            <span className="flex items-center gap-1.5 shrink-0">
+                              {v.compareAtPrice && v.compareAtPrice > v.price && (
+                                <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
+                                  {formatStorePrice(v.compareAtPrice, lang)}
+                                </span>
+                              )}
+                              <span className="font-mono text-amber-900 dark:text-amber-300 font-bold text-sm tabular-nums">
+                                {formatStorePrice(v.price, lang)}
+                              </span>
                             </span>
                           </span>
                         </SelectItem>
@@ -918,63 +932,67 @@ export function ProductCard({
               </div>
             )}
 
-            {/* Price (displayed below the variation dropdown) */}
-            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
-              {/* Unit Price */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
-                <span className="text-stone-600 dark:text-stone-400 font-semibold">
-                  {displayUnit > 0
-                    ? lang === "bn"
-                      ? "একক দর:"
-                      : "Unit Price:"
-                    : lang === "bn"
-                      ? "মূল্য:"
-                      : "Price:"}
-                </span>
-                <span
-                  className={`font-mono tabular-nums ${
-                    displayUnit > 0
-                      ? "text-sm sm:text-base font-bold text-amber-950 dark:text-amber-200"
-                      : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
-                  }`}
-                >
-                  {formatStorePrice(unitPrice, lang)}
-                </span>
-                {variantWeightText && (
-                  <span className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-semibold">
-                    / {variantWeightText}
-                  </span>
+            {/* Price section: unit price is hidden when product has multiple variants because variation dropdown already displays unit price */}
+            {(sortedVariants.length <= 1 || displayUnit > 0) && (
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
+                {/* Unit Price (only shown for single-variant products) */}
+                {sortedVariants.length <= 1 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
+                    <span className="text-stone-600 dark:text-stone-400 font-semibold">
+                      {displayUnit > 0
+                        ? lang === "bn"
+                          ? "একক দর:"
+                          : "Unit Price:"
+                        : lang === "bn"
+                          ? "মূল্য:"
+                          : "Price:"}
+                    </span>
+                    <span
+                      className={`font-mono tabular-nums ${
+                        displayUnit > 0
+                          ? "text-sm sm:text-base font-bold text-amber-950 dark:text-amber-200"
+                          : "text-base sm:text-xl font-bold text-amber-950 dark:text-amber-100"
+                      }`}
+                    >
+                      {formatStorePrice(unitPrice, lang)}
+                    </span>
+                    {variantWeightText && (
+                      <span className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 font-semibold">
+                        / {variantWeightText}
+                      </span>
+                    )}
+                    {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
+                      <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
+                        {formatStorePrice(selectedVariant.compareAtPrice, lang)}
+                      </span>
+                    )}
+                  </div>
                 )}
-                {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                  <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
-                    {formatStorePrice(selectedVariant.compareAtPrice, lang)}
-                  </span>
-                )}
-              </div>
 
-              {/* Total Price: Hidden when quantity is 0 */}
-              <AnimatePresence>
-                {displayUnit > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, y: -4 }}
-                    animate={{ opacity: 1, height: "auto", y: 0 }}
-                    exit={{ opacity: 0, height: 0, y: -4 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
-                    className="flex items-baseline gap-1.5 overflow-hidden"
-                  >
-                    <span className="text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300">
-                      {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
-                    </span>
-                    <span className="font-mono text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 tabular-nums">
-                      {formatStorePrice(unitPrice * displayUnit, lang)}
-                    </span>
-                    <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
-                      ({lang === "bn" ? `মোট ${((effectiveVariantWeightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(effectiveVariantWeightKg || 1) * displayUnit} kg`})
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                {/* Total Price: Hidden when quantity is 0 */}
+                <AnimatePresence>
+                  {displayUnit > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, y: -4 }}
+                      animate={{ opacity: 1, height: "auto", y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -4 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="flex items-baseline gap-1.5 overflow-hidden"
+                    >
+                      <span className="text-sm sm:text-base font-bold text-stone-700 dark:text-stone-300">
+                        {lang === "bn" ? "মোট মূল্য:" : "Total Price:"}
+                      </span>
+                      <span className="font-mono text-lg sm:text-2xl font-bold text-amber-950 dark:text-amber-100 tabular-nums">
+                        {formatStorePrice(unitPrice * displayUnit, lang)}
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">
+                        ({lang === "bn" ? `মোট ${((effectiveVariantWeightKg || 1) * displayUnit).toLocaleString("bn-BD")} কেজি` : `Total ${(effectiveVariantWeightKg || 1) * displayUnit} kg`})
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
 
             {selectedVariant.isCombo ? (
               /* Dedicated Buy Now Button for Combo Packages */
