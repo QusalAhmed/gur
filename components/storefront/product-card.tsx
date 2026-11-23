@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Minus, Check, ChevronDown, Award, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
+import { Plus, Minus, Check, ChevronDown, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import {
@@ -638,32 +638,27 @@ export function ProductCard({
       data-section-index={index + 1}
       className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-y-auto overflow-x-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300"
     >
+      {/* Floating Product Number Tag at Top Left Corner of Product Card */}
+      <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">
+        <div className="max-w-5xl lg:max-w-6xl mx-auto flex items-center justify-start">
+          <div className="inline-flex items-center gap-1.5 bg-stone-100/95 dark:bg-stone-850/95 backdrop-blur-md border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-700 dark:text-stone-300 shadow-2xs select-none">
+            <span>
+              {t.productCounter}{" "}
+              <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
+                {index + 1}
+              </span>{" "}
+              / {totalProducts}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Safe Centering Wrapper */}
       <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
         {/* Main Two-Column Container for Desktop & Tablet, Single Column on Mobile */}
         <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 pt-1 pb-0 sm:py-2">
         {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
         <div className="w-full flex flex-col items-center justify-center">
-          {/* Top Meta Header on Mobile Only (< md) */}
-          {!selectedVariant.isCombo && (
-            <div className="md:hidden w-full max-w-md flex items-center justify-between text-xs font-medium text-stone-600 dark:text-stone-400 mb-2">
-              <div className="inline-flex items-center gap-1.5 bg-stone-100 dark:bg-stone-850 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
-                <span>
-                  {t.productCounter}{" "}
-                  <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
-                    {index + 1}
-                  </span>{" "}
-                  / {totalProducts}
-                </span>
-              </div>
-
-              <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
-                <Award className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                <span>{t.authenticityBadge}</span>
-              </div>
-            </div>
-          )}
-
           {/* Full-width Responsive Showcase Container */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -778,26 +773,6 @@ export function ProductCard({
           transition={{ duration: 0.35, ease: "easeOut" }}
           className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5"
         >
-          {/* Top Meta Header on Desktop & Tab (>= md) */}
-          {!selectedVariant.isCombo && (
-            <div className="hidden md:flex items-center justify-between text-xs font-medium text-stone-600 dark:text-stone-400">
-              <div className="inline-flex items-center gap-1.5 bg-stone-100 dark:bg-stone-850 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
-                <span>
-                  {t.productCounter}{" "}
-                  <span className="font-semibold text-stone-900 dark:text-stone-100 tabular-nums">
-                    {index + 1}
-                  </span>{" "}
-                  / {totalProducts}
-                </span>
-              </div>
-
-              <div className="inline-flex items-center gap-1 bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border border-stone-200/80 dark:border-stone-800 px-2.5 py-1 rounded-lg text-xs">
-                <Award className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                <span>{t.authenticityBadge}</span>
-              </div>
-            </div>
-          )}
-
           {/* Product Title & Short Bio */}
           <div className="text-center md:text-left px-1">
             <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
