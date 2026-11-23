@@ -204,7 +204,7 @@ export function ProductCard({
   );
   const pointerEvents = useTransform(
     scrollYProgress,
-    (val) => (val >= 0.35 && val <= 0.65 ? "auto" : "none")
+    (val) => (val >= 0.25 && val <= 0.75 ? "auto" : "none")
   );
 
   const cardOpacity = !hasMounted || prefersReducedMotion ? 1 : scrollOpacity;

@@ -142,7 +142,7 @@
   }
 
   html:has([data-storefront-root]) {
-    scroll-snap-type: y mandatory;
+    scroll-snap-type: y proximity;
   }
 
   .font-bangla {
