@@ -137,7 +137,8 @@
   }
 
   html {
-    @apply font-sans;
+    @apply font-sans scroll-smooth;
+    scroll-snap-type: y mandatory;
   }
 
   .font-bangla {

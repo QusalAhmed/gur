@@ -636,7 +636,7 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-y-auto overflow-x-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300"
+      className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-y-auto overflow-x-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300"
     >
       {/* Floating Product Number Tag at Top Left Corner of Product Card */}
       <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">

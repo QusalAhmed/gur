@@ -482,12 +482,13 @@ export function useStorefrontIntro({
           return;
         }
 
-        const height = container.clientHeight || window.innerHeight || 1;
-        const targetTop = activeSectionIndex * height;
-        const distance = Math.abs(container.scrollTop - targetTop);
+        const targetEl = container.children[activeSectionIndex] as HTMLElement | null;
+        const targetTop = targetEl ? targetEl.offsetTop : activeSectionIndex * (window.innerHeight || 1);
+        const currentTop = typeof window !== "undefined" && window.scrollY !== undefined ? window.scrollY : container.scrollTop;
+        const distance = Math.abs(currentTop - targetTop);
         const elapsed = performance.now() - startTime;
 
-        if (distance <= 6 || elapsed >= 850) {
+        if (distance <= 8 || elapsed >= 850) {
           settleTimer = setTimeout(() => {
             void launchTour();
           }, 580);

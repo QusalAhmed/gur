@@ -109,50 +109,55 @@ export function ProductShowcase({
 
   // Track active full-screen section on scroll
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
     const handleScroll = () => {
-      const scrollPos = container.scrollTop;
-      const height = container.clientHeight || window.innerHeight;
-      const idx = Math.round(scrollPos / height);
-      setActiveSectionIndex(Math.max(0, Math.min(totalSections - 1, idx)));
+      const container = containerRef.current;
+      if (!container) return;
+      const sections = Array.from(container.children) as HTMLElement[];
+      if (!sections.length) return;
+
+      const viewportCenter = window.scrollY + window.innerHeight / 2;
+      let closestIdx = 0;
+      let minDistance = Infinity;
+
+      sections.forEach((sec, idx) => {
+        const center = sec.offsetTop + sec.offsetHeight / 2;
+        const dist = Math.abs(center - viewportCenter);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestIdx = idx;
+        }
+      });
+
+      setActiveSectionIndex(Math.max(0, Math.min(totalSections - 1, closestIdx)));
     };
 
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [totalSections]);
 
   // Smooth scroll to a specific section (0: Overview, 1..N: Products, N+1: Checkout)
   const scrollToSection = (sectionIndex: number) => {
     const container = containerRef.current;
     if (!container) return;
-    const height = container.clientHeight || window.innerHeight;
-    container.scrollTo({ top: sectionIndex * height, behavior: "smooth" });
+    const targetEl = container.children[sectionIndex] as HTMLElement | null;
+    if (targetEl) {
+      window.scrollTo({ top: targetEl.offsetTop, behavior: "smooth" });
+    } else {
+      const height = window.innerHeight;
+      window.scrollTo({ top: sectionIndex * height, behavior: "smooth" });
+    }
     if (sectionIndex === 0) {
-      const overviewEl = container.querySelector("#storefront-overview") || container.querySelector("#intro");
+      const overviewEl = container.querySelector("#storefront-overview") as HTMLElement | null;
       if (overviewEl) {
         overviewEl.scrollTo({ top: 0, behavior: "smooth" });
       }
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   // Smooth scroll to an element inside Section 0 (e.g. Why Buy From Us) or Contact Section
   const handleScrollToElement = (elementId: string) => {
-    if (elementId === "contact") {
-      scrollToSection(checkoutSectionIndex);
-      setTimeout(() => {
-        const targetEl = document.getElementById("contact");
-        if (targetEl) {
-          targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 120);
-      return;
-    }
-    const container = containerRef.current;
-    if (container && activeSectionIndex !== 0) {
-      scrollToSection(0);
-    }
     const targetEl = document.getElementById(elementId);
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -190,8 +195,12 @@ export function ProductShowcase({
       if (productEl) {
         productEl.scrollIntoView({ behavior: "instant", block: "start" });
       } else {
-        const height = container.clientHeight || window.innerHeight;
-        container.scrollTo({ top: productsStartIndex * height, behavior: "instant" as ScrollBehavior });
+        const targetEl = container.children[productsStartIndex] as HTMLElement | null;
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: "instant", block: "start" });
+        } else {
+          window.scrollTo({ top: productsStartIndex * window.innerHeight, behavior: "instant" as ScrollBehavior });
+        }
       }
       setActiveSectionIndex(productsStartIndex);
       hasAutoScrolledRef.current = true;
@@ -248,13 +257,11 @@ export function ProductShowcase({
         }
       }
 
-      const height = container.clientHeight || window.innerHeight;
-      const currentIdx = Math.round(container.scrollTop / height);
-
+      const currentIdx = activeSectionIndex;
       if (e.deltaY > 0 && currentIdx < totalSections - 1) {
         e.preventDefault();
         isScrolling = true;
-        container.scrollTo({ top: (currentIdx + 1) * height, behavior: "smooth" });
+        scrollToSection(currentIdx + 1);
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
           isScrolling = false;
@@ -262,7 +269,7 @@ export function ProductShowcase({
       } else if (e.deltaY < 0 && currentIdx > 0) {
         e.preventDefault();
         isScrolling = true;
-        container.scrollTo({ top: (currentIdx - 1) * height, behavior: "smooth" });
+        scrollToSection(currentIdx - 1);
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
           isScrolling = false;
@@ -270,18 +277,15 @@ export function ProductShowcase({
       }
     };
 
-    container.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
-      container.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("wheel", handleWheel);
       clearTimeout(scrollTimeout);
     };
-  }, [totalSections, isTourActiveRef]);
+  }, [totalSections, activeSectionIndex, isTourActiveRef]);
 
   // Keyboard Up/Down arrow keys support for changing full-screen products
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTourActiveRef.current) return;
       // Don't intercept if user is typing in an input
@@ -289,39 +293,23 @@ export function ProductShowcase({
         return;
       }
 
-      const height = container.clientHeight || window.innerHeight;
-      const currentIdx = Math.round(container.scrollTop / height);
-
-      // If user is inside any scrollable section (overview, product card, checkout), let keyboard scroll the inner content first
-      const currentSectionEl = container.children[currentIdx] as HTMLElement | null;
-      if (currentSectionEl && currentSectionEl.scrollHeight > currentSectionEl.clientHeight) {
-        const atTop = currentSectionEl.scrollTop <= 4;
-        const atBottom =
-          currentSectionEl.scrollHeight - currentSectionEl.clientHeight - currentSectionEl.scrollTop <= 10;
-        if ((e.key === "ArrowDown" || e.key === "PageDown") && !atBottom) {
-          return;
-        }
-        if ((e.key === "ArrowUp" || e.key === "PageUp") && !atTop) {
-          return;
-        }
-      }
-
+      const currentIdx = activeSectionIndex;
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         if (currentIdx < totalSections - 1) {
           e.preventDefault();
-          container.scrollTo({ top: (currentIdx + 1) * height, behavior: "smooth" });
+          scrollToSection(currentIdx + 1);
         }
       } else if (e.key === "ArrowUp" || e.key === "PageUp") {
         if (currentIdx > 0) {
           e.preventDefault();
-          container.scrollTo({ top: (currentIdx - 1) * height, behavior: "smooth" });
+          scrollToSection(currentIdx - 1);
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [totalSections, isTourActiveRef]);
+  }, [totalSections, activeSectionIndex, isTourActiveRef]);
 
   const handleCheckoutFromCart = () => {
     scrollToSection(checkoutSectionIndex);
@@ -336,7 +324,7 @@ export function ProductShowcase({
   };
 
   return (
-    <div className="relative w-full h-[100dvh] overflow-hidden bg-amber-50 dark:bg-stone-950 font-sans select-none">
+    <div className="relative w-full min-h-screen bg-amber-50 dark:bg-stone-950 font-sans select-none">
       {/* Sticky Header: Desktop / Tablet Only (Hidden on mobile phones to maximize vertical space) */}
       <header className="fixed top-0 left-0 right-0 z-40 h-14 sm:h-16 px-3 sm:px-6 md:px-8 bg-[#faf8f5]/95 dark:bg-[#141210]/95 backdrop-blur-md border-b border-stone-200/90 dark:border-stone-800 hidden sm:flex items-center justify-between shadow-xs select-none">
         {/* Logo & Store Title */}
@@ -554,14 +542,13 @@ export function ProductShowcase({
       {/* Main Full-Screen Snap-Scroll Container */}
       <main
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth touch-pan-y overscroll-y-contain flex flex-col"
-        style={{ scrollSnapType: "y mandatory" }}
+        className="w-full flex flex-col"
       >
         {/* Section 0: Brand & Value Proposition (Intro & Why Choose Us) under the same scrolling area */}
         <section
           id="storefront-overview"
           data-section-index="0"
-          className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+          className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
         >
 
           {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
@@ -620,7 +607,7 @@ export function ProductShowcase({
         {isLoading ? (
           <ProductCardSkeleton />
         ) : products.length === 0 ? (
-          <section className="h-[100dvh] max-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
+          <section className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
             <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-stone-800 flex items-center justify-center mb-4 shadow-md text-amber-700 dark:text-amber-400">
               <Package className="w-10 h-10" />
             </div>
