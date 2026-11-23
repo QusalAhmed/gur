@@ -1492,7 +1492,8 @@ export function OrdersClient() {
       sanitizeCourierName(selectedCourier) || sanitizeCourierName(effectiveStatusOrder.courier_name),
       cancelReason,
       effectiveStatusOrder.address?.division,
-      effectiveStatusOrder.address?.district
+      effectiveStatusOrder.address?.district,
+      effectiveStatusOrder.address?.postal_code
     );
   }, [isStatusOpen, effectiveStatusOrder, newStatus, selectedCourier, cancelReason]);
 
@@ -1503,6 +1504,7 @@ export function OrdersClient() {
         statusError.code === "CUSTOMER_NAME_REQUIRED" ||
         statusError.code === "CUSTOMER_PHONE_REQUIRED" ||
         statusError.code === "CUSTOMER_ADDRESS_REQUIRED" ||
+        statusError.code === "POSTAL_CODE_REQUIRED" ||
         statusError.code === "GEO_LOCATION_REQUIRED" ||
         statusError.code === "ORDER_ITEMS_REQUIRED" ||
         statusError.code === "COURIER_REQUIRED" ||
@@ -1566,7 +1568,8 @@ export function OrdersClient() {
         effectiveCourier,
         bulkTargetStatus === "cancelled" || bulkTargetStatus === "returned" ? bulkStatusNote : undefined,
         o.address?.division,
-        o.address?.district
+        o.address?.district,
+        o.address?.postal_code
       );
       if (val.valid) {
         eligible.push(o);

@@ -84,6 +84,7 @@ import {
   orderEmailSchema,
   orderDivisionSchema,
   orderDistrictSchema,
+  orderPostalCodeSchema,
   orderAddressLineSchema,
   orderShippingTotalSchema,
   orderDiscountTotalSchema,
@@ -535,6 +536,7 @@ export function OrderFormDialog({
       email: (mode === "edit" && order?.email ? order.email : "") || "",
       division: (mode === "edit" && order?.address?.division ? order.address.division : "") || "",
       district: (mode === "edit" && order?.address?.district ? order.address.district : "") || "",
+      postal_code: (mode === "edit" ? (order?.address?.postal_code || (order?.address as any)?.zip || "") : "") || "",
       address_line: (mode === "edit" && order?.address?.address_line ? order.address.address_line : "") || "",
       channel: (mode === "edit" ? (order?.channel || "") : "") as Order["channel"],
       method: (mode === "edit" ? (order?.method || "cod") : "cod") as Order["method"],
@@ -688,6 +690,7 @@ export function OrderFormDialog({
             address: {
               division: valid.division || "",
               district: valid.district || "",
+              postal_code: valid.postal_code || "",
               address_line: valid.address_line || "",
               recipient_name: effectiveRecipientName,
               phone: effectiveShippingPhone,
@@ -831,6 +834,7 @@ export function OrderFormDialog({
               ...(order.address || {}),
               division: valid.division || "",
               district: valid.district || "",
+              postal_code: valid.postal_code || "",
               address_line: valid.address_line || "",
               recipient_name: effectiveRecipientName,
               phone: effectiveShippingPhone,
@@ -953,6 +957,7 @@ export function OrderFormDialog({
           email: order.email || "",
           division: order.address?.division || "",
           district: order.address?.district || "",
+          postal_code: order.address?.postal_code || (order.address as any)?.zip || "",
           address_line: order.address?.address_line || "",
           channel: order.channel || ("" as Order["channel"]),
           method: order.method || "cod",
@@ -988,6 +993,7 @@ export function OrderFormDialog({
           email: "",
           division: "",
           district: "",
+          postal_code: "",
           address_line: "",
           channel: "" as Order["channel"],
           method: "cod",
@@ -1634,8 +1640,8 @@ export function OrderFormDialog({
                   </form.Field>
                 </div>
 
-                {/* Row 3: Geo Division & District */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Row 3: Geo Division & District & Zip Code */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <form.Field
                     name="division"
                     validators={{
@@ -1779,6 +1785,67 @@ export function OrderFormDialog({
                         </FormFieldItem>
                       );
                     }}
+                  </form.Field>
+
+                  <form.Field
+                    name="postal_code"
+                    validators={{
+                      onChangeListenTo: ["status"],
+                      onBlurListenTo: ["status"],
+                      onChange: ({ value }) => {
+                        const status = form.getFieldValue("status");
+                        const trimmed = (value || "").trim();
+                        if (!isFieldRequiredForStatus("postal_code", status) && !trimmed) return undefined;
+                        if (isFieldRequiredForStatus("postal_code", status) && !trimmed) {
+                          return "Zip code is required";
+                        }
+                        return validateWithZod(orderPostalCodeSchema)({ value });
+                      },
+                      onBlur: ({ value }) => {
+                        const status = form.getFieldValue("status");
+                        const trimmed = (value || "").trim();
+                        if (!isFieldRequiredForStatus("postal_code", status) && !trimmed) return undefined;
+                        if (isFieldRequiredForStatus("postal_code", status) && !trimmed) {
+                          return "Zip code is required";
+                        }
+                        return validateWithZod(orderPostalCodeSchema)({ value });
+                      },
+                      onSubmit: ({ value }) => {
+                        const status = form.getFieldValue("status");
+                        const trimmed = (value || "").trim();
+                        if (!isFieldRequiredForStatus("postal_code", status) && !trimmed) return undefined;
+                        if (isFieldRequiredForStatus("postal_code", status) && !trimmed) {
+                          return "Zip code is required";
+                        }
+                        return validateWithZod(orderPostalCodeSchema)({ value });
+                      },
+                    }}
+                  >
+                    {(field) => (
+                      <FormFieldItem className="flex flex-col">
+                        <form.Subscribe selector={(state) => state.values.status}>
+                          {(currentStatus) => (
+                            <FormFieldLabel
+                              htmlFor="order_form_postal_code"
+                              required={isFieldRequiredForStatus("postal_code", currentStatus)}
+                            >
+                              Zip Code
+                            </FormFieldLabel>
+                          )}
+                        </form.Subscribe>
+                        <Input
+                          id="order_form_postal_code"
+                          name={field.name}
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          placeholder="e.g. 1205"
+                          maxLength={4}
+                          className="h-9 text-xs bg-background"
+                        />
+                        <FormFieldError errors={field.state.meta.errors} />
+                      </FormFieldItem>
+                    )}
                   </form.Field>
                 </div>
 
@@ -1957,6 +2024,7 @@ export function OrderFormDialog({
                                 clearIfEmpty("address_line");
                                 clearIfEmpty("division");
                                 clearIfEmpty("district");
+                                clearIfEmpty("postal_code");
                                 clearIfEmpty("courier_name");
                                 clearIfEmpty("cancel_reason");
                               }
@@ -1964,6 +2032,7 @@ export function OrderFormDialog({
                               form.validateField("address_line", "change");
                               form.validateField("division", "change");
                               form.validateField("district", "change");
+                              form.validateField("postal_code", "change");
                               form.validateField("courier_name", "change");
                               form.validateField("cancel_reason", "change");
                               form.validateField("shipping_total", "change");

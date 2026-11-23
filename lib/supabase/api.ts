@@ -407,6 +407,7 @@ export function formatDbOrderRecord(data: any): Order {
       division: data.shipping_address?.division || "",
       district: data.shipping_address?.district || "",
       address_line: data.shipping_address?.address_line || "",
+      postal_code: data.shipping_address?.postal_code || data.shipping_address?.zip || "",
       recipient_name: recipName,
       phone: shipPhone,
     },

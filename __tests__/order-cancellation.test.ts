@@ -118,6 +118,59 @@ describe("Order Cancellation Requirements & Safeguards", () => {
       expect(result.code).toBe("GEO_LOCATION_REQUIRED");
       expect(result.reason).toContain("Delivery division and district are required");
     });
+
+    it("requires a valid 4-digit zip / postal code before transitioning to confirmed or further", () => {
+      // 1. Missing postal code
+      const missingZipResult = validateOrderStatusTransition(
+        "pending",
+        "confirmed",
+        "Customer Name",
+        "01712345678",
+        "House 1, Road 2",
+        1,
+        null,
+        undefined,
+        "Dhaka",
+        "Dhaka",
+        "" // missing
+      );
+      expect(missingZipResult.valid).toBe(false);
+      expect(missingZipResult.code).toBe("POSTAL_CODE_REQUIRED");
+      expect(missingZipResult.reason).toContain("A valid 4-digit zip/postal code is required");
+
+      // 2. Invalid non-4-digit postal code (e.g. 3 digits or letters)
+      const invalidZipResult = validateOrderStatusTransition(
+        "pending",
+        "confirmed",
+        "Customer Name",
+        "01712345678",
+        "House 1, Road 2",
+        1,
+        null,
+        undefined,
+        "Dhaka",
+        "Dhaka",
+        "123" // 3 digits
+      );
+      expect(invalidZipResult.valid).toBe(false);
+      expect(invalidZipResult.code).toBe("POSTAL_CODE_REQUIRED");
+
+      // 3. Valid 4-digit postal code
+      const validZipResult = validateOrderStatusTransition(
+        "pending",
+        "confirmed",
+        "Customer Name",
+        "01712345678",
+        "House 1, Road 2",
+        1,
+        null,
+        undefined,
+        "Dhaka",
+        "Dhaka",
+        "1205" // valid
+      );
+      expect(validZipResult.valid).toBe(true);
+    });
   });
 
   describe("isFieldRequiredForStatus", () => {
@@ -137,6 +190,15 @@ describe("Order Cancellation Requirements & Safeguards", () => {
     it("still requires phone for active/confirmed statuses", () => {
       expect(isFieldRequiredForStatus("phone", "confirmed")).toBe(true);
       expect(isFieldRequiredForStatus("phone", "processing")).toBe(true);
+    });
+
+    it("requires postal_code for confirmed and active statuses, but not for pending, incomplete, or cancelled", () => {
+      expect(isFieldRequiredForStatus("postal_code", "confirmed")).toBe(true);
+      expect(isFieldRequiredForStatus("postal_code", "processing")).toBe(true);
+      expect(isFieldRequiredForStatus("postal_code", "shipped")).toBe(true);
+      expect(isFieldRequiredForStatus("postal_code", "pending")).toBe(false);
+      expect(isFieldRequiredForStatus("postal_code", "incomplete_order")).toBe(false);
+      expect(isFieldRequiredForStatus("postal_code", "cancelled")).toBe(false);
     });
   });
 

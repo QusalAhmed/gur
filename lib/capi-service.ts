@@ -1163,6 +1163,7 @@ export async function triggerCapiPurchaseInternal(
       ln: lastName || null,
       ct: address.district ? String(address.district).trim().toLowerCase() : null,
       st: address.division ? String(address.division).trim().toLowerCase() : null,
+      zp: address.postal_code || address.zip ? String(address.postal_code || address.zip).trim().toLowerCase() : null,
       country: "bd",
       fbp,
       fbc,

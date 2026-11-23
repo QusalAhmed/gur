@@ -137,6 +137,7 @@ export async function persistOrderUpdateInternal(
           division: updatedOrder.address.division || "",
           district: updatedOrder.address.district || "",
           address_line: updatedOrder.address.address_line || "",
+          postal_code: updatedOrder.address.postal_code || "",
           phone: normalizedPhone || updatedOrder.phone || "",
           alternative_phone:
             normalizedAltPhone || updatedOrder.alternative_phone || "",

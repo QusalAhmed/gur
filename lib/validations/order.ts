@@ -117,6 +117,21 @@ export const orderDistrictSchema = z
   .default("");
 
 /**
+ * Postal / Zip Code: 4-digit numeric code (e.g. 1205).
+ */
+export const orderPostalCodeSchema = z
+  .string()
+  .transform((v) => (v || "").trim())
+  .pipe(
+    z
+      .string()
+      .regex(/^\d{4}$/, "Zip code must be a 4-digit postal code (e.g. 1205)")
+      .or(z.literal(""))
+  )
+  .optional()
+  .default("");
+
+/**
  * Street / Delivery Address: Required, minimum 3 characters.
  */
 export const orderAddressLineSchema = z
@@ -306,7 +321,7 @@ export const orderCourierNameSchema = z
  * Helper to determine if a field is mandatory based on order status
  */
 export function isFieldRequiredForStatus(
-  fieldName: "phone" | "customer" | "items" | "channel" | "method" | "division" | "district" | "address_line" | "shipping_total" | "courier_name" | "cancel_reason",
+  fieldName: "phone" | "customer" | "items" | "channel" | "method" | "division" | "district" | "address_line" | "postal_code" | "shipping_total" | "courier_name" | "cancel_reason",
   status: string
 ): boolean {
   if (status === "cancelled") {
@@ -327,6 +342,7 @@ export function isFieldRequiredForStatus(
     fieldName === "division" ||
     fieldName === "district" ||
     fieldName === "address_line" ||
+    fieldName === "postal_code" ||
     fieldName === "shipping_total"
   ) {
     return true;
@@ -356,6 +372,7 @@ export const orderFormSchema = z
     shipping_phone: orderShippingPhoneSchema,
     division: z.string().transform((v) => (v || "").trim()).default(""),
     district: z.string().transform((v) => (v || "").trim()).default(""),
+    postal_code: orderPostalCodeSchema,
     address_line: z.string().transform((v) => (v || "").trim()).default(""),
     channel: z.string().transform((v) => (v || "").trim()).default(""),
     method: orderMethodSchema,
@@ -487,6 +504,14 @@ export const orderFormSchema = z
           code: z.ZodIssueCode.custom,
           message: "Delivery district is required before confirming order",
           path: ["district"],
+        });
+      }
+
+      if (!data.postal_code || !/^\d{4}$/.test(data.postal_code.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A valid 4-digit zip/postal code is required before confirming order (e.g. 1205)",
+          path: ["postal_code"],
         });
       }
 

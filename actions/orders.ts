@@ -1025,6 +1025,12 @@ async function updateOrderStatusWithSession(
       dbRow?.shipping_address?.district ||
       ""
     ).trim();
+    const orderPostalCode = (
+      resolvedOrder.address?.postal_code ||
+      dbRow?.shipping_address?.postal_code ||
+      dbRow?.shipping_address?.zip ||
+      ""
+    ).trim();
     if (newStatus !== "cancelled" && (!orderDivision || !orderDistrict)) {
       return {
         success: false,
@@ -1042,7 +1048,8 @@ async function updateOrderStatusWithSession(
       courierName || resolvedOrder.courier_name,
       cancelReason,
       orderDivision,
-      orderDistrict
+      orderDistrict,
+      orderPostalCode
     );
 
     if (!val.valid) {
@@ -1585,6 +1592,7 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
         division: savedOrder.address?.division || "",
         district: savedOrder.address?.district || "",
         address_line: savedOrder.address?.address_line || "",
+        postal_code: savedOrder.address?.postal_code || "",
         phone: normalizedShippingPhone || normalizedPhone || "",
         alternative_phone: normalizedAltPhone || "",
         recipient_name: recipientName || customerName || "",

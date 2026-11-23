@@ -1109,7 +1109,12 @@ export function OrderDetailsSheet({
 
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">
-                    {[order.address?.district, order.address?.division].filter(Boolean).join(", ") || (
+                    {[
+                      [order.address?.district, order.address?.division].filter(Boolean).join(", "),
+                      order.address?.postal_code ? `Zip: ${order.address.postal_code}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ") || (
                       <span className="text-muted-foreground italic font-normal">District / Division not specified</span>
                     )}
                   </p>

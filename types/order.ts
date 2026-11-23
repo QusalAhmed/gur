@@ -77,6 +77,7 @@ export interface Order {
     division: string;
     district: string;
     address_line: string;
+    postal_code?: string;
     recipient_name?: string;
     phone?: string;
   };

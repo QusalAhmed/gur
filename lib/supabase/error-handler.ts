@@ -170,6 +170,25 @@ export function parseDatabaseError(error: any): ParsedDatabaseError {
       };
     }
 
+    // 3c-2. Zip / Postal Code Required
+    if (
+      lowerMsg.includes("postal_code_required") ||
+      lowerMsg.includes("zip/postal code is required") ||
+      lowerMsg.includes("zip code is required") ||
+      lowerMsg.includes("postal code is required")
+    ) {
+      return {
+        title: "Zip Code Required",
+        message: "Cannot advance order to Confirmed without a valid 4-digit zip code.",
+        resolution: "Click 'Edit Order' to enter the 4-digit zip/postal code, then retry confirming.",
+        code: "POSTAL_CODE_REQUIRED",
+        details: rawMessage,
+        isRlsError: false,
+        isWorkflowError: true,
+        originalError: error,
+      };
+    }
+
     // 3d. Order Items Required
     if (
       lowerMsg.includes("order_items_required") ||
@@ -457,7 +476,8 @@ export function validateOrderStatusTransition(
   courierName?: string | null,
   cancelReason?: string | null,
   division?: string | null,
-  district?: string | null
+  district?: string | null,
+  postalCode?: string | null
 ): TransitionValidationResult {
   const normalizedCurrent = currentStatus === "partially_delivered" ? "delivered" : currentStatus;
   const normalizedTarget = targetStatus === "partially_delivered" ? "delivered" : targetStatus;
@@ -581,6 +601,16 @@ export function validateOrderStatusTransition(
         valid: false,
         code: "CUSTOMER_ADDRESS_REQUIRED",
         reason: "Street delivery address is required before confirming order (minimum 3 characters).",
+      };
+    }
+
+    // 6e. Valid 4-digit zip / postal code required
+    const trimmedPostal = (postalCode || "").trim();
+    if (!/^\d{4}$/.test(trimmedPostal)) {
+      return {
+        valid: false,
+        code: "POSTAL_CODE_REQUIRED",
+        reason: "A valid 4-digit zip/postal code is required before confirming order. Please edit the order to provide the zip code.",
       };
     }
   }
