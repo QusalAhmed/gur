@@ -482,9 +482,10 @@ export function useStorefrontIntro({
           return;
         }
 
-        const height = container.clientHeight || window.innerHeight || 1;
+        const height = container.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 1) || 1;
         const targetTop = activeSectionIndex * height;
-        const distance = Math.abs(container.scrollTop - targetTop);
+        const currentScroll = container.scrollTop || (typeof window !== "undefined" ? window.scrollY : 0);
+        const distance = Math.abs(currentScroll - targetTop);
         const elapsed = performance.now() - startTime;
 
         if (distance <= 6 || elapsed >= 850) {
