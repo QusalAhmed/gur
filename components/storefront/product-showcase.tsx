@@ -92,6 +92,8 @@ export function ProductShowcase({
     return 0;
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const activeSectionRef = useRef(activeSectionIndex);
+  useEffect(() => { activeSectionRef.current = activeSectionIndex; }, [activeSectionIndex]);
 
   const t = STOREFRONT_TEXT[lang];
   const displayStoreName = storeName || t.storeName;
@@ -233,11 +235,11 @@ export function ProductShowcase({
         return;
       }
 
-      // If user is hovering over multi-screen sections (Overview or Checkout),
-      // allow normal native scrolling within that section until it reaches the edge
+      // If user is hovering over an element that has vertical scroll (e.g. Overview section or inner scrollables),
+      // allow normal native scrolling within the section until it reaches the edge
       const target = e.target as HTMLElement;
-      const scrollableParent = target?.closest("#storefront-overview, #checkout") as HTMLElement | null;
-      if (scrollableParent) {
+      const scrollableParent = target?.closest(".overflow-y-auto") as HTMLElement | null;
+      if (scrollableParent && scrollableParent !== container) {
         const canScroll = scrollableParent.scrollHeight > scrollableParent.clientHeight;
         if (canScroll) {
           const atTop = scrollableParent.scrollTop <= 4;
@@ -257,20 +259,7 @@ export function ProductShowcase({
         }
       }
 
-      // Calculate current index directly from live DOM to prevent stale state bounces
-      const sections = Array.from(container.children) as HTMLElement[];
-      const viewportCenter = window.scrollY + window.innerHeight / 2;
-      let currentIdx = 0;
-      let minDistance = Infinity;
-      sections.forEach((sec, idx) => {
-        const center = sec.offsetTop + sec.offsetHeight / 2;
-        const dist = Math.abs(center - viewportCenter);
-        if (dist < minDistance) {
-          minDistance = dist;
-          currentIdx = idx;
-        }
-      });
-
+      const currentIdx = activeSectionRef.current;
       if (e.deltaY > 0 && currentIdx < totalSections - 1) {
         e.preventDefault();
         isScrolling = true;
@@ -306,21 +295,7 @@ export function ProductShowcase({
         return;
       }
 
-      const container = containerRef.current;
-      if (!container) return;
-      const sections = Array.from(container.children) as HTMLElement[];
-      const viewportCenter = window.scrollY + window.innerHeight / 2;
-      let currentIdx = 0;
-      let minDistance = Infinity;
-      sections.forEach((sec, idx) => {
-        const center = sec.offsetTop + sec.offsetHeight / 2;
-        const dist = Math.abs(center - viewportCenter);
-        if (dist < minDistance) {
-          minDistance = dist;
-          currentIdx = idx;
-        }
-      });
-
+      const currentIdx = activeSectionRef.current;
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         if (currentIdx < totalSections - 1) {
           e.preventDefault();
