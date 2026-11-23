@@ -33,10 +33,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf8f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#141210" },
-  ],
+  themeColor: "#451a03",
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -91,10 +88,10 @@ export default function RootLayout({
   return (
     <html
       lang="bn"
-      className={`${roboto.variable} ${anekBangla.variable} min-h-full antialiased`}
+      className={`${roboto.variable} ${anekBangla.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans overflow-x-clip selection:bg-amber-200 selection:text-amber-900">
+      <body className="min-h-full flex flex-col font-sans overflow-x-hidden selection:bg-amber-200 selection:text-amber-900">
         <Suspense fallback={null}>
           <SeoGlobalScripts />
         </Suspense>

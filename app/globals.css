@@ -138,11 +138,6 @@
 
   html {
     @apply font-sans;
-    scroll-behavior: smooth;
-  }
-
-  html:has([data-storefront-root]) {
-    scroll-snap-type: y proximity;
   }
 
   .font-bangla {
