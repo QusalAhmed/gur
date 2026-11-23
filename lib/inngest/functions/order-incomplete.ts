@@ -63,7 +63,12 @@ export const orderIncompleteFunction = inngest.createFunction(
         emailRes = await sendAdminOrderNotification({
           orderId,
           orderNumber: displayOrderNumber,
-          customerName: data.customerName || orderRow.customer_name || "Customer (Lead)",
+          customerName:
+            (data.customerName && data.customerName !== "Customer")
+              ? data.customerName
+              : (orderRow.customer_name && orderRow.customer_name !== "Customer")
+              ? orderRow.customer_name
+              : undefined,
           customerPhone: phone,
           deliveryZone: data.deliveryZone,
           address: data.address,

@@ -504,7 +504,10 @@ export async function placeStorefrontOrderAction(
           p_order_id: validatedOrderId,
           p_status: targetStatus,
           p_customer_phone: normalizedPhone,
-          p_customer_name: payload.customerName !== undefined ? (payload.customerName.trim() || null) : null,
+          p_customer_name:
+            payload.customerName !== undefined
+              ? (payload.customerName.trim() && payload.customerName.trim() !== "Customer" ? payload.customerName.trim() : null)
+              : null,
           p_delivery_zone: payload.deliveryZone || null,
           p_address_line: payload.addressLine !== undefined ? (payload.addressLine.trim() || null) : null,
           p_customer_note: payload.customerNote !== undefined ? (payload.customerNote.trim() || null) : null,
@@ -578,7 +581,12 @@ export async function placeStorefrontOrderAction(
               payload: {
                 orderId: rpcData.order_id,
                 orderNumber: rpcData.order_number,
-                customerName: rpcData.customer_name || payload.customerName || "Customer",
+                customerName:
+                  rpcData.customer_name && rpcData.customer_name !== "Customer"
+                    ? rpcData.customer_name
+                    : payload.customerName && payload.customerName.trim() !== "Customer"
+                    ? payload.customerName.trim()
+                    : undefined,
                 customerPhone: rpcData.phone || normalizedPhone,
                 deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
                 address: {
@@ -615,7 +623,12 @@ export async function placeStorefrontOrderAction(
               payload: {
                 orderId: rpcData.order_id,
                 orderNumber: rpcData.order_number,
-                customerName: rpcData.customer_name || payload.customerName || undefined,
+                customerName:
+                  rpcData.customer_name && rpcData.customer_name !== "Customer"
+                    ? rpcData.customer_name
+                    : payload.customerName && payload.customerName.trim() !== "Customer"
+                    ? payload.customerName.trim()
+                    : undefined,
                 customerPhone: rpcData.phone || normalizedPhone,
                 deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
                 address: {
@@ -653,7 +666,10 @@ export async function placeStorefrontOrderAction(
             grandTotal: Number(rpcData.grand_total) || 0,
             subtotal: Number(rpcData.subtotal) || 0,
             shippingTotal: Number(rpcData.shipping_total) || 0,
-            customerName: rpcData.customer_name || undefined,
+            customerName:
+              rpcData.customer_name && rpcData.customer_name !== "Customer"
+                ? rpcData.customer_name
+                : undefined,
             phone: rpcData.phone,
             deliveryZone: rpcData.delivery_zone || payload.deliveryZone,
             eventId: payload.eventId,
@@ -765,7 +781,10 @@ export async function placeStorefrontOrderAction(
                 grandTotal: Number(foundById.grand_total) || 0,
                 subtotal: Number(foundById.subtotal) || 0,
                 shippingTotal: Number(foundById.shipping_total) || 0,
-                customerName: foundById.customer_name || undefined,
+                customerName:
+                  foundById.customer_name && foundById.customer_name !== "Customer"
+                    ? foundById.customer_name
+                    : undefined,
                 phone: normalizedPhone,
                 deliveryZone: savedDeliveryZone,
                 eventId: payload.eventId,
@@ -825,8 +844,8 @@ export async function placeStorefrontOrderAction(
       // Strict Customer Data SSOT: only store what customer input. Never inject system defaults.
       const resolvedCustomerName =
         payload.customerName !== undefined
-          ? payload.customerName.trim() || null
-          : existingOrder?.customer_name || null;
+          ? (payload.customerName.trim() && payload.customerName.trim() !== "Customer" ? payload.customerName.trim() : null)
+          : (existingOrder?.customer_name && existingOrder.customer_name !== "Customer" ? existingOrder.customer_name : null);
 
       const resolvedAddressLine =
         payload.addressLine !== undefined
@@ -1134,7 +1153,7 @@ export async function placeStorefrontOrderAction(
           createNotificationInternal({
             type: "order_created",
             title: "New order placed",
-            message: `${orderNumber} · ৳${cleanGrandTotal} from ${resolvedCustomerName || normalizedPhone || "Customer"}`,
+            message: `${orderNumber} · ৳${cleanGrandTotal} from ${resolvedCustomerName || normalizedPhone}`,
             data: {
               order_id: orderDbId,
               order_number: orderNumber,

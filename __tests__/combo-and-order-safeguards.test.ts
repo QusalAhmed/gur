@@ -8,12 +8,16 @@ const { mockClient, mockState } = vi.hoisted(() => {
     mockInquiries: any[];
     mockOrdersError: Error | null;
     updatedInquiries: any[];
+    insertedOrders: any[];
+    updatedOrders: any[];
     rpcMock: ((name: string, args: any) => Promise<{ data: any; error: any }>) | null;
   } = {
     mockOrders: [],
     mockInquiries: [],
     mockOrdersError: null,
     updatedInquiries: [],
+    insertedOrders: [],
+    updatedOrders: [],
     rpcMock: null,
   };
 
@@ -34,9 +38,11 @@ const { mockClient, mockState } = vi.hoisted(() => {
       limit: () => builder,
       update: (data: any) => {
         mockState.updatedInquiries.push(data);
+        if (table === "orders") mockState.updatedOrders.push(data);
         return builder;
       },
       insert: (data: any) => {
+        if (table === "orders") mockState.insertedOrders.push(data);
         const insertedRow = {
           id: "new-generated-order-id",
           order_number: "GUR-2611-9999",
@@ -1195,6 +1201,8 @@ describe("sendCapiContactAction - Session Authorization Decisions", () => {
     mockState.mockInquiries = [];
     mockState.mockOrdersError = null;
     mockState.updatedInquiries = [];
+    mockState.insertedOrders = [];
+    mockState.updatedOrders = [];
     mockState.rpcMock = null;
   });
 
@@ -1300,6 +1308,8 @@ describe("placeStorefrontOrderAction - Multiple Orders Per Phone & Owned Order U
     mockState.mockInquiries = [];
     mockState.mockOrdersError = null;
     mockState.updatedInquiries = [];
+    mockState.insertedOrders = [];
+    mockState.updatedOrders = [];
     mockState.rpcMock = null;
   });
 
@@ -1437,6 +1447,63 @@ describe("placeStorefrontOrderAction - Multiple Orders Per Phone & Owned Order U
     expect(result.grandTotal).toBe(630);
     expect(result.deliveryZone).toBe("outside_dhaka");
   });
+
+  it("does not automatically set customer name to anything if customer left it blank (empty string)", async () => {
+    const result = await placeStorefrontOrderAction({
+      customerPhone: "01712345678",
+      customerName: "",
+      deliveryZone: "inside_dhaka",
+      status: "pending",
+      items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 1, unitPrice: 500 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.customerName).toBeUndefined();
+    expect(mockState.insertedOrders.length).toBe(1);
+    expect(mockState.insertedOrders[0].customer_name).toBeNull();
+    expect(mockState.insertedOrders[0].shipping_address.recipient_name).toBe("");
+  });
+
+  it("does not automatically set customer name to anything if customer left customerName undefined", async () => {
+    const result = await placeStorefrontOrderAction({
+      customerPhone: "01712345678",
+      deliveryZone: "inside_dhaka",
+      status: "pending",
+      items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 1, unitPrice: 500 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.customerName).toBeUndefined();
+    expect(mockState.insertedOrders.length).toBe(1);
+    expect(mockState.insertedOrders[0].customer_name).toBeNull();
+  });
+
+  it("does not set customer name to 'Customer' even if legacy draft had 'Customer'", async () => {
+    mockState.mockOrders = [
+      {
+        id: validUuid,
+        customer_phone: "+8801712345678",
+        order_number: "GUR-2611-0001",
+        public_token: "tok-pending-abc",
+        status: "incomplete_order",
+        customer_name: "Customer",
+      },
+    ];
+
+    const result = await placeStorefrontOrderAction({
+      orderId: validUuid,
+      customerPhone: "01712345678",
+      customerName: "",
+      deliveryZone: "inside_dhaka",
+      status: "pending",
+      items: [{ productId: "p1", productName: "Item", variantId: "v1", variantName: "1", quantity: 1, unitPrice: 500 }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.customerName).toBeUndefined();
+    expect(mockState.updatedOrders.length).toBe(1);
+    expect(mockState.updatedOrders[0].customer_name).toBeNull();
+  });
 });
 
 describe("syncStorefrontIncompleteOrderAction - Autosave ID Retention & Fallback Decisions", () => {
@@ -1445,6 +1512,8 @@ describe("syncStorefrontIncompleteOrderAction - Autosave ID Retention & Fallback
     mockState.mockInquiries = [];
     mockState.mockOrdersError = null;
     mockState.updatedInquiries = [];
+    mockState.insertedOrders = [];
+    mockState.updatedOrders = [];
     mockState.rpcMock = null;
   });
 

@@ -379,7 +379,12 @@ export function renderAdminOrderEmailHtml(
           .filter(Boolean)
           .join(", ") || "ঠিকানা প্রদান করা হয়নি";
 
-  const customerName = data.customerName || (isIncomplete ? "ড্রাফট ভিজিটর" : "Customer (গ্রাহক)");
+  const customerName =
+    data.customerName && data.customerName !== "Customer"
+      ? data.customerName
+      : isIncomplete
+      ? "ড্রাফট ভিজিটর"
+      : "— (নাম উল্লেখ নেই)";
   const cleanPhone = (data.customerPhone || "").trim();
   const safeTel = sanitizeTelHref(cleanPhone);
   const safeTelHref = safeTel ? `tel:${escapeHtml(safeTel)}` : "#";
@@ -777,7 +782,7 @@ ${orderAdminUrl}
 --------------------------------------------------
 👤 গ্রাহকের বিবরণ:
 --------------------------------------------------
-নাম: ${data.customerName || "Customer"}
+নাম: ${data.customerName && data.customerName !== "Customer" ? data.customerName : "— (নাম উল্লেখ নেই)"}
 ফোন: ${data.customerPhone}
 ঠিকানা: ${addressText}
 ডেলিভারি জোন: ${data.deliveryZone || "N/A"}
@@ -858,7 +863,7 @@ export async function sendAdminOrderNotification(
 
     const subject = isIncomplete
       ? `⚠️ [ড্রাফট লিড] অসম্পূর্ণ অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerPhone}${payload.customerName ? ` (${payload.customerName})` : ""}`
-      : `🔔 নতুন অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerName || payload.customerPhone}`;
+      : `🔔 নতুন অর্ডার #${payload.orderNumber} (${formatCurrency(payload.grandTotal)}) - ${payload.customerName && payload.customerName !== "Customer" ? payload.customerName : payload.customerPhone}`;
 
     const htmlContent = renderAdminOrderEmailHtml(payload, config);
     const textContent = renderAdminOrderEmailText(payload, config);

@@ -288,7 +288,12 @@ export function CheckoutSection({
 
       // Pre-seed TanStack Query cache so /order-confirmed/[id] renders immediately with zero network delay
       if (result.orderId && result.publicToken) {
-        const customerName = result.customerName || variables.customerName || "";
+        const customerName =
+          result.customerName && result.customerName !== "Customer"
+            ? result.customerName
+            : variables.customerName && variables.customerName.trim() !== "Customer"
+            ? variables.customerName.trim()
+            : "";
         const customerPhone = result.phone || variables.customerPhone;
         queryClient.setQueryData<Order>(ORDER_QUERY_KEY(result.orderId), {
           id: result.orderNumber || result.orderId,
@@ -651,7 +656,7 @@ const form = useForm({
       await createOrderMutation.mutateAsync({
         orderId: draftOrderIdRef.current || undefined,
         status: "pending",
-        customerName: value.customerName?.trim() || undefined,
+        customerName: value.customerName?.trim() || "",
         customerPhone: parseBdPhone(value.customerPhone).local || value.customerPhone.trim(),
         deliveryZone,
         expectedShippingTotal: deliveryCharge,

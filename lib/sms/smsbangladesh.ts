@@ -581,7 +581,7 @@ export async function dispatchOrderStatusSms(
   }
 
   const renderedMessage = renderSmsTemplate(templateToUse, {
-    customer_name: customerName || "সম্মানিত গ্রাহক",
+    customer_name: (customerName && customerName !== "Customer") ? customerName : "সম্মানিত গ্রাহক",
     order_number: orderNumber || orderRow?.order_number || "",
     order_id: orderNumber || orderRow?.order_number || "",
     amount: grandTotal != null ? Math.round(Number(grandTotal)) : (orderRow?.grand_total != null ? Math.round(Number(orderRow.grand_total)) : ""),
