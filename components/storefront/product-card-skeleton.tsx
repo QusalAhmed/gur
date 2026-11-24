@@ -8,9 +8,9 @@ export function ProductCardSkeleton() {
       id="products"
       data-product-card="true"
       data-section-index="1"
-      className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col justify-center pt-3.5 sm:pt-16 pb-16 sm:pb-6 px-3 sm:px-6 md:px-10 lg:px-16 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
+      className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col justify-center pt-2 sm:pt-16 pb-14 sm:pb-6 px-3 sm:px-6 md:px-10 lg:px-16 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
     >
-      <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto my-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 py-2">
+      <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto my-auto grid grid-cols-1 md:grid-cols-2 items-center gap-2 sm:gap-6 md:gap-8 lg:gap-12 py-1 sm:py-2">
         {/* Left Column: Image Skeleton */}
         <div className="w-full flex flex-col items-center justify-center">
           {/* Mobile only Meta Header */}
@@ -19,7 +19,7 @@ export function ProductCardSkeleton() {
             <div className="h-6 w-24 bg-stone-200/80 dark:bg-stone-800 rounded-lg animate-pulse" />
           </div>
 
-          <div className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] rounded-2xl bg-stone-200/70 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 overflow-hidden flex items-center justify-center animate-pulse" />
+          <div className="relative w-full max-w-[220px] sm:max-w-md md:max-w-none aspect-square max-h-[20vh] xs:max-h-[24vh] sm:max-h-[360px] md:max-h-[440px] lg:max-h-[480px] rounded-2xl bg-stone-200/70 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 overflow-hidden flex items-center justify-center animate-pulse" />
         </div>
 
         {/* Right Column: Info & Control Deck Skeleton */}

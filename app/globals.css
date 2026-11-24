@@ -139,6 +139,7 @@
   html {
     @apply font-sans scroll-smooth;
     scroll-snap-type: y mandatory;
+    overscroll-behavior-y: none;
   }
 
   .font-bangla {
