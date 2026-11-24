@@ -92,8 +92,6 @@ export function ProductShowcase({
     return 0;
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeSectionRef = useRef(activeSectionIndex);
-  useEffect(() => { activeSectionRef.current = activeSectionIndex; }, [activeSectionIndex]);
 
   const t = STOREFRONT_TEXT[lang];
   const displayStoreName = storeName || t.storeName;
@@ -216,86 +214,43 @@ export function ProductShowcase({
     };
   }, [autoScrollToProduct, featuredIdentifier, isLoading, products.length, productsStartIndex]);
 
-  // Discrete 1-step scroll for desktop mouse wheels so 1 tick smoothly changes product
+  // Block wheel & touch scrolling while the onboarding tour is active
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let isScrolling = false;
-    let scrollTimeout: NodeJS.Timeout;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (isTourActiveRef.current) {
-        e.preventDefault();
-        return;
-      }
-      if (Math.abs(e.deltaY) < 15) return;
-      if (isScrolling) {
-        e.preventDefault();
-        return;
-      }
-
-      // If user is hovering over an element that has vertical scroll (e.g. Overview section or inner scrollables),
-      // allow normal native scrolling within the section until it reaches the edge
-      const target = e.target as HTMLElement;
-      const scrollableParent = target?.closest(".overflow-y-auto") as HTMLElement | null;
-      if (scrollableParent && scrollableParent !== container) {
-        const canScroll = scrollableParent.scrollHeight > scrollableParent.clientHeight;
-        if (canScroll) {
-          const atTop = scrollableParent.scrollTop <= 4;
-          const atBottom =
-            scrollableParent.scrollHeight -
-              scrollableParent.clientHeight -
-              scrollableParent.scrollTop <= 10;
-
-          // If scrolling down and haven't reached the bottom of inner content, allow normal inner scroll
-          if (e.deltaY > 0 && !atBottom) {
-            return;
-          }
-          // If scrolling up and haven't reached the top of inner content, allow normal inner scroll
-          if (e.deltaY < 0 && !atTop) {
-            return;
-          }
-        }
-      }
-
-      const currentIdx = activeSectionRef.current;
-      if (e.deltaY > 0 && currentIdx < totalSections - 1) {
-        e.preventDefault();
-        isScrolling = true;
-        scrollToSection(currentIdx + 1);
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          isScrolling = false;
-        }, 550);
-      } else if (e.deltaY < 0 && currentIdx > 0) {
-        e.preventDefault();
-        isScrolling = true;
-        scrollToSection(currentIdx - 1);
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          isScrolling = false;
-        }, 550);
-      }
-    };
-
-    window.addEventListener("wheel", handleWheel, { passive: false });
+    if (!isTourActiveRef.current) return;
+    const block = (e: Event) => { if (isTourActiveRef.current) e.preventDefault(); };
+    window.addEventListener("wheel", block, { passive: false });
+    window.addEventListener("touchmove", block, { passive: false });
     return () => {
-      window.removeEventListener("wheel", handleWheel);
-      clearTimeout(scrollTimeout);
+      window.removeEventListener("wheel", block);
+      window.removeEventListener("touchmove", block);
     };
-  }, [totalSections, isTourActiveRef]);
+  }, [isTourActive, isTourActiveRef]);
 
   // Keyboard Up/Down arrow keys support for changing full-screen products
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTourActiveRef.current) return;
-      // Don't intercept if user is typing in an input
       if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
 
-      const currentIdx = activeSectionRef.current;
+      const container = containerRef.current;
+      if (!container) return;
+      const sections = Array.from(container.children) as HTMLElement[];
+      if (!sections.length) return;
+
+      // Determine which section is currently snapped by finding closest to scroll position
+      const scrollY = window.scrollY;
+      let currentIdx = 0;
+      let minDist = Infinity;
+      sections.forEach((sec, idx) => {
+        const dist = Math.abs(sec.offsetTop - scrollY);
+        if (dist < minDist) {
+          minDist = dist;
+          currentIdx = idx;
+        }
+      });
+
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         if (currentIdx < totalSections - 1) {
           e.preventDefault();
