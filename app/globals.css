@@ -142,6 +142,13 @@
     overscroll-behavior-y: none;
   }
 
+  #storefront-overview,
+  [data-product-card],
+  #checkout {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
   .font-bangla {
     font-family: var(--font-bangla);
   }

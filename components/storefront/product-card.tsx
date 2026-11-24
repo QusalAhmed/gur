@@ -630,7 +630,7 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none animate-in fade-in duration-300"
+      className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start snap-always shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
     >
       {/* Floating Product Number Tag at Top Left Corner of Product Card */}
       <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">
@@ -654,11 +654,7 @@ export function ProductCard({
         {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
         <div className="w-full flex flex-col items-center justify-center">
           {/* Full-width Responsive Showcase Container */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: false, amount: "some" }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
+          <div
             className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
           >
 
@@ -756,15 +752,11 @@ export function ProductCard({
                 </div>
               </motion.div>
             )}
-          </motion.div>
+          </div>
         </div>
 
         {/* ================= RIGHT COLUMN: Info & Controls ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: false, amount: "some" }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
+        <div
           className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5"
         >
           {/* Product Title & Short Bio */}
@@ -1082,7 +1074,7 @@ export function ProductCard({
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   </section>

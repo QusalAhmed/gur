@@ -145,18 +145,14 @@ export function ProductShowcase({
     const container = containerRef.current;
     if (!container) return;
     const targetEl = container.children[sectionIndex] as HTMLElement | null;
-    if (targetEl) {
-      window.scrollTo({ top: targetEl.offsetTop, behavior: "smooth" });
-    } else {
-      const height = window.innerHeight;
-      window.scrollTo({ top: sectionIndex * height, behavior: "smooth" });
-    }
+    const topPos = targetEl ? targetEl.offsetTop : sectionIndex * window.innerHeight;
+    window.scrollTo({ top: topPos, behavior: "smooth" });
+
     if (sectionIndex === 0) {
       const overviewEl = container.querySelector("#storefront-overview") as HTMLElement | null;
       if (overviewEl) {
         overviewEl.scrollTo({ top: 0, behavior: "smooth" });
       }
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (sectionIndex === checkoutSectionIndex) {
       const checkoutEl = container.querySelector("#checkout") as HTMLElement | null;
       if (checkoutEl) {
@@ -337,26 +333,6 @@ export function ProductShowcase({
         const atBottom = overviewEl.scrollHeight - overviewEl.clientHeight - overviewEl.scrollTop <= 28;
         if (atBottom) {
           triggerTransition(productsStartIndex);
-        }
-        return;
-      }
-
-      // Inside Products: 1 discrete swipe gesture moves exactly 1 product card
-      if (currentIdx >= productsStartIndex && currentIdx < checkoutSectionIndex) {
-        if (deltaY < 0) {
-          // Swiping UP (scrolling down): move to next product, or to checkout if on last product
-          if (currentIdx === checkoutSectionIndex - 1) {
-            triggerTransition(checkoutSectionIndex);
-          } else {
-            triggerTransition(currentIdx + 1);
-          }
-        } else if (deltaY > 0) {
-          // Swiping DOWN (scrolling up): move to previous product, or to overview if on first product
-          if (currentIdx === productsStartIndex) {
-            triggerTransition(0);
-          } else {
-            triggerTransition(currentIdx - 1);
-          }
         }
         return;
       }
@@ -662,7 +638,7 @@ export function ProductShowcase({
         <section
           id="storefront-overview"
           data-section-index="0"
-          className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
+          className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
         >
 
           {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
@@ -721,7 +697,7 @@ export function ProductShowcase({
         {isLoading ? (
           <ProductCardSkeleton />
         ) : products.length === 0 ? (
-          <section className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
+          <section className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start snap-always shrink-0 flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-b from-[#fdfbf7] via-[#fbf5eb] to-[#f5ebd8] dark:from-stone-950 dark:via-[#1c1611] dark:to-[#261b12]">
             <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-stone-800 flex items-center justify-center mb-4 shadow-md text-amber-700 dark:text-amber-400">
               <Package className="w-10 h-10" />
             </div>
