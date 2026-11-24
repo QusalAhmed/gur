@@ -310,6 +310,7 @@ export interface DbOrder {
   discount_total: number;
   tax_total: number;
   grand_total: number;
+  advance_paid: number;
   amount_paid: number;
   customer_note?: string | null;
   cancel_reason?: string | null;

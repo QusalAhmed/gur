@@ -116,7 +116,7 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     // Orders requiring reprint (printed + courier modified, active status)
     supabase
       .from("orders")
-      .select("id, order_number, created_at, customer_name, customer_phone, customer_alternative_phone, grand_total, amount_paid, status, payment_status, fulfillment_status, channel, printed_at, printed_courier_snapshot, reprint_required, shipping_address, customer_note, order_items(id, product_name, quantity, unit_price)")
+      .select("id, order_number, created_at, customer_name, customer_phone, customer_alternative_phone, grand_total, advance_paid, amount_paid, delivered_at, status, payment_status, fulfillment_status, channel, printed_at, printed_courier_snapshot, reprint_required, shipping_address, customer_note, order_items(id, product_name, quantity, unit_price)")
       .eq("reprint_required", true)
       .not("status", "in", '("cancelled","returned")')
       .order("updated_at", { ascending: false })
@@ -124,7 +124,7 @@ export async function getAdminOverviewData(fromParam?: string, toParam?: string)
     // Recent 10 orders with line item summary and print flags
     supabase
       .from("orders")
-      .select("id, order_number, created_at, customer_name, customer_phone, grand_total, amount_paid, status, payment_status, fulfillment_status, channel, printed_at, reprint_required, printed_courier_snapshot, shipping_address, order_items(id, product_name, quantity, unit_price)")
+      .select("id, order_number, created_at, customer_name, customer_phone, grand_total, advance_paid, amount_paid, delivered_at, status, payment_status, fulfillment_status, channel, printed_at, reprint_required, printed_courier_snapshot, shipping_address, order_items(id, product_name, quantity, unit_price)")
       .order("created_at", { ascending: false })
       .limit(10),
   ]);

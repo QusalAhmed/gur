@@ -4,6 +4,11 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isValidUuid } from "@/lib/security";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import {
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  getOrderDueBalance,
+} from "@/lib/order-payment-utils";
 import type {
   ParcelTrackingData,
   ParcelTrackingResult,
@@ -144,7 +149,9 @@ export async function getParcelTrackingAction(
         subtotal,
         shipping_total,
         grand_total,
+        advance_paid,
         amount_paid,
+        delivered_at,
         total_weight_kg,
         courier_consignment_id,
         courier_tracking_code,
@@ -412,8 +419,16 @@ export async function getParcelTrackingAction(
     const subtotal = Number(order.subtotal) > 0 ? Number(order.subtotal) : computedSubtotal;
     const shippingTotal = Number(order.shipping_total) || 0;
     const grandTotal = Number(order.grand_total) || (subtotal + shippingTotal);
-    const amountPaid = Number(order.amount_paid) || 0;
-    const codPayable = Math.max(0, grandTotal - amountPaid);
+    const advancePaid = getOrderAdvancePaid(order);
+    const amountPaid = getOrderAmountPaidAfterDelivery(order);
+    const codPayable = getOrderDueBalance({
+      status: order.status,
+      delivered_at: order.delivered_at,
+      payment_status: order.payment_status,
+      grand_total: grandTotal,
+      advance_paid: advancePaid,
+      amount_paid: amountPaid,
+    });
     const totalWeightKg = Number(order.total_weight_kg) || items.reduce((sum, it) => sum + (it.weightKg || 1) * it.quantity, 0);
 
     const trackingData: ParcelTrackingData = {
@@ -427,6 +442,7 @@ export async function getParcelTrackingAction(
       subtotal,
       shippingTotal,
       grandTotal,
+      advancePaid,
       amountPaid,
       codPayable,
       totalWeightKg,

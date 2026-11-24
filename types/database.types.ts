@@ -1312,6 +1312,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          advance_paid: number
           amount_paid: number
           attribution: Json
           billing_address: Json | null
@@ -1364,6 +1365,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          advance_paid?: number
           amount_paid?: number
           attribution?: Json
           billing_address?: Json | null
@@ -1416,6 +1418,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          advance_paid?: number
           amount_paid?: number
           attribution?: Json
           billing_address?: Json | null
@@ -1592,6 +1595,7 @@ export type Database = {
           currency: string
           failure_reason: string | null
           id: string
+          is_advance: boolean
           kind: Database["public"]["Enums"]["payment_kind"]
           method: Database["public"]["Enums"]["payment_method"]
           order_id: string
@@ -1610,6 +1614,7 @@ export type Database = {
           currency?: string
           failure_reason?: string | null
           id?: string
+          is_advance?: boolean
           kind?: Database["public"]["Enums"]["payment_kind"]
           method: Database["public"]["Enums"]["payment_method"]
           order_id: string
@@ -1628,6 +1633,7 @@ export type Database = {
           currency?: string
           failure_reason?: string | null
           id?: string
+          is_advance?: boolean
           kind?: Database["public"]["Enums"]["payment_kind"]
           method?: Database["public"]["Enums"]["payment_method"]
           order_id?: string

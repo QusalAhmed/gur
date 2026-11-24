@@ -279,14 +279,22 @@ export default function PaymentsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
       cell: ({ row }) => {
         const k = row.getValue("kind") as string;
+        const isAdvance = row.original.isAdvance;
         return (
-          <span
-            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-              k === "refund" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-            }`}
-          >
-            {k}
-          </span>
+          <div className="inline-flex items-center gap-1">
+            <span
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                k === "refund" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              }`}
+            >
+              {k}
+            </span>
+            {k !== "refund" && isAdvance && (
+              <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                Advance
+              </span>
+            )}
+          </div>
         );
       },
     },

@@ -1,4 +1,5 @@
 import type { Order, OrderItem } from "@/types/order";
+import { getOrderEffectivePaid } from "@/lib/order-payment-utils";
 
 /**
  * Normalizes a Bangladeshi phone number into standard 11 digits starting with 01
@@ -22,7 +23,7 @@ export function normalizePhoneForSteadfast(phone: string): string {
 /**
  * Computes the Cash on Delivery (COD) collection amount in BDT.
  * If order is fully paid, cod_amount is 0.
- * Otherwise, remaining unpaid balance (grand_total - amount_paid).
+ * Otherwise, remaining unpaid balance (grand_total - effective paid: advance_paid pre-delivery, amount_paid post-delivery).
  */
 export function calculateCodAmount(order: Order, overrideAmount?: number): number {
   if (overrideAmount !== undefined && overrideAmount >= 0) {
@@ -32,8 +33,8 @@ export function calculateCodAmount(order: Order, overrideAmount?: number): numbe
     return 0;
   }
   const grandTotal = Number(order.grand_total) || 0;
-  const amountPaid = Number(order.amount_paid) || 0;
-  const remaining = grandTotal - amountPaid;
+  const effectivePaid = getOrderEffectivePaid(order);
+  const remaining = grandTotal - effectivePaid;
   return Math.max(0, Math.round(remaining));
 }
 

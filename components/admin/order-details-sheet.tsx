@@ -101,6 +101,12 @@ import { SteadfastRecreateDialog } from "@/components/admin/steadfast-recreate-d
 import { OrderSmsDialog } from "@/components/admin/order-sms-dialog";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
 import { formatPhoneDisplay } from "@/lib/admin-format";
+import {
+  isOrderDeliveredStatus,
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  getOrderDueBalance,
+} from "@/lib/order-payment-utils";
 import { updateAdminOrderAction } from "@/actions/orders";
 import { useOrder } from "@/hooks/use-order";
 import {
@@ -470,7 +476,10 @@ export function OrderDetailsSheet({
   if (!order) return null;
 
   const nextStatusLabel = getNextStatusLabel(order.status);
-  const dueAmount = Math.max(0, order.grand_total - order.amount_paid);
+  const isDelivered = isOrderDeliveredStatus(order.status, order.delivered_at);
+  const advancePaid = getOrderAdvancePaid(order);
+  const postDeliveryPaid = getOrderAmountPaidAfterDelivery(order);
+  const dueAmount = getOrderDueBalance(order);
   const isCancelledOrReturned =
     order.status === "cancelled" || order.status === "returned";
 
@@ -1486,16 +1495,25 @@ export function OrderDetailsSheet({
                     </Badge>
                   </div>
 
+                  {(advancePaid > 0 || !isDelivered) && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Advance Paid:</span>
+                      <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">
+                        ৳ {advancePaid.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Amount Paid:</span>
+                    <span className="text-muted-foreground">Total Paid (After Delivery):</span>
                     <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      ৳ {order.amount_paid.toLocaleString()}
+                      ৳ {postDeliveryPaid.toLocaleString()}
                     </span>
                   </div>
 
                   {dueAmount > 0 && (
                     <div className="flex justify-between text-xs font-bold text-rose-600 dark:text-rose-400 p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50">
-                      <span>Remaining Balance Due:</span>
+                      <span>{isDelivered ? "Remaining Balance Due:" : "Remaining COD Payable:"}</span>
                       <span className="font-mono">৳ {dueAmount.toLocaleString()}</span>
                     </div>
                   )}

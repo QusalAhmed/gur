@@ -5,6 +5,12 @@ import { isValidUuid } from "@/lib/security";
 import { parseDatabaseError, DatabaseOperationError } from "@/lib/supabase/error-handler";
 import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
 import { sanitizeCourierName } from "@/lib/validations/order";
+import {
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  isOrderDeliveredStatus,
+} from "@/lib/order-payment-utils";
+import { reconcileOrderPaymentsInLedger } from "@/lib/order-payment-sync";
 import type { Order, OrderNote, OrderNoteType } from "@/types/order";
 
 export function parseDbNoteToDomainInternal(
@@ -51,7 +57,8 @@ export function parseDbNoteToDomainInternal(
 export async function persistOrderUpdateInternal(
   updatedOrder: Order,
   syncItems: boolean = true,
-  authorName: string = "Admin Staff"
+  authorName: string = "Admin Staff",
+  transactionRef?: string
 ): Promise<Order> {
   const client = getSupabaseAdmin();
   const orderId = updatedOrder.id;
@@ -96,6 +103,15 @@ export async function persistOrderUpdateInternal(
     ? normalizeBdPhone(rawShippingPhone)
     : normalizedPhone;
 
+  const isDelivered = isOrderDeliveredStatus(dbStatus);
+  const advancePaid =
+    updatedOrder.advance_paid !== undefined
+      ? getOrderAdvancePaid(updatedOrder)
+      : undefined;
+  const amountPaid = isDelivered
+    ? Math.max(0, Number(updatedOrder.amount_paid) || 0)
+    : 0;
+
   const updatePayload: Record<string, any> = {
     customer_name: updatedOrder.customer ? updatedOrder.customer.trim() : null,
     customer_phone: normalizedPhone,
@@ -111,7 +127,8 @@ export async function persistOrderUpdateInternal(
     discount_total: discountTotal,
     subtotal: subtotal,
     grand_total: grandTotal,
-    amount_paid: updatedOrder.amount_paid ?? 0,
+    ...(advancePaid !== undefined ? { advance_paid: advancePaid } : {}),
+    amount_paid: amountPaid,
     customer_note: updatedOrder.customer_note || null,
     ...(updatedOrder.date ? { placed_at: updatedOrder.date } : {}),
     ...(updatedOrder.attribution ? { attribution: updatedOrder.attribution } : {}),
@@ -150,7 +167,7 @@ export async function persistOrderUpdateInternal(
     .from("orders")
     .update(updatePayload)
     .eq("order_number", orderId)
-    .select("id");
+    .select("id, status, delivered_at, advance_paid, amount_paid");
 
   if (updateErr) {
     console.error("[OrderService] Supabase update error:", updateErr);
@@ -158,13 +175,37 @@ export async function persistOrderUpdateInternal(
   }
 
   let orderUuid = updatedDbOrders?.[0]?.id;
+  let dbRowInfo: { id: any; status: any; delivered_at: any; advance_paid: any; amount_paid: any } | undefined =
+    updatedDbOrders?.[0];
   if (!orderUuid) {
     const { data: existingOrder } = await client
       .from("orders")
-      .select("id")
+      .select("id, status, delivered_at, advance_paid, amount_paid")
       .eq("order_number", orderId)
       .maybeSingle();
     orderUuid = existingOrder?.id;
+    dbRowInfo = existingOrder || undefined;
+  }
+
+  if (orderUuid) {
+    try {
+      const resolvedAdvance =
+        advancePaid !== undefined
+          ? advancePaid
+          : Math.max(0, Number(dbRowInfo?.advance_paid) || 0);
+      await reconcileOrderPaymentsInLedger({
+        client,
+        orderUuid,
+        status: dbStatus,
+        deliveredAt: dbRowInfo?.delivered_at,
+        paymentMethod: updatedOrder.method || "cod",
+        targetAdvancePaid: resolvedAdvance,
+        targetAmountPaid: amountPaid,
+        transactionRef,
+      });
+    } catch (paySyncErr) {
+      console.warn("[OrderService] Could not reconcile payments ledger:", paySyncErr);
+    }
   }
 
   if (syncItems && Array.isArray(updatedOrder.items) && orderUuid) {
@@ -299,6 +340,15 @@ export async function persistOrderUpdateInternal(
 
   resultOrder.subtotal = subtotal;
   resultOrder.grand_total = grandTotal;
+  resultOrder.advance_paid =
+    advancePaid !== undefined
+      ? advancePaid
+      : Math.max(0, Number(dbRowInfo?.advance_paid) || 0);
+  resultOrder.amount_paid = getOrderAmountPaidAfterDelivery({
+    status: dbStatus,
+    delivered_at: dbRowInfo?.delivered_at,
+    amount_paid: amountPaid,
+  });
 
   if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
     triggerCapiPurchaseInternal(orderId).catch(() => {});

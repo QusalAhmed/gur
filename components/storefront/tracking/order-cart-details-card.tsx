@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { ShoppingBag, Truck, ShieldCheck, CheckCircle2, Package } from "lucide-react";
 import type { ParcelTrackingData } from "@/types/tracking";
 import { formatStorePrice, toBnNumber, formatStoreItemUnit } from "@/lib/storefront-i18n";
+import { isOrderDeliveredStatus } from "@/lib/order-payment-utils";
 import { cn } from "@/lib/utils";
 
 interface OrderCartDetailsCardProps {
@@ -24,7 +25,10 @@ export function OrderCartDetailsCard({
   const displayShipping = data.shippingTotal || 0;
   const displayGrandTotal = data.grandTotal || displaySubtotal + displayShipping;
   const displayTotalWeightKg = data.totalWeightKg || 1;
-  const displayCodPayable = data.codPayable;
+  const isDelivered = isOrderDeliveredStatus(data.status);
+  const displayAdvancePaid = Math.max(0, Number(data.advancePaid) || 0);
+  const displayPostPaid = isDelivered ? Math.max(0, Number(data.amountPaid) || 0) : 0;
+  const displayCodPayable = Math.max(0, Number(data.codPayable) || 0);
 
   return (
     <div
@@ -207,35 +211,86 @@ export function OrderCartDetailsCard({
           )}
         </div>
 
-        {/* Advance Paid (if any) */}
-        {data.amountPaid > 0 && (
-          <div className="flex items-center justify-between text-stone-600 dark:text-stone-400 pt-1 border-t border-dashed border-stone-200 dark:border-stone-700">
-            <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-              {lang === "bn" ? "অগ্রিম পরিশোধিত:" : "Advance Paid:"}
+        {(displayAdvancePaid > 0 || isDelivered) && (
+          <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 pt-1.5 border-t border-dashed border-stone-200 dark:border-stone-700">
+            <span className="font-semibold">
+              {lang === "bn" ? "সর্বমোট অর্ডার মূল্য:" : "Grand Total:"}
             </span>
-            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm tabular-nums">
-              {formatStorePrice(data.amountPaid, lang)}
+            <span className="font-mono font-bold text-sm tabular-nums">
+              {formatStorePrice(displayGrandTotal, lang)}
             </span>
           </div>
         )}
 
-        {/* Total Payable / COD Grand Total */}
-        <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-bold text-amber-950 dark:text-amber-100">
-          <span>
-            {lang === "bn" ? "সর্বমোট প্রদেয় (ক্যাশ অন ডেলিভারি):" : "Total Payable (COD):"}
-          </span>
-          <span className="font-mono text-base sm:text-xl text-amber-900 dark:text-amber-300 font-bold tabular-nums">
-            {formatStorePrice(displayCodPayable, lang)}
-          </span>
-        </div>
+        {/* Advance Paid (if any) */}
+        {displayAdvancePaid > 0 && (
+          <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+              {lang === "bn" ? "অগ্রিম পরিশোধিত:" : "Advance Paid:"}
+            </span>
+            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm tabular-nums">
+              {formatStorePrice(displayAdvancePaid, lang)}
+            </span>
+          </div>
+        )}
+
+        {/* Total Paid (After Delivery) */}
+        {isDelivered && (
+          <div className="flex items-center justify-between text-stone-600 dark:text-stone-400">
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+              {lang === "bn" ? "মোট পরিশোধিত:" : "Total Paid:"}
+            </span>
+            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-sm tabular-nums">
+              {formatStorePrice(displayPostPaid, lang)}
+            </span>
+          </div>
+        )}
+
+        {/* Remaining COD Payable (pre-delivery) / Remaining Due (post-delivery if > 0) */}
+        {(!isDelivered || displayCodPayable > 0) && (
+          <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-stone-300 dark:border-stone-700 text-base sm:text-lg font-bold text-amber-950 dark:text-amber-100">
+            <span>
+              {isDelivered
+                ? lang === "bn"
+                  ? "বাকি প্রদেয় (বকেয়া):"
+                  : "Remaining Due:"
+                : displayAdvancePaid > 0
+                  ? lang === "bn"
+                    ? "অবশিষ্ট প্রদেয় (ক্যাশ অন ডেলিভারি):"
+                    : "Remaining COD Payable:"
+                  : lang === "bn"
+                    ? "সর্বমোট প্রদেয় (ক্যাশ অন ডেলিভারি):"
+                    : "Total Payable (COD):"}
+            </span>
+            <span className="font-mono text-base sm:text-xl text-amber-900 dark:text-amber-300 font-bold tabular-nums">
+              {formatStorePrice(displayCodPayable, lang)}
+            </span>
+          </div>
+        )}
 
         {/* Reassurance Callout Badge */}
         <div className="text-[11px] text-amber-900/90 dark:text-amber-300/90 text-center font-medium bg-amber-100/70 dark:bg-stone-800/80 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 mt-2 border border-amber-200/80 dark:border-stone-700">
           <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>
-            {lang === "bn"
-              ? "কোন অগ্রিম টাকা লাগবে না, পার্সেল হাতে পেয়ে দেখে টাকা দিন।"
-              : "No advance payment required. Inspect parcel upon delivery and pay cash."}
+            {isDelivered
+              ? lang === "bn"
+                ? displayCodPayable > 0
+                  ? "পার্সেল ডেলিভারি সম্পন্ন হয়েছে। বকেয়া থাকলে আমাদের সাথে যোগাযোগ করুন।"
+                  : "পার্সেল ডেলিভারি ও পেমেন্ট সম্পন্ন হয়েছে।"
+                : displayCodPayable > 0
+                  ? "Parcel delivered with a remaining due balance."
+                  : "Parcel delivered and payment completed."
+              : displayAdvancePaid > 0
+                ? displayCodPayable === 0
+                  ? lang === "bn"
+                    ? "সম্পূর্ণ অগ্রিম পরিশোধিত — ডেলিভারির সময় কোনো টাকা দিতে হবে না।"
+                    : "Fully prepaid in advance — nothing due upon delivery."
+                  : lang === "bn"
+                    ? "অগ্রিম বাদে অবশিষ্ট টাকা পার্সেল হাতে পেয়ে পরিশোধ করুন।"
+                    : "Pay the remaining COD balance upon parcel delivery."
+                : lang === "bn"
+                  ? "কোন অগ্রিম টাকা লাগবে না, পার্সেল হাতে পেয়ে দেখে টাকা দিন।"
+                  : "No advance payment required. Inspect parcel upon delivery and pay cash."}
           </span>
         </div>
       </div>

@@ -69,6 +69,13 @@ import {
   type BulkBookSteadfastResult,
 } from "@/actions/steadfast";
 import {
+  isOrderDeliveredStatus,
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  getOrderEffectivePaid,
+  getOrderDueBalance,
+} from "@/lib/order-payment-utils";
+import {
   getOrdersAction,
   getOrderAction,
   updateOrderStatusAction,
@@ -168,6 +175,7 @@ import {
   orderNoteTypeSchema,
   updateOrderNoteFormSchema,
   recordPaymentFormSchema,
+  orderAdvancePaidSchema,
   orderAmountPaidSchema,
   BANGLADESH_COURIERS,
   sanitizeCourierName,
@@ -1158,6 +1166,7 @@ export function OrdersClient() {
     mutationFn: async ({
       orderId,
       amountPaid,
+      advancePaid,
       paymentStatus,
       paymentMethod,
       transactionRef,
@@ -1166,6 +1175,7 @@ export function OrdersClient() {
     }: {
       orderId: string;
       amountPaid: number;
+      advancePaid?: number;
       paymentStatus: Order["payment"];
       paymentMethod?: Order["method"];
       transactionRef?: string;
@@ -1179,7 +1189,8 @@ export function OrdersClient() {
         paymentMethod,
         transactionRef,
         noteText,
-        currentOrder
+        currentOrder,
+        advancePaid
       );
     },
     onSuccess: (updated) => {
@@ -1188,8 +1199,9 @@ export function OrdersClient() {
         setSelectedOrder(updated);
       }
       setIsPaymentOpen(false);
+      const effectivePaid = getOrderEffectivePaid(updated);
       showToast(
-        `Payment recorded for ${updated.id}: ৳ ${updated.amount_paid.toLocaleString()} (${updated.payment.replace(/_/g, " ")}).`,
+        `Payment recorded for ${updated.id}: ৳ ${effectivePaid.toLocaleString()} (${updated.payment.replace(/_/g, " ")}).`,
         "success"
       );
     },
@@ -1762,6 +1774,7 @@ export function OrdersClient() {
     defaultValues: {
       payment: "partially_paid" as Order["payment"],
       method: "bkash" as Order["method"],
+      advance_paid: 0,
       amount_paid: 0,
       transaction_ref: "",
       note: "",
@@ -1776,6 +1789,7 @@ export function OrdersClient() {
       recordPaymentMutation.mutate({
         orderId: paymentOrder.id,
         amountPaid: valid.data.amount_paid,
+        advancePaid: valid.data.advance_paid,
         paymentStatus: valid.data.payment,
         paymentMethod: valid.data.method,
         transactionRef: valid.data.transaction_ref,
@@ -1787,10 +1801,12 @@ export function OrdersClient() {
 
   React.useEffect(() => {
     if (isPaymentOpen && paymentOrder) {
+      const isDeliv = isOrderDeliveredStatus(paymentOrder.status, paymentOrder.delivered_at);
       recordPaymentForm.reset({
         payment: paymentOrder.payment || "partially_paid",
         method: paymentOrder.method || "bkash",
-        amount_paid: paymentOrder.amount_paid || 0,
+        advance_paid: getOrderAdvancePaid(paymentOrder),
+        amount_paid: isDeliv ? getOrderAmountPaidAfterDelivery(paymentOrder) : 0,
         transaction_ref: "",
         note: "",
       });
@@ -2812,10 +2828,14 @@ export function OrdersClient() {
         ),
         cell: ({ row }) => {
           const order = row.original;
-          const due = Math.max(0, order.grand_total - order.amount_paid);
+          const isDelivered = isOrderDeliveredStatus(order.status, order.delivered_at);
+          const advancePaid = getOrderAdvancePaid(order);
+          const postDeliveryPaid = getOrderAmountPaidAfterDelivery(order);
+          const effectivePaid = getOrderEffectivePaid(order);
+          const due = getOrderDueBalance(order);
           const percentPaid =
             order.grand_total > 0
-              ? Math.min(100, Math.round((order.amount_paid / order.grand_total) * 100))
+              ? Math.min(100, Math.round((effectivePaid / order.grand_total) * 100))
               : 0;
 
           return (
@@ -2855,7 +2875,9 @@ export function OrdersClient() {
               {order.payment === "partially_paid" && (
                 <div className="space-y-0.5">
                   <div className="flex items-center justify-end gap-1 text-xs font-mono">
-                    <span className="text-emerald-600 font-semibold">Paid ৳{order.amount_paid.toLocaleString()}</span>
+                    <span className="text-emerald-600 font-semibold">
+                      {isDelivered ? `Paid ৳${postDeliveryPaid.toLocaleString()}` : `Adv ৳${advancePaid.toLocaleString()}`}
+                    </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-rose-600 font-bold">Due ৳{due.toLocaleString()}</span>
                   </div>
@@ -2869,10 +2891,17 @@ export function OrdersClient() {
               )}
 
               {order.payment === "paid" && (
-                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Paid in Full
-                </p>
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {isDelivered ? "Paid in Full" : "Advance Paid"}
+                  </p>
+                  {isDelivered && advancePaid > 0 && (
+                    <p className="text-[11px] font-mono text-muted-foreground">
+                      Adv ৳{advancePaid.toLocaleString()}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           );
@@ -3078,7 +3107,10 @@ export function OrdersClient() {
   );
 
   const renderOrderDetailsSubRow = (order: Order) => {
-    const dueAmount = Math.max(0, order.grand_total - order.amount_paid);
+    const isDelivered = isOrderDeliveredStatus(order.status, order.delivered_at);
+    const advancePaid = getOrderAdvancePaid(order);
+    const postDeliveryPaid = getOrderAmountPaidAfterDelivery(order);
+    const dueAmount = getOrderDueBalance(order);
 
     return (
       <div className="px-4 py-3.5 sm:px-6 bg-gradient-to-r from-amber-500/[0.03] via-background to-muted/20 border-t border-dashed border-border/70 space-y-3">
@@ -3278,12 +3310,22 @@ export function OrdersClient() {
 
           <div className="p-2.5 rounded-lg bg-background/60 border space-y-0.5">
             <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Payment Settlement</span>
+            {(advancePaid > 0 || !isDelivered) && (
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
+                <span>Advance Paid:</span>
+                <span className="font-mono text-amber-700 dark:text-amber-400 font-semibold">
+                  ৳ {advancePaid.toLocaleString()}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
-              <span>Amount Paid:</span>
-              <span className="font-mono text-emerald-600 font-semibold">৳ {order.amount_paid.toLocaleString()}</span>
+              <span>Total Paid (After Delivery):</span>
+              <span className="font-mono text-emerald-600 font-semibold">
+                ৳ {postDeliveryPaid.toLocaleString()}
+              </span>
             </div>
             <div className="flex justify-between text-xs sm:text-sm font-semibold text-foreground">
-              <span>Due Balance:</span>
+              <span>{isDelivered ? "Due Balance:" : "Due on Delivery (COD):"}</span>
               <span className={`font-mono ${dueAmount > 0 ? "text-rose-600 font-bold" : "text-muted-foreground"}`}>
                 ৳ {dueAmount.toLocaleString()}
               </span>
@@ -4362,213 +4404,392 @@ export function OrdersClient() {
             </DialogDescription>
           </DialogHeader>
 
-          {paymentOrder && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                recordPaymentForm.handleSubmit();
-              }}
-              className="space-y-4 py-2"
-            >
-              {/* Order Amount Overview Card */}
-              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-muted/40 border text-center">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Total</span>
-                  <p className="font-mono font-bold text-sm text-foreground">
-                    ৳ {paymentOrder.grand_total.toLocaleString()}
-                  </p>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Paid</span>
-                  <p className="font-mono font-bold text-sm text-emerald-600">
-                    ৳ {paymentOrder.amount_paid.toLocaleString()}
-                  </p>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Due</span>
-                  <p className="font-mono font-bold text-sm text-rose-600">
-                    ৳ {Math.max(0, paymentOrder.grand_total - paymentOrder.amount_paid).toLocaleString()}
-                  </p>
-                </div>
-              </div>
+          {paymentOrder && (() => {
+            const isPaymentOrderDelivered = isOrderDeliveredStatus(paymentOrder.status, paymentOrder.delivered_at);
+            const currentAdvance = getOrderAdvancePaid(paymentOrder);
+            const currentPostPaid = getOrderAmountPaidAfterDelivery(paymentOrder);
+            const currentDue = getOrderDueBalance(paymentOrder);
 
-              {/* Payment Status & Method */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <recordPaymentForm.Field name="payment">
-                  {(field) => (
-                    <FormFieldItem>
-                      <FormFieldLabel htmlFor="pay_modal_status">Payment Status</FormFieldLabel>
-                      <Select
-                        value={field.state.value}
-                        onValueChange={(val) => {
-                          if (!val) return;
-                          const newStatus = val as Order["payment"];
-                          field.handleChange(newStatus);
-                          if (newStatus === "paid") {
-                            recordPaymentForm.setFieldValue("amount_paid", paymentOrder.grand_total);
-                          } else if (newStatus === "unpaid") {
-                            recordPaymentForm.setFieldValue("amount_paid", 0);
-                          } else if (newStatus === "partially_paid") {
-                            const cur = Number(recordPaymentForm.state.values.amount_paid) || 0;
-                            if (cur <= 0 || cur >= paymentOrder.grand_total) {
-                              const half = Math.round(paymentOrder.grand_total / 2);
-                              recordPaymentForm.setFieldValue("amount_paid", half > 0 ? half : 500);
-                            }
-                          }
-                        }}
-                      >
-                        <SelectTrigger id="pay_modal_status" className="w-full h-9 text-xs bg-background">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unpaid">Unpaid</SelectItem>
-                          <SelectItem value="partially_paid">Partially Paid</SelectItem>
-                          <SelectItem value="paid">Paid in Full</SelectItem>
-                          <SelectItem value="refunded">Refunded</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormFieldItem>
-                  )}
-                </recordPaymentForm.Field>
-
-                <recordPaymentForm.Field name="method">
-                  {(field) => (
-                    <FormFieldItem>
-                      <FormFieldLabel htmlFor="pay_modal_method">Payment Method</FormFieldLabel>
-                      <Select
-                        value={field.state.value}
-                        onValueChange={(val) => {
-                          if (val) field.handleChange(val as Order["method"]);
-                        }}
-                      >
-                        <SelectTrigger id="pay_modal_method" className="w-full h-9 text-xs bg-background">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bkash">bKash</SelectItem>
-                          <SelectItem value="nagad">Nagad</SelectItem>
-                          <SelectItem value="rocket">Rocket</SelectItem>
-                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                          <SelectItem value="card">Credit / Debit Card</SelectItem>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="cod">Cash on Delivery (COD)</SelectItem>
-                          <SelectItem value="credit_terms">Credit Terms</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormFieldItem>
-                  )}
-                </recordPaymentForm.Field>
-              </div>
-
-              {/* Amount Paid Field */}
-              <recordPaymentForm.Field
-                name="amount_paid"
-                validators={{
-                  onChange: validateWithZod(orderAmountPaidSchema),
-                  onBlur: validateWithZod(orderAmountPaidSchema),
+            return (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  recordPaymentForm.handleSubmit();
                 }}
+                className="space-y-4 py-2"
               >
-                {(field) => {
-                  const paidVal = Number(field.state.value) || 0;
-                  const remainingDue = Math.max(0, paymentOrder.grand_total - paidVal);
+                {/* Order Amount Overview Card */}
+                <div className={`grid ${isPaymentOrderDelivered ? "grid-cols-4" : "grid-cols-3"} gap-2 p-3 rounded-xl bg-muted/40 border text-center`}>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">Total</span>
+                    <p className="font-mono font-bold text-sm text-foreground">
+                      ৳ {paymentOrder.grand_total.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">Advance</span>
+                    <p className="font-mono font-bold text-sm text-amber-600">
+                      ৳ {currentAdvance.toLocaleString()}
+                    </p>
+                  </div>
+                  {isPaymentOrderDelivered && (
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase">Paid</span>
+                      <p className="font-mono font-bold text-sm text-emerald-600">
+                        ৳ {currentPostPaid.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">Due</span>
+                    <p className="font-mono font-bold text-sm text-rose-600">
+                      ৳ {currentDue.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
 
-                  return (
-                    <FormFieldItem>
-                      <div className="flex items-center justify-between">
-                        <FormFieldLabel htmlFor="pay_modal_amount">Amount Paid ({currency} {currencySymbol})</FormFieldLabel>
-                        <span className="text-[11px] font-mono text-muted-foreground">
-                          Due: <span className="text-rose-600 font-bold">{currencySymbol} {remainingDue.toLocaleString()}</span>
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
-                          {currencySymbol}
-                        </span>
-                        <Input
-                          id="pay_modal_amount"
-                          type="number"
-                          min="0"
-                          max={paymentOrder.grand_total}
-                          value={field.state.value === 0 ? "" : field.state.value}
-                          onChange={(e) => {
-                            const val = e.target.value === "" ? 0 : Number(e.target.value);
-                            field.handleChange(val);
-                            if (val >= paymentOrder.grand_total) {
-                              recordPaymentForm.setFieldValue("payment", "paid");
-                            } else if (val > 0) {
-                              recordPaymentForm.setFieldValue("payment", "partially_paid");
-                            } else {
-                              recordPaymentForm.setFieldValue("payment", "unpaid");
+                {/* Payment Status & Method */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <recordPaymentForm.Field name="payment">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="pay_modal_status">Payment Status</FormFieldLabel>
+                        <Select
+                          value={field.state.value}
+                          onValueChange={(val) => {
+                            if (!val) return;
+                            const newStatus = val as Order["payment"];
+                            field.handleChange(newStatus);
+                            const targetField = isPaymentOrderDelivered ? "amount_paid" : "advance_paid";
+                            if (!isPaymentOrderDelivered) {
+                              recordPaymentForm.setFieldValue("amount_paid", 0);
+                            }
+                            if (newStatus === "paid") {
+                              recordPaymentForm.setFieldValue(targetField, paymentOrder.grand_total);
+                            } else if (newStatus === "unpaid") {
+                              recordPaymentForm.setFieldValue(targetField, 0);
+                            } else if (newStatus === "partially_paid") {
+                              const cur = Number(recordPaymentForm.state.values[targetField]) || 0;
+                              if (cur <= 0 || cur >= paymentOrder.grand_total) {
+                                const half = Math.round(paymentOrder.grand_total / 2);
+                                const minBase = isPaymentOrderDelivered ? currentAdvance : 0;
+                                recordPaymentForm.setFieldValue(targetField, Math.max(minBase, half > 0 ? half : 500));
+                              }
                             }
                           }}
-                          onBlur={field.handleBlur}
-                          className="pl-7 font-mono font-bold text-sm h-9 bg-background"
-                        />
-                      </div>
-                      <FormFieldError errors={field.state.meta.errors} />
+                        >
+                          <SelectTrigger id="pay_modal_status" className="w-full h-9 text-xs bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unpaid">Unpaid</SelectItem>
+                            <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                            <SelectItem value="paid">Paid in Full</SelectItem>
+                            <SelectItem value="refunded">Refunded</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormFieldItem>
+                    )}
+                  </recordPaymentForm.Field>
 
-                      {/* Quick Presets */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
-                          Quick Presets:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            field.handleChange(500);
-                            recordPaymentForm.setFieldValue("payment", "partially_paid");
+                  <recordPaymentForm.Field name="method">
+                    {(field) => (
+                      <FormFieldItem>
+                        <FormFieldLabel htmlFor="pay_modal_method">Payment Method</FormFieldLabel>
+                        <Select
+                          value={field.state.value}
+                          onValueChange={(val) => {
+                            if (val) field.handleChange(val as Order["method"]);
                           }}
-                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
                         >
-                          ৳ 500
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            field.handleChange(1000);
-                            recordPaymentForm.setFieldValue("payment", "partially_paid");
-                          }}
-                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                        >
-                          ৳ 1,000
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const half = Math.round(paymentOrder.grand_total * 0.5);
-                            field.handleChange(half);
-                            recordPaymentForm.setFieldValue("payment", "partially_paid");
-                          }}
-                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                        >
-                          50%
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            field.handleChange(paymentOrder.grand_total);
-                            recordPaymentForm.setFieldValue("payment", "paid");
-                          }}
-                          className="px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer"
-                        >
-                          Full (৳ {paymentOrder.grand_total.toLocaleString()})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            field.handleChange(0);
-                            recordPaymentForm.setFieldValue("payment", "unpaid");
-                          }}
-                          className="px-2 py-0.5 rounded border text-[11px] font-mono text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </FormFieldItem>
-                  );
-                }}
-              </recordPaymentForm.Field>
+                          <SelectTrigger id="pay_modal_method" className="w-full h-9 text-xs bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="bkash">bKash</SelectItem>
+                            <SelectItem value="nagad">Nagad</SelectItem>
+                            <SelectItem value="rocket">Rocket</SelectItem>
+                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                            <SelectItem value="card">Credit / Debit Card</SelectItem>
+                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="cod">Cash on Delivery (COD)</SelectItem>
+                            <SelectItem value="credit_terms">Credit Terms</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormFieldItem>
+                    )}
+                  </recordPaymentForm.Field>
+                </div>
+
+                {/* Advance Paid / Amount Paid Field */}
+                {!isPaymentOrderDelivered ? (
+                  <recordPaymentForm.Field
+                    name="advance_paid"
+                    validators={{
+                      onChange: validateWithZod(orderAdvancePaidSchema),
+                      onBlur: validateWithZod(orderAdvancePaidSchema),
+                    }}
+                  >
+                    {(field) => {
+                      const advVal = Number(field.state.value) || 0;
+                      const remainingDue = Math.max(0, paymentOrder.grand_total - advVal);
+
+                      return (
+                        <FormFieldItem>
+                          <div className="flex items-center justify-between">
+                            <FormFieldLabel htmlFor="pay_modal_amount">
+                              Advance Paid ({currency} {currencySymbol})
+                            </FormFieldLabel>
+                            <span className="text-[11px] font-mono text-muted-foreground">
+                              Due on Delivery: <span className="text-rose-600 font-bold">{currencySymbol} {remainingDue.toLocaleString()}</span>
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
+                              {currencySymbol}
+                            </span>
+                            <Input
+                              id="pay_modal_amount"
+                              type="number"
+                              min="0"
+                              max={paymentOrder.grand_total}
+                              value={field.state.value === 0 ? "" : field.state.value}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                field.handleChange(val);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                if (val >= paymentOrder.grand_total) {
+                                  recordPaymentForm.setFieldValue("payment", "paid");
+                                } else if (val > 0) {
+                                  recordPaymentForm.setFieldValue("payment", "partially_paid");
+                                } else {
+                                  recordPaymentForm.setFieldValue("payment", "unpaid");
+                                }
+                              }}
+                              onBlur={field.handleBlur}
+                              className="pl-7 font-mono font-bold text-sm h-9 bg-background"
+                            />
+                          </div>
+                          <FormFieldError errors={field.state.meta.errors} />
+
+                          {/* Quick Presets */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
+                              Quick Presets:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                field.handleChange(500);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                recordPaymentForm.setFieldValue("payment", paymentOrder.grand_total <= 500 ? "paid" : "partially_paid");
+                              }}
+                              className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                            >
+                              ৳ 500
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                field.handleChange(1000);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                recordPaymentForm.setFieldValue("payment", paymentOrder.grand_total <= 1000 ? "paid" : "partially_paid");
+                              }}
+                              className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                            >
+                              ৳ 1,000
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const half = Math.round(paymentOrder.grand_total * 0.5);
+                                field.handleChange(half);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                recordPaymentForm.setFieldValue("payment", "partially_paid");
+                              }}
+                              className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                            >
+                              50%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                field.handleChange(paymentOrder.grand_total);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                recordPaymentForm.setFieldValue("payment", "paid");
+                              }}
+                              className="px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                            >
+                              Full (৳ {paymentOrder.grand_total.toLocaleString()})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                field.handleChange(0);
+                                recordPaymentForm.setFieldValue("amount_paid", 0);
+                                recordPaymentForm.setFieldValue("payment", "unpaid");
+                              }}
+                              className="px-2 py-0.5 rounded border text-[11px] font-mono text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground pt-0.5">
+                            Total Amount Paid (After Delivery) stays ৳ 0 until the order is delivered.
+                          </p>
+                        </FormFieldItem>
+                      );
+                    }}
+                  </recordPaymentForm.Field>
+                ) : (
+                  <div className="space-y-3">
+                    <recordPaymentForm.Field
+                      name="advance_paid"
+                      validators={{
+                        onChange: validateWithZod(orderAdvancePaidSchema),
+                        onBlur: validateWithZod(orderAdvancePaidSchema),
+                      }}
+                    >
+                      {(field) => (
+                        <FormFieldItem>
+                          <FormFieldLabel htmlFor="pay_modal_advance">
+                            Advance Paid ({currency} {currencySymbol})
+                          </FormFieldLabel>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
+                              {currencySymbol}
+                            </span>
+                            <Input
+                              id="pay_modal_advance"
+                              type="number"
+                              min="0"
+                              max={paymentOrder.grand_total}
+                              value={field.state.value === 0 ? "" : field.state.value}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                field.handleChange(val);
+                              }}
+                              onBlur={field.handleBlur}
+                              className="pl-7 font-mono font-bold text-sm h-9 bg-background"
+                            />
+                          </div>
+                          <FormFieldError errors={field.state.meta.errors} />
+                        </FormFieldItem>
+                      )}
+                    </recordPaymentForm.Field>
+
+                    <recordPaymentForm.Field
+                      name="amount_paid"
+                      validators={{
+                        onChange: validateWithZod(orderAmountPaidSchema),
+                        onBlur: validateWithZod(orderAmountPaidSchema),
+                      }}
+                    >
+                      {(field) => {
+                        const paidVal = Number(field.state.value) || 0;
+                        const remainingDue = Math.max(0, paymentOrder.grand_total - paidVal);
+
+                        return (
+                          <FormFieldItem>
+                            <div className="flex items-center justify-between">
+                              <FormFieldLabel htmlFor="pay_modal_amount">
+                                Total Amount Paid After Delivery ({currency} {currencySymbol})
+                              </FormFieldLabel>
+                              <span className="text-[11px] font-mono text-muted-foreground">
+                                Due: <span className="text-rose-600 font-bold">{currencySymbol} {remainingDue.toLocaleString()}</span>
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2 text-sm font-bold text-muted-foreground font-mono">
+                                {currencySymbol}
+                              </span>
+                              <Input
+                                id="pay_modal_amount"
+                                type="number"
+                                min="0"
+                                max={paymentOrder.grand_total}
+                                value={field.state.value === 0 ? "" : field.state.value}
+                                onChange={(e) => {
+                                  const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                  field.handleChange(val);
+                                  if (val >= paymentOrder.grand_total) {
+                                    recordPaymentForm.setFieldValue("payment", "paid");
+                                  } else if (val > 0) {
+                                    recordPaymentForm.setFieldValue("payment", "partially_paid");
+                                  } else {
+                                    recordPaymentForm.setFieldValue("payment", "unpaid");
+                                  }
+                                }}
+                                onBlur={field.handleBlur}
+                                className="pl-7 font-mono font-bold text-sm h-9 bg-background"
+                              />
+                            </div>
+                            <FormFieldError errors={field.state.meta.errors} />
+
+                            {/* Quick Presets */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
+                                Quick Presets:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  field.handleChange(500);
+                                  recordPaymentForm.setFieldValue("payment", "partially_paid");
+                                }}
+                                className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                              >
+                                ৳ 500
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  field.handleChange(1000);
+                                  recordPaymentForm.setFieldValue("payment", "partially_paid");
+                                }}
+                                className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                              >
+                                ৳ 1,000
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const half = Math.round(paymentOrder.grand_total * 0.5);
+                                  field.handleChange(half);
+                                  recordPaymentForm.setFieldValue("payment", "partially_paid");
+                                }}
+                                className="px-2 py-0.5 rounded border text-[11px] font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                              >
+                                50%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  field.handleChange(paymentOrder.grand_total);
+                                  recordPaymentForm.setFieldValue("payment", "paid");
+                                }}
+                                className="px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                              >
+                                Full (৳ {paymentOrder.grand_total.toLocaleString()})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  field.handleChange(0);
+                                  recordPaymentForm.setFieldValue("payment", "unpaid");
+                                }}
+                                className="px-2 py-0.5 rounded border text-[11px] font-mono text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </FormFieldItem>
+                        );
+                      }}
+                    </recordPaymentForm.Field>
+                  </div>
+                )}
 
               {/* Transaction Ref / Code */}
               <recordPaymentForm.Field name="transaction_ref">
@@ -4617,8 +4838,9 @@ export function OrdersClient() {
                   {recordPaymentMutation.isPending ? "Recording..." : "Save Payment"}
                 </Button>
               </DialogFooter>
-            </form>
-          )}
+              </form>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

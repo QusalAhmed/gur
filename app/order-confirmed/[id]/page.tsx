@@ -34,6 +34,12 @@ import { useStorefrontProducts } from "@/hooks/use-storefront-products";
 import type { OrderItem } from "@/types/order";
 import { getClientFbpAndFbc, trackPurchase } from "@/lib/facebook-pixel";
 import { enrichOrderMetaTrackingAction } from "@/actions/facebook-capi";
+import {
+  isOrderDeliveredStatus,
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  getOrderDueBalance,
+} from "@/lib/order-payment-utils";
 
 const HOTLINE_NUMBER = "01843557389";
 const RAW_HOTLINE = HOTLINE_NUMBER.replace(/[^0-9]/g, "");
@@ -777,17 +783,66 @@ function OrderConfirmedContent() {
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-dashed border-stone-300 dark:border-stone-700 text-sm sm:text-base font-black text-amber-950 dark:text-amber-100">
-                      <div>
-                        <span className="block leading-tight">ক্যাশ অন ডেলিভারি মোট প্রদেয়:</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
-                          পণ্য হাতে পেয়ে দেখে টাকা দিন
-                        </span>
-                      </div>
-                      <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
-                        {formatStorePrice(Number(order.grand_total) || 0, "bn")}
-                      </span>
-                    </div>
+                    {(() => {
+                      const isDelivered = isOrderDeliveredStatus(order.status, order.delivered_at);
+                      const advancePaid = getOrderAdvancePaid(order);
+                      const postDeliveryPaid = getOrderAmountPaidAfterDelivery(order);
+                      const dueBalance = getOrderDueBalance(order);
+                      const grandTotal = Number(order.grand_total) || 0;
+
+                      return (
+                        <>
+                          {(advancePaid > 0 || isDelivered) && (
+                            <div className="flex items-center justify-between pt-2 border-t border-dashed border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300">
+                              <span className="font-semibold">সর্বমোট অর্ডার মূল্য:</span>
+                              <span className="font-mono font-bold text-xs sm:text-sm">
+                                {formatStorePrice(grandTotal, "bn")}
+                              </span>
+                            </div>
+                          )}
+
+                          {advancePaid > 0 && (
+                            <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
+                              <span className="font-semibold">অগ্রিম পরিশোধিত:</span>
+                              <span className="font-mono font-bold text-xs sm:text-sm">
+                                - {formatStorePrice(advancePaid, "bn")}
+                              </span>
+                            </div>
+                          )}
+
+                          {isDelivered && (
+                            <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
+                              <span className="font-semibold">মোট পরিশোধিত:</span>
+                              <span className="font-mono font-bold text-xs sm:text-sm">
+                                {formatStorePrice(postDeliveryPaid, "bn")}
+                              </span>
+                            </div>
+                          )}
+
+                          {(!isDelivered || dueBalance > 0) && (
+                            <div className="flex items-center justify-between pt-2 border-t border-dashed border-stone-300 dark:border-stone-700 text-sm sm:text-base font-black text-amber-950 dark:text-amber-100">
+                              <div>
+                                <span className="block leading-tight">
+                                  {isDelivered
+                                    ? "বাকি প্রদেয় (বকেয়া):"
+                                    : advancePaid > 0
+                                      ? "ক্যাশ অন ডেলিভারি বাকি প্রদেয়:"
+                                      : "ক্যাশ অন ডেলিভারি মোট প্রদেয়:"}
+                                </span>
+                                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                                  {dueBalance === 0 && !isDelivered
+                                    ? "সম্পূর্ণ অগ্রিম পরিশোধিত — ডেলিভারির সময় কোনো টাকা লাগবে না"
+                                    : "পণ্য হাতে পেয়ে দেখে টাকা দিন"}
+                                </span>
+                              </div>
+                              <span className="font-mono text-base sm:text-xl text-emerald-700 dark:text-emerald-400 font-black">
+                                {formatStorePrice(dueBalance, "bn")}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (

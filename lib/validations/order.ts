@@ -231,7 +231,16 @@ export const orderDiscountTotalSchema = z.coerce
   .min(0, "Discount cannot be negative");
 
 /**
- * Amount Paid (Partial or Full Payment): Non-negative number.
+ * Advance Paid (Pre-delivery Advance Payment): Non-negative number.
+ */
+export const orderAdvancePaidSchema = z.coerce
+  .number({
+    message: "Advance paid must be a number",
+  })
+  .min(0, "Advance paid cannot be negative");
+
+/**
+ * Amount Paid (Total Paid Amount After Delivery): Non-negative number.
  */
 export const orderAmountPaidSchema = z.coerce
   .number({
@@ -381,6 +390,7 @@ export const orderFormSchema = z
     fulfillment: orderFulfillmentSchema,
     shipping_total: orderShippingTotalSchema,
     discount_total: orderDiscountTotalSchema,
+    advance_paid: orderAdvancePaidSchema.optional().default(0),
     amount_paid: orderAmountPaidSchema.optional().default(0),
     courier_name: orderCourierNameSchema,
     customer_note: orderCustomerNoteSchema,
@@ -571,13 +581,18 @@ export const orderFormSchema = z
 
     // 5. Partial payment sanity check (only enforced when not in initial incomplete draft)
     const grandTotal = Math.max(0, subtotal - (data.discount_total || 0) + (data.shipping_total || 0));
+    const isDelivered = data.status === "delivered" || data.status === "partially_delivered";
+    const advancePaid = Number(data.advance_paid) || 0;
     const amountPaid = Number(data.amount_paid) || 0;
+    const effectivePaid = isDelivered ? amountPaid : advancePaid;
     if (data.payment === "partially_paid" && !isDraft) {
-      if (amountPaid <= 0 || amountPaid >= grandTotal) {
+      if (effectivePaid <= 0 || effectivePaid >= grandTotal) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "For partial payment, amount paid must be greater than 0 and less than grand total",
-          path: ["amount_paid"],
+          message: isDelivered
+            ? "For partial payment, total amount paid must be greater than 0 and less than grand total"
+            : "For partial payment, advance paid must be greater than 0 and less than grand total",
+          path: [isDelivered ? "amount_paid" : "advance_paid"],
         });
       }
     }
@@ -589,7 +604,8 @@ export const orderFormSchema = z
 export const recordPaymentFormSchema = z.object({
   payment: orderPaymentSchema,
   method: orderMethodSchema,
-  amount_paid: orderAmountPaidSchema,
+  advance_paid: orderAdvancePaidSchema.optional().default(0),
+  amount_paid: orderAmountPaidSchema.optional().default(0),
   transaction_ref: z.string().max(100, "Reference code is too long").optional().default(""),
   note: z.string().max(500, "Payment memo must not exceed 500 characters").optional().default(""),
 });

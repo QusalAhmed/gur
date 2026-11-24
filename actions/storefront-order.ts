@@ -977,6 +977,7 @@ export async function placeStorefrontOrderAction(
           tax_total: cleanTaxTotal,
           discount_total: cleanDiscountTotal,
           grand_total: cleanGrandTotal,
+          advance_paid: 0,
           amount_paid: 0,
           customer_note: resolvedCustomerNote,
           attribution: {

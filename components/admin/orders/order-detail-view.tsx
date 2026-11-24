@@ -48,6 +48,13 @@ import { ShipDialog } from "@/components/admin/orders/ship-dialog";
 import { RecordPaymentDialog } from "@/components/admin/orders/record-payment-dialog";
 import { RecordRefundDialog } from "@/components/admin/orders/record-refund-dialog";
 import {
+  isOrderDeliveredStatus,
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+  getOrderEffectivePaid,
+  getOrderDueBalance,
+} from "@/lib/order-payment-utils";
+import {
   confirmOrderAction,
   processOrderAction,
   cancelOrderWithReasonAction,
@@ -152,8 +159,11 @@ export function OrderDetailView({
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
 
   const grandTotal = Number(order.grand_total) || 0;
-  const amountPaid = Number(order.amount_paid) || 0;
-  const balanceDue = Math.max(0, grandTotal - amountPaid);
+  const isDelivered = isOrderDeliveredStatus(order.status, order.delivered_at);
+  const advancePaid = getOrderAdvancePaid(order);
+  const amountPaid = getOrderAmountPaidAfterDelivery(order);
+  const effectivePaid = getOrderEffectivePaid(order);
+  const balanceDue = getOrderDueBalance(order);
 
   const statusBadge = STATUS_BADGE_STYLE[order.status] || {
     label: order.status,
@@ -168,7 +178,7 @@ export function OrderDetailView({
   const canEditItems =
     (order.status === "pending" || order.status === "incomplete_order") &&
     !hasShipments &&
-    amountPaid === 0;
+    effectivePaid === 0;
 
   const canShip =
     order.status !== "cancelled" &&
@@ -337,7 +347,7 @@ export function OrderDetailView({
             </Button>
           )}
 
-          {amountPaid > 0 && (
+          {effectivePaid > 0 && (
             <Button
               size="sm"
               variant="outline"
@@ -631,15 +641,24 @@ export function OrderDetailView({
                 <span className="font-mono text-base">{formatBDT(grandTotal)}</span>
               </div>
 
+              {(advancePaid > 0 || !isDelivered) && (
+                <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                  <span>Advance Paid</span>
+                  <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">
+                    {formatBDT(advancePaid)}
+                  </span>
+                </div>
+              )}
+
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                <span>Amount Paid</span>
+                <span>Total Paid (After Delivery)</span>
                 <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatBDT(amountPaid)}
                 </span>
               </div>
 
               <div className="flex justify-between text-xs font-semibold pt-0.5">
-                <span>Balance Due</span>
+                <span>{isDelivered ? "Balance Due" : "Remaining COD Payable"}</span>
                 <span className={cn("font-mono text-sm", balanceDue > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-muted-foreground")}>
                   {formatBDT(balanceDue)}
                 </span>
@@ -843,7 +862,7 @@ export function OrderDetailView({
         onOpenChange={setRefundOpen}
         orderId={order.id}
         orderNumber={order.order_number}
-        amountPaid={amountPaid}
+        amountPaid={effectivePaid}
       />
 
       <ConfirmReasonDialog

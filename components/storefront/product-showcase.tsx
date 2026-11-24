@@ -9,7 +9,6 @@ import { ProductCardSkeleton } from "./product-card-skeleton";
 import dynamic from "next/dynamic";
 import { IntroSection } from "./intro-section";
 import { WhyBuyFromUs } from "./why-buy-from-us";
-import { ViewProductsButton } from "./view-products-button";
 import { ContactSection } from "./contact-section";
 import { MobileDock } from "./mobile-dock";
 import { trackContact } from "@/lib/facebook-pixel";
@@ -682,15 +681,6 @@ export function ProductShowcase({
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
             onScrollToContact={() => handleScrollToElement("contact")}
           />
-
-          {/* Bottom Action: "View Products & Order" button at bottom of overview area */}
-          <div className="relative z-10 w-full text-center pt-2 pb-8 sm:pb-6 px-4">
-            <ViewProductsButton
-              onClick={() => scrollToSection(productsStartIndex)}
-              lang={lang}
-              label={t.viewProductsBtn}
-            />
-          </div>
         </section>
 
         {/* Sections 1..N: Full-Screen Products or Skeleton */}

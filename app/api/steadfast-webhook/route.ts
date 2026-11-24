@@ -4,6 +4,8 @@ import { enqueueAndDispatch } from "@/lib/outbox";
 import { createNotificationInternal } from "@/lib/notifications-service";
 import { timingSafeTokenEqual } from "@/lib/server-security";
 import { safePublicErrorMessage, sanitizePostgrestFilterTerm } from "@/lib/security";
+import { reconcileOrderPaymentsInLedger } from "@/lib/order-payment-sync";
+import { deriveOrderPaymentStatus, getOrderAdvancePaid } from "@/lib/order-payment-utils";
 
 interface WebhookResult {
   success: boolean;
@@ -104,7 +106,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     payment_status: string;
     fulfillment_status: string;
     grand_total: number;
+    advance_paid: number;
     amount_paid: number;
+    delivered_at?: string | null;
     courier_consignment_id?: string;
     courier_invoice?: string;
     courier_tracking_code?: string;
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       let query = adminClient
         .from("orders")
         .select(
-          "id, order_number, status, payment_status, fulfillment_status, grand_total, amount_paid, courier_consignment_id, courier_invoice, courier_tracking_code, courier_tracking_url, shipping_address, customer_name, customer_phone, customer_alternative_phone, shipping_phone"
+          "id, order_number, status, payment_status, fulfillment_status, grand_total, advance_paid, amount_paid, delivered_at, courier_consignment_id, courier_invoice, courier_tracking_code, courier_tracking_url, shipping_address, customer_name, customer_phone, customer_alternative_phone, shipping_phone"
         );
 
       if (safeConsignmentId && safeInvoice) {
@@ -195,18 +199,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           : nowIso;
 
         if (sfStatus === "delivered") {
-          // Rule: full sync to delivered + paid + fulfilled + update amount_paid & delivery charge
+          const advancePaid = getOrderAdvancePaid(matchedOrder);
+          const grandTotal = Math.max(0, Number(matchedOrder.grand_total) || 0);
+          const hasCodAmount = codAmount !== null && !isNaN(codAmount);
+          const collectedCod = hasCodAmount
+            ? Math.max(0, codAmount)
+            : Math.max(0, grandTotal - advancePaid);
+          const totalPaid = hasCodAmount
+            ? advancePaid + collectedCod
+            : Math.max(advancePaid, grandTotal);
+          const derivedPaymentStatus = deriveOrderPaymentStatus(
+            grandTotal,
+            totalPaid,
+            matchedOrder.payment_status
+          );
+
+          // Rule: full sync to delivered + derived payment_status + fulfilled + update amount_paid & delivery charge
           const updatePayload: Record<string, any> = {
             status: "delivered",
-            payment_status: "paid",
+            payment_status: derivedPaymentStatus,
             fulfillment_status: "fulfilled",
+            amount_paid: totalPaid,
             delivered_at: eventTimestamp,
             updated_at: nowIso,
           };
 
-          if (codAmount !== null && !isNaN(codAmount)) {
-            updatePayload.amount_paid = codAmount;
-          }
           if (deliveryCharge !== null && !isNaN(deliveryCharge)) {
             updatePayload.courier_delivery_charge = deliveryCharge;
           }
@@ -215,6 +232,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             .from("orders")
             .update(updatePayload)
             .eq("id", matchedOrder.id);
+
+          await reconcileOrderPaymentsInLedger({
+            client: adminClient,
+            orderUuid: matchedOrder.id,
+            status: "delivered",
+            deliveredAt: eventTimestamp,
+            paymentMethod: "cod",
+            provider: "steadfast",
+            targetAdvancePaid: advancePaid,
+            targetAmountPaid: totalPaid,
+            transactionRef: rawConsignmentId
+              ? `SF-DELIV-${rawConsignmentId}`
+              : `SF-DELIV-${matchedOrder.order_number}`,
+            paidAtIso: eventTimestamp,
+          });
 
           // Add timeline event
           await adminClient.from("order_events").insert({
@@ -257,17 +289,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             console.warn("[Steadfast Webhook] Background Outbox enqueue error (delivered):", outboxErr);
           });
         } else if (sfStatus === "partial_delivered") {
-          // Rule: mark as delivered, payment as partially_paid + update amount_paid & delivery charge
+          const advancePaid = getOrderAdvancePaid(matchedOrder);
+          const grandTotal = Math.max(0, Number(matchedOrder.grand_total) || 0);
+          const hasCodAmount = codAmount !== null && !isNaN(codAmount);
+          const collectedCod = hasCodAmount ? Math.max(0, codAmount) : 0;
+          const totalPaid = advancePaid + collectedCod;
+          const derivedPaymentStatus = deriveOrderPaymentStatus(
+            grandTotal,
+            totalPaid,
+            matchedOrder.payment_status
+          );
+
+          // Rule: mark as delivered, derive payment_status + update amount_paid & delivery charge
           const updatePayload: Record<string, any> = {
             status: "delivered",
-            payment_status: "partially_paid",
+            payment_status: derivedPaymentStatus,
+            amount_paid: totalPaid,
             delivered_at: eventTimestamp,
             updated_at: nowIso,
           };
 
-          if (codAmount !== null && !isNaN(codAmount)) {
-            updatePayload.amount_paid = codAmount;
-          }
           if (deliveryCharge !== null && !isNaN(deliveryCharge)) {
             updatePayload.courier_delivery_charge = deliveryCharge;
           }
@@ -276,6 +317,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             .from("orders")
             .update(updatePayload)
             .eq("id", matchedOrder.id);
+
+          await reconcileOrderPaymentsInLedger({
+            client: adminClient,
+            orderUuid: matchedOrder.id,
+            status: "delivered",
+            deliveredAt: eventTimestamp,
+            paymentMethod: "cod",
+            provider: "steadfast",
+            targetAdvancePaid: advancePaid,
+            targetAmountPaid: totalPaid,
+            transactionRef: rawConsignmentId
+              ? `SF-PARTIAL-${rawConsignmentId}`
+              : `SF-PARTIAL-${matchedOrder.order_number}`,
+            paidAtIso: eventTimestamp,
+          });
 
           await adminClient.from("order_events").insert({
             order_id: matchedOrder.id,
@@ -291,7 +347,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             type: "order_status_changed",
             title: `Order ${matchedOrder.order_number} Partially Delivered`,
             message: `Steadfast marked order as partially delivered${
-              codAmount !== null && !isNaN(codAmount) ? ` (COD collected: ৳${codAmount})` : ""
+              hasCodAmount ? ` (COD collected: ৳${collectedCod})` : ""
             }.${trackingMessage ? ` Note: ${trackingMessage}` : ""}`,
             data: {
               order_id: matchedOrder.id,
@@ -299,8 +355,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               consignment_id: rawConsignmentId,
               status: "partially_delivered",
               previous_status: matchedOrder.status,
-              payment_status: "partially_paid",
-              amount_paid: codAmount,
+              payment_status: derivedPaymentStatus,
+              advance_paid: advancePaid,
+              amount_paid: totalPaid,
               source: "courier_webhook",
               link: `/admin/orders?search=${encodeURIComponent(matchedOrder.order_number)}`,
             },

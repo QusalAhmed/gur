@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isOrderDeliveredStatus } from "@/lib/order-payment-utils";
 
 export interface RecordPaymentParams {
   orderId: string;
@@ -24,7 +25,8 @@ export interface RecordRefundParams {
 /**
  * Records a manual payment entry:
  * Inserts into `payments` table with kind='charge', provider='manual', status='succeeded'.
- * Trigger `trg_payments_sync` automatically updates order.amount_paid and payment_status.
+ * Trigger `trg_payments_sync` automatically updates orders.advance_paid (pre-delivery)
+ * or orders.amount_paid (after delivery) and payment_status.
  */
 export async function recordPaymentAction(params: RecordPaymentParams) {
   try {
@@ -39,6 +41,18 @@ export async function recordPaymentAction(params: RecordPaymentParams) {
       return { ok: false, code: "INVALID_AMOUNT", message: "Payment amount must be greater than zero." };
     }
 
+    const { data: orderRow, error: orderErr } = await supabase
+      .from("orders")
+      .select("id, status, delivered_at")
+      .eq("id", params.orderId)
+      .single();
+
+    if (orderErr || !orderRow) {
+      return { ok: false, code: "NOT_FOUND", message: "Order not found." };
+    }
+
+    const isAdvance = !isOrderDeliveredStatus(orderRow.status, orderRow.delivered_at);
+
     const { data, error } = await supabase
       .from("payments")
       .insert({
@@ -48,6 +62,7 @@ export async function recordPaymentAction(params: RecordPaymentParams) {
         method: (params.method || "cash") as any,
         status: "succeeded",
         amount,
+        is_advance: isAdvance,
         provider_txn_id: params.transactionId?.trim() || null,
         paid_at: new Date().toISOString(),
       })
@@ -82,7 +97,7 @@ export async function recordPaymentAction(params: RecordPaymentParams) {
 /**
  * Records a customer refund:
  * Inserts into `payments` table with kind='refund', provider='manual', status='succeeded'.
- * Trigger `trg_payments_sync` automatically updates order.amount_paid and payment_status.
+ * Trigger `trg_payments_sync` automatically updates orders.advance_paid / orders.amount_paid and payment_status.
  */
 export async function recordRefundAction(params: RecordRefundParams) {
   try {

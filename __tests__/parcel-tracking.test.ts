@@ -79,6 +79,7 @@ describe("Parcel Tracking Security: Strictly public_token Only", () => {
         subtotal: 1200,
         shipping_total: 120,
         grand_total: 1320,
+        advance_paid: 0,
         amount_paid: 0,
         total_weight_kg: 1,
         courier_consignment_id: "CID-998877",
@@ -192,5 +193,42 @@ describe("Parcel Tracking Security: Strictly public_token Only", () => {
     // Checkpoints & items
     expect(result.data.items.length).toBe(1);
     expect(result.data.items[0].productName).toBe("Khejurer Patali Gur");
+  });
+
+  it("exposes advancePaid pre-delivery while keeping amountPaid at 0 and deducting from codPayable", async () => {
+    mockState.orders[0] = {
+      ...mockState.orders[0],
+      payment_status: "partially_paid",
+      advance_paid: 300,
+      amount_paid: 0,
+    };
+
+    const result = await getParcelTrackingAction(VALID_PUBLIC_TOKEN);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.advancePaid).toBe(300);
+    expect(result.data.amountPaid).toBe(0);
+    expect(result.data.codPayable).toBe(1020);
+  });
+
+  it("exposes both advancePaid and total amountPaid after delivery with 0 codPayable when paid", async () => {
+    mockState.orders[0] = {
+      ...mockState.orders[0],
+      status: "delivered",
+      fulfillment_status: "fulfilled",
+      payment_status: "paid",
+      advance_paid: 300,
+      amount_paid: 1320,
+      delivered_at: "2026-11-21T15:00:00.000Z",
+    };
+
+    const result = await getParcelTrackingAction(VALID_PUBLIC_TOKEN);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.advancePaid).toBe(300);
+    expect(result.data.amountPaid).toBe(1320);
+    expect(result.data.codPayable).toBe(0);
   });
 });

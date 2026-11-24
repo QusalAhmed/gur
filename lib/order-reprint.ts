@@ -1,4 +1,5 @@
 import { Order } from "@/types/order";
+import { getOrderEffectivePaid } from "@/lib/order-payment-utils";
 
 export interface OrderCourierSnapshot {
   recipient_name: string;
@@ -35,8 +36,8 @@ export function buildOrderCourierSnapshot(order: Order): OrderCourierSnapshot {
 
   const isPaid = order.payment === "paid";
   const grandTotal = Number(order.grand_total) || 0;
-  const amountPaid = Number(order.amount_paid) || 0;
-  const codAmount = isPaid ? 0 : Math.max(0, Math.round(grandTotal - amountPaid));
+  const effectivePaid = getOrderEffectivePaid(order);
+  const codAmount = isPaid ? 0 : Math.max(0, Math.round(grandTotal - effectivePaid));
 
   return {
     recipient_name: recipientName,

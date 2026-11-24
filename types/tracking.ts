@@ -32,6 +32,7 @@ export interface ParcelTrackingData {
   subtotal: number;
   shippingTotal: number;
   grandTotal: number;
+  advancePaid: number;
   amountPaid: number;
   codPayable: number;
   totalWeightKg: number;

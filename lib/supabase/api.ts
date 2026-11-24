@@ -27,6 +27,7 @@ import {
   BD_PHONE_REGEX,
 } from "@/lib/phone";
 import { sanitizeCourierName } from "@/lib/validations/order";
+import { getOrderAmountPaidAfterDelivery } from "@/lib/order-payment-utils";
 
 export {
   parseDatabaseError,
@@ -395,9 +396,11 @@ export function formatDbOrderRecord(data: any): Order {
     discount_total: Number(data.discount_total) || 0,
     shipping_total: Number(data.shipping_total) || 0,
     grand_total: Number(data.grand_total) || 0,
-    amount_paid: Number(data.amount_paid) || 0,
+    advance_paid: Number(data.advance_paid) || 0,
+    amount_paid: getOrderAmountPaidAfterDelivery(data),
     currency: data.currency || "BDT",
     date: data.placed_at || data.created_at || nowStr,
+    delivered_at: data.delivered_at || null,
     customer_note:
       data.customer_note ||
       (() => {

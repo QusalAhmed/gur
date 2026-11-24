@@ -33,6 +33,12 @@ import {
   parseDbNoteToDomainInternal,
   persistOrderUpdateInternal,
 } from "@/lib/order-service";
+import {
+  deriveOrderPaymentStatus,
+  getOrderAdvancePaid,
+  isOrderDeliveredStatus,
+} from "@/lib/order-payment-utils";
+import { reconcileOrderPaymentsInLedger } from "@/lib/order-payment-sync";
 import { triggerCapiPurchaseInternal } from "@/lib/capi-service";
 import {
   buildSteadfastPayloadSnapshot,
@@ -744,7 +750,9 @@ export async function getPublicOrderAction(
     discount_total,
     shipping_total,
     grand_total,
+    advance_paid,
     amount_paid,
+    delivered_at,
     currency,
     placed_at,
     created_at,
@@ -1120,6 +1128,9 @@ async function updateOrderStatusWithSession(
       );
     }
 
+    const advancePaid = getOrderAdvancePaid(resolvedOrder);
+    const grandTotal = Math.max(0, Number(resolvedOrder.grand_total) || 0);
+
     if (newStatus === "cancelled") {
       updatePayload.cancel_reason = cancelReason?.trim() || "";
       updatePayload.cancelled_at = nowIso;
@@ -1127,11 +1138,19 @@ async function updateOrderStatusWithSession(
       updatePayload.confirmed_at = nowIso;
     } else if (newStatus === "shipped") {
       updatePayload.shipped_at = nowIso;
-    } else if (
-      newStatus === "delivered" ||
-      newStatus === "partially_delivered"
-    ) {
+    } else if (newStatus === "delivered") {
       updatePayload.delivered_at = nowIso;
+      updatePayload.amount_paid = grandTotal;
+      updatePayload.payment_status = "paid";
+    } else if (newStatus === "partially_delivered") {
+      updatePayload.delivered_at = nowIso;
+      const partialPaid = Math.max(Number(resolvedOrder.amount_paid) || 0, advancePaid);
+      updatePayload.amount_paid = partialPaid;
+      updatePayload.payment_status = deriveOrderPaymentStatus(
+        grandTotal,
+        partialPaid,
+        resolvedOrder.payment
+      );
     }
 
     let updateQuery = client.from("orders").update(updatePayload);
@@ -1155,6 +1174,32 @@ async function updateOrderStatusWithSession(
         error:
           updateErr.message || "Failed to persist order status in database.",
       };
+    }
+
+    if (dbStatus === "delivered") {
+      const targetOrderUuid =
+        updatedRows?.[0]?.id && isValidUuid(updatedRows[0].id)
+          ? updatedRows[0].id
+          : finalOrderUuid;
+      if (targetOrderUuid) {
+        try {
+          await reconcileOrderPaymentsInLedger({
+            client,
+            orderUuid: targetOrderUuid,
+            status: dbStatus,
+            deliveredAt: nowIso,
+            paymentMethod: resolvedOrder.method || "cod",
+            targetAdvancePaid: advancePaid,
+            targetAmountPaid: Number(updatePayload.amount_paid ?? advancePaid) || 0,
+            paidAtIso: nowIso,
+          });
+        } catch (ledgerErr) {
+          console.warn(
+            "[updateOrderStatusAction] Could not sync delivery payment to ledger:",
+            ledgerErr
+          );
+        }
+      }
     }
 
     try {
@@ -1442,6 +1487,30 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
   const shippingTotal = Number(savedOrder.shipping_total) || 0;
   const discountTotal = Number(savedOrder.discount_total) || 0;
   const grandTotal = Math.max(0, subtotal - discountTotal + shippingTotal);
+  const isDelivered = isOrderDeliveredStatus(savedOrder.status);
+  const dbStatus =
+    savedOrder.status === "partially_delivered"
+      ? "delivered"
+      : savedOrder.status;
+  const advancePaid = Math.max(0, Number(savedOrder.advance_paid) || 0);
+  const rawAmountPaid = Math.max(0, Number(savedOrder.amount_paid) || 0);
+  const finalAmountPaid = isDelivered
+    ? rawAmountPaid > 0
+      ? rawAmountPaid
+      : savedOrder.payment === "paid"
+      ? grandTotal
+      : advancePaid
+    : 0;
+  const effectivePaid = isDelivered ? finalAmountPaid : advancePaid;
+  const resolvedPaymentStatus =
+    savedOrder.payment === "refunded" ||
+    savedOrder.payment === "partially_refunded"
+      ? savedOrder.payment
+      : effectivePaid > 0 && effectivePaid >= grandTotal && grandTotal > 0
+      ? "paid"
+      : effectivePaid > 0
+      ? "partially_paid"
+      : savedOrder.payment || "unpaid";
 
   let orderNumber = savedOrder.id;
   if (
@@ -1530,7 +1599,7 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
       phone: normalizedShippingPhone || normalizedPhone,
     },
     status: savedOrder.status,
-    payment: savedOrder.payment || "unpaid",
+    payment: resolvedPaymentStatus,
     fulfillment: savedOrder.fulfillment || "unfulfilled",
     method: savedOrder.method || "cod",
     channel: savedOrder.channel || "phone",
@@ -1538,7 +1607,8 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
     discount_total: discountTotal,
     shipping_total: shippingTotal,
     grand_total: grandTotal,
-    amount_paid: Number(savedOrder.amount_paid) || 0,
+    advance_paid: advancePaid,
+    amount_paid: finalAmountPaid,
     currency: "BDT",
     date: savedOrder.date || nowStr,
     customer_note: savedOrder.customer_note || "",
@@ -1576,13 +1646,14 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
     const dbInsertPayload: Record<string, any> = {
       order_number: orderNumber,
       customer_id: matchedCustomerId,
-      status: savedOrder.status,
+      status: dbStatus,
       channel: savedOrder.channel || "phone",
-      payment_status: savedOrder.payment || "unpaid",
+      payment_status: resolvedPaymentStatus,
       fulfillment_status: savedOrder.fulfillment || "unfulfilled",
       payment_method: savedOrder.method || "cod",
       currency: "BDT",
       placed_at: savedOrder.date || nowStr,
+      ...(isDelivered ? { delivered_at: new Date().toISOString() } : {}),
       customer_name: customerName || null,
       customer_phone: normalizedPhone || null,
       customer_alternative_phone: normalizedAltPhone || null,
@@ -1604,7 +1675,8 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
       shipping_total: shippingTotal,
       tax_total: 0,
       grand_total: grandTotal,
-      amount_paid: Number(savedOrder.amount_paid) || 0,
+      advance_paid: advancePaid,
+      amount_paid: finalAmountPaid,
       customer_note: savedOrder.customer_note || null,
       attribution: savedOrder.attribution || {},
       cancel_reason: savedOrder.cancel_reason || null,
@@ -1632,6 +1704,22 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
         .eq("order_number", orderNumber)
         .maybeSingle();
       orderDbId = fetchedOrder?.id;
+    }
+
+    if (orderDbId && (advancePaid > 0 || finalAmountPaid > 0)) {
+      try {
+        await reconcileOrderPaymentsInLedger({
+          client,
+          orderUuid: orderDbId,
+          status: dbStatus,
+          deliveredAt: isDelivered ? new Date().toISOString() : null,
+          paymentMethod: savedOrder.method || "cod",
+          targetAdvancePaid: advancePaid,
+          targetAmountPaid: finalAmountPaid,
+        });
+      } catch (ledgerErr) {
+        console.warn("Could not record initial payment in ledger:", ledgerErr);
+      }
     }
 
     if (orderDbId && savedOrder.items && savedOrder.items.length > 0) {
@@ -1845,6 +1933,7 @@ export async function addOrderNoteAction(
       discount_total: 0,
       shipping_total: 0,
       grand_total: 0,
+      advance_paid: 0,
       amount_paid: 0,
       currency: "BDT",
       date: new Date().toISOString(),
@@ -2220,6 +2309,8 @@ export async function deleteOrderNoteAction(
 
 /**
  * Server Action: Records payment amount and status on an order.
+ * Pre-delivery updates `advance_paid` (keeping `amount_paid = 0`);
+ * post-delivery updates `amount_paid` (total paid after delivery).
  */
 export async function recordOrderPaymentAction(
   orderId: string,
@@ -2228,33 +2319,13 @@ export async function recordOrderPaymentAction(
   paymentMethod?: Order["method"],
   transactionRef?: string,
   noteText?: string,
-  currentOrder?: Order
+  currentOrder?: Order,
+  advancePaid?: number
 ): Promise<Order> {
   const session = await assertStaffRole([...ORDER_STAFF_ROLES]);
-  const client = getSupabaseAdmin();
   const actorName = session.user.name || "Admin Staff";
 
   const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
-  const paymentEvent: OrderEvent = {
-    id: `ev-pay-${Date.now()}`,
-    event_type: "payment_recorded",
-    to_value: paymentStatus,
-    message: `Payment updated: ৳ ${amountPaid.toLocaleString()} (${paymentStatus.replace("_", " ")})${transactionRef ? ` via ${transactionRef}` : ""}`,
-    actor: actorName,
-    created_at: formatDateTime(nowStr),
-  };
-
-  const newNotes = [...(currentOrder?.notes || [])];
-  if (noteText && noteText.trim()) {
-    newNotes.unshift({
-      id: `note-pay-${Date.now()}`,
-      author: actorName,
-      text: `[Payment Record]: ${noteText.trim()}${transactionRef ? ` (Ref: ${transactionRef})` : ""}`,
-      type: "internal",
-      created_at: formatDateTime(nowStr),
-    });
-  }
-
   const baseOrder =
     currentOrder ||
     (await getOrderAction(orderId)) ||
@@ -2273,7 +2344,8 @@ export async function recordOrderPaymentAction(
       discount_total: 0,
       shipping_total: 0,
       grand_total: 0,
-      amount_paid: amountPaid,
+      advance_paid: 0,
+      amount_paid: 0,
       currency: "BDT",
       date: nowStr,
       items: [],
@@ -2281,34 +2353,47 @@ export async function recordOrderPaymentAction(
       events: [],
     } as Order);
 
+  const isDelivered = isOrderDeliveredStatus(baseOrder.status);
+  const finalAdvancePaid =
+    advancePaid !== undefined
+      ? Math.max(0, Number(advancePaid) || 0)
+      : !isDelivered
+      ? Math.max(0, Number(amountPaid) || 0)
+      : Math.max(0, Number(baseOrder.advance_paid) || 0);
+  const finalAmountPaid = isDelivered ? Math.max(0, Number(amountPaid) || 0) : 0;
+  const loggedAmount = isDelivered ? finalAmountPaid : finalAdvancePaid;
+
+  const paymentEvent: OrderEvent = {
+    id: `ev-pay-${Date.now()}`,
+    event_type: "payment_recorded",
+    to_value: paymentStatus,
+    message: `${isDelivered ? "Total paid" : "Advance payment"} updated: ৳ ${loggedAmount.toLocaleString()} (${paymentStatus.replace("_", " ")})${transactionRef ? ` via ${transactionRef}` : ""}`,
+    actor: actorName,
+    created_at: formatDateTime(nowStr),
+  };
+
+  const newNotes = [...(baseOrder.notes || [])];
+  if (noteText && noteText.trim()) {
+    newNotes.unshift({
+      id: `note-pay-${Date.now()}`,
+      author: actorName,
+      text: `[Payment Record]: ${noteText.trim()}${transactionRef ? ` (Ref: ${transactionRef})` : ""}`,
+      type: "internal",
+      created_at: formatDateTime(nowStr),
+    });
+  }
+
   const updated: Order = {
     ...baseOrder,
     payment: paymentStatus,
-    amount_paid: amountPaid,
+    advance_paid: finalAdvancePaid,
+    amount_paid: finalAmountPaid,
     method: paymentMethod || baseOrder.method || "cod",
     notes: newNotes,
     events: [paymentEvent, ...(baseOrder.events || [])],
   };
 
-  const orderPaymentUpdatePayload: Record<string, any> = {
-    payment_status: paymentStatus,
-    amount_paid: Number(amountPaid) || 0,
-    updated_at: new Date().toISOString(),
-  };
-  if (paymentMethod) {
-    orderPaymentUpdatePayload.payment_method = paymentMethod;
-  }
-
-  const { error: directPayErr } = await client
-    .from("orders")
-    .update(orderPaymentUpdatePayload)
-    .eq("order_number", orderId);
-
-  if (directPayErr) {
-    console.error("Direct payment update error:", directPayErr);
-  }
-
-  return await persistOrderUpdateInternal(updated, false, actorName);
+  return await persistOrderUpdateInternal(updated, false, actorName, transactionRef);
 }
 
 /**

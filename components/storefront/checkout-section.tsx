@@ -312,6 +312,7 @@ export function CheckoutSection({
           discount_total: 0,
           shipping_total: result.shippingTotal ?? 0,
           grand_total: result.grandTotal ?? 0,
+          advance_paid: 0,
           amount_paid: 0,
           currency: "BDT",
           date: new Date().toISOString(),

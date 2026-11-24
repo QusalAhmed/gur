@@ -99,9 +99,11 @@ export interface Order {
   discount_total: number;
   shipping_total: number;
   grand_total: number;
+  advance_paid?: number;
   amount_paid: number;
   currency: string;
   date: string;
+  delivered_at?: string | null;
   customer_note?: string;
   cancel_reason?: string;
   courier_name?: string;

@@ -75,6 +75,11 @@ import { cn, formatDateTime, extractRefToken } from "@/lib/utils";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { Order, OrderItem, OrderEvent, OrderNote, OrderNoteType, CatalogProduct, ORDER_CANCELLATION_REASONS } from "@/types/order";
 import {
+  isOrderDeliveredStatus,
+  getOrderAdvancePaid,
+  getOrderAmountPaidAfterDelivery,
+} from "@/lib/order-payment-utils";
+import {
   orderFormSchema,
   orderCustomerSchema,
   orderPhoneSchema,
@@ -88,6 +93,7 @@ import {
   orderAddressLineSchema,
   orderShippingTotalSchema,
   orderDiscountTotalSchema,
+  orderAdvancePaidSchema,
   orderAmountPaidSchema,
   orderCustomerNoteSchema,
   orderCourierNameSchema,
@@ -548,7 +554,8 @@ export function OrderFormDialog({
           ? (order?.shipping_total ?? 0)
           : ("" as any),
       discount_total: mode === "edit" ? (order?.discount_total ?? 0) : 0,
-      amount_paid: mode === "edit" ? (order?.amount_paid ?? 0) : 0,
+      advance_paid: mode === "edit" ? getOrderAdvancePaid(order || {}) : 0,
+      amount_paid: mode === "edit" ? getOrderAmountPaidAfterDelivery(order || {}) : 0,
       customer_note: mode === "edit" ? (order?.customer_note || "") : "",
       staff_note: "",
       delivery_note: "",
@@ -602,13 +609,29 @@ export function OrderFormDialog({
         const grand_total = Math.max(0, subtotal - discount_total + shipping_total);
         const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
 
-        let finalAmountPaid = Number(valid.amount_paid) || 0;
-        if (valid.payment === "paid") {
-          finalAmountPaid = grand_total;
-        } else if (valid.payment === "unpaid") {
+        const isDelivered = isOrderDeliveredStatus(valid.status);
+        let finalAdvancePaid = Math.min(grand_total, Math.max(0, Number(valid.advance_paid) || 0));
+        let finalAmountPaid = isDelivered
+          ? Math.min(grand_total, Math.max(0, Number(valid.amount_paid) || 0))
+          : 0;
+
+        if (!isDelivered) {
           finalAmountPaid = 0;
-        } else if (valid.payment === "partially_paid") {
-          finalAmountPaid = Math.min(grand_total, Math.max(0, finalAmountPaid));
+          if (valid.payment === "paid") {
+            finalAdvancePaid = finalAdvancePaid > 0 ? Math.min(grand_total, finalAdvancePaid) : grand_total;
+          } else if (valid.payment === "unpaid") {
+            finalAdvancePaid = 0;
+          } else if (valid.payment === "partially_paid") {
+            finalAdvancePaid = Math.min(grand_total, Math.max(0, finalAdvancePaid));
+          }
+        } else {
+          if (valid.status === "delivered" || valid.payment === "paid") {
+            finalAmountPaid = grand_total;
+          } else if (valid.payment === "unpaid") {
+            finalAmountPaid = 0;
+          } else if (valid.payment === "partially_paid") {
+            finalAmountPaid = Math.min(grand_total, Math.max(finalAdvancePaid, finalAmountPaid));
+          }
         }
 
         const newNoteClean = pendingNoteRef.current.text.trim();
@@ -704,6 +727,7 @@ export function OrderFormDialog({
             discount_total,
             shipping_total,
             grand_total,
+            advance_paid: finalAdvancePaid,
             amount_paid: finalAmountPaid,
             currency: currency || "BDT",
             date: valid.order_date
@@ -748,7 +772,13 @@ export function OrderFormDialog({
                   id: `note-${Date.now()}`,
                   author: "Admin Staff",
                   text: valid.items.length > 0
-                    ? `Manual order created with ${valid.items.length} product(s) via ${valid.channel.toUpperCase()} channel.${valid.payment === "partially_paid" ? ` Partial advance payment: ৳ ${finalAmountPaid.toLocaleString()} recorded.` : ""}${valid.courier_name ? ` Assigned courier: ${valid.courier_name}.` : ""}`
+                    ? `Manual order created with ${valid.items.length} product(s) via ${valid.channel.toUpperCase()} channel.${
+                        !isDelivered && finalAdvancePaid > 0
+                          ? ` Advance payment: ৳ ${finalAdvancePaid.toLocaleString()} recorded.`
+                          : isDelivered && finalAmountPaid > 0
+                            ? ` Payment after delivery: ৳ ${finalAmountPaid.toLocaleString()} recorded.`
+                            : ""
+                      }${valid.courier_name ? ` Assigned courier: ${valid.courier_name}.` : ""}`
                     : `Draft ${valid.status === "incomplete_order" ? "incomplete" : "pending"} order created without product items via ${valid.channel.toUpperCase()} channel.`,
                   type: "internal",
                   created_at: nowStr,
@@ -777,7 +807,11 @@ export function OrderFormDialog({
           const editEvent: OrderEvent = {
             id: `ev-${Date.now()}`,
             event_type: "order_edited",
-            message: `Order updated: ${valid.items.length} item(s), total ৳ ${grand_total.toLocaleString()}${valid.payment === "partially_paid" ? `, partial payment ৳ ${finalAmountPaid.toLocaleString()}` : ""}${valid.courier_name ? `, courier: ${valid.courier_name}` : ""}`,
+            message: `Order updated: ${valid.items.length} item(s), total ৳ ${grand_total.toLocaleString()}${
+              finalAdvancePaid > 0 ? `, advance paid ৳ ${finalAdvancePaid.toLocaleString()}` : ""
+            }${
+              isDelivered && finalAmountPaid > 0 ? `, total paid ৳ ${finalAmountPaid.toLocaleString()}` : ""
+            }${valid.courier_name ? `, courier: ${valid.courier_name}` : ""}`,
             actor: "Admin Staff",
             created_at: nowStr,
           };
@@ -848,6 +882,7 @@ export function OrderFormDialog({
             discount_total,
             subtotal,
             grand_total,
+            advance_paid: finalAdvancePaid,
             amount_paid: finalAmountPaid,
             customer_note: finalCustomerNote,
             courier_name: valid.courier_name || "",
@@ -966,7 +1001,8 @@ export function OrderFormDialog({
           fulfillment: order.fulfillment || "unfulfilled",
           shipping_total: order.shipping_total ?? 0,
           discount_total: order.discount_total ?? 0,
-          amount_paid: order.amount_paid ?? 0,
+          advance_paid: getOrderAdvancePaid(order),
+          amount_paid: getOrderAmountPaidAfterDelivery(order),
           customer_note: order.customer_note || "",
           staff_note: "",
           delivery_note: "",
@@ -1002,6 +1038,7 @@ export function OrderFormDialog({
           fulfillment: "unfulfilled",
           shipping_total: "" as any,
           discount_total: 0,
+          advance_paid: 0,
           amount_paid: 0,
           customer_note: "",
           staff_note: "",
@@ -1093,10 +1130,13 @@ export function OrderFormDialog({
   const partialPaymentSelector = React.useMemo(
     () =>
       createShallowSelector((state: any) => ({
+        status: (state.values.status || "confirmed") as Order["status"],
         payment: (state.values.payment || "unpaid") as Order["payment"],
         items: (state.values.items || []) as OrderItem[],
         shipping_total: (state.values.shipping_total ?? 0) as number,
         discount_total: (state.values.discount_total ?? 0) as number,
+        advance_paid: (state.values.advance_paid ?? 0) as number,
+        amount_paid: (state.values.amount_paid ?? 0) as number,
       })),
     []
   );
@@ -1104,10 +1144,12 @@ export function OrderFormDialog({
   const orderSummarySelector = React.useMemo(
     () =>
       createShallowSelector((state: any) => ({
+        status: (state.values.status || "confirmed") as Order["status"],
         items: (state.values.items || []) as OrderItem[],
         shipping_total: (state.values.shipping_total ?? 0) as number,
         discount_total: (state.values.discount_total ?? 0) as number,
         payment: (state.values.payment || "unpaid") as Order["payment"],
+        advance_paid: (state.values.advance_paid ?? 0) as number,
         amount_paid: (state.values.amount_paid ?? 0) as number,
       })),
     []
@@ -2007,6 +2049,22 @@ export function OrderFormDialog({
                             if (!val) return;
                             const newStatus = val as Order["status"];
                             field.handleChange(newStatus);
+                            const isNextDelivered = isOrderDeliveredStatus(newStatus);
+                            const itemsList = form.state.values.items || [];
+                            const sub = itemsList.reduce((sum, it) => sum + it.line_total, 0);
+                            const ship = Number(form.state.values.shipping_total) || 0;
+                            const disc = Number(form.state.values.discount_total) || 0;
+                            const total = Math.max(0, sub - disc + ship);
+                            const adv = Number(form.getFieldValue("advance_paid")) || 0;
+                            if (newStatus === "delivered") {
+                              form.setFieldValue("payment", "paid");
+                              form.setFieldValue("amount_paid", total);
+                            } else if (isNextDelivered) {
+                              const curPaid = Number(form.getFieldValue("amount_paid")) || 0;
+                              form.setFieldValue("amount_paid", Math.max(curPaid, adv));
+                            } else {
+                              form.setFieldValue("amount_paid", 0);
+                            }
                             setTimeout(() => {
                               const isDraft = newStatus === "incomplete_order" || newStatus === "pending";
                               if (isDraft) {
@@ -2889,16 +2947,33 @@ export function OrderFormDialog({
                                 const shipping = Number(form.state.values.shipping_total) || 0;
                                 const discount = Number(form.state.values.discount_total) || 0;
                                 const grandTotal = Math.max(0, subtotal - discount + shipping);
+                                const isDelivered = isOrderDeliveredStatus(form.state.values.status);
 
-                                if (newPayment === "paid") {
-                                  form.setFieldValue("amount_paid", grandTotal);
-                                } else if (newPayment === "unpaid") {
+                                if (!isDelivered) {
                                   form.setFieldValue("amount_paid", 0);
-                                } else if (newPayment === "partially_paid") {
-                                  const curr = Number(form.state.values.amount_paid) || 0;
-                                  if (curr <= 0 || curr >= grandTotal) {
-                                    const half = Math.round(grandTotal / 2);
-                                    form.setFieldValue("amount_paid", half > 0 ? half : 500);
+                                  if (newPayment === "paid") {
+                                    form.setFieldValue("advance_paid", grandTotal);
+                                  } else if (newPayment === "unpaid") {
+                                    form.setFieldValue("advance_paid", 0);
+                                  } else if (newPayment === "partially_paid") {
+                                    const currAdv = Number(form.state.values.advance_paid) || 0;
+                                    if (currAdv <= 0 || currAdv >= grandTotal) {
+                                      const half = Math.round(grandTotal / 2);
+                                      form.setFieldValue("advance_paid", half > 0 ? half : 500);
+                                    }
+                                  }
+                                } else {
+                                  if (newPayment === "paid") {
+                                    form.setFieldValue("amount_paid", grandTotal);
+                                  } else if (newPayment === "unpaid") {
+                                    form.setFieldValue("amount_paid", 0);
+                                  } else if (newPayment === "partially_paid") {
+                                    const adv = Number(form.state.values.advance_paid) || 0;
+                                    const curr = Number(form.state.values.amount_paid) || 0;
+                                    if (curr <= 0 || curr >= grandTotal) {
+                                      const half = Math.round(grandTotal / 2);
+                                      form.setFieldValue("amount_paid", Math.max(adv, half > 0 ? half : 500));
+                                    }
                                   }
                                 }
                               }}
@@ -3041,41 +3116,219 @@ export function OrderFormDialog({
                       </form.Field>
                     </div>
 
-                    {/* Partial Advance Payment (when partially_paid) */}
+                    {/* Advance Paid (Pre-Delivery) & Total Amount Paid (Post-Delivery) */}
                     <form.Subscribe selector={partialPaymentSelector}>
-                      {({ payment, items, shipping_total, discount_total }) => {
-                        if (payment !== "partially_paid") return null;
+                      {({ status, payment, items, shipping_total, discount_total, advance_paid, amount_paid }) => {
+                        const isDelivered = isOrderDeliveredStatus(status);
+                        if (!isDelivered && payment !== "partially_paid" && payment !== "paid") {
+                          return null;
+                        }
 
                         const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
                         const shipping = Number(shipping_total) || 0;
                         const discount = Number(discount_total) || 0;
                         const grandTotal = Math.max(0, subtotal - discount + shipping);
+                        const currentAdv = Math.max(0, Number(advance_paid) || 0);
+                        const currentPaid = isDelivered ? Math.max(0, Number(amount_paid) || 0) : 0;
+
+                        if (!isDelivered) {
+                          const due = Math.max(0, grandTotal - currentAdv);
+                          return (
+                            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <FormFieldLabel htmlFor="order_form_advance_paid" className="text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5 normal-case tracking-normal">
+                                  <CreditCard className="h-4 w-4 text-amber-600" />
+                                  {payment === "paid" ? "Advance Paid (100% Prepaid)" : "Advance Paid (Pre-Delivery Collection)"}
+                                </FormFieldLabel>
+                                <span className="text-xs font-mono font-medium text-amber-900 dark:text-amber-200">
+                                  Total: ৳ {grandTotal.toLocaleString()}
+                                </span>
+                              </div>
+
+                              <form.Field
+                                name="advance_paid"
+                                validators={{
+                                  onChange: validateWithZod(orderAdvancePaidSchema),
+                                  onBlur: validateWithZod(orderAdvancePaidSchema),
+                                }}
+                              >
+                                {(field) => {
+                                  const advVal = Number(field.state.value) || 0;
+                                  const remDue = Math.max(0, grandTotal - advVal);
+
+                                  return (
+                                    <div className="space-y-2">
+                                      <div className="relative">
+                                        <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground font-mono">
+                                          ৳
+                                        </span>
+                                        <Input
+                                          id="order_form_advance_paid"
+                                          type="number"
+                                          min="0"
+                                          max={grandTotal}
+                                          value={field.state.value === 0 ? "" : field.state.value}
+                                          onChange={(e) => {
+                                            const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                            field.handleChange(val);
+                                            form.setFieldValue("amount_paid", 0);
+                                            if (grandTotal > 0 && val >= grandTotal) {
+                                              form.setFieldValue("payment", "paid");
+                                            } else if (val > 0 && val < grandTotal) {
+                                              form.setFieldValue("payment", "partially_paid");
+                                            }
+                                          }}
+                                          onBlur={field.handleBlur}
+                                          placeholder="Enter advance amount received..."
+                                          className="pl-7 font-mono font-bold text-base h-10 bg-background"
+                                        />
+                                      </div>
+                                      <FormFieldError errors={field.state.meta.errors} />
+
+                                      {/* Preset Quick Fill Buttons */}
+                                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
+                                          Quick Fill:
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            field.handleChange(500);
+                                            form.setFieldValue("amount_paid", 0);
+                                            if (grandTotal > 500) form.setFieldValue("payment", "partially_paid");
+                                          }}
+                                          className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                                        >
+                                          ৳ 500
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            field.handleChange(1000);
+                                            form.setFieldValue("amount_paid", 0);
+                                            if (grandTotal > 1000) form.setFieldValue("payment", "partially_paid");
+                                          }}
+                                          className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                                        >
+                                          ৳ 1,000
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const half = Math.round(grandTotal * 0.5);
+                                            field.handleChange(half);
+                                            form.setFieldValue("amount_paid", 0);
+                                            if (half > 0 && half < grandTotal) form.setFieldValue("payment", "partially_paid");
+                                          }}
+                                          className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
+                                        >
+                                          50% (৳ {Math.round(grandTotal * 0.5).toLocaleString()})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            field.handleChange(grandTotal);
+                                            form.setFieldValue("amount_paid", 0);
+                                            form.setFieldValue("payment", "paid");
+                                          }}
+                                          className="px-2 py-0.5 rounded-md border text-xs font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 font-semibold transition-colors cursor-pointer"
+                                        >
+                                          100% (৳ {grandTotal.toLocaleString()})
+                                        </button>
+                                      </div>
+
+                                      {/* Breakdown Badges */}
+                                      <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                                        <div className="p-2.5 rounded-lg bg-background/90 border border-emerald-500/20 space-y-0.5">
+                                          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                            Advance Paid
+                                          </span>
+                                          <p className="font-mono font-bold text-sm text-emerald-600">
+                                            ৳ {advVal.toLocaleString()}
+                                          </p>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-background/90 border border-rose-500/20 space-y-0.5">
+                                          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                            Remaining Due (COD)
+                                          </span>
+                                          <p className={`font-mono font-bold text-sm ${remDue > 0 ? "text-rose-600" : "text-muted-foreground"}`}>
+                                            ৳ {due > 0 ? remDue.toLocaleString() : "0"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                                        Total Paid After Delivery remains ৳ 0 until the order is delivered.
+                                      </p>
+                                    </div>
+                                  );
+                                }}
+                              </form.Field>
+                            </div>
+                          );
+                        }
+
+                        const codCollected = Math.max(0, currentPaid - currentAdv);
+                        const dueAfterDelivery = Math.max(0, grandTotal - currentPaid);
 
                         return (
-                          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
                             <div className="flex items-center justify-between">
-                              <FormFieldLabel htmlFor="order_form_amount_paid" className="text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5 normal-case tracking-normal">
-                                <CreditCard className="h-4 w-4 text-amber-600" />
-                                Partial Payment (Advance Received)
+                              <FormFieldLabel className="text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-1.5 normal-case tracking-normal">
+                                <CreditCard className="h-4 w-4 text-emerald-600" />
+                                Post-Delivery Payment Settlement
                               </FormFieldLabel>
-                              <span className="text-xs font-mono font-medium text-amber-900 dark:text-amber-200">
+                              <span className="text-xs font-mono font-medium text-emerald-900 dark:text-emerald-200">
                                 Total: ৳ {grandTotal.toLocaleString()}
                               </span>
                             </div>
 
-                            <form.Field
-                              name="amount_paid"
-                              validators={{
-                                onChange: validateWithZod(orderAmountPaidSchema),
-                                onBlur: validateWithZod(orderAmountPaidSchema),
-                              }}
-                            >
-                              {(field) => {
-                                const currentPaid = Number(field.state.value) || 0;
-                                const due = Math.max(0, grandTotal - currentPaid);
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <form.Field
+                                name="advance_paid"
+                                validators={{
+                                  onChange: validateWithZod(orderAdvancePaidSchema),
+                                  onBlur: validateWithZod(orderAdvancePaidSchema),
+                                }}
+                              >
+                                {(field) => (
+                                  <FormFieldItem>
+                                    <FormFieldLabel htmlFor="order_form_advance_paid">Advance Paid</FormFieldLabel>
+                                    <div className="relative">
+                                      <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground font-mono">
+                                        ৳
+                                      </span>
+                                      <Input
+                                        id="order_form_advance_paid"
+                                        type="number"
+                                        min="0"
+                                        max={grandTotal}
+                                        value={field.state.value === 0 ? "" : field.state.value}
+                                        onChange={(e) => {
+                                          const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                          field.handleChange(val);
+                                        }}
+                                        onBlur={field.handleBlur}
+                                        placeholder="0"
+                                        className="pl-7 font-mono font-bold text-base h-10 bg-background"
+                                      />
+                                    </div>
+                                    <FormFieldError errors={field.state.meta.errors} />
+                                  </FormFieldItem>
+                                )}
+                              </form.Field>
 
-                                return (
-                                  <div className="space-y-2">
+                              <form.Field
+                                name="amount_paid"
+                                validators={{
+                                  onChange: validateWithZod(orderAmountPaidSchema),
+                                  onBlur: validateWithZod(orderAmountPaidSchema),
+                                }}
+                              >
+                                {(field) => (
+                                  <FormFieldItem>
+                                    <FormFieldLabel htmlFor="order_form_amount_paid">
+                                      Total Amount Paid (After Delivery)
+                                    </FormFieldLabel>
                                     <div className="relative">
                                       <span className="absolute left-3 top-2.5 text-sm font-bold text-muted-foreground font-mono">
                                         ৳
@@ -3089,72 +3342,49 @@ export function OrderFormDialog({
                                         onChange={(e) => {
                                           const val = e.target.value === "" ? 0 : Number(e.target.value);
                                           field.handleChange(val);
+                                          if (grandTotal > 0 && val >= grandTotal) {
+                                            form.setFieldValue("payment", "paid");
+                                          } else if (val > 0) {
+                                            form.setFieldValue("payment", "partially_paid");
+                                          }
                                         }}
                                         onBlur={field.handleBlur}
-                                        placeholder="Enter partial amount received..."
+                                        placeholder="Enter total paid after delivery..."
                                         className="pl-7 font-mono font-bold text-base h-10 bg-background"
                                       />
                                     </div>
                                     <FormFieldError errors={field.state.meta.errors} />
+                                  </FormFieldItem>
+                                )}
+                              </form.Field>
+                            </div>
 
-                                    {/* Preset Quick Fill Buttons */}
-                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-1">
-                                        Quick Fill:
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => field.handleChange(500)}
-                                        className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                                      >
-                                        ৳ 500
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => field.handleChange(1000)}
-                                        className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                                      >
-                                        ৳ 1,000
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => field.handleChange(Math.round(grandTotal * 0.5))}
-                                        className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                                      >
-                                        50% (৳ {Math.round(grandTotal * 0.5).toLocaleString()})
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => field.handleChange(Math.round(grandTotal * 0.25))}
-                                        className="px-2 py-0.5 rounded-md border text-xs font-mono bg-background hover:bg-muted font-medium transition-colors cursor-pointer"
-                                      >
-                                        25% (৳ {Math.round(grandTotal * 0.25).toLocaleString()})
-                                      </button>
-                                    </div>
-
-                                    {/* Breakdown Badges */}
-                                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                                      <div className="p-2.5 rounded-lg bg-background/90 border border-emerald-500/20 space-y-0.5">
-                                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                                          Paid Now
-                                        </span>
-                                        <p className="font-mono font-bold text-sm text-emerald-600">
-                                          ৳ {currentPaid.toLocaleString()}
-                                        </p>
-                                      </div>
-                                      <div className="p-2.5 rounded-lg bg-background/90 border border-rose-500/20 space-y-0.5">
-                                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                                          Remaining Due (COD)
-                                        </span>
-                                        <p className={`font-mono font-bold text-sm ${due > 0 ? "text-rose-600" : "text-muted-foreground"}`}>
-                                          ৳ {due.toLocaleString()}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }}
-                            </form.Field>
+                            <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                              <div className="p-2 rounded-lg bg-background/90 border space-y-0.5">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                  Advance
+                                </span>
+                                <p className="font-mono font-bold text-sm text-foreground">
+                                  ৳ {currentAdv.toLocaleString()}
+                                </p>
+                              </div>
+                              <div className="p-2 rounded-lg bg-background/90 border border-emerald-500/20 space-y-0.5">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                  Delivery COD
+                                </span>
+                                <p className="font-mono font-bold text-sm text-emerald-600">
+                                  ৳ {codCollected.toLocaleString()}
+                                </p>
+                              </div>
+                              <div className="p-2 rounded-lg bg-background/90 border border-rose-500/20 space-y-0.5">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                  Due Balance
+                                </span>
+                                <p className={`font-mono font-bold text-sm ${dueAfterDelivery > 0 ? "text-rose-600" : "text-muted-foreground"}`}>
+                                  ৳ {dueAfterDelivery.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         );
                       }}
@@ -3176,13 +3406,16 @@ export function OrderFormDialog({
                     </div>
 
                     <form.Subscribe selector={orderSummarySelector}>
-                      {({ items, shipping_total, discount_total, payment, amount_paid }) => {
+                      {({ status, items, shipping_total, discount_total, payment, advance_paid, amount_paid }) => {
                         const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
                         const shipping = Number(shipping_total) || 0;
                         const discount = Number(discount_total) || 0;
                         const grandTotal = Math.max(0, subtotal - discount + shipping);
-                        const paid = Number(amount_paid) || 0;
-                        const due = Math.max(0, grandTotal - paid);
+                        const isDelivered = isOrderDeliveredStatus(status);
+                        const advPaid = Math.max(0, Number(advance_paid) || 0);
+                        const postPaid = isDelivered ? Math.max(0, Number(amount_paid) || 0) : 0;
+                        const effectivePaid = isDelivered ? postPaid : advPaid;
+                        const due = payment === "paid" ? 0 : Math.max(0, grandTotal - effectivePaid);
 
                         return (
                           <div className="space-y-2 text-xs pt-1">
@@ -3208,16 +3441,33 @@ export function OrderFormDialog({
                               </span>
                             </div>
 
-                            {payment === "partially_paid" ? (
+                            {payment === "partially_paid" || advPaid > 0 || (isDelivered && postPaid > 0) ? (
                               <div className="pt-2 border-t border-dashed space-y-1.5">
-                                <div className="flex justify-between text-emerald-600 font-medium">
-                                  <span>Advance Paid:</span>
-                                  <span className="font-mono font-semibold">৳ {paid.toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between text-rose-600 font-bold">
-                                  <span>Due on Delivery (COD):</span>
-                                  <span className="font-mono font-bold">৳ {due.toLocaleString()}</span>
-                                </div>
+                                {advPaid > 0 && (
+                                  <div className="flex justify-between text-emerald-600 font-medium">
+                                    <span>Advance Paid:</span>
+                                    <span className="font-mono font-semibold">৳ {advPaid.toLocaleString()}</span>
+                                  </div>
+                                )}
+                                {isDelivered && (
+                                  <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-medium">
+                                    <span>Total Paid (After Delivery):</span>
+                                    <span className="font-mono font-semibold">৳ {postPaid.toLocaleString()}</span>
+                                  </div>
+                                )}
+                                {due > 0 ? (
+                                  <div className="flex justify-between text-rose-600 font-bold">
+                                    <span>{isDelivered ? "Remaining Due:" : "Due on Delivery (COD):"}</span>
+                                    <span className="font-mono font-bold">৳ {due.toLocaleString()}</span>
+                                  </div>
+                                ) : payment === "paid" ? (
+                                  <div className="flex justify-between items-center text-emerald-600 font-semibold text-xs">
+                                    <span>Payment Status:</span>
+                                    <Badge variant="outline" className="border-emerald-500 text-emerald-600 bg-emerald-500/10 font-mono text-[11px]">
+                                      {isDelivered ? "Fully Paid (৳ 0 Due)" : "Fully Prepaid Advance (৳ 0 Due)"}
+                                    </Badge>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : payment === "paid" ? (
                               <div className="pt-2 border-t border-dashed flex justify-between items-center text-emerald-600 font-semibold text-xs">

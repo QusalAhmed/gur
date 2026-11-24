@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
+import { isOrderDeliveredStatus } from "@/lib/order-payment-utils";
 
 export interface TransactionItem {
   id: string;
@@ -12,6 +13,7 @@ export interface TransactionItem {
   customer: string;
   method: "bkash" | "nagad" | "bank_transfer" | "card" | "cod";
   kind: "charge" | "refund";
+  isAdvance?: boolean;
   amount: string;
   amountNumeric: number;
   gatewayRef: string;
@@ -71,6 +73,7 @@ export async function getAdminPaymentsAction(): Promise<{
         id,
         order_id,
         kind,
+        is_advance,
         method,
         provider,
         status,
@@ -127,6 +130,7 @@ export async function getAdminPaymentsAction(): Promise<{
         customer,
         method: (p.method as any) || "cod",
         kind: p.kind === "refund" ? "refund" : "charge",
+        isAdvance: Boolean(p.is_advance),
         amount: `৳ ${numAmount.toLocaleString("en-BD")}`,
         amountNumeric: numAmount,
         gatewayRef: p.provider_payment_id || p.provider_txn_id || p.provider || "Manual",
@@ -240,7 +244,7 @@ export async function recordManualPaymentAction(payload: {
     // Find order
     let orderQuery = supabase
       .from("orders")
-      .select("id, grand_total, amount_paid, payment_status");
+      .select("id, status, delivered_at, grand_total, advance_paid, amount_paid, payment_status");
     orderQuery = isValidUuid(cleanOrderRef)
       ? orderQuery.or(`order_number.eq.${cleanOrderRef},id.eq.${cleanOrderRef}`)
       : orderQuery.eq("order_number", cleanOrderRef);
@@ -251,10 +255,13 @@ export async function recordManualPaymentAction(payload: {
       return { success: false, error: "Order not found" };
     }
 
-    // Insert payment record (Trigger trg_payments_sync automatically updates orders.amount_paid & payment_status)
+    const isAdvance = !isOrderDeliveredStatus(order.status, order.delivered_at);
+
+    // Insert payment record (Trigger trg_payments_sync automatically updates advance_paid / amount_paid & payment_status)
     const { error: payErr } = await supabase.from("payments").insert({
       order_id: order.id,
       kind: "charge",
+      is_advance: isAdvance,
       method: payload.method,
       provider: "manual",
       amount,

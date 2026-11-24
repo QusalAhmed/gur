@@ -30,6 +30,7 @@ describe("Order Reprint Tracking & Courier Diff Detection", () => {
     discount_total: 0,
     shipping_total: 100,
     grand_total: 1100,
+    advance_paid: 0,
     amount_paid: 0,
     currency: "BDT",
     date: new Date().toISOString(),
@@ -127,5 +128,28 @@ describe("Order Reprint Tracking & Courier Diff Detection", () => {
     };
 
     expect(flaggedOrder.reprint_required).toBe(true);
+  });
+
+  it("detects COD amount diff when pre-delivery advance_paid is updated", () => {
+    const snapshot = buildOrderCourierSnapshot(baseOrder);
+    const printedOrder: Order = {
+      ...baseOrder,
+      printed_at: new Date().toISOString(),
+      printed_courier_snapshot: snapshot,
+    };
+
+    const modifiedOrder: Order = {
+      ...printedOrder,
+      payment: "partially_paid",
+      advance_paid: 300,
+      amount_paid: 0,
+    };
+
+    expect(isOrderReprintRequired(modifiedOrder)).toBe(true);
+    const diffs = getOrderReprintDiff(modifiedOrder);
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0].field).toBe("COD Amount");
+    expect(diffs[0].old).toBe("৳1,100");
+    expect(diffs[0].new).toBe("৳800");
   });
 });
