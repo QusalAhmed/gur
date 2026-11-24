@@ -240,6 +240,8 @@ export function buildCspHeader(options: BuildCspHeaderOptions = {}): string {
     "'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
     "https://www.googletagmanager.com",
+    "https://*.clarity.ms",
+    "https://tag.clarity.ms",
     "https://www.clarity.ms",
     "https://scripts.clarity.ms",
     "https://va.vercel-scripts.com",

@@ -117,8 +117,24 @@ export function shouldLoadClarity(options: ShouldLoadClarityOptions): boolean {
 }
 
 /**
+ * Ensures the global `window.clarity` queue shim exists so early events are never dropped.
+ */
+export function ensureClarityQueueShim(): void {
+  if (typeof window === "undefined") return;
+  if (typeof window.clarity !== "function") {
+    const queueShim: ClarityFunction = function clarityStub(...args: unknown[]) {
+      queueShim.q = queueShim.q || [];
+      queueShim.q.push(args);
+    };
+    queueShim.q = [];
+    window.clarity = queueShim;
+  }
+}
+
+/**
  * Initializes the official Microsoft Clarity tag once on allowed storefront pages.
  * Zero-dependency loader using Clarity's native queue shim.
+ * Uses `tag.clarity.ms` with automatic `www.clarity.ms` fallback to resist router/ISP DNS resolution failures.
  */
 export function initClarity(projectId: string): boolean {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -140,20 +156,23 @@ export function initClarity(projectId: string): boolean {
     return true;
   }
 
-  if (typeof window.clarity !== "function") {
-    const queueShim: ClarityFunction = function clarityStub(...args: unknown[]) {
-      queueShim.q = queueShim.q || [];
-      queueShim.q.push(args);
-    };
-    queueShim.q = [];
-    window.clarity = queueShim;
-  }
+  ensureClarityQueueShim();
 
   const script = document.createElement("script");
   script.id = CLARITY_SCRIPT_ELEMENT_ID;
   script.async = true;
-  script.src = `https://www.clarity.ms/tag/${encodeURIComponent(safeId)}`;
+  // tag.clarity.ms is Microsoft's direct tag endpoint that resolves reliably without www-prefix DNS suffix collision
+  const primarySrc = `https://tag.clarity.ms/tag/${encodeURIComponent(safeId)}`;
+  const fallbackSrc = `https://www.clarity.ms/tag/${encodeURIComponent(safeId)}`;
+  script.src = primarySrc;
+
+  let retried = false;
   script.onerror = () => {
+    if (!retried) {
+      retried = true;
+      script.src = fallbackSrc;
+      return;
+    }
     // Ad-blocker or network blocked Clarity tag script; fail gracefully
   };
 
@@ -169,13 +188,13 @@ export function initClarity(projectId: string): boolean {
 
 function canInvokeClarityInBrowser(): boolean {
   if (typeof window === "undefined") return false;
-  if (typeof window.clarity !== "function") return false;
   if (
     isClarityAdminHostOrPath(window.location.hostname, window.location.pathname)
   ) {
     return false;
   }
-  return true;
+  ensureClarityQueueShim();
+  return typeof window.clarity === "function";
 }
 
 function sanitizeTagValue(value: string): string {

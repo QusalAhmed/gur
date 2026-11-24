@@ -3,6 +3,8 @@ import {
   claritySetTag,
   clarityTrackEvent,
   clarityUpgrade,
+  ensureClarityQueueShim,
+  initClarity,
   isClarityAdminHostOrPath,
   isClarityEnabledEnvironment,
   resolveClarityProjectId,
@@ -190,6 +192,78 @@ describe("Microsoft Clarity helpers", () => {
       clarityUpgrade("purchase");
 
       expect(mockClarity).not.toHaveBeenCalled();
+    });
+
+    it("ensures window.clarity queue shim is initialized so early events are queued and not dropped", () => {
+      const mockWindow = {
+        location: {
+          hostname: "khatikhejurgur.shop",
+          pathname: "/",
+        },
+      } as unknown as Window & typeof globalThis;
+      globalThis.window = mockWindow;
+
+      ensureClarityQueueShim();
+      expect(typeof globalThis.window.clarity).toBe("function");
+      expect(Array.isArray(globalThis.window.clarity?.q)).toBe(true);
+
+      claritySetTag("lang", "bn");
+      expect(globalThis.window.clarity?.q?.length).toBe(1);
+      expect(globalThis.window.clarity?.q?.[0]).toEqual(["set", "lang", "bn"]);
+    });
+
+    it("injects script using tag.clarity.ms and falls back to www.clarity.ms on load failure", () => {
+      const prevDevEnv = process.env.NEXT_PUBLIC_CLARITY_ENABLE_DEV;
+      process.env.NEXT_PUBLIC_CLARITY_ENABLE_DEV = "true";
+
+      try {
+        const mockExistingScript = {
+          parentNode: {
+            insertBefore: vi.fn(),
+          },
+        };
+
+        const createdElements: Array<Record<string, unknown>> = [];
+        const mockDocument = {
+          getElementById: vi.fn().mockReturnValue(null),
+          getElementsByTagName: vi.fn().mockReturnValue([mockExistingScript]),
+          createElement: vi.fn().mockImplementation((tag: string) => {
+            const el: Record<string, unknown> = { tagName: tag, src: "", id: "", async: false };
+            createdElements.push(el);
+            return el;
+          }),
+        };
+
+        globalThis.window = {
+          location: {
+            hostname: "khatikhejurgur.shop",
+            pathname: "/",
+          },
+        } as unknown as Window & typeof globalThis;
+        // @ts-expect-error test mock
+        globalThis.document = mockDocument;
+
+        const loaded = initClarity("zfj5g0gmye");
+        expect(loaded).toBe(true);
+        expect(mockDocument.createElement).toHaveBeenCalledWith("script");
+
+        const scriptEl = createdElements[0];
+        expect(scriptEl.src).toBe("https://tag.clarity.ms/tag/zfj5g0gmye");
+        expect(scriptEl.id).toBe("ms-clarity-tag");
+        expect(scriptEl.async).toBe(true);
+        expect(mockExistingScript.parentNode.insertBefore).toHaveBeenCalledWith(
+          scriptEl,
+          mockExistingScript
+        );
+
+        // Simulate network / DNS error on tag.clarity.ms
+        if (typeof scriptEl.onerror === "function") {
+          scriptEl.onerror(new Event("error"));
+          expect(scriptEl.src).toBe("https://www.clarity.ms/tag/zfj5g0gmye");
+        }
+      } finally {
+        process.env.NEXT_PUBLIC_CLARITY_ENABLE_DEV = prevDevEnv;
+      }
     });
   });
 });
