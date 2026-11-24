@@ -250,7 +250,7 @@ export function ProductShowcase({
       clearTimeout(transitionTimer);
       transitionTimer = setTimeout(() => {
         isTransitioning = false;
-      }, 500);
+      }, 450);
     };
 
     // 1. Wheel handler for desktop mouse & trackpad
@@ -324,7 +324,7 @@ export function ProductShowcase({
       const deltaX = e.changedTouches[0].clientX - touchStartX;
 
       // Only handle clear vertical gestures (swipe distance >= 35px, more vertical than horizontal)
-      if (Math.abs(deltaY) < 35 || Math.abs(deltaY) < Math.abs(deltaX) * 1.2) {
+      if (Math.abs(deltaY) < 35 || Math.abs(deltaY) < Math.abs(deltaX) * 1.25) {
         return;
       }
 
@@ -341,15 +341,23 @@ export function ProductShowcase({
         return;
       }
 
-      // Boundary: Product 1 swipe DOWN (deltaY > 0, scrolling up) -> enter Overview
-      if (currentIdx === productsStartIndex && deltaY > 0) {
-        triggerTransition(0);
-        return;
-      }
-
-      // Boundary: Last product swipe UP (deltaY < 0, scrolling down) -> enter Checkout
-      if (currentIdx === checkoutSectionIndex - 1 && deltaY < 0) {
-        triggerTransition(checkoutSectionIndex);
+      // Inside Products: 1 discrete swipe gesture moves exactly 1 product card
+      if (currentIdx >= productsStartIndex && currentIdx < checkoutSectionIndex) {
+        if (deltaY < 0) {
+          // Swiping UP (scrolling down): move to next product, or to checkout if on last product
+          if (currentIdx === checkoutSectionIndex - 1) {
+            triggerTransition(checkoutSectionIndex);
+          } else {
+            triggerTransition(currentIdx + 1);
+          }
+        } else if (deltaY > 0) {
+          // Swiping DOWN (scrolling up): move to previous product, or to overview if on first product
+          if (currentIdx === productsStartIndex) {
+            triggerTransition(0);
+          } else {
+            triggerTransition(currentIdx - 1);
+          }
+        }
         return;
       }
 
