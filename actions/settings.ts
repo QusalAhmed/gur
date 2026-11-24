@@ -373,7 +373,7 @@ export async function updateSiteSettingsAction(
  * Loads public site settings (branding, store details, etc.) without requiring admin authentication.
  * Safe for use in public layouts, store headers, and metadata generation.
  */
-export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>> {
+export async function getPublicSiteSettingsAction(): Promise<Partial<SiteSettingsMap>> {
   try {
     const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
@@ -396,10 +396,6 @@ export async function getPublicSiteSettings(): Promise<Partial<SiteSettingsMap>>
     console.error("Error fetching public site settings:", err);
     return {};
   }
-}
-
-export async function getPublicSiteSettingsAction(): Promise<Partial<SiteSettingsMap>> {
-  return getPublicSiteSettings();
 }
 
 /**

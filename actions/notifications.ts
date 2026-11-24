@@ -2,7 +2,6 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
-import { createNotificationInternal } from "@/lib/notifications-service";
 import { isValidUuid } from "@/lib/security";
 import { AdminNotification, NotificationType } from "@/types/notification";
 import { revalidatePath } from "next/cache";
@@ -38,28 +37,6 @@ export async function getNotificationsAction(
   } catch (err: any) {
     console.error("[getNotificationsAction] exception:", err);
     return { success: false, error: err?.message || "Failed to fetch notifications" };
-  }
-}
-
-/**
- * Fetch total unread notifications count
- */
-export async function getUnreadNotificationsCountAction(): Promise<ActionResult<number>> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    const supabase = getSupabaseAdmin();
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("is_read", false);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: count || 0 };
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Failed to count unread notifications" };
   }
 }
 
@@ -162,33 +139,6 @@ export async function clearReadNotificationsAction(): Promise<ActionResult> {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to clear read notifications" };
-  }
-}
-
-/**
- * Push an application-level notification (e.g. from customer phone inquiry, custom alert)
- */
-export async function createNotificationAction({
-  type = "system_alert",
-  title,
-  message,
-  data = {},
-}: {
-  type?: NotificationType;
-  title: string;
-  message: string;
-  data?: Record<string, any>;
-}): Promise<ActionResult<AdminNotification>> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "editor", "support"]);
-    return await createNotificationInternal({
-      type,
-      title,
-      message,
-      data,
-    });
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Failed to create notification" };
   }
 }
 

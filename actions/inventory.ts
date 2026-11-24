@@ -7,16 +7,8 @@ import { isValidUuid, clampInt } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { Database } from "@/types/database.types";
 import {
-  receiveStockAction,
-  adjustStockAction as appendAdjustStockAction,
-  writeOffStockAction,
   updateReorderPointAction,
 } from "./inventory-ops";
-import {
-  createBatchAction as baseCreateBatchAction,
-  updateBatchStatusAction as baseUpdateBatchStatusAction,
-  updateBatchLabResultsAction,
-} from "./batch-ops";
 
 export interface InventoryItem {
   id: string;
@@ -448,30 +440,6 @@ export async function getAdminStockLedgerAction(params?: {
 }
 
 /**
- * Adjust stock: delegates to append-only stock_movements entry.
- */
-export async function adjustStockAction(payload: {
-  variantId: string;
-  warehouseId: string;
-  quantityDelta: number;
-  reason: string;
-  batchId?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  const res = await appendAdjustStockAction({
-    variantId: payload.variantId,
-    warehouseId: payload.warehouseId,
-    quantityDelta: payload.quantityDelta,
-    reason: payload.reason,
-    batchId: payload.batchId,
-  });
-
-  if (!res.ok) {
-    return { success: false, error: res.message };
-  }
-  return { success: true };
-}
-
-/**
  * Updates reorder point for a variant at a warehouse.
  */
 export async function updateReorderPointDirectAction(payload: {
@@ -483,64 +451,6 @@ export async function updateReorderPointDirectAction(payload: {
     variantId: payload.variantId,
     warehouseId: payload.warehouseId,
     reorderPoint: payload.reorderPoint,
-  });
-
-  if (!res.ok) {
-    return { success: false, error: res.message };
-  }
-  return { success: true };
-}
-
-/**
- * Create batch action wrapper.
- */
-export async function createBatchAction(payload: {
-  lotCode: string;
-  productId: string;
-  supplierId?: string;
-  producedOn?: string;
-  bestBefore?: string;
-  brix?: number;
-  ph?: number;
-  moisturePct?: number;
-  densityKgPerL?: number;
-  ashPct?: number;
-  totalSugarPct?: number;
-  notes?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  const res = await baseCreateBatchAction({
-    lotCode: payload.lotCode,
-    productId: payload.productId,
-    supplierId: payload.supplierId,
-    producedOn: payload.producedOn,
-    bestBefore: payload.bestBefore,
-    brix: payload.brix,
-    ph: payload.ph,
-    moisturePct: payload.moisturePct,
-    densityKgPerL: payload.densityKgPerL,
-    ashPct: payload.ashPct,
-    totalSugarPct: payload.totalSugarPct,
-    notes: payload.notes,
-  });
-
-  if (!res.ok) {
-    return { success: false, error: res.message };
-  }
-  return { success: true };
-}
-
-/**
- * Update batch status action wrapper.
- */
-export async function updateBatchStatusAction(payload: {
-  id: string;
-  status: "released" | "quarantine" | "blocked" | "expired";
-  reason?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  const res = await baseUpdateBatchStatusAction({
-    batchId: payload.id,
-    status: payload.status,
-    reason: payload.reason,
   });
 
   if (!res.ok) {
@@ -676,48 +586,5 @@ export async function getAdminSuppliersAction(): Promise<{
   } catch (error: any) {
     const friendly = mapDatabaseError(error);
     return { success: false, error: friendly.message, data: [] };
-  }
-}
-
-export async function createSupplierAction(payload: {
-  name: string;
-  contactName?: string;
-  phone?: string;
-  address?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager"]);
-    const supabase = getSupabaseAdmin();
-
-    const { error } = await supabase.from("suppliers").insert({
-      name: payload.name.trim(),
-      contact_name: payload.contactName?.trim() || null,
-      phone: payload.phone?.trim() || null,
-      address: payload.address?.trim() || null,
-      is_active: true,
-    });
-
-    if (error) return { success: false, error: error.message };
-    revalidatePath("/admin/batches");
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Failed to create supplier" };
-  }
-}
-
-export async function deleteSupplierAction(id: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    await assertStaffRole(["owner", "admin"]);
-    if (!isValidUuid(id)) {
-      return { success: false, error: "Invalid supplier ID" };
-    }
-    const supabase = getSupabaseAdmin();
-
-    const { error } = await supabase.from("suppliers").delete().eq("id", id);
-    if (error) return { success: false, error: error.message };
-    revalidatePath("/admin/batches");
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Failed to delete supplier" };
   }
 }

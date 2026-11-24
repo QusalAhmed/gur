@@ -128,31 +128,6 @@ export interface UiProductItem {
   createdAt?: string;
 }
 
-export async function uploadProductImageToStorage(
-  file: File,
-  productId?: string
-): Promise<{ path: string; publicUrl: string }> {
-  const fileExt = file.name.split(".").pop()?.toLowerCase() || "webp";
-  const cleanBaseName = file.name
-    .replace(/\.[^/.]+$/, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .slice(0, 30);
-  const targetId = productId || "temp";
-  const folder = `products/${targetId}`;
-  const fileName = `${Date.now()}-${cleanBaseName}.${fileExt}`;
-
-  const result = await uploadToImageKitWithProgress(file, {
-    folder,
-    fileName,
-  });
-
-  return {
-    path: result.url,
-    publicUrl: result.url,
-  };
-}
-
 export async function deleteProductImageFromStorage(_storagePath: string): Promise<boolean> {
   // Storage is completely hosted on ImageKit CDN
   return true;

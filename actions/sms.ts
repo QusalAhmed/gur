@@ -14,7 +14,6 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
-import { updateSiteSettingsAction } from "@/actions/settings";
 
 export interface SmsLogItem {
   id: string;
@@ -53,84 +52,6 @@ export async function getSmsConfigAction(): Promise<{
     };
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to load SMS configuration." };
-  }
-}
-
-/**
- * Server Action: Updates SMS configuration and templates in site_settings.
- */
-export async function updateSmsConfigAction(payload: {
-  enabled?: boolean;
-  gateway?: string;
-  user?: string;
-  password?: string;
-  senderId?: string;
-  statusToggles?: {
-    placed?: boolean;
-    confirmed?: boolean;
-    shipped?: boolean;
-    delivered?: boolean;
-  };
-  templates?: {
-    placed?: string;
-    confirmed?: string;
-    shipped?: string;
-    delivered?: string;
-  };
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    await assertStaffRole(["owner", "admin"]);
-    const settingsPayload: Record<string, any> = {};
-
-    if (payload.enabled !== undefined) {
-      settingsPayload["notifications.sms_enabled"] = payload.enabled;
-    }
-    if (payload.gateway !== undefined) {
-      settingsPayload["notifications.sms_gateway"] = payload.gateway;
-    }
-    if (payload.user !== undefined) {
-      settingsPayload["notifications.smsbangladesh_user"] = payload.user.trim();
-    }
-    if (payload.password !== undefined) {
-      settingsPayload["notifications.smsbangladesh_password"] = payload.password.trim();
-    }
-    if (payload.senderId !== undefined) {
-      settingsPayload["notifications.smsbangladesh_from"] = payload.senderId.trim();
-    }
-
-    if (payload.statusToggles) {
-      if (payload.statusToggles.placed !== undefined) {
-        settingsPayload["notifications.sms_placed_enabled"] = payload.statusToggles.placed;
-      }
-      if (payload.statusToggles.confirmed !== undefined) {
-        settingsPayload["notifications.sms_confirmed_enabled"] = payload.statusToggles.confirmed;
-      }
-      if (payload.statusToggles.shipped !== undefined) {
-        settingsPayload["notifications.sms_shipped_enabled"] = payload.statusToggles.shipped;
-      }
-      if (payload.statusToggles.delivered !== undefined) {
-        settingsPayload["notifications.sms_delivered_enabled"] = payload.statusToggles.delivered;
-      }
-    }
-
-    if (payload.templates) {
-      if (payload.templates.placed !== undefined) {
-        settingsPayload["notifications.sms_template_placed"] = payload.templates.placed.trim();
-      }
-      if (payload.templates.confirmed !== undefined) {
-        settingsPayload["notifications.sms_template_confirmed"] = payload.templates.confirmed.trim();
-      }
-      if (payload.templates.shipped !== undefined) {
-        settingsPayload["notifications.sms_template_shipped"] = payload.templates.shipped.trim();
-      }
-      if (payload.templates.delivered !== undefined) {
-        settingsPayload["notifications.sms_template_delivered"] = payload.templates.delivered.trim();
-      }
-    }
-
-    return await updateSiteSettingsAction(settingsPayload);
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Failed to save SMS settings." };
   }
 }
 

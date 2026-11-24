@@ -203,27 +203,6 @@ export async function uploadImageWithProgress(
 }
 
 /**
- * Direct upload to Supabase Storage with XMLHttpRequest for accurate 0-100% progress tracking.
- * Falls back to standard Supabase client upload if XHR is blocked by network constraints.
- * Kept for backward compatibility.
- */
-export async function uploadToSupabaseWithProgress(
-  file: File,
-  options: {
-    bucket?: string;
-    path: string;
-    onProgress: (percent: number) => void;
-  }
-): Promise<{ path: string; publicUrl: string }> {
-  // Completely migrated to ImageKit CDN
-  const res = await uploadToImageKitWithProgress(file, {
-    fileName: options.path.split('/').pop(),
-    onProgress: options.onProgress,
-  });
-  return { path: res.url, publicUrl: res.url };
-}
-
-/**
  * Normalizes any external value format into standard UploadedImage[] array.
  */
 export function normalizeValue(

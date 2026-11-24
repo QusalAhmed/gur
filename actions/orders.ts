@@ -2219,40 +2219,6 @@ export async function deleteOrderNoteAction(
 }
 
 /**
- * Server Action: Updates an order's customer note.
- */
-export async function updateCustomerNoteAction(
-  orderId: string,
-  customerNoteText: string,
-  currentOrder?: Order
-): Promise<Order> {
-  await assertStaffRole([...ORDER_STAFF_ROLES]);
-  const client = getSupabaseAdmin();
-
-  const baseOrder =
-    currentOrder ||
-    (await getOrderAction(orderId)) ||
-    ({ id: orderId, customer_note: "" } as any as Order);
-
-  const trimmed = customerNoteText.trim();
-
-  await client
-    .from("orders")
-    .update({ customer_note: trimmed || null })
-    .eq("order_number", orderId);
-
-  await client
-    .from("order_notes")
-    .delete()
-    .eq("order_number", orderId)
-    .eq("type", "customer");
-
-  baseOrder.customer_note = trimmed;
-  baseOrder.notes = (baseOrder.notes || []).filter((n) => n.type !== "customer");
-  return baseOrder;
-}
-
-/**
  * Server Action: Records payment amount and status on an order.
  */
 export async function recordOrderPaymentAction(

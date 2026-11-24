@@ -5,7 +5,6 @@ import {
   bookSteadfastParcelInternal,
   bookSteadfastBulkParcelsInternal,
   getSteadfastBalanceInternal,
-  cancelSteadfastConsignmentInternal,
   recreateSteadfastParcelInternal,
   getSteadfastDeliveryRecordInternal,
   batchGetSteadfastDeliveryRecordsInternal,
@@ -92,55 +91,6 @@ export async function bookSteadfastBulkParcelsAction(
 }
 
 /**
- * Server Action: Enqueues bulk parcel booking into Inngest with concurrency control.
- * Falls back to synchronous execution if Inngest queue is unavailable.
- */
-export async function queueSteadfastBulkBookingAction(orders: Order[]): Promise<{
-  success: boolean;
-  queued: boolean;
-  totalRequested: number;
-  error?: string;
-}> {
-  try {
-    const session = await assertStaffRole(["owner", "admin", "manager", "support"]);
-    if (!orders || orders.length === 0) {
-      return { success: true, queued: false, totalRequested: 0 };
-    }
-
-    try {
-      const { inngest } = await import("@/lib/inngest/client");
-      await inngest.send({
-        name: "steadfast.bulk.book",
-        data: { orders },
-      });
-      return { success: true, queued: true, totalRequested: orders.length };
-    } catch (err: any) {
-      console.warn(
-        "[Steadfast] Failed to enqueue bulk booking, falling back to synchronous execution:",
-        err
-      );
-      const syncRes = await bookSteadfastBulkParcelsInternal(
-        orders,
-        getActorUuid(session)
-      );
-      return {
-        success: syncRes.success,
-        queued: false,
-        totalRequested: syncRes.totalRequested,
-        error: syncRes.error,
-      };
-    }
-  } catch (err: any) {
-    return {
-      success: false,
-      queued: false,
-      totalRequested: orders?.length || 0,
-      error: err?.message || "Unauthorized or failed to queue bulk booking.",
-    };
-  }
-}
-
-/**
  * Server Action: Fetch current Steadfast Courier merchant balance & remittance.
  */
 export async function getSteadfastBalanceAction(): Promise<SteadfastBalanceResult> {
@@ -151,47 +101,6 @@ export async function getSteadfastBalanceAction(): Promise<SteadfastBalanceResul
     return {
       success: false,
       error: err?.message || "Unauthorized or failed to retrieve balance.",
-    };
-  }
-}
-
-/**
- * Server Action: High-level status updater with automatic Steadfast parcel creation.
- * Delegated to central updateOrderStatusAction in actions/orders.ts.
- */
-export async function updateOrderStatusWithSteadfastAction(
-  params: UpdateOrderStatusWithSteadfastParams
-): Promise<UpdateOrderStatusWithSteadfastResult> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const { updateOrderStatusAction } = await import("@/actions/orders");
-    return await updateOrderStatusAction(params);
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err?.message || "Unauthorized or failed to update order status.",
-    };
-  }
-}
-
-/**
- * Server Action: Submit a return/cancellation request to Steadfast Courier.
- */
-export async function cancelSteadfastConsignmentAction(
-  identifier: {
-    consignmentId?: number | string;
-    invoice?: string;
-    trackingCode?: string;
-  },
-  reason?: string
-): Promise<{ success: boolean; status?: number; message?: string; raw?: any }> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "support"]);
-    return await cancelSteadfastConsignmentInternal(identifier, reason);
-  } catch (err: any) {
-    return {
-      success: false,
-      message: err?.message || "Unauthorized or failed to cancel consignment.",
     };
   }
 }

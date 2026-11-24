@@ -13,7 +13,6 @@ import {
   outboxRecoveryCronFunction,
   outboxSweepEventFunction,
 } from "@/lib/inngest/functions/outbox-recovery";
-import { demoPackagingFunction } from "@/lib/inngest/functions/demo-packaging";
 import { metaCapiBatchDispatcherFunction } from "@/lib/inngest/functions/meta-capi-batch";
 import { draftOrderDebouncedAutoSaveFunction } from "@/lib/inngest/functions/draft-order";
 import { steadfastBulkBookingFunction } from "@/lib/inngest/functions/steadfast-bulk";
@@ -31,7 +30,6 @@ export const { GET, POST, PUT } = serve({
     metaCapiPurchaseFunction,
     outboxRecoveryCronFunction,
     outboxSweepEventFunction,
-    demoPackagingFunction,
     metaCapiBatchDispatcherFunction,
     draftOrderDebouncedAutoSaveFunction,
     steadfastBulkBookingFunction,

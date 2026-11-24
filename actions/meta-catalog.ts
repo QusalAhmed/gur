@@ -208,32 +208,4 @@ export async function syncSingleProductToMetaCatalogAction(
   }
 }
 
-/**
- * Deletes a product or variant item from Meta Catalog by retailer ID.
- */
-export async function deleteProductFromMetaCatalogAction(
-  retailerId: string,
-  payload?: { catalogId?: string; accessToken?: string }
-): Promise<{
-  success: boolean;
-  handles: string[];
-  error?: string;
-}> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "editor"]);
-    const res = await deleteProductFromCatalog(retailerId, payload);
-    return {
-      success: res.success,
-      handles: res.handles,
-      error: res.error,
-    };
-  } catch (err: any) {
-    console.error(`[Meta Catalog Action] deleteProductFromMetaCatalogAction error for ${retailerId}:`, err);
-    return {
-      success: false,
-      handles: [],
-      error: err?.message || `Failed to delete product ${retailerId} from Meta Catalog`,
-    };
-  }
-}
 

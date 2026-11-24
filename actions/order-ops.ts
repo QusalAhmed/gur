@@ -225,39 +225,3 @@ export async function addStaffNoteAction(
     return { ok: false, code: friendly.code, message: friendly.message };
   }
 }
-
-/**
- * Modifies items of a pending or incomplete order:
- * Calls RPC set_order_items(p_order_id, p_items, p_price_overrides)
- */
-export async function setOrderItemsAction(
-  orderId: string,
-  items: Array<{ variant_id: string; quantity: number }>,
-  priceOverrides?: Record<string, number>
-): Promise<ActionResult> {
-  try {
-    await assertStaffRole(["owner", "admin", "manager", "support"]);
-    if (!isValidUuid(orderId)) {
-      return { ok: false, code: "INVALID_ORDER_ID", message: "Invalid order ID." };
-    }
-    const client = getSupabaseAdmin();
-
-    const { data, error } = await client.rpc("set_order_items", {
-      p_order_id: orderId,
-      p_items: items as any,
-      p_price_overrides: priceOverrides ? (priceOverrides as any) : null,
-    });
-
-    if (error) {
-      const friendly = mapDatabaseError(error);
-      return { ok: false, code: friendly.code, message: friendly.message };
-    }
-
-    revalidatePath("/admin/orders");
-    revalidatePath(`/admin/orders/${orderId}`);
-    return { ok: true, data };
-  } catch (err: any) {
-    const friendly = mapDatabaseError(err);
-    return { ok: false, code: friendly.code, message: friendly.message };
-  }
-}
