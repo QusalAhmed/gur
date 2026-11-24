@@ -199,6 +199,7 @@ export function ProductCard({
     }
   }, [product.id, variants, defaultVariant, selectedVariant.id]);
 
+
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -629,7 +630,7 @@ export function ProductCard({
       id={index === 0 ? "products" : `product-${product.id}`}
       data-product-card="true"
       data-section-index={index + 1}
-      className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth animate-in fade-in duration-300"
+      className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 relative overflow-hidden bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none animate-in fade-in duration-300"
     >
       {/* Floating Product Number Tag at Top Left Corner of Product Card */}
       <div className="absolute top-3 sm:top-20 left-0 right-0 z-30 pointer-events-none px-3 sm:px-6 md:px-10 lg:px-16">
@@ -647,9 +648,9 @@ export function ProductCard({
       </div>
 
       {/* Safe Centering Wrapper */}
-      <div className="h-full max-h-full w-full flex flex-col justify-center pt-2 sm:pt-16 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16 overflow-hidden">
+      <div className="min-h-full w-full flex flex-col justify-center pt-3.5 sm:pt-20 pb-14 sm:pb-8 px-3 sm:px-6 md:px-10 lg:px-16">
         {/* Main Two-Column Container for Desktop & Tablet, Single Column on Mobile */}
-        <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-2 sm:gap-6 md:gap-8 lg:gap-12 py-1 sm:py-2">
+        <div className="relative z-10 w-full max-w-5xl lg:max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 pt-1 pb-0 sm:py-2">
         {/* ================= LEFT COLUMN: Image Showcase / Carousel ================= */}
         <div className="w-full flex flex-col items-center justify-center">
           {/* Full-width Responsive Showcase Container */}
@@ -658,7 +659,7 @@ export function ProductCard({
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: false, amount: "some" }}
             transition={{ duration: 0.35, ease: "easeOut" }}
-            className="relative w-full max-w-[220px] sm:max-w-md md:max-w-none aspect-square max-h-[20vh] xs:max-h-[24vh] sm:max-h-[360px] md:max-h-[440px] lg:max-h-[480px] mx-auto shrink min-h-0"
+            className="relative w-full max-w-[260px] sm:max-w-md md:max-w-none aspect-square max-h-[260px] sm:max-h-[420px] md:max-h-[440px] lg:max-h-[480px] mx-auto"
           >
 
             {/* Multiple Media with Shadcn Carousel */}
@@ -764,15 +765,15 @@ export function ProductCard({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: false, amount: "some" }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-2 sm:space-y-3.5"
+          className="w-full max-w-lg md:max-w-none lg:max-w-xl mx-auto flex flex-col justify-center space-y-3 sm:space-y-3.5"
         >
           {/* Product Title & Short Bio */}
           <div className="text-center md:text-left px-1">
-            <h2 className="text-base sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight line-clamp-1 sm:line-clamp-none">
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100 tracking-tight leading-tight">
               {displayName}
             </h2>
             {!selectedVariant.isCombo && displaySummary && (
-              <p className="text-xs sm:text-base text-stone-600 dark:text-stone-300 mt-0.5 sm:mt-1.5 leading-relaxed font-normal line-clamp-2">
+              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed font-normal">
                 {displaySummary}
               </p>
             )}
@@ -781,11 +782,11 @@ export function ProductCard({
           {/* Control Deck: Variation Selector, Price & Quantity Stepper */}
           <div
             data-tour-zone={index === 0 ? "product-controls" : undefined}
-            className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs space-y-2 sm:space-y-2.5"
+            className="w-full bg-stone-50 dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5"
           >
             {/* Variation Dropdown */}
             {sortedVariants.length > 1 && (
-              <div className="space-y-1 sm:space-y-1.5 px-1">
+              <div className="space-y-1.5 px-1">
                 <label
                   htmlFor={`variant-select-${product.id}`}
                   className="block text-xs sm:text-sm font-semibold text-stone-700 dark:text-stone-300"
@@ -806,7 +807,7 @@ export function ProductCard({
                     id={`variant-select-${product.id}`}
                     data-tour={index === 0 ? "product-variant-select" : undefined}
                     aria-label={lang === "bn" ? `${displayName}-এর সাইজ বা ওজন নির্বাচন করুন` : `Select weight or size for ${displayName}`}
-                    className="w-full !h-9 sm:!h-11 data-[size=default]:h-9 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-xs sm:text-base px-3 sm:px-3.5 rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xs hover:border-amber-700/60 dark:hover:border-stone-600 focus-visible:ring-1 focus-visible:ring-amber-700/50"
+                    className="w-full !h-10 sm:!h-11 data-[size=default]:h-10 sm:data-[size=default]:h-11 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold text-sm sm:text-base px-3.5 rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xs hover:border-amber-700/60 dark:hover:border-stone-600 focus-visible:ring-1 focus-visible:ring-amber-700/50"
                   >
                     <SelectValue>
                       <span className="flex items-center justify-between w-full pr-1.5">
@@ -857,12 +858,12 @@ export function ProductCard({
 
             {/* Combo Contents Breakdown Box */}
             {selectedVariant.isCombo && selectedVariant.comboItems && selectedVariant.comboItems.length > 0 && (
-              <div className="p-2 sm:p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/80 border border-amber-200/90 dark:border-stone-700/80 space-y-1 sm:space-y-1.5 text-left">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/80 border border-amber-200/90 dark:border-stone-700/80 space-y-1.5 text-left">
                 <span className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
                   <Boxes className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                   {lang === "bn" ? "প্যাকেজে যা যা থাকছে:" : "What's in this combo:"}
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300 max-h-[64px] sm:max-h-none overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
                   {selectedVariant.comboItems.map((ci, idx) => {
                     const prodName = lang === "bn" ? ci.product_name_bn || ci.product_name : ci.product_name;
                     const weightText = formatComboComponentWeight(ci, lang);
@@ -877,7 +878,7 @@ export function ProductCard({
                       <div
                         key={idx}
                         title={fullTitle}
-                        className="flex items-center justify-between gap-1 bg-white/70 dark:bg-stone-900/60 px-2 py-0.5 sm:py-1 rounded-md border border-amber-100 dark:border-stone-700 min-w-0"
+                        className="flex items-center justify-between gap-1.5 bg-white/70 dark:bg-stone-900/60 px-2 py-1 rounded-md border border-amber-100 dark:border-stone-700 min-w-0"
                       >
                         <div className="flex items-center gap-1.5 truncate min-w-0">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
@@ -964,42 +965,42 @@ export function ProductCard({
 
             {selectedVariant.isCombo ? (
               /* Dedicated Buy Now Button for Combo Packages */
-              <div className="pt-1 sm:pt-1.5 space-y-1.5 sm:space-y-2">
+              <div className="pt-1.5 space-y-2">
                 <button
                   type="button"
                   data-tour={index === 0 ? "product-combo-buy" : undefined}
                   onClick={handleBuyNow}
-                  className="w-full h-10 sm:h-12 rounded-xl bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-sm sm:text-base shadow-sm flex items-center justify-center gap-2 transition-colors touch-manipulation cursor-pointer group"
+                  className="w-full h-12 rounded-xl bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white font-semibold text-base shadow-sm flex items-center justify-center gap-2.5 transition-colors touch-manipulation cursor-pointer group"
                 >
-                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <ShoppingBag className="w-5 h-5" />
                   <span>{lang === "bn" ? "এখনই অর্ডার করুন" : "Order Combo Now"}</span>
-                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-0.5" />
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
               </div>
             ) : (
-              <div className="space-y-1.5 sm:space-y-2.5">
+              <div className="space-y-2.5">
                 {/* Quantity Stepper with Minus, Counter, Plus */}
                 <div className="relative">
-                  <div className="w-full rounded-xl p-1 sm:p-1.5 border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800/70 flex items-center justify-between gap-1.5 sm:gap-2 shadow-xs">
+                  <div className="w-full rounded-xl p-1.5 border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800/70 flex items-center justify-between gap-2 shadow-xs">
                     {/* Left: Minus Button */}
                     {displayUnit === 0 ? (
                       <button
                         type="button"
                         disabled
                         aria-disabled="true"
-                        className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-stone-200/50 dark:bg-stone-800 text-stone-400 dark:text-stone-600 flex items-center justify-center font-bold text-base sm:text-lg shrink-0 cursor-not-allowed select-none"
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-stone-200/50 dark:bg-stone-800 text-stone-400 dark:text-stone-600 flex items-center justify-center font-bold text-lg shrink-0 cursor-not-allowed select-none"
                         aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                       >
-                        <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+                        <Minus className="w-4 h-4 stroke-[2.5]" />
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleSetUnit(currentUnit - 1)}
-                        className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-50 active:bg-stone-100 flex items-center justify-center text-stone-800 dark:text-stone-100 font-bold text-base sm:text-lg transition-colors touch-manipulation cursor-pointer shrink-0 border border-stone-200/80 dark:border-stone-600 shadow-xs"
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white dark:bg-stone-700 hover:bg-stone-50 active:bg-stone-100 flex items-center justify-center text-stone-800 dark:text-stone-100 font-bold text-lg transition-colors touch-manipulation cursor-pointer shrink-0 border border-stone-200/80 dark:border-stone-600 shadow-xs"
                         aria-label={lang === "bn" ? "পরিমাণ কমান" : "Decrease quantity"}
                       >
-                        <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+                        <Minus className="w-4 h-4 stroke-[2.5]" />
                       </button>
                     )}
 
@@ -1008,7 +1009,7 @@ export function ProductCard({
                       <div ref={bagRef} className="relative flex items-center justify-center">
                         {/* Large Quantity Box with SlidingNumber */}
                         <div
-                          className={`px-3 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[48px] sm:min-w-[64px] ${
+                          className={`px-4 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[54px] sm:min-w-[64px] ${
                             displayUnit > 0
                               ? "bg-amber-800 text-white border-amber-900"
                               : "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 border-stone-200 dark:border-stone-600"
@@ -1017,7 +1018,7 @@ export function ProductCard({
                           <SlidingNumber
                             value={displayUnit}
                             isBengali={false}
-                            className="text-lg sm:text-2xl font-bold font-mono tracking-tight flex items-center justify-center tabular-nums"
+                            className="text-xl sm:text-2xl font-bold font-mono tracking-tight flex items-center justify-center tabular-nums"
                           />
                         </div>
                       </div>
@@ -1029,17 +1030,17 @@ export function ProductCard({
                       data-tour={index === 0 ? "product-plus-btn" : undefined}
                       type="button"
                       onClick={handleAddQuantityWithAnimation}
-                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white flex items-center justify-center font-bold text-base sm:text-lg shadow-sm transition-colors touch-manipulation cursor-pointer shrink-0"
+                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white flex items-center justify-center font-bold text-lg shadow-sm transition-colors touch-manipulation cursor-pointer shrink-0"
                       aria-label={lang === "bn" ? "পরিমাণ বাড়ান" : "Increase quantity"}
                     >
-                      <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
                     </button>
                   </div>
                 </div>
 
                 {/* Quick Preset Quantity Selector Pills: 1, 2, 3, 5, 10 */}
-                <div className="flex items-center justify-center md:justify-start gap-1 sm:gap-1.5 pt-0.5">
-                  <span className="text-[11px] sm:text-sm font-medium text-stone-500 dark:text-stone-400 mr-1">
+                <div className="flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
+                  <span className="text-xs sm:text-sm font-medium text-stone-500 dark:text-stone-400 mr-1">
                     {lang === "bn" ? "দ্রুত পছন্দ:" : "Quick Select:"}
                   </span>
                   {[1, 2, 3, 5, 10].map((preset) => (
@@ -1050,7 +1051,7 @@ export function ProductCard({
                       onClick={() => handlePresetClick(preset)}
                       aria-label={lang === "bn" ? `${preset}টি নির্বাচন করুন` : `Select ${preset}`}
                       aria-pressed={displayUnit === preset}
-                      className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-semibold border transition-colors touch-manipulation cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-xs sm:text-sm font-semibold border transition-colors touch-manipulation cursor-pointer ${
                         displayUnit === preset
                           ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-xs"
                           : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-750"

@@ -137,7 +137,7 @@
   }
 
   html {
-    @apply font-sans scroll-smooth;
+    @apply font-sans;
     scroll-snap-type: y mandatory;
     overscroll-behavior-y: none;
   }

@@ -695,7 +695,7 @@ return (
   <section
     id="checkout"
     data-section-index="checkout"
-    className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none scroll-smooth"
+    className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none overscroll-contain"
   >
     {/* Background Watcher for Incomplete Order Syncing (zero UI re-renders on keystrokes) */}
     <AutoSyncOrderWatcher
