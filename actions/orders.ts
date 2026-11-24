@@ -13,6 +13,7 @@ import {
 } from "@/lib/security";
 import { timingSafeTokenEqual } from "@/lib/server-security";
 import { normalizeBdPhone } from "@/lib/phone";
+import { cleanCustomerEmail, cleanCustomerName } from "@/lib/customer-autofill";
 import { formatDateTime } from "@/lib/utils";
 import {
   formatDbOrderRecord,
@@ -1536,6 +1537,30 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
   }
 
   let matchedCustomerId: string | null = null;
+  const cleanEmail = cleanCustomerEmail(savedOrder.email);
+  const cleanName = cleanCustomerName(customerName).slice(0, 120) || null;
+  const isDifferentRecipient = Boolean(
+    (normalizedShippingPhone && normalizedPhone && normalizedShippingPhone !== normalizedPhone) ||
+      (recipientName && customerName && recipientName.toLowerCase() !== customerName.toLowerCase())
+  );
+  const addrDivision = (savedOrder.address?.division || "").trim();
+  const addrDistrict = (savedOrder.address?.district || "").trim();
+  const addrLine = (savedOrder.address?.address_line || "").trim();
+  const addrPostal = (savedOrder.address?.postal_code || "").trim();
+  const hasAddressData = Boolean(addrDivision || addrDistrict || addrLine || addrPostal);
+  const defaultAddressPayload =
+    !isDifferentRecipient && hasAddressData
+      ? {
+          division: addrDivision,
+          district: addrDistrict,
+          postal_code: addrPostal,
+          address_line: addrLine,
+          recipient_name: cleanName || "",
+          phone: normalizedPhone,
+          ...(normalizedAltPhone ? { alternative_phone: normalizedAltPhone } : {}),
+        }
+      : undefined;
+
   if (normalizedPhone) {
     try {
       const { data: existingCust } = await client
@@ -1545,12 +1570,27 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
         .maybeSingle();
       if (existingCust?.id) {
         matchedCustomerId = existingCust.id;
+        const customerUpdatePayload: Record<string, any> = {
+          updated_at: nowStr,
+        };
+        if (cleanName) customerUpdatePayload.full_name = cleanName;
+        if (cleanEmail) customerUpdatePayload.email = cleanEmail;
+        if (defaultAddressPayload) customerUpdatePayload.default_address = defaultAddressPayload;
+
+        if (cleanName || cleanEmail || defaultAddressPayload) {
+          await client
+            .from("customers")
+            .update(customerUpdatePayload)
+            .eq("id", existingCust.id);
+        }
       } else {
         const { data: newCust } = await client
           .from("customers")
           .insert({
             phone: normalizedPhone,
-            full_name: customerName || null,
+            full_name: cleanName,
+            ...(cleanEmail ? { email: cleanEmail } : {}),
+            ...(defaultAddressPayload ? { default_address: defaultAddressPayload } : {}),
           })
           .select("id")
           .maybeSingle();
@@ -1590,11 +1630,12 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
     alternative_phone: normalizedAltPhone,
     shipping_phone: normalizedShippingPhone || normalizedPhone,
     recipient_name: recipientName || customerName,
-    email: savedOrder.email ? savedOrder.email.trim() : "",
+    email: cleanEmail,
     address: {
-      division: savedOrder.address?.division || "",
-      district: savedOrder.address?.district || "",
-      address_line: savedOrder.address?.address_line || "",
+      division: addrDivision,
+      district: addrDistrict,
+      address_line: addrLine,
+      postal_code: addrPostal,
       recipient_name: recipientName || customerName,
       phone: normalizedShippingPhone || normalizedPhone,
     },

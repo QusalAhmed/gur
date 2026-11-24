@@ -19,6 +19,8 @@ vi.mock("next/cache", () => ({
 
 let mockCustomersTable: any[] = [];
 let mockProfilesTable: any[] = [];
+let mockOrdersTable: any[] = [];
+let mockAddressesTable: any[] = [];
 let mockBusinessesTable: any[] = [];
 let mockMembersTable: any[] = [];
 let orderQueryCalls = {
@@ -36,6 +38,13 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: vi.fn(() => ({
     from: (table: string) => {
       if (table === "customers") {
+        const lookupChain = {
+          limit: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockImplementation(async () => {
+              return { data: mockCustomersTable[0] || null, error: null };
+            }),
+          }),
+        };
         return {
           select: vi.fn().mockReturnValue({
             order: vi.fn().mockReturnValue({
@@ -44,13 +53,8 @@ vi.mock("@/lib/supabase/admin", () => ({
                 error: null,
               }),
             }),
-            or: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockImplementation(async () => {
-                  return { data: mockCustomersTable[0] || null, error: null };
-                }),
-              }),
-            }),
+            or: vi.fn().mockReturnValue(lookupChain),
+            in: vi.fn().mockReturnValue(lookupChain),
           }),
           delete: vi.fn().mockReturnValue({
             eq: vi.fn().mockImplementation((col: string, val: any) => {
@@ -62,16 +66,45 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
 
       if (table === "profiles") {
+        const profileLookupChain = {
+          limit: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockImplementation(async () => ({
+              data: mockProfilesTable[0] || null,
+              error: null,
+            })),
+          }),
+          maybeSingle: vi.fn().mockImplementation(async () => ({
+            data: mockProfilesTable[0] || null,
+            error: null,
+          })),
+        };
         return {
           select: vi.fn().mockReturnValue({
-            or: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: mockProfilesTable[0] || null,
-                  error: null,
-                }),
-              }),
-            }),
+            or: vi.fn().mockReturnValue(profileLookupChain),
+            in: vi.fn().mockReturnValue(profileLookupChain),
+            eq: vi.fn().mockReturnValue(profileLookupChain),
+          }),
+        };
+      }
+
+      if (table === "addresses") {
+        const addrChain: any = {
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockImplementation(async () => ({
+            data: mockAddressesTable,
+            error: null,
+          })),
+        };
+        return {
+          select: vi.fn().mockReturnValue(addrChain),
+        };
+      }
+
+      if (table === "geo_divisions" || table === "geo_districts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
           }),
         };
       }
@@ -101,7 +134,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       if (table === "orders") {
         return {
           select: vi.fn().mockImplementation((sel: string) => {
-            if (sel.includes("status") && sel.includes("grand_total")) {
+            if (sel.includes("status") && sel.includes("grand_total") && !sel.includes("customer_phone")) {
               const filterObj: any = {
                 gte: vi.fn().mockImplementation((...args) => {
                   orderQueryCalls.statsGte.push(args);
@@ -128,6 +161,7 @@ vi.mock("@/lib/supabase/admin", () => ({
                 orderQueryCalls.mainEq.push(args);
                 return queryObj;
               }),
+              in: vi.fn().mockReturnThis(),
               gte: vi.fn().mockImplementation((...args) => {
                 orderQueryCalls.mainGte.push(args);
                 return queryObj;
@@ -142,6 +176,10 @@ vi.mock("@/lib/supabase/admin", () => ({
               }),
               order: vi.fn().mockReturnThis(),
               range: vi.fn().mockResolvedValue({ data: [], count: 0, error: null }),
+              limit: vi.fn().mockImplementation(async () => ({
+                data: mockOrdersTable,
+                error: null,
+              })),
             };
             return queryObj;
           }),
@@ -185,6 +223,8 @@ describe("Customer Flow & Decoupled Customer Management (Approach B)", () => {
       },
     ];
     mockProfilesTable = [];
+    mockOrdersTable = [];
+    mockAddressesTable = [];
     mockBusinessesTable = [];
     mockMembersTable = [];
   });
@@ -218,6 +258,39 @@ describe("Customer Flow & Decoupled Customer Management (Approach B)", () => {
     expect(result.data?.name).toBe("Tariqul Islam");
     expect(result.data?.phone).toBe("+8801712345678");
     expect(result.data?.address?.addressLine).toBe("Sector 3, Uttara");
+    expect(result.data?.address?.division).toBe("Dhaka");
+    expect(result.data?.address?.district).toBe("Dhaka");
+  });
+
+  it("searchCustomerByPhoneAction prioritizes recent active orders and merges multiple addresses", async () => {
+    mockCustomersTable = [];
+    mockProfilesTable = [];
+    mockOrdersTable = [
+      {
+        id: "ord-latest",
+        order_number: "MOL-2611-01201",
+        status: "delivered",
+        grand_total: 1850,
+        placed_at: "2026-11-20T10:00:00.000Z",
+        customer_name: "Nadia Rahman",
+        customer_phone: "+8801712345678",
+        customer_alternative_phone: "+8801812345678",
+        shipping_phone: "+8801712345678",
+        shipping_address: {
+          division: "Dhaka",
+          district: "Dhaka",
+          postal_code: "1205",
+          address_line: "House 14, Road 6, Dhanmondi",
+        },
+      },
+    ];
+
+    const result = await searchCustomerByPhoneAction("01712345678");
+    expect(result.ok).toBe(true);
+    expect(result.data?.name).toBe("Nadia Rahman");
+    expect(result.data?.alternativePhone).toBe("+8801812345678");
+    expect(result.data?.addresses).toHaveLength(1);
+    expect(result.data?.addresses[0].postalCode).toBe("1205");
   });
 
   it("getOrdersAction filters by date range (from and to) with Asia/Dhaka time bounds", async () => {

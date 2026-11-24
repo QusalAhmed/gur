@@ -709,6 +709,7 @@ export function OrdersClient() {
     mutationFn: (newOrder: Order) => createAdminOrderAction(newOrder),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "customer-phone-lookup"] });
       showToast(`Order ${created.id} successfully created and synced to database!`, "success");
     },
     onError: (err: any) => {
@@ -726,6 +727,7 @@ export function OrdersClient() {
         old.map((o) => (o.id === updated.id ? updated : o))
       );
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "customer-phone-lookup"] });
 
       // 2. Synchronize all local modal states immediately
       if (selectedOrder?.id === updated.id) {
@@ -1352,10 +1354,12 @@ export function OrdersClient() {
     open: boolean;
     mode: "create" | "edit";
     order?: Order | null;
+    initialPhone?: string | null;
   }>({
     open: false,
     mode: "create",
     order: null,
+    initialPhone: null,
   });
 
   const [statusOrder, setStatusOrder] = React.useState<Order | null>(null);
@@ -1871,32 +1875,43 @@ export function OrdersClient() {
       open: true,
       mode: "edit",
       order: freshOrder,
+      initialPhone: null,
     });
   };
 
   // Open Create Dialog (Unified form)
-  const handleOpenCreate = React.useCallback(() => {
+  const handleOpenCreate = React.useCallback((initialPhone?: string | null) => {
     setOrderModalState({
       open: true,
       mode: "create",
       order: null,
+      initialPhone: typeof initialPhone === "string" ? initialPhone : null,
     });
   }, []);
 
-  // Check if ?create=true was passed in the URL to automatically open the Order Form Dialog
+  // Check if ?create=true or ?new=true (and optional ?phone=...) was passed in the URL to open the Order Form Dialog
   const hasHandledCreateRef = React.useRef(false);
   const createParam = searchParams?.get("create");
+  const newParam = searchParams?.get("new");
+  const prefillPhoneParam = searchParams?.get("phone");
   React.useEffect(() => {
-    if ((createParam === "true" || createParam === "1") && !hasHandledCreateRef.current) {
+    const shouldOpen =
+      createParam === "true" ||
+      createParam === "1" ||
+      newParam === "true" ||
+      newParam === "1";
+    if (shouldOpen && !hasHandledCreateRef.current) {
       hasHandledCreateRef.current = true;
-      handleOpenCreate();
+      handleOpenCreate(prefillPhoneParam ? prefillPhoneParam.trim() : null);
       try {
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete("create");
+        newUrl.searchParams.delete("new");
+        newUrl.searchParams.delete("phone");
         window.history.replaceState(window.history.state, "", newUrl.toString());
       } catch {}
     }
-  }, [createParam, handleOpenCreate]);
+  }, [createParam, newParam, prefillPhoneParam, handleOpenCreate]);
 
   // Save handler for unified form
   const handleSaveOrder = async (savedOrder: Order, mode: "create" | "edit") => {
@@ -3370,7 +3385,7 @@ export function OrdersClient() {
           <Button
             id="btn-open-create-order-dialog"
             size="sm"
-            onClick={handleOpenCreate}
+            onClick={() => handleOpenCreate()}
             className="bg-amber-600 hover:bg-amber-700 text-white font-medium cursor-pointer shrink-0"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -3984,11 +3999,12 @@ export function OrdersClient() {
       {/* UNIFIED ORDER FORM DIALOG (CREATING & EDITING) */}
       {/* ========================================================================= */}
       <OrderFormDialog
-        key={orderModalState.open ? `${orderModalState.mode}-${orderModalState.order?.id || "create"}` : "closed"}
+        key={orderModalState.open ? `${orderModalState.mode}-${orderModalState.order?.id || "create"}-${orderModalState.initialPhone || ""}` : "closed"}
         open={orderModalState.open}
         onOpenChange={(open) => setOrderModalState((prev) => ({ ...prev, open }))}
         mode={orderModalState.mode}
         order={orderModalState.order}
+        initialPhone={orderModalState.initialPhone}
         defaultStatus={selectedTab !== "all" ? (selectedTab as Order["status"]) : "confirmed"}
         onSave={handleSaveOrder}
         geoDivisions={geoDivisions}

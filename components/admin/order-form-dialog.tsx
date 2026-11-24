@@ -30,8 +30,14 @@ import {
 } from "lucide-react";
 import {
   searchInquiryByRefCodeAction,
+  type CustomerLookupResult,
   type InquiryLookupResult,
 } from "@/actions/new-order-ops";
+import { CustomerPhoneLookupCard } from "@/components/admin/customer-phone-lookup-card";
+import {
+  resolveGeoLocationForOrderForm,
+  type CustomerSavedAddressOption,
+} from "@/lib/customer-autofill";
 import {
   DbGeoDivision,
   DbGeoDistrict,
@@ -108,6 +114,7 @@ export interface OrderFormDialogProps {
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   order?: Order | null;
+  initialPhone?: string | null;
   defaultStatus?: Order["status"];
   onSave: (order: Order, mode: "create" | "edit") => Promise<void> | void;
   geoDivisions: DbGeoDivision[];
@@ -333,6 +340,7 @@ export function OrderFormDialog({
   onOpenChange,
   mode,
   order,
+  initialPhone,
   defaultStatus,
   onSave,
   geoDivisions,
@@ -529,7 +537,7 @@ export function OrderFormDialog({
     canSubmitWhenInvalid: true,
     defaultValues: {
       customer: (mode === "edit" && order?.customer ? order.customer : "") || "",
-      phone: (mode === "edit" && order?.phone ? order.phone : "") || "",
+      phone: (mode === "edit" && order?.phone ? order.phone : initialPhone || "") || "",
       alternative_phone: (mode === "edit" && order?.alternative_phone ? order.alternative_phone : "") || "",
       different_shipping_recipient: mode === "edit" && Boolean(
         (order?.shipping_phone && order.shipping_phone !== order.phone) ||
@@ -1021,7 +1029,7 @@ export function OrderFormDialog({
         setNotesList([]);
         form.reset({
           customer: "",
-          phone: "",
+          phone: initialPhone || "",
           alternative_phone: "",
           different_shipping_recipient: false,
           shipping_recipient_name: "",
@@ -1051,7 +1059,77 @@ export function OrderFormDialog({
         });
       }
     }
-  }, [open, mode, order, defaultStatus, form]);
+  }, [open, mode, order, defaultStatus, initialPhone, form]);
+
+  const handleAutofillCustomer = React.useCallback(
+    (
+      customerData: CustomerLookupResult,
+      selectedAddress: CustomerSavedAddressOption | null
+    ) => {
+      const fieldsToValidate: Array<
+        "customer" | "alternative_phone" | "email" | "division" | "district" | "postal_code" | "address_line"
+      > = [];
+
+      if (customerData.name?.trim()) {
+        form.setFieldValue("customer", customerData.name.trim());
+        fieldsToValidate.push("customer");
+      }
+
+      if (customerData.alternativePhone?.trim()) {
+        form.setFieldValue("alternative_phone", customerData.alternativePhone.trim());
+        fieldsToValidate.push("alternative_phone");
+      }
+
+      if (customerData.email?.trim()) {
+        form.setFieldValue("email", customerData.email.trim());
+        fieldsToValidate.push("email");
+      }
+
+      if (selectedAddress) {
+        const resolvedGeo = resolveGeoLocationForOrderForm(
+          selectedAddress.division,
+          selectedAddress.district,
+          geoDivisions,
+          geoDistricts
+        );
+
+        if (resolvedGeo.division) {
+          form.setFieldValue("division", resolvedGeo.division);
+          fieldsToValidate.push("division");
+        }
+        if (resolvedGeo.district) {
+          form.setFieldValue("district", resolvedGeo.district);
+          fieldsToValidate.push("district");
+        }
+        if (selectedAddress.postalCode?.trim()) {
+          form.setFieldValue("postal_code", selectedAddress.postalCode.trim());
+          fieldsToValidate.push("postal_code");
+        }
+        if (selectedAddress.addressLine?.trim()) {
+          form.setFieldValue("address_line", selectedAddress.addressLine.trim());
+          fieldsToValidate.push("address_line");
+        }
+      }
+
+      setTimeout(() => {
+        for (const fieldName of fieldsToValidate) {
+          try {
+            form.validateField(fieldName, "change");
+          } catch {
+            // Ignore field validation edge cases
+          }
+        }
+      }, 0);
+
+      if (showToast) {
+        showToast(
+          `Autofilled customer details${customerData.name ? ` for ${customerData.name}` : ""}.`,
+          "success"
+        );
+      }
+    },
+    [form, geoDivisions, geoDistricts, showToast]
+  );
 
   // Group available catalog products by parent product
   const groupedCatalogProducts = React.useMemo(() => {
@@ -1681,6 +1759,20 @@ export function OrderFormDialog({
                     )}
                   </form.Field>
                 </div>
+
+                {mode === "create" && (
+                  <form.Subscribe selector={(state) => state.values.phone}>
+                    {(currentPhone) => (
+                      <CustomerPhoneLookupCard
+                        phone={currentPhone}
+                        initialPhone={initialPhone}
+                        geoDivisions={geoDivisions}
+                        geoDistricts={geoDistricts}
+                        onAutofill={handleAutofillCustomer}
+                      />
+                    )}
+                  </form.Subscribe>
+                )}
 
                 {/* Row 3: Geo Division & District & Zip Code */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

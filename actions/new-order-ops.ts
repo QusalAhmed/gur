@@ -1,26 +1,17 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
-import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
+import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
-import { normalizeBDPhone } from "@/lib/admin-format";
+import { fallbackDistricts, fallbackDivisions } from "@/lib/supabase/api";
+import {
+  buildCustomerLookupResult,
+  getBdPhoneQueryVariants,
+  type CustomerLookupResult,
+} from "@/lib/customer-autofill";
 
-export interface CustomerLookupResult {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  businessId?: string | null;
-  businessName?: string | null;
-  address?: {
-    districtId: number | null;
-    upazila: string | null;
-    addressLine: string;
-    postalCode: string | null;
-  } | null;
-}
+export type { CustomerLookupResult };
 
 
 export interface InquiryLookupResult {
@@ -97,121 +88,160 @@ export async function searchInquiryByRefCodeAction(
 }
 
 /**
- * Searches customer profiles by Bangladeshi phone number.
+ * Searches customer history and profile records by Bangladeshi phone number.
+ * Merges orders (preferring active/delivered over cancelled/incomplete), customers,
+ * and profiles/addresses, returning deduplicated address options and stats.
  */
 export async function searchCustomerByPhoneAction(
   rawPhone: string
 ): Promise<{ ok: boolean; data?: CustomerLookupResult | null; message?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
-    const supabase = getSupabaseAdmin();
-
-    const normalized = sanitizePostgrestFilterTerm(normalizeBDPhone(rawPhone));
-    const cleanDigits = sanitizePostgrestFilterTerm(rawPhone.replace(/[^0-9]/g, ""));
-    if (!normalized && !cleanDigits) {
+    const phoneQuery = getBdPhoneQueryVariants(rawPhone);
+    if (!phoneQuery) {
       return { ok: true, data: null };
     }
 
-    const orClauses = [
-      ...(normalized ? [`phone.eq.${normalized}`] : []),
-      ...(cleanDigits ? [`phone.ilike.%${cleanDigits}%`] : []),
-    ];
+    const supabase = getSupabaseAdmin();
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select(
-        `
-        id,
-        full_name,
-        phone,
-        business_members (
-          business_id,
-          business_accounts (
+    const [customerRes, profileRes, ordersRes, divisionsRes, districtsRes] = await Promise.all([
+      Promise.resolve(
+        supabase
+          .from("customers")
+          .select("id, user_id, phone, full_name, email, default_address, total_orders, total_spent, last_order_at")
+          .in("phone", phoneQuery.variants)
+          .limit(1)
+          .maybeSingle()
+      ).catch((err) => ({ data: null, error: err })),
+      Promise.resolve(
+        supabase
+          .from("profiles")
+          .select(
+            `
             id,
-            company_name,
-            status
+            full_name,
+            phone,
+            business_members (
+              business_id,
+              business_accounts (
+                id,
+                name,
+                status
+              )
+            )
+          `
           )
-        )
-      `
-      )
-      .or(orClauses.join(","))
-      .limit(1)
-      .maybeSingle();
+          .in("phone", phoneQuery.variants)
+          .limit(1)
+          .maybeSingle()
+      ).catch((err) => ({ data: null, error: err })),
+      Promise.resolve(
+        supabase
+          .from("orders")
+          .select(
+            "id, order_number, status, grand_total, placed_at, created_at, customer_name, customer_phone, customer_alternative_phone, shipping_phone, customer_email, shipping_address"
+          )
+          .in("customer_phone", phoneQuery.variants)
+          .order("placed_at", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(50)
+      ).catch((err) => ({ data: null, error: err })),
+      Promise.resolve(
+        supabase.from("geo_divisions").select("id, name, name_bn").order("name", { ascending: true })
+      ).catch(() => ({ data: null, error: null })),
+      Promise.resolve(
+        supabase.from("geo_districts").select("id, division_id, zone_id, name, name_bn").order("name", { ascending: true })
+      ).catch(() => ({ data: null, error: null })),
+    ]);
 
-    if (error) {
-      const friendly = mapDatabaseError(error);
+    if (ordersRes.error && customerRes.error && profileRes.error) {
+      const friendly = mapDatabaseError(ordersRes.error);
       return { ok: false, message: friendly.message };
     }
 
-    if (!profile) {
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id, full_name, phone, email, default_address")
-        .or(orClauses.join(","))
-        .limit(1)
-        .maybeSingle();
+    const customerData = customerRes.data || null;
+    let profileData = profileRes.data || null;
 
-      if (customer) {
-        const addr = (customer.default_address as Record<string, any>) || {};
-        return {
-          ok: true,
-          data: {
-            id: customer.id,
-            name: customer.full_name || "",
-            phone: customer.phone || "",
-            email: customer.email || null,
-            businessId: null,
-            businessName: null,
-            address: addr.address_line
-              ? {
-                  districtId: null,
-                  upazila: null,
-                  addressLine: addr.address_line,
-                  postalCode: null,
-                }
-              : null,
-          },
-        };
+    if (!profileData && customerData?.user_id && isValidUuid(customerData.user_id)) {
+      try {
+        const { data: linkedProfile } = await supabase
+          .from("profiles")
+          .select(
+            `
+            id,
+            full_name,
+            phone,
+            business_members (
+              business_id,
+              business_accounts (
+                id,
+                name,
+                status
+              )
+            )
+          `
+          )
+          .eq("id", customerData.user_id)
+          .maybeSingle();
+        if (linkedProfile) {
+          profileData = linkedProfile;
+        }
+      } catch {
+        // Optional profile lookup failure shouldn't block customer autofill
       }
-
-      return { ok: true, data: null };
     }
 
-    // Try to get default address
-    const { data: address } = await supabase
-      .from("addresses")
-      .select("district_id, upazila, address_line, postal_code")
-      .eq("user_id", profile.id)
-      .eq("is_default", true)
-      .limit(1)
-      .maybeSingle();
+    const linkedUserId = profileData?.id || customerData?.user_id || null;
+    let profileAddresses: any[] = [];
+    if (linkedUserId && isValidUuid(linkedUserId)) {
+      try {
+        const { data: addrRows } = await supabase
+          .from("addresses")
+          .select("id, label, recipient_name, phone, address_line, district_id, upazila, postal_code, is_default")
+          .eq("user_id", linkedUserId)
+          .order("is_default", { ascending: false })
+          .order("updated_at", { ascending: false })
+          .limit(10);
+        profileAddresses = addrRows || [];
+      } catch {
+        // Optional addresses lookup failure shouldn't block customer autofill
+      }
+    }
 
-    const bizMembers = Array.isArray(profile.business_members)
-      ? profile.business_members[0]
-      : profile.business_members;
-    const bizAccount = Array.isArray(bizMembers?.business_accounts)
-      ? bizMembers?.business_accounts[0]
-      : bizMembers?.business_accounts;
+    const geoDivisions =
+      divisionsRes.data && divisionsRes.data.length > 0 ? divisionsRes.data : fallbackDivisions;
+    const geoDistricts =
+      districtsRes.data && districtsRes.data.length > 0 ? districtsRes.data : fallbackDistricts;
 
-    return {
-      ok: true,
-      data: {
-        id: profile.id,
-        name: profile.full_name || "",
-        phone: profile.phone || "",
-        email: null,
-        businessId: bizAccount?.id || null,
-        businessName: bizAccount?.company_name || null,
-        address: address
-          ? {
-              districtId: address.district_id,
-              upazila: address.upazila,
-              addressLine: address.address_line,
-              postalCode: address.postal_code,
-            }
-          : null,
-      },
-    };
+    const result = buildCustomerLookupResult({
+      phone: rawPhone,
+      customer: customerData
+        ? {
+            ...customerData,
+            default_address:
+              customerData.default_address &&
+              typeof customerData.default_address === "object" &&
+              !Array.isArray(customerData.default_address)
+                ? (customerData.default_address as Record<string, any>)
+                : null,
+          }
+        : null,
+      profile: profileData,
+      profileAddresses,
+      orders: (ordersRes.data || []).map((o: any) => ({
+        ...o,
+        shipping_address:
+          o.shipping_address &&
+          typeof o.shipping_address === "object" &&
+          !Array.isArray(o.shipping_address)
+            ? (o.shipping_address as Record<string, any>)
+            : null,
+      })),
+      geoDivisions,
+      geoDistricts,
+    });
+
+    return { ok: true, data: result };
   } catch (err: any) {
     const friendly = mapDatabaseError(err);
     return { ok: false, message: friendly.message };
