@@ -42,7 +42,7 @@ export async function getAdminPostsAction(): Promise<{
       author: p.author_name || "Editorial Team",
       views: 0,
       status: (p.status as PostItem["status"]) || "draft",
-      publishedDate: p.published_at ? new Date(p.published_at).toLocaleDateString("en-GB") : "–",
+      publishedDate: p.published_at ? new Date(p.published_at).toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka" }) : "–",
       tags: p.tags || ["Molasses", "Industry"],
     }));
 

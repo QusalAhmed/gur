@@ -21,6 +21,45 @@ export interface FormatDateOptions {
   fallback?: string;
 }
 
+const DHAKA_TIME_ZONE = "Asia/Dhaka";
+
+const dhakaDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: DHAKA_TIME_ZONE,
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+function formatDateInDhaka(d: Date, options?: FormatDateOptions): string {
+  const parts = dhakaDateTimeFormatter.formatToParts(d);
+  let dayVal = "";
+  let monthVal = "";
+  let yearVal = "";
+  let hourVal = "";
+  let minuteVal = "";
+  let dayPeriodVal = "";
+
+  for (const part of parts) {
+    if (part.type === "day") dayVal = part.value;
+    else if (part.type === "month") monthVal = part.value;
+    else if (part.type === "year") yearVal = part.value;
+    else if (part.type === "hour") hourVal = part.value;
+    else if (part.type === "minute") minuteVal = part.value;
+    else if (part.type === "dayPeriod") dayPeriodVal = part.value.toUpperCase();
+  }
+
+  const day = options?.padDay ? dayVal.padStart(2, "0") : dayVal;
+  const datePart = `${day} ${monthVal} ${yearVal}`;
+
+  if (options?.includeTime) {
+    return `${datePart}, ${hourVal.padStart(2, "0")}:${minuteVal} ${dayPeriodVal}`;
+  }
+  return datePart;
+}
+
 /**
  * Formats any date input (ISO string, database timestamp, Date object, or epoch number)
  * into standard display format:
@@ -49,25 +88,11 @@ export function formatDate(
       return `${prefixMatch[1]} ${formatDate(prefixMatch[2], options)}`;
     }
 
-    // Check if ISO with timezone ('Z' or '+00:00' or '-05:00') - parse with Date for local browser timezone
+    // Check if ISO with timezone ('Z' or '+00:00' or '-05:00') - format explicitly in Asia/Dhaka
     if (/[Zz]|[+-]\d{2}(?::?\d{2})?$/.test(s)) {
       const d = new Date(s);
       if (!isNaN(d.getTime())) {
-        const dayNum = d.getDate();
-        const day = options?.padDay ? String(dayNum).padStart(2, "0") : String(dayNum);
-        const month = MONTH_NAMES[d.getMonth()];
-        const year = d.getFullYear();
-        const datePart = `${day} ${month} ${year}`;
-
-        if (options?.includeTime) {
-          const rawHours = d.getHours();
-          const mm = String(d.getMinutes()).padStart(2, "0");
-          const period = rawHours >= 12 ? "PM" : "AM";
-          const h12 = rawHours % 12 || 12;
-          const hh = String(h12).padStart(2, "0");
-          return `${datePart}, ${hh}:${mm} ${period}`;
-        }
-        return datePart;
+        return formatDateInDhaka(d, options);
       }
     }
 
@@ -107,22 +132,7 @@ export function formatDate(
 
   if (isNaN(d.getTime())) return String(value);
 
-  const dayNum = d.getDate();
-  const day = options?.padDay ? String(dayNum).padStart(2, "0") : String(dayNum);
-  const month = MONTH_NAMES[d.getMonth()];
-  const year = d.getFullYear();
-  const datePart = `${day} ${month} ${year}`;
-
-  if (options?.includeTime) {
-    const rawHours = d.getHours();
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    const period = rawHours >= 12 ? "PM" : "AM";
-    const h12 = rawHours % 12 || 12;
-    const hh = String(h12).padStart(2, "0");
-    return `${datePart}, ${hh}:${mm} ${period}`;
-  }
-
-  return datePart;
+  return formatDateInDhaka(d, options);
 }
 
 /**

@@ -465,7 +465,7 @@ export function OrderDetailsSheet({
             : "Admin Staff",
         text: validation.data.text.trim(),
         type: validation.data.type,
-        created_at: new Date().toISOString().replace("T", " ").slice(0, 16),
+        created_at: new Date().toISOString(),
       };
 
       await onAddNote(order.id, newNoteObj, order);

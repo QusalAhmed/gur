@@ -331,7 +331,7 @@ export const fallbackDistricts: DbGeoDistrict[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function formatDbOrderRecord(data: any): Order {
-  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const nowStr = new Date().toISOString();
   const rawItems = data.order_items || data.items || [];
   const items: OrderItem[] = rawItems.map((it: any, idx: number) => {
     const weightGrams = Number(it.weight_grams) || 0;

@@ -367,7 +367,7 @@ export function OrderFormDialog({
       return;
     }
 
-    const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+    const nowStr = new Date().toISOString();
     const newNoteId = `note-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newNote: OrderNote = {
       id: newNoteId,
@@ -607,7 +607,7 @@ export function OrderFormDialog({
         const shipping_total = Number(valid.shipping_total) || 0;
         const discount_total = Number(valid.discount_total) || 0;
         const grand_total = Math.max(0, subtotal - discount_total + shipping_total);
-        const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+        const nowStr = new Date().toISOString();
 
         const isDelivered = isOrderDeliveredStatus(valid.status);
         let finalAdvancePaid = Math.min(grand_total, Math.max(0, Number(valid.advance_paid) || 0));

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatBDT, normalizeBDPhone, toBengaliDigits, formatUOM } from "@/lib/admin-format";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { canRoleAccessPath, canAssignRole, AdminRole } from "@/lib/admin-permissions";
 import { resolveOtherOrdersForDisplay, Order } from "@/types/order";
@@ -34,6 +35,14 @@ describe("Admin Formatter Helpers", () => {
     expect(formatUOM(5, "kg", "en")).toBe("5 kg");
     expect(formatUOM(5, "kg", "bn")).toBe("৫ কেজি");
     expect(formatUOM(10, "pcs", "bn")).toBe("১০ টি");
+  });
+
+  it("formats ISO timestamps explicitly in Asia/Dhaka timezone", () => {
+    expect(formatDateTime("2026-11-23T06:00:00Z")).toBe("23 Nov 2026, 12:00 PM");
+    expect(formatDateTime("2026-11-23T18:00:00Z")).toBe("24 Nov 2026, 12:00 AM");
+    expect(formatDate("2026-11-23T18:00:00Z")).toBe("24 Nov 2026");
+    expect(formatDateTime("2026-11-05T03:05:00Z", { padDay: true })).toBe("05 Nov 2026, 09:05 AM");
+    expect(formatDateTime(new Date("2026-11-23T06:00:00Z"))).toBe("23 Nov 2026, 12:00 PM");
   });
 });
 

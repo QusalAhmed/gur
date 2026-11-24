@@ -91,9 +91,9 @@ export async function getAdminShipmentsAction(): Promise<{
         weight: `${weightVal} kg`,
         packages: 1,
         status: (s.status as ShipmentItem["status"]) || "preparing",
-        dispatchedAt: s.shipped_at ? new Date(s.shipped_at).toLocaleDateString("en-GB") : "–",
+        dispatchedAt: s.shipped_at ? new Date(s.shipped_at).toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka" }) : "–",
         eta: s.delivered_at
-          ? `Delivered ${new Date(s.delivered_at).toLocaleDateString("en-GB")}`
+          ? `Delivered ${new Date(s.delivered_at).toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka" })}`
           : "Estimated 2-3 Days",
       };
     });

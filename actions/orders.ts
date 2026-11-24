@@ -1474,7 +1474,7 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
     savedOrder.recipient_name ||
     customerName
   ).trim();
-  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const nowStr = new Date().toISOString();
 
   const subtotal = (savedOrder.items || []).reduce(
     (sum, item) =>
@@ -2325,7 +2325,7 @@ export async function recordOrderPaymentAction(
   const session = await assertStaffRole([...ORDER_STAFF_ROLES]);
   const actorName = session.user.name || "Admin Staff";
 
-  const nowStr = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const nowStr = new Date().toISOString();
   const baseOrder =
     currentOrder ||
     (await getOrderAction(orderId)) ||

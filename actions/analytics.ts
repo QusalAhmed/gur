@@ -2,6 +2,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { DHAKA_TIMEZONE } from "@/lib/admin-format";
 
 export type AnalyticsTimeRange = "ytd" | "mtd" | "last30" | "last90";
 
@@ -71,18 +73,19 @@ export async function getAdminAnalyticsAction(
   try {
     await assertStaffRole(["owner", "admin", "manager", "support"]);
     const supabaseAdmin = getSupabaseAdmin();
-    const now = new Date();
+    const nowUtc = new Date();
+    const nowDhaka = toZonedTime(nowUtc, DHAKA_TIMEZONE);
     let startDate: Date;
 
     if (timeRange === "mtd") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = fromZonedTime(new Date(nowDhaka.getFullYear(), nowDhaka.getMonth(), 1, 0, 0, 0, 0), DHAKA_TIMEZONE);
     } else if (timeRange === "last30") {
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      startDate = new Date(nowUtc.getTime() - 30 * 24 * 60 * 60 * 1000);
     } else if (timeRange === "last90") {
-      startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      startDate = new Date(nowUtc.getTime() - 90 * 24 * 60 * 60 * 1000);
     } else {
       // ytd
-      startDate = new Date(now.getFullYear(), 0, 1);
+      startDate = fromZonedTime(new Date(nowDhaka.getFullYear(), 0, 1, 0, 0, 0, 0), DHAKA_TIMEZONE);
     }
 
     const [ordersRes, itemsRes, profilesRes] = await Promise.all([
@@ -123,13 +126,13 @@ export async function getAdminAnalyticsAction(
     // Initialise last 6 or 10 months
     const monthCount = timeRange === "mtd" ? 1 : timeRange === "last30" ? 2 : timeRange === "last90" ? 3 : 10;
     for (let i = monthCount - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(nowDhaka.getFullYear(), nowDhaka.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       monthlyMap.set(key, { month: monthNames[d.getMonth()], revenue: 0, orders: 0, newCustomers: 0 });
     }
 
     orders.forEach((o) => {
-      const d = new Date(o.placed_at);
+      const d = toZonedTime(new Date(o.placed_at), DHAKA_TIMEZONE);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const entry = monthlyMap.get(key);
       if (entry) {
@@ -141,7 +144,7 @@ export async function getAdminAnalyticsAction(
     });
 
     profiles.forEach((p) => {
-      const d = new Date(p.created_at);
+      const d = toZonedTime(new Date(p.created_at), DHAKA_TIMEZONE);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const entry = monthlyMap.get(key);
       if (entry) {
@@ -210,7 +213,7 @@ export async function getAdminAnalyticsAction(
     });
 
     orders.forEach((o) => {
-      const d = new Date(o.placed_at);
+      const d = toZonedTime(new Date(o.placed_at), DHAKA_TIMEZONE);
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       const entry = retentionMap.get(key);
       if (entry) {

@@ -6,6 +6,8 @@ import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid, sanitizePostgrestFilterTerm } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { isOrderDeliveredStatus } from "@/lib/order-payment-utils";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { DHAKA_TIMEZONE } from "@/lib/admin-format";
 
 export interface TransactionItem {
   id: string;
@@ -139,14 +141,15 @@ export async function getAdminPaymentsAction(): Promise<{
       };
     });
 
-    // Volume by day for current week
+    // Volume by day for current week (Asia/Dhaka)
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
+    const nowDhaka = toZonedTime(new Date(), DHAKA_TIMEZONE);
+    const startOfWeekDhaka = new Date(nowDhaka);
+    const day = startOfWeekDhaka.getDay();
+    const diff = startOfWeekDhaka.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeekDhaka.setDate(diff);
+    startOfWeekDhaka.setHours(0, 0, 0, 0);
+    const startOfWeek = fromZonedTime(startOfWeekDhaka, DHAKA_TIMEZONE);
 
     const volumeMap = new Map<string, number>([
       ["Mon", 0],
@@ -161,7 +164,8 @@ export async function getAdminPaymentsAction(): Promise<{
     (rawPayments || []).forEach((p: any) => {
       const pDate = new Date(p.created_at);
       if (pDate >= startOfWeek) {
-        const dName = dayNames[pDate.getDay()];
+        const pDhaka = toZonedTime(pDate, DHAKA_TIMEZONE);
+        const dName = dayNames[pDhaka.getDay()];
         if (volumeMap.has(dName)) {
           volumeMap.set(dName, (volumeMap.get(dName) || 0) + Number(p.amount || 0));
         }

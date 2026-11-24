@@ -1725,7 +1725,7 @@ export function OrdersClient() {
         author: isCustomer ? (noteOrder.customer ? `${noteOrder.customer} (Customer)` : "Customer") : "Admin Staff",
         text: validation.data.text.trim(),
         type: validation.data.type,
-        created_at: new Date().toISOString().replace("T", " ").slice(0, 16),
+        created_at: new Date().toISOString(),
       };
 
       addNoteMutation.mutate({
