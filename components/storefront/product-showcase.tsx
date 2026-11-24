@@ -92,6 +92,10 @@ export function ProductShowcase({
     return 0;
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const activeSectionRef = useRef(activeSectionIndex);
+  useEffect(() => {
+    activeSectionRef.current = activeSectionIndex;
+  }, [activeSectionIndex]);
 
   const t = STOREFRONT_TEXT[lang];
   const displayStoreName = storeName || t.storeName;
@@ -153,6 +157,11 @@ export function ProductShowcase({
         overviewEl.scrollTo({ top: 0, behavior: "smooth" });
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (sectionIndex === checkoutSectionIndex) {
+      const checkoutEl = container.querySelector("#checkout") as HTMLElement | null;
+      if (checkoutEl) {
+        checkoutEl.scrollTop = 0;
+      }
     }
   };
 
@@ -225,6 +234,146 @@ export function ProductShowcase({
       window.removeEventListener("touchmove", block);
     };
   }, [isTourActive, isTourActiveRef]);
+
+  // Discrete transitions across sections (Section 0 <-> Products <-> Checkout)
+  useEffect(() => {
+    let isTransitioning = false;
+    let transitionTimer: NodeJS.Timeout;
+
+    const triggerTransition = (targetIdx: number) => {
+      if (isTransitioning) return;
+      const clampedIdx = Math.max(0, Math.min(totalSections - 1, targetIdx));
+      isTransitioning = true;
+      activeSectionRef.current = clampedIdx;
+      setActiveSectionIndex(clampedIdx);
+      scrollToSection(clampedIdx);
+      clearTimeout(transitionTimer);
+      transitionTimer = setTimeout(() => {
+        isTransitioning = false;
+      }, 500);
+    };
+
+    // 1. Wheel handler for desktop mouse & trackpad
+    const handleWheel = (e: WheelEvent) => {
+      if (isTourActiveRef.current) {
+        e.preventDefault();
+        return;
+      }
+      if (Math.abs(e.deltaY) < 18) return;
+      if (isTransitioning) {
+        e.preventDefault();
+        return;
+      }
+
+      const currentIdx = activeSectionRef.current;
+      const overviewEl = document.getElementById("storefront-overview");
+      const checkoutEl = document.getElementById("checkout");
+
+      // Boundary: Section 0 (Overview)
+      if (currentIdx === 0 && overviewEl) {
+        if (e.deltaY > 0) {
+          const atBottom = overviewEl.scrollHeight - overviewEl.clientHeight - overviewEl.scrollTop <= 16;
+          if (atBottom) {
+            e.preventDefault();
+            triggerTransition(productsStartIndex);
+          }
+        }
+        return;
+      }
+
+      // Inside Products: 1 discrete wheel notch advances 1 product card
+      if (currentIdx >= productsStartIndex && currentIdx < checkoutSectionIndex) {
+        if (e.deltaY > 0) {
+          e.preventDefault();
+          triggerTransition(currentIdx + 1);
+        } else if (e.deltaY < 0) {
+          e.preventDefault();
+          triggerTransition(currentIdx - 1);
+        }
+        return;
+      }
+
+      // Boundary: Checkout section scrolling up to last product
+      if (currentIdx >= checkoutSectionIndex && checkoutEl) {
+        if (e.deltaY < 0) {
+          const atTop = checkoutEl.scrollTop <= 8;
+          if (atTop) {
+            e.preventDefault();
+            triggerTransition(checkoutSectionIndex - 1);
+          }
+        }
+        return;
+      }
+    };
+
+    // 2. Touch handler for mobile swipe transitions at boundaries
+    let touchStartY = 0;
+    let touchStartX = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (isTourActiveRef.current || isTransitioning) return;
+      if (e.changedTouches.length !== 1) return;
+
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+
+      // Only handle clear vertical gestures (swipe distance >= 35px, more vertical than horizontal)
+      if (Math.abs(deltaY) < 35 || Math.abs(deltaY) < Math.abs(deltaX) * 1.2) {
+        return;
+      }
+
+      const currentIdx = activeSectionRef.current;
+      const overviewEl = document.getElementById("storefront-overview");
+      const checkoutEl = document.getElementById("checkout");
+
+      // Boundary: Section 0 (Overview) swipe UP (deltaY < 0, scrolling down) -> enter Products
+      if (currentIdx === 0 && deltaY < 0 && overviewEl) {
+        const atBottom = overviewEl.scrollHeight - overviewEl.clientHeight - overviewEl.scrollTop <= 28;
+        if (atBottom) {
+          triggerTransition(productsStartIndex);
+        }
+        return;
+      }
+
+      // Boundary: Product 1 swipe DOWN (deltaY > 0, scrolling up) -> enter Overview
+      if (currentIdx === productsStartIndex && deltaY > 0) {
+        triggerTransition(0);
+        return;
+      }
+
+      // Boundary: Last product swipe UP (deltaY < 0, scrolling down) -> enter Checkout
+      if (currentIdx === checkoutSectionIndex - 1 && deltaY < 0) {
+        triggerTransition(checkoutSectionIndex);
+        return;
+      }
+
+      // Boundary: Checkout swipe DOWN (deltaY > 0, scrolling up) -> enter last product
+      if (currentIdx >= checkoutSectionIndex && deltaY > 0 && checkoutEl) {
+        const atTop = checkoutEl.scrollTop <= 20;
+        if (atTop) {
+          triggerTransition(checkoutSectionIndex - 1);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+      clearTimeout(transitionTimer);
+    };
+  }, [totalSections, productsStartIndex, checkoutSectionIndex, isTourActiveRef]);
 
   // Keyboard Up/Down arrow keys support for changing full-screen products
   useEffect(() => {
@@ -505,7 +654,7 @@ export function ProductShowcase({
         <section
           id="storefront-overview"
           data-section-index="0"
-          className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none overscroll-contain"
+          className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
         >
 
           {/* Mobile Non-Sticky Language Switcher (Right Top of Page on Phone - Scrolls away with content) */}
