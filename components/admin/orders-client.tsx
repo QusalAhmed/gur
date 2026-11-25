@@ -275,7 +275,6 @@ const statusStyles: Record<string, string> = {
 const validStatusTabs = [
   "all",
   "reprint_required",
-  "urgent",
   "paused",
   "incomplete_order",
   "pending",
@@ -553,7 +552,6 @@ export function OrdersClient() {
   const counts = ordersResult?.statusCounts || {
     all: 0,
     reprint_required: 0,
-    urgent: 0,
     paused: 0,
     incomplete_order: 0,
     pending: 0,
@@ -3727,23 +3725,6 @@ export function OrdersClient() {
                   </TabsTrigger>
 
                   <TabsTrigger
-                    value="urgent"
-                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-xs cursor-pointer text-rose-700 dark:text-rose-300"
-                  >
-                    <Flame className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                    <span>Urgent</span>
-                    {counts.urgent > 0 ? (
-                      <span className="ml-1.5 rounded-full bg-rose-500/20 text-rose-800 dark:text-rose-200 [[data-state=active]_&]:bg-white/25 [[data-state=active]_&]:text-white px-1.5 py-0.5 text-[10px] font-bold shrink-0">
-                        {counts.urgent}
-                      </span>
-                    ) : (
-                      <span className="ml-1.5 rounded-full bg-muted-foreground/15 [[data-state=active]_&]:bg-white/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
-                        0
-                      </span>
-                    )}
-                  </TabsTrigger>
-
-                  <TabsTrigger
                     value="paused"
                     className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-amber-700 data-[state=active]:text-white data-[state=active]:shadow-xs cursor-pointer text-amber-800 dark:text-amber-300"
                   >
@@ -4334,7 +4315,6 @@ export function OrdersClient() {
         defaultStatus={
           selectedTab !== "all" &&
           selectedTab !== "reprint_required" &&
-          selectedTab !== "urgent" &&
           selectedTab !== "paused"
             ? (selectedTab as Order["status"])
             : "confirmed"

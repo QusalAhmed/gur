@@ -83,7 +83,6 @@ export interface GetOrdersParams {
 export interface StatusCounts {
   all: number;
   reprint_required: number;
-  urgent: number;
   paused: number;
   incomplete_order: number;
   pending: number;
@@ -490,8 +489,6 @@ export async function getOrdersAction(
 
     if (status === "reprint_required") {
       q = q.eq("reprint_required", true).not("status", "in", '("cancelled","returned")');
-    } else if (status === "urgent") {
-      q = q.eq("is_urgent", true).not("status", "in", '("cancelled","returned","delivered")');
     } else if (status === "paused") {
       q = q.eq("is_paused", true).not("status", "in", '("shipped","delivered","cancelled","returned")');
     } else if (status && status !== "all") {
@@ -579,7 +576,7 @@ export async function getOrdersAction(
       return res;
     }),
     (() => {
-      let sq = client.from("orders").select("status, grand_total, reprint_required, is_paused, is_urgent");
+      let sq = client.from("orders").select("status, grand_total, reprint_required, is_paused");
       if (cleanSearch) {
         sq = sq.or(
           `order_number.ilike.%${cleanSearch}%,customer_name.ilike.%${cleanSearch}%,customer_phone.ilike.%${cleanSearch}%,customer_alternative_phone.ilike.%${cleanSearch}%,shipping_phone.ilike.%${cleanSearch}%,customer_note.ilike.%${cleanSearch}%,shipping_method_name.ilike.%${cleanSearch}%`
@@ -633,7 +630,6 @@ export async function getOrdersAction(
   const initialStatusCounts: StatusCounts = {
     all: 0,
     reprint_required: 0,
-    urgent: 0,
     paused: 0,
     incomplete_order: 0,
     pending: 0,
@@ -659,14 +655,6 @@ export async function getOrdersAction(
         initialStatusCounts.reprint_required = (initialStatusCounts.reprint_required || 0) + 1;
       }
       if (
-        row.is_urgent &&
-        row.status !== "cancelled" &&
-        row.status !== "returned" &&
-        row.status !== "delivered"
-      ) {
-        initialStatusCounts.urgent = (initialStatusCounts.urgent || 0) + 1;
-      }
-      if (
         row.is_paused &&
         row.status !== "shipped" &&
         row.status !== "delivered" &&
@@ -675,7 +663,7 @@ export async function getOrdersAction(
       ) {
         initialStatusCounts.paused = (initialStatusCounts.paused || 0) + 1;
       }
-      const st = row.status as keyof Omit<StatusCounts, "all" | "reprint_required" | "urgent" | "paused">;
+      const st = row.status as keyof Omit<StatusCounts, "all" | "reprint_required" | "paused">;
       if (st in initialStatusCounts) {
         initialStatusCounts[st] = (initialStatusCounts[st] || 0) + 1;
       }
