@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { invalidateDeliveryConfigCache } from "@/lib/delivery-charge";
+import { fetchPublicSiteSettings, isSecretSettingKey } from "@/lib/storefront-public-data";
 
 export interface SiteSettingsMap {
   // Store Profile
@@ -110,18 +111,6 @@ export interface SaveSettingsResult {
   success: boolean;
   message?: string;
   error?: string;
-}
-
-const SECRET_SETTING_KEYS = new Set([
-  "notifications.brevo_api_key",
-  "notifications.smsbangladesh_password",
-]);
-
-function isSecretSettingKey(key: string): boolean {
-  return (
-    SECRET_SETTING_KEYS.has(key) ||
-    /(?:api_key|secret|password|token)/i.test(key)
-  );
 }
 
 function isMaskedSecretPlaceholder(val: unknown): boolean {
@@ -335,6 +324,7 @@ export async function updateSiteSettingsAction(
     invalidateDeliveryConfigCache();
     revalidateTag("site-settings", "max");
     revalidateTag("storefront-products", "max");
+    revalidateTag("live-stock-stats", "max");
     revalidatePath("/admin/settings");
     revalidatePath("/");
     revalidatePath("/products");
@@ -375,23 +365,7 @@ export async function updateSiteSettingsAction(
  */
 export async function getPublicSiteSettingsAction(): Promise<Partial<SiteSettingsMap>> {
   try {
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data, error } = await supabaseAdmin
-      .from("site_settings")
-      .select("key, value")
-      .eq("is_public", true);
-
-    if (error || !data) {
-      return {};
-    }
-
-    const map: Partial<SiteSettingsMap> = {};
-    for (const row of data) {
-      if (!isSecretSettingKey(row.key)) {
-        map[row.key as keyof SiteSettingsMap] = row.value;
-      }
-    }
-    return map;
+    return (await fetchPublicSiteSettings({ throwOnError: false })) as Partial<SiteSettingsMap>;
   } catch (err) {
     console.error("Error fetching public site settings:", err);
     return {};
@@ -426,6 +400,8 @@ export async function resetSimulatedStockAction(): Promise<SaveSettingsResult> {
       return { success: false, error: error.message };
     }
 
+    revalidateTag("site-settings", "max");
+    revalidateTag("live-stock-stats", "max");
     revalidatePath("/admin/settings");
     revalidatePath("/");
 

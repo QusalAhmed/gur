@@ -1,5 +1,15 @@
+import { revalidateTag } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+function revalidateSimulatedStockCaches(): void {
+  try {
+    revalidateTag("live-stock-stats", "max");
+    revalidateTag("site-settings", "max");
+  } catch {
+    // Ignore outside Next.js request lifecycle (e.g. unit tests / standalone scripts)
+  }
+}
 
 /**
  * Helper to inspect the current date, hour, and minute in Asia/Dhaka.
@@ -130,6 +140,7 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
             },
           ]);
 
+        revalidateSimulatedStockCaches();
         const isOutsideHours = dhakaHour < 8 || dhakaHour > 23 || (dhakaHour === 23 && dhakaMinute > 30);
         return {
           action: "midnight_reset",
@@ -211,6 +222,8 @@ export const simulatedStockDecrementorFunction = inngest.createFunction(
       if (updateErr) {
         throw new Error(`Failed to update simulated demand: ${updateErr.message}`);
       }
+
+      revalidateSimulatedStockCaches();
 
       // Determine if next cycle will still fall within active shopping hours
       const nextTotalDhakaMinutes = dhakaHour * 60 + dhakaMinute + intervalMins;

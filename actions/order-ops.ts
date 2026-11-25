@@ -1,7 +1,7 @@
 "use server";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { assertStaffRole, getActorUuid } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
 import { mapDatabaseError } from "@/lib/admin-errors";
@@ -44,6 +44,7 @@ export async function confirmOrderAction(orderId: string): Promise<ActionResult>
       actor_id: getActorUuid(session),
     });
 
+    revalidateTag("live-stock-stats", "max");
     revalidatePath("/admin/orders");
     revalidatePath(`/admin/orders/${orderId}`);
     return { ok: true, data };
@@ -86,6 +87,7 @@ export async function processOrderAction(orderId: string): Promise<ActionResult>
       actor_id: getActorUuid(session),
     });
 
+    revalidateTag("live-stock-stats", "max");
     revalidatePath("/admin/orders");
     revalidatePath(`/admin/orders/${orderId}`);
     return { ok: true, data };
@@ -152,6 +154,7 @@ export async function cancelOrderWithReasonAction(
       author_id: getActorUuid(session),
     });
 
+    revalidateTag("live-stock-stats", "max");
     revalidatePath("/admin/orders");
     revalidatePath(`/admin/orders/${orderId}`);
     return { ok: true, data: { orderId, cancelled: true } };

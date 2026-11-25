@@ -182,7 +182,22 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
 
     try {
-      const stats = await getPublicLiveStockStatsAction();
+      let stats;
+      if (typeof window !== "undefined") {
+        try {
+          const res = await fetch("/api/storefront/live-stock", {
+            cache: isBackground ? "no-cache" : "default",
+          });
+          if (res.ok) {
+            stats = await res.json();
+          }
+        } catch (fetchErr) {
+          console.warn("Failed to fetch live stock from /api/storefront/live-stock, falling back:", fetchErr);
+        }
+      }
+      if (!stats) {
+        stats = await getPublicLiveStockStatsAction();
+      }
       if (!isMountedRef.current) return;
 
       if (stats.dailyProductionKg !== null && stats.dailyProductionKg > 0) {

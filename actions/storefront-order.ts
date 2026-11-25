@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeBdPhone, toLocalBdPhone } from "@/lib/phone";
 import { getOtherOrderInsight } from "@/types/order";
@@ -568,6 +569,11 @@ export async function placeStorefrontOrderAction(
 
           // Trigger Outbox Background Notification Job (Inngest event with transactional guarantee)
           if (rpcData.status === "pending" || rpcData.status === "confirmed") {
+            try {
+              revalidateTag("live-stock-stats", "max");
+            } catch {
+              // revalidateTag throws outside Next.js request lifecycle (e.g. unit tests)
+            }
             // Resolve any prior incomplete order in-app notification if this was converted from a draft
             if (wasIncompleteDraft) {
               resolveIncompleteOrderNotification(rpcData.order_id, rpcData.order_number).catch(() => {});
@@ -1150,6 +1156,11 @@ export async function placeStorefrontOrderAction(
 
       // Trigger Outbox Background Notification Job (Tier 2 fallback path)
       if (finalStatus === "pending") {
+        try {
+          revalidateTag("live-stock-stats", "max");
+        } catch {
+          // revalidateTag throws outside Next.js request lifecycle (e.g. unit tests)
+        }
         if (wasIncomplete || !existingOrder) {
           createNotificationInternal({
             type: "order_created",

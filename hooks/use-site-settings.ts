@@ -135,6 +135,16 @@ export function useSiteSettings(): ParsedSiteSettings {
           console.warn("Could not get admin settings via server action, falling back to public settings:", e);
         }
       }
+      if (typeof window !== "undefined") {
+        try {
+          const res = await fetch("/api/storefront/site-settings");
+          if (res.ok) {
+            return await res.json();
+          }
+        } catch (err) {
+          console.warn("Failed to fetch public settings from /api/storefront/site-settings, falling back:", err);
+        }
+      }
       return getPublicSiteSettingsAction();
     },
     staleTime: 1000 * 60 * 5, // 5 minutes cache
