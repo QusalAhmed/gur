@@ -6,6 +6,7 @@ import { assertStaffRole } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
 import { getImageKitServer, isImageKitConfigured } from "@/lib/imagekit/server";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import { resolveProductImageAltTexts } from "@/lib/product-image-alt";
 
 export interface ProductImageItem {
   id: string;
@@ -290,6 +291,13 @@ export async function assignNewProductImagesAction(payload: {
     }
     const supabaseAdmin = getSupabaseAdmin();
 
+    // Fetch parent product names for alt-text fallback
+    const { data: product } = await supabaseAdmin
+      .from("products")
+      .select("name, name_bn")
+      .eq("id", productId)
+      .maybeSingle();
+
     // Check if the product already has any images or an existing primary image
     const { data: existingImages } = await supabaseAdmin
       .from("product_images")
@@ -297,6 +305,7 @@ export async function assignNewProductImagesAction(payload: {
       .eq("product_id", productId)
       .order("sort_order", { ascending: false });
 
+    const existingCount = (existingImages || []).length;
     const hasExistingPrimary = (existingImages || []).some((img) => img.is_primary);
     const maxSortOrder = (existingImages || []).reduce((max, img) => Math.max(max, img.sort_order ?? 0), 0);
 
@@ -310,15 +319,25 @@ export async function assignNewProductImagesAction(payload: {
         .eq("product_id", productId);
     }
 
+    let nextGalleryNumber = Math.max(2, existingCount + 1);
     const rowsToInsert = images.map((img, idx) => {
       // If product has no primary image at all, mark the first uploaded image as primary
       const shouldBePrimary = img.isPrimary || (!hasExistingPrimary && idx === 0 && !hasNewPrimary);
+      const imageNumber = shouldBePrimary ? 1 : nextGalleryNumber++;
+      const { alt_text, alt_text_bn } = resolveProductImageAltTexts({
+        productName: product?.name || "",
+        productNameBn: product?.name_bn,
+        altText: img.altText,
+        altTextBn: img.altTextBn,
+        isPrimary: shouldBePrimary,
+        imageNumber,
+      });
 
       return {
         product_id: productId,
         storage_path: img.storagePath,
-        alt_text: img.altText?.trim() || null,
-        alt_text_bn: img.altTextBn?.trim() || null,
+        alt_text,
+        alt_text_bn,
         sort_order: (img.sortOrder ?? maxSortOrder + idx + 1),
         is_primary: shouldBePrimary,
       };
@@ -462,15 +481,28 @@ export async function linkImageKitFileToProductAction(payload: {
   productId: string;
   url: string;
   altText?: string;
+  altTextBn?: string;
   isPrimary?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertStaffRole(["owner", "admin", "manager", "editor"]);
-    const { productId, url, altText, isPrimary } = payload;
+    const { productId, url, altText, altTextBn, isPrimary } = payload;
     if (!isValidUuid(productId) || !url) {
       return { success: false, error: "Valid Product ID and Image URL are required" };
     }
     const supabaseAdmin = getSupabaseAdmin();
+
+    const [{ data: product }, { count: existingCount }] = await Promise.all([
+      supabaseAdmin
+        .from("products")
+        .select("name, name_bn")
+        .eq("id", productId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("product_images")
+        .select("id", { count: "exact", head: true })
+        .eq("product_id", productId),
+    ]);
 
     if (isPrimary) {
       await supabaseAdmin
@@ -479,10 +511,20 @@ export async function linkImageKitFileToProductAction(payload: {
         .eq("product_id", productId);
     }
 
+    const { alt_text, alt_text_bn } = resolveProductImageAltTexts({
+      productName: product?.name || "",
+      productNameBn: product?.name_bn,
+      altText,
+      altTextBn,
+      isPrimary: Boolean(isPrimary),
+      imageNumber: (existingCount ?? 0) + 1,
+    });
+
     const { error } = await supabaseAdmin.from("product_images").insert({
       product_id: productId,
       storage_path: url,
-      alt_text: altText?.trim() || null,
+      alt_text,
+      alt_text_bn,
       is_primary: Boolean(isPrimary),
       sort_order: 0,
     });

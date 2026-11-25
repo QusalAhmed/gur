@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  PHASE_DEVELOPMENT_SERVER,
+  PHASE_PRODUCTION_BUILD,
+  PHASE_PRODUCTION_SERVER,
+} from "next/constants";
+import createNextConfig from "@/next.config";
+import {
   canAssignRole,
   canRoleAccessPath,
   sanitizeAdminRedirect,
@@ -843,5 +849,23 @@ describe("Server Action Authentication, RBAC & Public Order Token Enforcement", 
 
     expect(result.success).toBe(false);
     expect(mockState.rpcCalls).toHaveLength(0);
+  });
+});
+
+describe("Next.js Dev Cross-Origin Configuration", () => {
+  it("enables allowedDevOrigins in development server phase only", () => {
+    const devConfig = createNextConfig(PHASE_DEVELOPMENT_SERVER);
+    expect(Array.isArray(devConfig.allowedDevOrigins)).toBe(true);
+    expect(devConfig.allowedDevOrigins).toContain("127.0.0.1");
+    expect(devConfig.allowedDevOrigins).toContain("[::1]");
+    expect(
+      devConfig.allowedDevOrigins?.some((origin) => origin.startsWith("169.254."))
+    ).toBe(false);
+
+    const buildConfig = createNextConfig(PHASE_PRODUCTION_BUILD);
+    expect(buildConfig.allowedDevOrigins).toBeUndefined();
+
+    const prodConfig = createNextConfig(PHASE_PRODUCTION_SERVER);
+    expect(prodConfig.allowedDevOrigins).toBeUndefined();
   });
 });

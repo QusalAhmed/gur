@@ -20,7 +20,7 @@ interface SortableImageListProps {
   onReorder: (newItems: UploadedImage[]) => void;
   onRemove: (item: UploadedImage) => void;
   onSetPrimary: (item: UploadedImage) => void;
-  onUpdateAltText?: (item: UploadedImage, altText: string) => void;
+  onUpdateAltText?: (item: UploadedImage, value: string, field?: "altText" | "altTextBn") => void;
   showAltInput?: boolean;
   disabled?: boolean;
 }
@@ -282,14 +282,24 @@ export function SortableImageList({
                 </div>
 
                 {showAltInput && (
-                  <Input
-                    placeholder="Alt text (SEO)..."
-                    value={img.altText || ""}
-                    disabled={disabled}
-                    onChange={(e) => onUpdateAltText?.(img, e.target.value)}
-                    className="h-6 text-[10px] px-1.5 py-0"
-                    title="Image alt text for search engine optimization and accessibility"
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      placeholder="Alt text EN (auto-filled from name)..."
+                      value={img.altText || ""}
+                      disabled={disabled}
+                      onChange={(e) => onUpdateAltText?.(img, e.target.value, "altText")}
+                      className="h-6 text-[10px] px-1.5 py-0"
+                      title="English image alt text for search engine optimization and accessibility"
+                    />
+                    <Input
+                      placeholder="Alt text BN (বাংলা)..."
+                      value={img.altTextBn || ""}
+                      disabled={disabled}
+                      onChange={(e) => onUpdateAltText?.(img, e.target.value, "altTextBn")}
+                      className="h-6 text-[10px] px-1.5 py-0"
+                      title="Bengali image alt text (বাংলা বিবরণ)"
+                    />
+                  </div>
                 )}
               </div>
             </div>

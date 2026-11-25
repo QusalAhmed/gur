@@ -116,6 +116,11 @@ export interface Order {
   printed_at?: string | null;
   printed_courier_snapshot?: Record<string, any> | null;
   reprint_required?: boolean;
+  is_paused?: boolean;
+  sending_date?: string | null;
+  paused_at?: string | null;
+  pause_reason?: string | null;
+  is_urgent?: boolean;
   total_weight_kg?: number;
   items: OrderItem[];
   notes: OrderNote[];

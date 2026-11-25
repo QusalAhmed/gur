@@ -23,13 +23,33 @@ import {
   Layers,
   Truck,
   Square,
+  Flame,
+  PauseCircle,
+  CalendarClock,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
-import { getOrdersByIdsAction, markOrdersAsPrintedAction } from "@/actions/orders";
+import {
+  getOrdersByIdsAction,
+  getPrintQueueOrdersAction,
+  markOrdersAsPrintedAction,
+} from "@/actions/orders";
 import { assignInvoiceNumberAction } from "@/actions/invoice-ops";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { getSiteUrl } from "@/lib/site-url";
+import { isOrderReprintRequired } from "@/lib/order-reprint";
+import {
+  SendingDateFilterMode,
+  formatSendingDateDisplay,
+  getDhakaTodayIsoDate,
+  getOrderDispatchHoldState,
+  matchesPrintSendingDateFilter,
+  normalizeSendingDate,
+  sortOrdersForPrint,
+  toDhakaDateKey,
+} from "@/lib/order-dispatch";
 
 type PaperFormat = "2inch" | "58mm" | "a4";
 
@@ -233,74 +253,204 @@ function PrintContent() {
   }), [storeName, address, supportPhone, siteUrl, logoUrl]);
 
   const idsParam = searchParams.get("ids") || searchParams.get("orderId") || "";
+  const isQueueMode = !idsParam.trim();
   const isInvoiceType = searchParams.get("type") === "invoice";
   const initialFormat = (searchParams.get("format") as PaperFormat) || (isInvoiceType ? "a4" : "58mm");
+  const defaultToday = React.useMemo(() => getDhakaTodayIsoDate(), []);
+
+  const initialSendingDate = normalizeSendingDate(searchParams.get("sendingDate")) || defaultToday;
+  const rawModeParam = searchParams.get("mode");
+  const initialMode: SendingDateFilterMode =
+    rawModeParam === "exact_date" || rawModeParam === "all" || rawModeParam === "due_on_or_before"
+      ? rawModeParam
+      : "due_on_or_before";
+  const rawStatusParam = searchParams.get("status");
+  const initialStatusFilter: "all_active" | "pending" | "confirmed" | "processing" =
+    rawStatusParam === "pending" || rawStatusParam === "confirmed" || rawStatusParam === "processing"
+      ? rawStatusParam
+      : "all_active";
+  const rawPriorityParam = searchParams.get("priority");
+  const initialPriorityFilter: "all" | "urgent" | "normal" =
+    rawPriorityParam === "urgent" || rawPriorityParam === "normal" ? rawPriorityParam : "all";
+  const rawPrintStateParam = searchParams.get("printState");
+  const initialPrintStateFilter: "all" | "unprinted" | "printed" =
+    rawPrintStateParam === "unprinted" || rawPrintStateParam === "printed"
+      ? rawPrintStateParam
+      : "all";
 
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Print queue filters (Sending Date defaults to Today Asia/Dhaka, Urgent first -> Oldest first)
+  const [sendingDate, setSendingDate] = React.useState<string>(initialSendingDate);
+  const [dateFilterMode, setDateFilterMode] = React.useState<SendingDateFilterMode>(initialMode);
+  const [statusFilter, setStatusFilter] = React.useState<"all_active" | "pending" | "confirmed" | "processing">(
+    initialStatusFilter
+  );
+  const [priorityFilter, setPriorityFilter] = React.useState<"all" | "urgent" | "normal">(
+    initialPriorityFilter
+  );
+  const [printStateFilter, setPrintStateFilter] = React.useState<"all" | "unprinted" | "printed">(
+    initialPrintStateFilter
+  );
+  const [includeHeld, setIncludeHeld] = React.useState<boolean>(false);
 
   // Print controls & preferences
   const [paperFormat, setPaperFormat] = React.useState<PaperFormat>(initialFormat);
   const [zoomLevel, setZoomLevel] = React.useState<number>(100);
   const [showQrCode, setShowQrCode] = React.useState<boolean>(true);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [sessionPrintedCount, setSessionPrintedCount] = React.useState<number | null>(null);
 
   // QR Code Data URL Cache: map of url -> PNG data URL
   const [qrDataUrls, setQrDataUrls] = React.useState<Record<string, string>>({});
+  const requestedInvoiceIdsRef = React.useRef<Set<string>>(new Set());
 
-  // 1. Fetch Orders
-  React.useEffect(() => {
-    async function loadOrders() {
-      if (!idsParam.trim()) {
-        setLoading(false);
-        setError("No order IDs provided to print.");
-        return;
-      }
+  // 1. Fetch Orders (Selected ?ids= mode OR full active Print Queue mode)
+  const loadOrders = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-      const idList = idsParam
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      let data: Order[];
+      if (idsParam.trim()) {
+        const idList = idsParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
 
-      if (idList.length === 0) {
-        setLoading(false);
-        setError("No valid order IDs provided.");
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const data = await getOrdersByIdsAction(idList);
-        setOrders(data);
-
-        // Assign invoice numbers idempotently if printing invoices
-        if (data.length > 0) {
-          data.forEach(async (ord: any) => {
-            if (!ord.invoice_number) {
-              const res = await assignInvoiceNumberAction(ord.id);
-              if (res.ok && res.invoiceNumber) {
-                ord.invoice_number = res.invoiceNumber;
-                setOrders((prev) => [...prev]);
-              }
-            }
-          });
-
-          const numbers = data.map((o) => o.id);
-          markOrdersAsPrintedAction(numbers).catch((err) => {
-            console.warn("Could not record print snapshot:", err);
-          });
+        if (idList.length === 0) {
+          setOrders([]);
+          setError("No valid order IDs provided.");
+          return;
         }
-      } catch (err: any) {
-        console.error("Failed to load orders for print:", err);
-        setError(err.message || "Failed to load order invoices");
-      } finally {
-        setLoading(false);
+        data = await getOrdersByIdsAction(idList);
+      } else {
+        data = await getPrintQueueOrdersAction();
+      }
+
+      setOrders(data);
+    } catch (err: any) {
+      console.error("Failed to load orders for print:", err);
+      setError(err.message || "Failed to load orders for printing");
+    } finally {
+      setLoading(false);
+    }
+  }, [idsParam]);
+
+  React.useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  // Compute filtered & sorted orders:
+  // 1) Status / Priority / Print-State filters
+  // 2) Sending Date & Hold filter
+  // 3) Urgent parcels first (oldest first), then Normal parcels (oldest first)
+  const { printableOrders, heldHiddenCount, urgentCount, normalCount } = React.useMemo(() => {
+    const baseFiltered = orders.filter((order) => {
+      if (isQueueMode) {
+        if (
+          order.status !== "pending" &&
+          order.status !== "confirmed" &&
+          order.status !== "processing"
+        ) {
+          return false;
+        }
+        if (statusFilter !== "all_active" && order.status !== statusFilter) {
+          return false;
+        }
+      }
+
+      if (priorityFilter === "urgent" && !order.is_urgent) return false;
+      if (priorityFilter === "normal" && order.is_urgent) return false;
+
+      if (printStateFilter === "unprinted") {
+        if (order.printed_at && !isOrderReprintRequired(order)) return false;
+      } else if (printStateFilter === "printed") {
+        if (!order.printed_at || isOrderReprintRequired(order)) return false;
+      }
+
+      return true;
+    });
+
+    const dateFiltered: Order[] = [];
+    let hiddenHeld = 0;
+
+    for (const order of baseFiltered) {
+      const passes = matchesPrintSendingDateFilter(order, {
+        targetDate: sendingDate,
+        mode: dateFilterMode,
+        includeHeld,
+      });
+
+      if (passes) {
+        dateFiltered.push(order);
+      } else if (!includeHeld && getOrderDispatchHoldState(order, sendingDate).held) {
+        hiddenHeld += 1;
       }
     }
 
-    loadOrders();
-  }, [idsParam]);
+    const sorted = sortOrdersForPrint(dateFiltered);
+    const urgentTotal = sorted.filter((o) => Boolean(o.is_urgent)).length;
+
+    return {
+      printableOrders: sorted,
+      heldHiddenCount: hiddenHeld,
+      urgentCount: urgentTotal,
+      normalCount: sorted.length - urgentTotal,
+    };
+  }, [
+    orders,
+    isQueueMode,
+    statusFilter,
+    priorityFilter,
+    printStateFilter,
+    sendingDate,
+    dateFilterMode,
+    includeHeld,
+  ]);
+
+  // Assign missing invoice numbers idempotently for visible printable orders
+  React.useEffect(() => {
+    const missing = printableOrders.filter(
+      (ord) => !(ord as any).invoice_number && !requestedInvoiceIdsRef.current.has(ord.id)
+    );
+    if (missing.length === 0) return;
+
+    for (const ord of missing) {
+      requestedInvoiceIdsRef.current.add(ord.id);
+    }
+
+    let cancelled = false;
+    Promise.all(
+      missing.map(async (ord) => {
+        try {
+          const res = await assignInvoiceNumberAction(ord.id);
+          return res.ok && res.invoiceNumber ? { id: ord.id, invoiceNumber: res.invoiceNumber } : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const updates = new Map<string, string>();
+      for (const r of results) {
+        if (r) updates.set(r.id, r.invoiceNumber);
+      }
+      if (updates.size > 0) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            updates.has(o.id) ? ({ ...o, invoice_number: updates.get(o.id) } as Order) : o
+          )
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [printableOrders]);
 
   // 2. Pre-generate Data URL QR Code for fixed store website (avoids HTML/SVG injection)
   React.useEffect(() => {
@@ -327,12 +477,21 @@ function PrintContent() {
     generateQrs();
   }, [storeConfig.website]);
 
+  // Record printed snapshot ONLY when actually printing visible filtered orders
   const handlePrint = React.useCallback(() => {
-    if (orders.length > 0) {
-      markOrdersAsPrintedAction(orders.map((o) => o.id)).catch(() => {});
-    }
+    if (printableOrders.length === 0) return;
+    const idsToMark = printableOrders.map((o) => o.id);
+    markOrdersAsPrintedAction(idsToMark)
+      .then((res) => {
+        if (res.success) {
+          setSessionPrintedCount(idsToMark.length);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not record print snapshot:", err);
+      });
     window.print();
-  }, [orders]);
+  }, [printableOrders]);
 
   // Keyboard shortcut Ctrl+P / Cmd+P
   React.useEffect(() => {
@@ -352,19 +511,30 @@ function PrintContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const resetQueueFilters = () => {
+    setSendingDate(defaultToday);
+    setDateFilterMode("due_on_or_before");
+    setStatusFilter("all_active");
+    setPriorityFilter("all");
+    setPrintStateFilter("all");
+    setIncludeHeld(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-slate-800">
         <Loader2 className="h-9 w-9 animate-spin text-amber-600 mb-3" />
-        <h2 className="text-sm font-bold tracking-tight">Preparing invoice...</h2>
+        <h2 className="text-sm font-bold tracking-tight">
+          {isQueueMode ? "Loading print queue..." : "Preparing invoice..."}
+        </h2>
         <p className="text-xs text-slate-500 mt-1">
-          Loading order line items and generating vector QR codes...
+          Sorting urgent parcels first, oldest first, and generating QR codes...
         </p>
       </div>
     );
   }
 
-  if (error || orders.length === 0) {
+  if (error || (!isQueueMode && orders.length === 0)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-center">
         <div className="p-3 bg-rose-50 text-rose-600 rounded-full border border-rose-200 mb-3">
@@ -374,14 +544,25 @@ function PrintContent() {
         <p className="text-xs text-slate-500 mt-1 max-w-sm">
           {error || "Could not find any order records matching the provided IDs."}
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push("/admin/orders")}
-          className="mt-4 gap-1.5 text-xs bg-white text-slate-800"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Return to Orders List
-        </Button>
+        <div className="mt-4 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/admin/orders")}
+            className="gap-1.5 text-xs bg-white text-slate-800 cursor-pointer"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Return to Orders List
+          </Button>
+          {!isQueueMode && (
+            <Button
+              size="sm"
+              onClick={() => router.push("/admin/orders/print")}
+              className="gap-1.5 text-xs bg-amber-700 hover:bg-amber-800 text-white cursor-pointer"
+            >
+              <Printer className="h-3.5 w-3.5" /> Open Print Queue
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -483,127 +664,306 @@ function PrintContent() {
           TOP CONTROL BAR (Hidden on Print)
       ───────────────────────────────────────────────────────────────────────────── */}
       <header className="print-control-bar sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-300 shadow-sm px-4 py-2.5">
-        <div className="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Navigation & Info */}
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/admin/orders")}
-              className="gap-1.5 text-xs text-slate-700 hover:text-slate-900 border-slate-300 cursor-pointer"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders
-            </Button>
-            <div className="h-4 w-px bg-slate-300 hidden sm:block" />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-xs sm:text-sm text-slate-900">
-                  58mm Thermal Sticker Invoice & Packing Slip
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
-                  58mm Roll
-                </span>
+        <div className="w-full max-w-7xl mx-auto space-y-2.5">
+          {/* Primary Row: Navigation, Format & Print */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Navigation & Info */}
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/admin/orders")}
+                className="gap-1.5 text-xs text-slate-700 hover:text-slate-900 border-slate-300 cursor-pointer"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders
+              </Button>
+              <div className="h-4 w-px bg-slate-300 hidden sm:block" />
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-xs sm:text-sm text-slate-900">
+                    {isQueueMode
+                      ? "Thermal Print Queue"
+                      : "Selected Stickers Preview"}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                    Urgent First · Oldest First
+                  </span>
+                  {urgentCount > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-rose-600 text-white font-bold">
+                      <Flame className="h-2.5 w-2.5" /> {urgentCount} Urgent
+                    </span>
+                  )}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-300">
+                    {normalCount} Normal
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Showing {printableOrders.length} of {orders.length} loaded order{orders.length !== 1 ? "s" : ""}
+                  {sessionPrintedCount !== null && ` · Recorded ${sessionPrintedCount} printed`}
+                </p>
               </div>
-              <p className="text-[11px] text-slate-500">
-                {orders.length} order{orders.length > 1 ? "s" : ""} selected for direct thermal sticker printing
-              </p>
+            </div>
+
+            {/* Center: Format & Zoom controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Format selector */}
+              <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPaperFormat("58mm")}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    paperFormat === "58mm"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="58mm continuous adhesive sticker and POS receipt roll (Default)"
+                >
+                  58mm Roll
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaperFormat("2inch")}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    paperFormat === "2inch"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="2 inch (50.8mm) continuous adhesive sticker roll"
+                >
+                  2&quot; Roll (50.8mm)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaperFormat("a4")}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    paperFormat === "a4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Standard A4 sheet for traditional packing slip"
+                >
+                  A4 Standard
+                </button>
+              </div>
+
+              {/* Zoom controls (Only affects on-screen preview) */}
+              <div className="hidden md:flex items-center border border-slate-300 rounded-lg bg-white px-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.max(75, z - 15))}
+                  className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer"
+                  title="Zoom out preview"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <span className="font-mono text-[11px] px-1 text-slate-700 min-w-[40px] text-center font-semibold">
+                  {zoomLevel}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.min(150, z + 15))}
+                  className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer"
+                  title="Zoom in preview"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel(100)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 border-l border-slate-200 cursor-pointer"
+                  title="Reset zoom to 100%"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+
+              {/* Toggles */}
+              <label className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showQrCode}
+                  onChange={(e) => setShowQrCode(e.target.checked)}
+                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span>Web QR</span>
+              </label>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={loadOrders}
+                className="h-8 px-2.5 text-xs border-slate-300 text-slate-700 cursor-pointer"
+                title="Refresh queue from database"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {/* Right: Print Action */}
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handlePrint}
+                disabled={printableOrders.length === 0}
+                size="sm"
+                className="bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white font-bold gap-1.5 text-xs shadow-md cursor-pointer px-4"
+              >
+                <Printer className="h-4 w-4" /> Print Stickers ({printableOrders.length})
+              </Button>
             </div>
           </div>
 
-          {/* Center: Format & Zoom controls */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Format selector */}
-            <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setPaperFormat("58mm")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                  paperFormat === "58mm"
-                    ? "bg-white text-slate-900 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="58mm continuous adhesive sticker and POS receipt roll (Default)"
-              >
-                58mm Roll
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaperFormat("2inch")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                  paperFormat === "2inch"
-                    ? "bg-white text-slate-900 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="2 inch (50.8mm) continuous adhesive sticker roll"
-              >
-                2&quot; Roll (50.8mm)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaperFormat("a4")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                  paperFormat === "a4"
-                    ? "bg-white text-slate-900 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="Standard A4 sheet for traditional packing slip"
-              >
-                A4 Standard
-              </button>
-            </div>
-
-            {/* Zoom controls (Only affects on-screen preview) */}
-            <div className="hidden md:flex items-center border border-slate-300 rounded-lg bg-white px-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setZoomLevel((z) => Math.max(75, z - 15))}
-                className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer"
-                title="Zoom out preview"
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <span className="font-mono text-[11px] px-1 text-slate-700 min-w-[40px] text-center font-semibold">
-                {zoomLevel}%
+          {/* Secondary Row: Sending Date Filter, Status, Priority & Print State */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 text-xs">
+            {/* Sending Date Picker */}
+            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 rounded-lg px-2 py-1">
+              <CalendarClock className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+              <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+                Sending Date:
               </span>
-              <button
-                type="button"
-                onClick={() => setZoomLevel((z) => Math.min(150, z + 15))}
-                className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer"
-                title="Zoom in preview"
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setZoomLevel(100)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 border-l border-slate-200 cursor-pointer"
-                title="Reset zoom to 100%"
-              >
-                <RotateCcw className="h-3 w-3" />
-              </button>
+              <input
+                type="date"
+                value={sendingDate}
+                disabled={dateFilterMode === "all"}
+                onChange={(e) => {
+                  const v = normalizeSendingDate(e.target.value);
+                  if (v) setSendingDate(v);
+                }}
+                className="text-xs font-mono bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 disabled:opacity-50"
+              />
+              {sendingDate !== defaultToday && (
+                <button
+                  type="button"
+                  onClick={() => setSendingDate(defaultToday)}
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 hover:bg-amber-200 cursor-pointer"
+                >
+                  Today
+                </button>
+              )}
             </div>
 
-            {/* Toggles */}
-            <label className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showQrCode}
-                onChange={(e) => setShowQrCode(e.target.checked)}
-                className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-              />
-              <span>Web QR</span>
-            </label>
-          </div>
+            {/* Date Match Mode */}
+            <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "due_on_or_before", label: "Due <= Date" },
+                  { id: "exact_date", label: "Exact Date" },
+                  { id: "all", label: "All Dates" },
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setDateFilterMode(m.id)}
+                  className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                    dateFilterMode === m.id
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Right: Print Action */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handlePrint}
-              size="sm"
-              className="bg-amber-700 hover:bg-amber-800 text-white font-bold gap-1.5 text-xs shadow-md cursor-pointer px-4"
-            >
-              <Printer className="h-4 w-4" /> Print Stickers ({orders.length})
-            </Button>
+            {/* Active Status Pills (Queue Mode) */}
+            {isQueueMode && (
+              <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px]">
+                {(
+                  [
+                    { id: "all_active", label: "All Active" },
+                    { id: "pending", label: "Pending" },
+                    { id: "confirmed", label: "Confirmed" },
+                    { id: "processing", label: "Processing" },
+                  ] as const
+                ).map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setStatusFilter(st.id)}
+                    className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                      statusFilter === st.id
+                        ? "bg-white text-slate-900 shadow-xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Priority Filter */}
+            <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "all", label: "All Priority" },
+                  { id: "urgent", label: "Urgent" },
+                  { id: "normal", label: "Normal" },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPriorityFilter(p.id)}
+                  className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                    priorityFilter === p.id
+                      ? p.id === "urgent"
+                        ? "bg-rose-600 text-white shadow-xs font-bold"
+                        : "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Print State Filter */}
+            <div className="flex items-center rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px]">
+              {(
+                [
+                  { id: "all", label: "All Print States" },
+                  { id: "unprinted", label: "Unprinted / Reprint" },
+                  { id: "printed", label: "Printed" },
+                ] as const
+              ).map((ps) => (
+                <button
+                  key={ps.id}
+                  type="button"
+                  onClick={() => setPrintStateFilter(ps.id)}
+                  className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+                    printStateFilter === ps.id
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {ps.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Held / Paused override toggle */}
+            {includeHeld ? (
+              <button
+                type="button"
+                onClick={() => setIncludeHeld(false)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-bold cursor-pointer hover:bg-amber-700"
+                title="Hide paused or future-dated parcels"
+              >
+                <PauseCircle className="h-3 w-3" /> Showing Paused / Scheduled (Hide)
+              </button>
+            ) : heldHiddenCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setIncludeHeld(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-semibold cursor-pointer hover:bg-amber-200"
+                title="Paused or future sending date parcels are excluded by default"
+              >
+                <AlertTriangle className="h-3 w-3 text-amber-700" />
+                {heldHiddenCount} Held Hidden — Include
+              </button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -611,17 +971,39 @@ function PrintContent() {
       {/* ─────────────────────────────────────────────────────────────────────────────
           PREVIEW CANVAS / THERMAL ROLL HOLDER
       ───────────────────────────────────────────────────────────────────────────── */}
-      <main className="py-8 px-4 flex flex-col items-center justify-start min-h-[calc(100vh-65px)]">
-        {/* Physical Paper Size Spec Banner (Screen only) */}
-        <div className="print-control-bar mb-6 text-center text-xs text-slate-600 max-w-md bg-white/90 border border-slate-300/80 rounded-xl p-3 shadow-xs">
-          <div className="flex items-center justify-center gap-2 text-slate-800 font-bold mb-1">
-            <Package className="h-4 w-4 text-amber-700" />
-            <span>Thermal Roll Output: 58mm Thermal Sticker Roll</span>
+      <main className="py-8 px-4 flex flex-col items-center justify-start min-h-[calc(100vh-110px)]">
+        {/* Held / Override Notice Banner (Screen only) */}
+        {includeHeld && (
+          <div className="print-control-bar mb-4 text-xs bg-amber-50 border border-amber-300 text-amber-950 rounded-xl px-4 py-2.5 max-w-2xl flex flex-wrap items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" />
+              <span>
+                <strong>Override active:</strong> Paused and future-scheduled orders are currently included in the print list.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIncludeHeld(false)}
+              className="text-[11px] font-bold px-2.5 py-1 rounded bg-amber-700 text-white hover:bg-amber-800 cursor-pointer"
+            >
+              Hide Held Orders
+            </button>
           </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Layout is calibrated for 58mm direct thermal sticker & POS receipt printers (Xprinter, Rongta, Munbyn, Dymo, generic POS). High contrast monochrome typography with 100% full-width phone banners.
-          </p>
-        </div>
+        )}
+
+        {/* Physical Paper Size Spec Banner (Screen only) */}
+        {printableOrders.length > 0 && (
+          <div className="print-control-bar mb-6 text-center text-xs text-slate-600 max-w-md bg-white/90 border border-slate-300/80 rounded-xl p-3 shadow-xs">
+            <div className="flex items-center justify-center gap-2 text-slate-800 font-bold mb-1">
+              <Package className="h-4 w-4 text-amber-700" />
+              <span>Thermal Roll Output: 58mm Thermal Sticker Roll</span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Ordered <strong>Urgent First (oldest first)</strong>, then <strong>Normal (oldest first)</strong>
+              {dateFilterMode !== "all" ? ` · Filtered by Sending Date (${formatSendingDateDisplay(sendingDate)})` : ""}.
+            </p>
+          </div>
+        )}
 
         {/* Scaled Preview Wrapper */}
         <div
@@ -630,9 +1012,60 @@ function PrintContent() {
             transformOrigin: "top center",
             transition: "transform 0.15s ease",
           }}
-          className={`space-y-8 print:space-y-0 print:transform-none ${getContainerWidth()}`}
+          className={`space-y-8 print:space-y-0 print:transform-none ${
+            printableOrders.length === 0 ? "w-full max-w-lg" : getContainerWidth()
+          }`}
         >
-          {orders.map((order, orderIdx) => {
+          {printableOrders.length === 0 ? (
+            <div className="print-control-bar bg-white border border-slate-300 rounded-2xl p-6 text-center shadow-sm space-y-3">
+              <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-sm font-bold text-slate-900">
+                  No Parcels Match Current Sending Date &amp; Queue Filters
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {heldHiddenCount > 0
+                    ? `${heldHiddenCount} parcel(s) matched your status/priority filters but are paused or scheduled for a future sending date.`
+                    : `No active parcels due for ${formatSendingDateDisplay(sendingDate)} under the current filter settings.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {heldHiddenCount > 0 && !includeHeld && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setIncludeHeld(true)}
+                    className="bg-amber-700 hover:bg-amber-800 text-white text-xs cursor-pointer"
+                  >
+                    <PauseCircle className="h-3.5 w-3.5 mr-1.5" />
+                    Include Paused / Future ({heldHiddenCount})
+                  </Button>
+                )}
+                {dateFilterMode !== "all" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateFilterMode("all")}
+                    className="text-xs cursor-pointer"
+                  >
+                    Show All Sending Dates
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={resetQueueFilters}
+                  className="text-xs cursor-pointer"
+                >
+                  Reset Filters
+                </Button>
+              </div>
+            </div>
+          ) : printableOrders.map((order, orderIdx) => {
             const orderKey = order.order_number || order.id;
             const courierConsignmentId =
               order.courier_consignment_id ||
@@ -660,6 +1093,13 @@ function PrintContent() {
                     minWidth: paperFormat === "a4" ? "auto" : undefined,
                   }}
                 >
+                  {/* URGENT PARCEL BANNER (High-contrast monochrome thermal safe) */}
+                  {order.is_urgent && (
+                    <div className="w-full bg-black text-white text-center py-0.5 px-1 mb-1 border border-black font-mono uppercase tracking-widest leading-none">
+                      <span className="font-black text-[10.5px] sm:text-[11px]">★ URGENT PARCEL ★</span>
+                    </div>
+                  )}
+
                   {/* ============================================================= */}
                   {/* 1. BUSINESS NAME AND ADDRESS */}
                   {/* ============================================================= */}
@@ -742,6 +1182,13 @@ function PrintContent() {
                         <span className="font-bold text-[11px] select-all leading-tight">
                           {(order as any).invoice_number}
                         </span>
+                      </div>
+                    )}
+
+                    {order.sending_date && (
+                      <div className="flex items-center justify-between gap-1 text-[8.5px] font-bold px-1 py-0.5 bg-black/5 border border-black rounded-xs my-0.5">
+                        <span>SEND ON:</span>
+                        <span>{formatSendingDateDisplay(order.sending_date)}</span>
                       </div>
                     )}
 
@@ -882,8 +1329,36 @@ function PrintContent() {
                 </article>
 
                 {/* On-screen quick copy / action bar underneath each sticker */}
-                <div className="tear-guide-screen flex items-center justify-between px-2 pt-2 text-[11px] text-slate-500">
-                  <span className="font-mono text-xs">Sticker #{orderIdx + 1} of {orders.length}</span>
+                <div className="tear-guide-screen flex flex-wrap items-center justify-between gap-1.5 px-2 pt-2 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-xs font-semibold text-slate-700">
+                      Sticker #{orderIdx + 1} of {printableOrders.length}
+                    </span>
+                    {order.is_urgent ? (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-bold uppercase">
+                        <Flame className="h-2.5 w-2.5" /> Urgent
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-semibold">
+                        Normal
+                      </span>
+                    )}
+                    {order.sending_date && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-semibold">
+                        <CalendarClock className="h-2.5 w-2.5" /> {formatSendingDateDisplay(order.sending_date)}
+                      </span>
+                    )}
+                    {order.is_paused && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-semibold">
+                        <PauseCircle className="h-2.5 w-2.5" /> Paused
+                      </span>
+                    )}
+                    {toDhakaDateKey(order.date) && (
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Placed: {toDhakaDateKey(order.date)}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleCopyId(order.order_number || order.id)}

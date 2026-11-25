@@ -1342,7 +1342,11 @@ export type Database = {
           id: string
           invoice_number: string | null
           invoiced_at: string | null
+          is_paused: boolean
+          is_urgent: boolean
           order_number: string
+          pause_reason: string | null
+          paused_at: string | null
           payment_due_date: string | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status: Database["public"]["Enums"]["payment_status"]
@@ -1351,6 +1355,7 @@ export type Database = {
           printed_courier_snapshot: Json | null
           public_token: string
           quote_request_id: string | null
+          sending_date: string | null
           shipped_at: string | null
           shipping_address: Json
           shipping_method_id: string | null
@@ -1395,7 +1400,11 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoiced_at?: string | null
+          is_paused?: boolean
+          is_urgent?: boolean
           order_number: string
+          pause_reason?: string | null
+          paused_at?: string | null
           payment_due_date?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]
@@ -1404,6 +1413,7 @@ export type Database = {
           printed_courier_snapshot?: Json | null
           public_token?: string
           quote_request_id?: string | null
+          sending_date?: string | null
           shipped_at?: string | null
           shipping_address: Json
           shipping_method_id?: string | null
@@ -1448,7 +1458,11 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoiced_at?: string | null
+          is_paused?: boolean
+          is_urgent?: boolean
           order_number?: string
+          pause_reason?: string | null
+          paused_at?: string | null
           payment_due_date?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]
@@ -1457,6 +1471,7 @@ export type Database = {
           printed_courier_snapshot?: Json | null
           public_token?: string
           quote_request_id?: string | null
+          sending_date?: string | null
           shipped_at?: string | null
           shipping_address?: Json
           shipping_method_id?: string | null

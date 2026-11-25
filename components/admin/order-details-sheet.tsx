@@ -41,7 +41,12 @@ import {
   RotateCcw,
   CheckCircle2,
   CircleDot,
+  Flame,
+  PauseCircle,
+  PlayCircle,
+  CalendarClock,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -107,7 +112,12 @@ import {
   getOrderAmountPaidAfterDelivery,
   getOrderDueBalance,
 } from "@/lib/order-payment-utils";
-import { updateAdminOrderAction } from "@/actions/orders";
+import { updateAdminOrderAction, updateOrderDispatchSettingsAction } from "@/actions/orders";
+import { DispatchScheduleDialog } from "@/components/admin/orders/dispatch-schedule-dialog";
+import {
+  formatSendingDateDisplay,
+  getOrderDispatchHoldState,
+} from "@/lib/order-dispatch";
 import { useOrder } from "@/hooks/use-order";
 import {
   getOtherOrderInsight,
@@ -223,6 +233,8 @@ export function OrderDetailsSheet({
   const [isRecreatingSteadfast, setIsRecreatingSteadfast] = React.useState(false);
   const [isRecreateModalOpen, setIsRecreateModalOpen] = React.useState(false);
   const [isSmsModalOpen, setIsSmsModalOpen] = React.useState(false);
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = React.useState(false);
+  const [isUpdatingDispatch, setIsUpdatingDispatch] = React.useState(false);
   const [steadfastError, setSteadfastError] = React.useState<string | null>(null);
 
   // Check for other orders with the same customer phone with deduplication
@@ -482,6 +494,58 @@ export function OrderDetailsSheet({
   const dueAmount = getOrderDueBalance(order);
   const isCancelledOrReturned =
     order.status === "cancelled" || order.status === "returned";
+  const isFinalizedForPause =
+    isCancelledOrReturned ||
+    order.status === "shipped" ||
+    order.status === "delivered" ||
+    order.status === "partially_delivered";
+  const dispatchHold = getOrderDispatchHoldState(order);
+
+  const handleToggleUrgentQuick = async () => {
+    setIsUpdatingDispatch(true);
+    try {
+      const res = await updateOrderDispatchSettingsAction({
+        orderId: order.id,
+        isUrgent: !order.is_urgent,
+      });
+      if (res.success && res.order) {
+        onUpdateOrder?.(res.order);
+        toast.success(
+          res.order.is_urgent
+            ? `Order ${order.id} marked as URGENT`
+            : `Order ${order.id} set to Normal priority`
+        );
+      } else {
+        toast.error(res.error || "Failed to update priority");
+      }
+    } finally {
+      setIsUpdatingDispatch(false);
+    }
+  };
+
+  const handleSaveDispatchSchedule = async (values: {
+    isPaused: boolean;
+    sendingDate: string | null;
+    pauseReason: string | null;
+    isUrgent: boolean;
+  }) => {
+    setIsUpdatingDispatch(true);
+    try {
+      const res = await updateOrderDispatchSettingsAction({
+        orderId: order.id,
+        ...values,
+      });
+      if (res.success && res.order) {
+        onUpdateOrder?.(res.order);
+        setIsScheduleDialogOpen(false);
+        toast.success(`Dispatch schedule & priority updated for ${order.id}`);
+      } else {
+        toast.error(res.error || "Failed to update dispatch schedule");
+      }
+    } finally {
+      setIsUpdatingDispatch(false);
+    }
+  };
 
   // Channel icon and color
   const renderChannelBadge = () => {
@@ -556,7 +620,7 @@ export function OrderDetailsSheet({
               </div>
 
               {/* Desktop/Tablet badges shown inline next to ID */}
-              <div className="hidden md:flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2 flex-wrap">
                 {renderChannelBadge()}
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize whitespace-nowrap ${statusStyles[order.status] || "bg-muted text-muted-foreground"
@@ -564,6 +628,21 @@ export function OrderDetailsSheet({
                 >
                   {order.status.replace(/_/g, " ")}
                 </span>
+                {order.is_urgent && (
+                  <Badge className="bg-rose-600 text-white text-[11px] font-bold px-2 py-0.5 gap-1">
+                    <Flame className="h-3 w-3" />
+                    URGENT
+                  </Badge>
+                )}
+                {dispatchHold.held && (
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-400 text-[11px] font-semibold px-2 py-0.5 gap-1"
+                  >
+                    <PauseCircle className="h-3 w-3" />
+                    {dispatchHold.label}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -619,6 +698,21 @@ export function OrderDetailsSheet({
               >
                 {order.status.replace(/_/g, " ")}
               </span>
+              {order.is_urgent && (
+                <Badge className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 gap-1">
+                  <Flame className="h-2.5 w-2.5" />
+                  URGENT
+                </Badge>
+              )}
+              {dispatchHold.held && (
+                <Badge
+                  variant="outline"
+                  className="bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-400 text-[10px] font-semibold px-2 py-0.5 gap-1"
+                >
+                  <PauseCircle className="h-2.5 w-2.5" />
+                  {dispatchHold.label}
+                </Badge>
+              )}
             </div>
             {order.isFromDb && (
               <span className="text-emerald-700 dark:text-emerald-400 font-medium text-[11px] flex items-center gap-1 shrink-0">
@@ -636,8 +730,50 @@ export function OrderDetailsSheet({
               <Clock className="h-3 w-3 text-amber-600 shrink-0" />
               Placed: {formatDateTime(order.date)}
             </span>
+            {order.sending_date && (
+              <>
+                <span>•</span>
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-800 dark:text-amber-300">
+                  <CalendarClock className="h-3 w-3 shrink-0" />
+                  Send Date: {formatSendingDateDisplay(order.sending_date)}
+                </span>
+              </>
+            )}
             <span>•</span>
             <span>Currency: {order.currency}</span>
+            {!isFinalizedForPause && (
+              <>
+                <span>•</span>
+                <button
+                  type="button"
+                  disabled={isUpdatingDispatch}
+                  onClick={handleToggleUrgentQuick}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+                    order.is_urgent
+                      ? "bg-rose-600 text-white border-rose-700 hover:bg-rose-700"
+                      : "bg-background hover:bg-rose-50 text-rose-700 border-rose-200 dark:text-rose-400 dark:border-rose-900"
+                  )}
+                >
+                  <Flame className="h-3 w-3" />
+                  {order.is_urgent ? "Urgent On" : "Mark Urgent"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isUpdatingDispatch}
+                  onClick={() => setIsScheduleDialogOpen(true)}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+                    dispatchHold.held
+                      ? "bg-amber-600 text-white border-amber-700 hover:bg-amber-700"
+                      : "bg-background hover:bg-muted text-foreground border-border"
+                  )}
+                >
+                  <CalendarClock className="h-3 w-3" />
+                  {dispatchHold.held ? "Paused / Edit Date" : "Pause / Set Send Date"}
+                </button>
+              </>
+            )}
             {order.isFromDb && (
               <span className="hidden md:inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium">
                 <span>•</span>
@@ -688,6 +824,51 @@ export function OrderDetailsSheet({
         {/* 2. SCROLLABLE BODY CONTENT */}
         {/* ========================================================================= */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3.5 sm:py-4 space-y-4 sm:space-y-5">
+          {/* Paused / Scheduled Dispatch Banner */}
+          {dispatchHold.held && (
+            <div className="rounded-xl border border-amber-400 dark:border-amber-800 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+              <div className="space-y-0.5">
+                <p className="font-bold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+                  <PauseCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>{dispatchHold.label}</span>
+                </p>
+                {order.pause_reason && (
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    Reason: {order.pause_reason}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isUpdatingDispatch}
+                  onClick={() =>
+                    handleSaveDispatchSchedule({
+                      isPaused: false,
+                      sendingDate: order.sending_date || null,
+                      pauseReason: null,
+                      isUrgent: Boolean(order.is_urgent),
+                    })
+                  }
+                  className="h-7 text-xs bg-background border-amber-400 hover:bg-amber-100 cursor-pointer"
+                >
+                  <PlayCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  Resume Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isUpdatingDispatch}
+                  onClick={() => setIsScheduleDialogOpen(true)}
+                  className="h-7 text-xs bg-background border-amber-400 cursor-pointer"
+                >
+                  Edit Date
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Outdated Shipping Label Warning Banner */}
           {isOrderReprintRequired(order) && (
             <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-500/10 p-3.5 text-xs text-amber-950 dark:text-amber-200 space-y-2.5 shadow-xs">
@@ -1994,6 +2175,17 @@ export function OrderDetailsSheet({
             onUpdateOrder(order);
           }
         }}
+      />
+      <DispatchScheduleDialog
+        open={isScheduleDialogOpen}
+        onOpenChange={setIsScheduleDialogOpen}
+        orderNumbers={[order.order_number || order.id]}
+        initialPaused={Boolean(order.is_paused)}
+        initialSendingDate={order.sending_date || null}
+        initialPauseReason={order.pause_reason || ""}
+        initialUrgent={Boolean(order.is_urgent)}
+        isSubmitting={isUpdatingDispatch}
+        onConfirm={handleSaveDispatchSchedule}
       />
     </Sheet>
   );

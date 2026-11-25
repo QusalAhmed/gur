@@ -50,6 +50,10 @@ import {
   Package,
   XCircle,
   Scale,
+  Flame,
+  PauseCircle,
+  PlayCircle,
+  CalendarClock,
 } from "lucide-react";
 import {
   DbGeoDivision,
@@ -91,7 +95,14 @@ import {
   bulkUpdateOrderStatusAction,
   bulkAssignCourierAction,
   bulkDeleteOrdersAction,
+  updateOrderDispatchSettingsAction,
+  bulkUpdateOrderDispatchSettingsAction,
 } from "@/actions/orders";
+import { DispatchScheduleDialog } from "@/components/admin/orders/dispatch-schedule-dialog";
+import {
+  formatSendingDateDisplay,
+  getOrderDispatchHoldState,
+} from "@/lib/order-dispatch";
 import {
   buildSteadfastPayloadSnapshot,
   detectSteadfastPayloadDiff,
@@ -264,6 +275,8 @@ const statusStyles: Record<string, string> = {
 const validStatusTabs = [
   "all",
   "reprint_required",
+  "urgent",
+  "paused",
   "incomplete_order",
   "pending",
   "confirmed",
@@ -540,6 +553,8 @@ export function OrdersClient() {
   const counts = ordersResult?.statusCounts || {
     all: 0,
     reprint_required: 0,
+    urgent: 0,
+    paused: 0,
     incomplete_order: 0,
     pending: 0,
     confirmed: 0,
@@ -1418,6 +1433,12 @@ export function OrdersClient() {
   const [isChecklistOpen, setIsChecklistOpen] = React.useState(false);
   const [checklistOrders, setChecklistOrders] = React.useState<Order[]>([]);
 
+  // Dispatch Schedule / Priority Dialog state (Single or Bulk)
+  const [isDispatchScheduleOpen, setIsDispatchScheduleOpen] = React.useState(false);
+  const [dispatchScheduleOrders, setDispatchScheduleOrders] = React.useState<Order[]>([]);
+  const [dispatchClearSelectionFn, setDispatchClearSelectionFn] = React.useState<(() => void) | null>(null);
+  const [isDispatchUpdating, setIsDispatchUpdating] = React.useState(false);
+
   // Steadfast Auto-booking Failure & Bulk Results States
   const [steadfastFailureState, setSteadfastFailureState] = React.useState<{
     isOpen: boolean;
@@ -1702,6 +1723,114 @@ export function OrdersClient() {
     if (orders.length === 0) return;
     const ids = orders.map((o) => o.id).join(",");
     window.open(`/admin/orders/print?ids=${encodeURIComponent(ids)}&format=58mm`, "_blank");
+  };
+
+  const handleOpenDispatchSchedule = (ordersList: Order[], clearFn?: () => void) => {
+    const freshOrders = ordersList.map((o) => orders.find((fresh) => fresh.id === o.id) || o);
+    setDispatchScheduleOrders(freshOrders);
+    setDispatchClearSelectionFn(() => clearFn || null);
+    setIsDispatchScheduleOpen(true);
+  };
+
+  const handleToggleUrgentOrder = async (order: Order) => {
+    const fresh = orders.find((o) => o.id === order.id) || order;
+    setIsDispatchUpdating(true);
+    try {
+      const res = await updateOrderDispatchSettingsAction({
+        orderId: fresh.id,
+        isUrgent: !fresh.is_urgent,
+      });
+      if (res.success && res.order) {
+        queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+        if (selectedOrder?.id === res.order.id) {
+          setSelectedOrder(res.order);
+        }
+        showToast(
+          res.order.is_urgent
+            ? `Order ${res.order.id} marked as URGENT parcel.`
+            : `Order ${res.order.id} set to Normal priority.`,
+          "success"
+        );
+      } else {
+        showToast(res.error || "Failed to update parcel priority.", "destructive");
+      }
+    } finally {
+      setIsDispatchUpdating(false);
+    }
+  };
+
+  const handleBulkQuickDispatchUpdate = async (
+    selectedOrders: Order[],
+    updates: { isUrgent?: boolean; isPaused?: boolean; sendingDate?: string | null; pauseReason?: string | null },
+    successLabel: string,
+    clearSelection?: () => void
+  ) => {
+    if (selectedOrders.length === 0) return;
+    setIsDispatchUpdating(true);
+    try {
+      const res = await bulkUpdateOrderDispatchSettingsAction({
+        orderIds: selectedOrders.map((o) => o.id),
+        ...updates,
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      if (res.success) {
+        if (clearSelection) clearSelection();
+        showToast(
+          `${successLabel} (${res.updatedCount} updated${res.skippedCount > 0 ? `, ${res.skippedCount} skipped` : ""}).`,
+          res.skippedCount > 0 ? "warning" : "success"
+        );
+      } else {
+        showToast(res.errors[0] || "Failed to update selected orders.", "destructive");
+      }
+    } finally {
+      setIsDispatchUpdating(false);
+    }
+  };
+
+  const handleSaveDispatchScheduleDialog = async (values: {
+    isPaused: boolean;
+    sendingDate: string | null;
+    pauseReason: string | null;
+    isUrgent: boolean;
+  }) => {
+    if (dispatchScheduleOrders.length === 0) return;
+    setIsDispatchUpdating(true);
+    try {
+      if (dispatchScheduleOrders.length === 1) {
+        const res = await updateOrderDispatchSettingsAction({
+          orderId: dispatchScheduleOrders[0].id,
+          ...values,
+        });
+        if (res.success && res.order) {
+          queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+          if (selectedOrder?.id === res.order.id) {
+            setSelectedOrder(res.order);
+          }
+          setIsDispatchScheduleOpen(false);
+          showToast(`Dispatch schedule & priority saved for ${res.order.id}.`, "success");
+        } else {
+          showToast(res.error || "Failed to update order schedule.", "destructive");
+        }
+      } else {
+        const res = await bulkUpdateOrderDispatchSettingsAction({
+          orderIds: dispatchScheduleOrders.map((o) => o.id),
+          ...values,
+        });
+        queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+        setIsDispatchScheduleOpen(false);
+        if (dispatchClearSelectionFn) dispatchClearSelectionFn();
+        if (res.success) {
+          showToast(
+            `Updated schedule & priority for ${res.updatedCount} order(s)${res.skippedCount > 0 ? ` (${res.skippedCount} skipped)` : ""}.`,
+            res.skippedCount > 0 ? "warning" : "success"
+          );
+        } else {
+          showToast(res.errors[0] || "Failed to update selected orders.", "destructive");
+        }
+      }
+    } finally {
+      setIsDispatchUpdating(false);
+    }
   };
 
   const handleOpenPayment = (order: Order) => {
@@ -2079,6 +2208,16 @@ export function OrdersClient() {
       next === "shipped" ||
       next === "delivered" ||
       next === "partially_delivered";
+
+    const dispatchHold = getOrderDispatchHoldState(freshOrder);
+    if (requiresCourier && dispatchHold.held) {
+      handleOpenStatus(freshOrder, next);
+      showToast(
+        `Hold warning: Order ${freshOrder.id} is ${dispatchHold.label}. Confirm below to override.`,
+        "warning"
+      );
+      return;
+    }
 
     if (requiresCourier && (!freshOrder.courier_name || freshOrder.courier_name.trim().length < 2)) {
       handleOpenStatus(freshOrder, next);
@@ -2751,10 +2890,14 @@ export function OrdersClient() {
           const order = row.original;
           const needsReprint = !!(order.reprint_required || isOrderReprintRequired(order));
           const reprintDiffs = needsReprint ? getOrderReprintDiff(order) : [];
+          const dispatchHold = getOrderDispatchHoldState(order);
+          const isFinalized = ["cancelled", "returned", "delivered", "partially_delivered"].includes(
+            order.status
+          );
           return (
             <div className="space-y-1.5 min-w-[125px] max-w-[165px]">
               {/* Order Status Badge */}
-              <div>
+              <div className="flex items-center gap-1 flex-wrap">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2770,6 +2913,61 @@ export function OrdersClient() {
                   {order.status.replace(/_/g, " ")}
                 </button>
               </div>
+
+              {/* Urgent & Paused / Scheduled Sending Date Badges */}
+              {((order.is_urgent && !isFinalized) || dispatchHold.held || (order.sending_date && !isFinalized)) && (
+                <div className="flex flex-wrap gap-1">
+                  {order.is_urgent && !isFinalized && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenDispatchSchedule([order]);
+                      }}
+                      title="Urgent parcel — prints first. Click to edit priority or schedule."
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer shadow-2xs"
+                    >
+                      <Flame className="h-2.5 w-2.5 shrink-0" />
+                      <span>URGENT</span>
+                    </button>
+                  )}
+                  {dispatchHold.held ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenDispatchSchedule([order]);
+                      }}
+                      title={
+                        order.pause_reason
+                          ? `${dispatchHold.label} — ${order.pause_reason}`
+                          : dispatchHold.label
+                      }
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border border-amber-400 bg-amber-500/15 text-amber-900 dark:text-amber-300 hover:bg-amber-500/25 cursor-pointer"
+                    >
+                      <PauseCircle className="h-2.5 w-2.5 shrink-0 text-amber-600" />
+                      <span className="truncate max-w-[130px]">
+                        {order.sending_date
+                          ? `Paused · ${formatSendingDateDisplay(order.sending_date)}`
+                          : "Paused"}
+                      </span>
+                    </button>
+                  ) : order.sending_date && !isFinalized ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenDispatchSchedule([order]);
+                      }}
+                      title={`Scheduled sending date: ${formatSendingDateDisplay(order.sending_date)}`}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border border-sky-300 bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 cursor-pointer"
+                    >
+                      <CalendarClock className="h-2.5 w-2.5 shrink-0 text-sky-600" />
+                      <span>Send {formatSendingDateDisplay(order.sending_date)}</span>
+                    </button>
+                  ) : null}
+                </div>
+              )}
 
               {/* Print Tag (Rendered on a new line) */}
               {(needsReprint || order.printed_at) && (
@@ -2979,6 +3177,18 @@ export function OrdersClient() {
                       <ShieldCheck className="h-4 w-4 mr-2 text-amber-600" />
                       Add Staff Note
                     </DropdownMenuItem>
+                    {!["shipped", "delivered", "partially_delivered", "cancelled", "returned"].includes(order.status) && (
+                      <>
+                        <DropdownMenuItem onClick={() => handleToggleUrgentOrder(order)} className="text-xs">
+                          <Flame className="h-4 w-4 mr-2 text-rose-600" />
+                          {order.is_urgent ? "Remove Urgent Flag" : "Mark as Urgent"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenDispatchSchedule([order])} className="text-xs">
+                          <CalendarClock className="h-4 w-4 mr-2 text-amber-600" />
+                          {order.is_paused ? "Paused / Edit Send Date" : "Pause / Set Send Date"}
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuItem onClick={() => handleBulkPrintInvoices([order])} className="text-xs">
                       <Printer className="h-4 w-4 mr-2 text-amber-600" />
                       {order.reprint_required || isOrderReprintRequired(order)
@@ -3372,6 +3582,17 @@ export function OrdersClient() {
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <DateRangePicker allowAllTime={true} />
           <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.open("/admin/orders/print", "_blank", "noopener,noreferrer")}
+            className="cursor-pointer border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            title="Open Print Labels Queue (Urgent first, oldest first, filtered by Sending Date)"
+          >
+            <Printer className="h-4 w-4 mr-1.5 text-amber-600" />
+            Print Queue
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => refetchOrders()}
@@ -3500,6 +3721,40 @@ export function OrdersClient() {
                       </span>
                     ) : (
                       <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                        0
+                      </span>
+                    )}
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="urgent"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-xs cursor-pointer text-rose-700 dark:text-rose-300"
+                  >
+                    <Flame className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                    <span>Urgent</span>
+                    {counts.urgent > 0 ? (
+                      <span className="ml-1.5 rounded-full bg-rose-500/20 text-rose-800 dark:text-rose-200 [[data-state=active]_&]:bg-white/25 [[data-state=active]_&]:text-white px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                        {counts.urgent}
+                      </span>
+                    ) : (
+                      <span className="ml-1.5 rounded-full bg-muted-foreground/15 [[data-state=active]_&]:bg-white/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                        0
+                      </span>
+                    )}
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="paused"
+                    className="shrink-0 h-9 px-3.5 text-xs font-semibold rounded-lg inline-flex items-center justify-center whitespace-nowrap transition-all data-[state=active]:bg-amber-700 data-[state=active]:text-white data-[state=active]:shadow-xs cursor-pointer text-amber-800 dark:text-amber-300"
+                  >
+                    <PauseCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                    <span>Paused / Hold</span>
+                    {counts.paused > 0 ? (
+                      <span className="ml-1.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-200 [[data-state=active]_&]:bg-white/25 [[data-state=active]_&]:text-white px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                        {counts.paused}
+                      </span>
+                    ) : (
+                      <span className="ml-1.5 rounded-full bg-muted-foreground/15 [[data-state=active]_&]:bg-white/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
                         0
                       </span>
                     )}
@@ -3913,6 +4168,77 @@ export function OrdersClient() {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
+                {/* 2.5 Priority / Pause / Send Date Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isDispatchUpdating}
+                      className="h-7 text-xs gap-1 bg-background hover:bg-muted cursor-pointer"
+                    >
+                      <CalendarClock className="h-3.5 w-3.5 text-amber-600" />
+                      Priority &amp; Hold
+                      <ChevronDown className="h-3 w-3 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56 text-xs">
+                    <DropdownMenuLabel>Dispatch Priority &amp; Schedule</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleBulkQuickDispatchUpdate(
+                          selectedOrders,
+                          { isUrgent: true },
+                          "Marked parcels as Urgent",
+                          clearSelection
+                        )
+                      }
+                      className="cursor-pointer text-rose-700 dark:text-rose-300 font-medium"
+                    >
+                      <Flame className="h-3.5 w-3.5 mr-2 text-rose-600" />
+                      Mark as Urgent
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleBulkQuickDispatchUpdate(
+                          selectedOrders,
+                          { isUrgent: false },
+                          "Cleared Urgent flag",
+                          clearSelection
+                        )
+                      }
+                      className="cursor-pointer"
+                    >
+                      <Check className="h-3.5 w-3.5 mr-2 text-slate-500" />
+                      Set Normal Priority
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleOpenDispatchSchedule(selectedOrders, clearSelection)}
+                      className="cursor-pointer font-medium"
+                    >
+                      <PauseCircle className="h-3.5 w-3.5 mr-2 text-amber-600" />
+                      Pause / Set Sending Date...
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleBulkQuickDispatchUpdate(
+                          selectedOrders,
+                          { isPaused: false, pauseReason: null },
+                          "Resumed selected orders",
+                          clearSelection
+                        )
+                      }
+                      className="cursor-pointer text-emerald-700 dark:text-emerald-300"
+                    >
+                      <PlayCircle className="h-3.5 w-3.5 mr-2 text-emerald-600" />
+                      Resume Orders (Clear Pause)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* 3. Print 58mm Thermal Stickers */}
                 <Button
                   type="button"
@@ -4005,7 +4331,14 @@ export function OrdersClient() {
         mode={orderModalState.mode}
         order={orderModalState.order}
         initialPhone={orderModalState.initialPhone}
-        defaultStatus={selectedTab !== "all" ? (selectedTab as Order["status"]) : "confirmed"}
+        defaultStatus={
+          selectedTab !== "all" &&
+          selectedTab !== "reprint_required" &&
+          selectedTab !== "urgent" &&
+          selectedTab !== "paused"
+            ? (selectedTab as Order["status"])
+            : "confirmed"
+        }
         onSave={handleSaveOrder}
         geoDivisions={geoDivisions}
         geoDistricts={geoDistricts}
@@ -4191,6 +4524,37 @@ export function OrdersClient() {
               </Button>
             </div>
           )}
+
+          {(() => {
+            if (!effectiveStatusOrder) return null;
+            const isAdvancingToDispatch =
+              newStatus === "processing" ||
+              newStatus === "shipped" ||
+              newStatus === "delivered" ||
+              newStatus === "partially_delivered";
+            if (!isAdvancingToDispatch) return null;
+            const holdState = getOrderDispatchHoldState(effectiveStatusOrder);
+            if (!holdState.held) return null;
+            return (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 flex items-start gap-2.5 text-xs">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 flex-1">
+                  <p className="font-semibold text-amber-950 dark:text-amber-200">
+                    Dispatch Hold Warning: {holdState.label}
+                  </p>
+                  {effectiveStatusOrder.pause_reason && (
+                    <p className="text-[11px] text-amber-900/90 dark:text-amber-300/90">
+                      Reason: {effectiveStatusOrder.pause_reason}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                    This order is currently paused or scheduled for a future sending date. Proceed only if overriding early
+                    {newStatus !== "processing" ? " (moving to Shipped/Delivered automatically clears Pause)" : ""}.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="space-y-4 pt-2 pb-4">
             <div className="space-y-1.5">
@@ -5554,6 +5918,46 @@ export function OrdersClient() {
             </div>
           )}
 
+          {(() => {
+            const isAdvancingToDispatch =
+              bulkTargetStatus === "processing" ||
+              bulkTargetStatus === "shipped" ||
+              bulkTargetStatus === "delivered" ||
+              bulkTargetStatus === "partially_delivered";
+            if (!isAdvancingToDispatch || bulkEligibility.eligible.length === 0) return null;
+            const heldOrders = bulkEligibility.eligible
+              .map((order) => ({ order, hold: getOrderDispatchHoldState(order) }))
+              .filter((x) => x.hold.held);
+            if (heldOrders.length === 0) return null;
+            return (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-xs space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-950 dark:text-amber-200">
+                      {heldOrders.length} eligible order(s) have an active pause or future sending date
+                    </p>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Proceeding will dispatch them early
+                      {bulkTargetStatus !== "processing" ? " and automatically clear their paused flag" : ""}.
+                    </p>
+                  </div>
+                </div>
+                <div className="max-h-24 overflow-y-auto space-y-0.5 pl-6">
+                  {heldOrders.map(({ order, hold }) => (
+                    <div
+                      key={order.id}
+                      className="text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2"
+                    >
+                      <span className="font-mono font-bold">{order.id}</span>
+                      <span>{hold.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="space-y-3 pt-2 pb-4">
             <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1">
               <div className="flex items-center justify-between">
@@ -5933,6 +6337,35 @@ export function OrdersClient() {
           orders={checklistOrders}
         />
       )}
+
+      {/* Dispatch Priority, Pause & Sending Date Dialog */}
+      <DispatchScheduleDialog
+        open={isDispatchScheduleOpen}
+        onOpenChange={setIsDispatchScheduleOpen}
+        orderNumbers={dispatchScheduleOrders.map((o) => o.order_number || o.id)}
+        initialPaused={
+          dispatchScheduleOrders.length === 1
+            ? Boolean(dispatchScheduleOrders[0].is_paused)
+            : dispatchScheduleOrders.some((o) => Boolean(o.is_paused))
+        }
+        initialSendingDate={
+          dispatchScheduleOrders.length === 1
+            ? dispatchScheduleOrders[0].sending_date ?? null
+            : null
+        }
+        initialPauseReason={
+          dispatchScheduleOrders.length === 1
+            ? dispatchScheduleOrders[0].pause_reason ?? ""
+            : ""
+        }
+        initialUrgent={
+          dispatchScheduleOrders.length === 1
+            ? Boolean(dispatchScheduleOrders[0].is_urgent)
+            : dispatchScheduleOrders.some((o) => Boolean(o.is_urgent))
+        }
+        isSubmitting={isDispatchUpdating}
+        onConfirm={handleSaveDispatchScheduleDialog}
+      />
     </div>
   );
 }

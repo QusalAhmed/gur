@@ -30,6 +30,7 @@ import {
   ArrowUpDown,
   PhoneCall,
   Image as ImageIcon,
+  Printer,
 } from "lucide-react";
 import { useAdminAuth } from "@/components/admin/auth-context";
 import { useAdminBadgeCounts } from "@/hooks/use-admin-badge-counts";
@@ -110,6 +111,12 @@ const tier1Groups: NavGroup[] = [
         titleBn: "শিপমেন্ট ও ট্র্যাকিং",
         href: "/admin/shipments",
         icon: Truck,
+      },
+      {
+        title: "Print Labels",
+        titleBn: "প্রিন্ট লেবেল",
+        href: "/admin/orders/print",
+        icon: Printer,
       },
     ],
   },

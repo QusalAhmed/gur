@@ -424,6 +424,11 @@ export function formatDbOrderRecord(data: any): Order {
     printed_at: data.printed_at || null,
     printed_courier_snapshot: data.printed_courier_snapshot || null,
     reprint_required: !!data.reprint_required,
+    is_paused: !!data.is_paused,
+    sending_date: data.sending_date ? String(data.sending_date).slice(0, 10) : null,
+    paused_at: data.paused_at || null,
+    pause_reason: data.pause_reason || null,
+    is_urgent: !!data.is_urgent,
     total_weight_kg: (() => {
       if (data.total_weight_kg !== undefined && data.total_weight_kg !== null && Number(data.total_weight_kg) > 0) {
         return Number(Number(data.total_weight_kg).toFixed(2));

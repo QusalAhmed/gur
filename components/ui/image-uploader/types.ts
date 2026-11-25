@@ -8,7 +8,8 @@ export interface UploadedImage {
   path?: string; // Storage path in bucket (e.g. "categories/slug/file.webp")
   hash?: string; // SHA-256 hexadecimal hash for deduplication
   name?: string; // Original or sanitized file name
-  altText?: string; // SEO and accessibility alt text
+  altText?: string; // SEO and accessibility alt text (English)
+  altTextBn?: string; // SEO and accessibility alt text (Bengali)
   size?: number; // Current file size in bytes
   originalSize?: number; // Raw file size before client-side compression
   compressedSize?: number; // Size after compression

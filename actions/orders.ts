@@ -49,6 +49,12 @@ import { enqueueAndDispatch } from "@/lib/outbox";
 import { toZonedTime } from "date-fns-tz";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { DHAKA_TIMEZONE } from "@/lib/admin-format";
+import {
+  formatSendingDateDisplay,
+  getOrderDispatchHoldState,
+  normalizeSendingDate,
+  sortOrdersForPrint,
+} from "@/lib/order-dispatch";
 import type { DbGeoDivision, DbGeoDistrict } from "@/lib/supabase/types";
 import type {
   CatalogProduct,
@@ -77,6 +83,8 @@ export interface GetOrdersParams {
 export interface StatusCounts {
   all: number;
   reprint_required: number;
+  urgent: number;
+  paused: number;
   incomplete_order: number;
   pending: number;
   confirmed: number;
@@ -124,6 +132,9 @@ const VALID_SORT_COLUMNS: Record<string, string> = {
   method: "payment_method",
   payment_method: "payment_method",
   channel: "channel",
+  sending_date: "sending_date",
+  is_urgent: "is_urgent",
+  is_paused: "is_paused",
 };
 
 const ORDER_STAFF_ROLES = ["owner", "admin", "manager", "support"] as const;
@@ -479,6 +490,10 @@ export async function getOrdersAction(
 
     if (status === "reprint_required") {
       q = q.eq("reprint_required", true).not("status", "in", '("cancelled","returned")');
+    } else if (status === "urgent") {
+      q = q.eq("is_urgent", true).not("status", "in", '("cancelled","returned","delivered")');
+    } else if (status === "paused") {
+      q = q.eq("is_paused", true).not("status", "in", '("shipped","delivered","cancelled","returned")');
     } else if (status && status !== "all") {
       q = q.eq("status", status);
     }
@@ -564,7 +579,7 @@ export async function getOrdersAction(
       return res;
     }),
     (() => {
-      let sq = client.from("orders").select("status, grand_total, reprint_required");
+      let sq = client.from("orders").select("status, grand_total, reprint_required, is_paused, is_urgent");
       if (cleanSearch) {
         sq = sq.or(
           `order_number.ilike.%${cleanSearch}%,customer_name.ilike.%${cleanSearch}%,customer_phone.ilike.%${cleanSearch}%,customer_alternative_phone.ilike.%${cleanSearch}%,shipping_phone.ilike.%${cleanSearch}%,customer_note.ilike.%${cleanSearch}%,shipping_method_name.ilike.%${cleanSearch}%`
@@ -618,6 +633,8 @@ export async function getOrdersAction(
   const initialStatusCounts: StatusCounts = {
     all: 0,
     reprint_required: 0,
+    urgent: 0,
+    paused: 0,
     incomplete_order: 0,
     pending: 0,
     confirmed: 0,
@@ -641,7 +658,24 @@ export async function getOrdersAction(
       ) {
         initialStatusCounts.reprint_required = (initialStatusCounts.reprint_required || 0) + 1;
       }
-      const st = row.status as keyof Omit<StatusCounts, "all" | "reprint_required">;
+      if (
+        row.is_urgent &&
+        row.status !== "cancelled" &&
+        row.status !== "returned" &&
+        row.status !== "delivered"
+      ) {
+        initialStatusCounts.urgent = (initialStatusCounts.urgent || 0) + 1;
+      }
+      if (
+        row.is_paused &&
+        row.status !== "shipped" &&
+        row.status !== "delivered" &&
+        row.status !== "cancelled" &&
+        row.status !== "returned"
+      ) {
+        initialStatusCounts.paused = (initialStatusCounts.paused || 0) + 1;
+      }
+      const st = row.status as keyof Omit<StatusCounts, "all" | "reprint_required" | "urgent" | "paused">;
       if (st in initialStatusCounts) {
         initialStatusCounts[st] = (initialStatusCounts[st] || 0) + 1;
       }
@@ -859,18 +893,74 @@ export async function getAdminBadgeCountsAction(): Promise<AdminBadgeCounts> {
 }
 
 /**
- * Server Action: Fetches a list of orders by their order numbers for invoice printing.
+ * Server Action: Fetches a list of orders by their order numbers or UUIDs for invoice printing,
+ * ordered Urgent first, then Normal in oldest-first order.
  */
 export async function getOrdersByIdsAction(
   orderNumbers: string[]
 ): Promise<Order[]> {
   await assertStaffRole([...ORDER_STAFF_ROLES]);
 
-  const cleanNumbers = (orderNumbers || [])
-    .map((n) => String(n || "").trim())
-    .filter(Boolean)
-    .slice(0, 200);
-  if (cleanNumbers.length === 0) return [];
+  const cleanIds = Array.from(
+    new Set(
+      (orderNumbers || [])
+        .map((n) => String(n || "").trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 200);
+  if (cleanIds.length === 0) return [];
+
+  const uuidList = cleanIds.filter((id) => isValidUuid(id));
+  const numberList = cleanIds.filter((id) => !isValidUuid(id));
+
+  const client = getSupabaseAdmin();
+  let query = client
+    .from("orders")
+    .select(
+      `
+      *,
+      order_items (
+        *,
+        products (id, name, name_bn),
+        product_variants (id, name, name_bn)
+      ),
+      order_events (*),
+      order_notes (*)
+    `
+    );
+
+  if (uuidList.length > 0 && numberList.length > 0) {
+    const safeNumbers = numberList.map((n) => sanitizePostgrestFilterTerm(n)).filter(Boolean);
+    query = query.or(
+      `id.in.(${uuidList.join(",")}),order_number.in.(${safeNumbers.join(",")})`
+    );
+  } else if (uuidList.length > 0) {
+    query = query.in("id", uuidList);
+  } else {
+    query = query.in("order_number", numberList);
+  }
+
+  const { data, error } = await query
+    .order("is_urgent", { ascending: false })
+    .order("placed_at", { ascending: true });
+
+  if (error || !data) {
+    console.error("Error fetching orders by ids:", error);
+    return [];
+  }
+
+  await enrichOrderItemsWithCombos(client, data);
+  const formatted = data.map((d: any) => formatDbOrderRecord(d));
+  return sortOrdersForPrint(formatted);
+}
+
+/**
+ * Server Action: Fetches all active print-queue orders (pending, confirmed, processing)
+ * sorted Urgent first, then Normal in oldest-first order.
+ * Sending-date filtering and optional status/print-state narrowing are applied cleanly on top.
+ */
+export async function getPrintQueueOrdersAction(): Promise<Order[]> {
+  await assertStaffRole([...ORDER_STAFF_ROLES]);
 
   const client = getSupabaseAdmin();
   const { data, error } = await client
@@ -887,16 +977,232 @@ export async function getOrdersByIdsAction(
       order_notes (*)
     `
     )
-    .in("order_number", cleanNumbers)
-    .order("placed_at", { ascending: false });
+    .in("status", ["pending", "confirmed", "processing"])
+    .order("is_urgent", { ascending: false })
+    .order("placed_at", { ascending: true })
+    .limit(500);
 
   if (error || !data) {
-    console.error("Error fetching orders by ids:", error);
+    console.error("Error fetching print queue orders:", error);
     return [];
   }
 
   await enrichOrderItemsWithCombos(client, data);
-  return data.map((d: any) => formatDbOrderRecord(d));
+  const formatted = data.map((d: any) => formatDbOrderRecord(d));
+  return sortOrdersForPrint(formatted);
+}
+
+export interface UpdateOrderDispatchSettingsInput {
+  orderId: string;
+  isPaused?: boolean;
+  sendingDate?: string | null;
+  pauseReason?: string | null;
+  isUrgent?: boolean;
+}
+
+/**
+ * Server Action: Updates an order's pause state, scheduled sending_date, and/or urgency,
+ * and logs descriptive timeline events.
+ */
+export async function updateOrderDispatchSettingsAction(
+  input: UpdateOrderDispatchSettingsInput
+): Promise<{ success: boolean; order?: Order; error?: string }> {
+  const session = await assertStaffRole([...ORDER_STAFF_ROLES]);
+  const client = getSupabaseAdmin();
+  const actorUuid = getActorUuid(session);
+  const actorName = session.user.name || "Admin Staff";
+
+  const cleanId = String(input.orderId || "").trim();
+  if (!cleanId) {
+    return { success: false, error: "Order ID is required." };
+  }
+
+  const isUuid = isValidUuid(cleanId);
+  const { data: existing, error: fetchErr } = await client
+    .from("orders")
+    .select("id, order_number, status, is_paused, sending_date, pause_reason, is_urgent")
+    .eq(isUuid ? "id" : "order_number", cleanId)
+    .maybeSingle();
+
+  if (fetchErr || !existing) {
+    return { success: false, error: fetchErr?.message || "Order not found." };
+  }
+
+  const normalizedDate =
+    input.sendingDate !== undefined
+      ? normalizeSendingDate(input.sendingDate)
+      : existing.sending_date
+      ? String(existing.sending_date).slice(0, 10)
+      : null;
+
+  const isFinalOrDispatched = ["shipped", "delivered", "cancelled", "returned"].includes(
+    existing.status
+  );
+
+  const nextPaused =
+    isFinalOrDispatched
+      ? false
+      : input.isPaused !== undefined
+      ? Boolean(input.isPaused)
+      : Boolean(existing.is_paused);
+
+  if (input.isPaused && isFinalOrDispatched) {
+    return {
+      success: false,
+      error: `Cannot pause an order that is already ${existing.status}.`,
+    };
+  }
+
+  const nextPauseReason =
+    input.pauseReason !== undefined
+      ? input.pauseReason
+        ? input.pauseReason.trim().slice(0, 500)
+        : null
+      : existing.pause_reason;
+
+  const nextUrgent =
+    input.isUrgent !== undefined ? Boolean(input.isUrgent) : Boolean(existing.is_urgent);
+
+  const updatePayload: Record<string, any> = {
+    is_paused: nextPaused,
+    sending_date: normalizedDate,
+    pause_reason: nextPaused ? nextPauseReason : input.pauseReason === null ? null : nextPauseReason,
+    is_urgent: nextUrgent,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: updatedRow, error: updateErr } = await client
+    .from("orders")
+    .update(updatePayload)
+    .eq("id", existing.id)
+    .select(
+      `
+      *,
+      order_items (
+        *,
+        products (id, name, name_bn),
+        product_variants (id, name, name_bn)
+      ),
+      order_events (*),
+      order_notes (*)
+    `
+    )
+    .single();
+
+  if (updateErr || !updatedRow) {
+    return {
+      success: false,
+      error: updateErr?.message || "Failed to update order dispatch settings.",
+    };
+  }
+
+  // Record clear timeline events
+  const eventsToInsert: Array<{
+    order_id: string;
+    event_type: string;
+    message: string;
+    actor_id: string | null;
+  }> = [];
+
+  const prevPaused = Boolean(existing.is_paused);
+  const prevSend = existing.sending_date ? String(existing.sending_date).slice(0, 10) : null;
+  const prevUrgent = Boolean(existing.is_urgent);
+
+  if (prevPaused !== nextPaused) {
+    if (nextPaused) {
+      const dateStr = normalizedDate ? ` (Send on ${formatSendingDateDisplay(normalizedDate)})` : "";
+      const reasonStr = nextPauseReason ? ` — ${nextPauseReason}` : "";
+      eventsToInsert.push({
+        order_id: existing.id,
+        event_type: "order_paused",
+        message: `Order paused by ${actorName}${dateStr}${reasonStr}`,
+        actor_id: actorUuid,
+      });
+    } else {
+      eventsToInsert.push({
+        order_id: existing.id,
+        event_type: "order_resumed",
+        message: `Order resumed by ${actorName}`,
+        actor_id: actorUuid,
+      });
+    }
+  } else if (prevSend !== normalizedDate) {
+    eventsToInsert.push({
+      order_id: existing.id,
+      event_type: "sending_date_updated",
+      message: normalizedDate
+        ? `Sending date set to ${formatSendingDateDisplay(normalizedDate)} by ${actorName}`
+        : `Scheduled sending date cleared by ${actorName}`,
+      actor_id: actorUuid,
+    });
+  }
+
+  if (prevUrgent !== nextUrgent) {
+    eventsToInsert.push({
+      order_id: existing.id,
+      event_type: "priority_changed",
+      message: nextUrgent
+        ? `Marked as URGENT parcel by ${actorName}`
+        : `Priority changed to Normal by ${actorName}`,
+      actor_id: actorUuid,
+    });
+  }
+
+  if (eventsToInsert.length > 0) {
+    await client.from("order_events").insert(eventsToInsert);
+  }
+
+  await enrichOrderItemsWithCombos(client, [updatedRow]);
+  return { success: true, order: formatDbOrderRecord(updatedRow) };
+}
+
+/**
+ * Server Action: Bulk-updates pause / sending date / urgency across multiple orders.
+ */
+export async function bulkUpdateOrderDispatchSettingsAction(input: {
+  orderIds: string[];
+  isPaused?: boolean;
+  sendingDate?: string | null;
+  pauseReason?: string | null;
+  isUrgent?: boolean;
+}): Promise<{
+  success: boolean;
+  updatedCount: number;
+  skippedCount: number;
+  errors: string[];
+}> {
+  await assertStaffRole([...ORDER_STAFF_ROLES]);
+  const ids = (input.orderIds || []).filter(Boolean);
+  if (ids.length === 0) {
+    return { success: true, updatedCount: 0, skippedCount: 0, errors: [] };
+  }
+
+  let updatedCount = 0;
+  let skippedCount = 0;
+  const errors: string[] = [];
+
+  for (const id of ids) {
+    const res = await updateOrderDispatchSettingsAction({
+      orderId: id,
+      isPaused: input.isPaused,
+      sendingDate: input.sendingDate,
+      pauseReason: input.pauseReason,
+      isUrgent: input.isUrgent,
+    });
+    if (res.success) {
+      updatedCount++;
+    } else {
+      skippedCount++;
+      if (res.error) errors.push(`${id}: ${res.error}`);
+    }
+  }
+
+  return {
+    success: updatedCount > 0,
+    updatedCount,
+    skippedCount,
+    errors,
+  };
 }
 
 /**
@@ -1135,14 +1441,19 @@ async function updateOrderStatusWithSession(
     if (newStatus === "cancelled") {
       updatePayload.cancel_reason = cancelReason?.trim() || "";
       updatePayload.cancelled_at = nowIso;
+      updatePayload.is_paused = false;
+    } else if (newStatus === "returned") {
+      updatePayload.is_paused = false;
     } else if (newStatus === "confirmed") {
       updatePayload.confirmed_at = nowIso;
     } else if (newStatus === "shipped") {
       updatePayload.shipped_at = nowIso;
+      updatePayload.is_paused = false;
     } else if (newStatus === "delivered") {
       updatePayload.delivered_at = nowIso;
       updatePayload.amount_paid = grandTotal;
       updatePayload.payment_status = "paid";
+      updatePayload.is_paused = false;
     } else if (newStatus === "partially_delivered") {
       updatePayload.delivered_at = nowIso;
       const partialPaid = Math.max(Number(resolvedOrder.amount_paid) || 0, advancePaid);
@@ -1152,6 +1463,7 @@ async function updateOrderStatusWithSession(
         partialPaid,
         resolvedOrder.payment
       );
+      updatePayload.is_paused = false;
     }
 
     let updateQuery = client.from("orders").update(updatePayload);
@@ -1655,6 +1967,12 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
     customer_note: savedOrder.customer_note || "",
     courier_name: savedOrder.courier_name || "",
     cancel_reason: savedOrder.cancel_reason || "",
+    is_paused: ["shipped", "delivered", "cancelled", "returned"].includes(dbStatus)
+      ? false
+      : Boolean(savedOrder.is_paused),
+    sending_date: normalizeSendingDate(savedOrder.sending_date),
+    pause_reason: savedOrder.pause_reason ? savedOrder.pause_reason.trim() : null,
+    is_urgent: Boolean(savedOrder.is_urgent),
     items: savedOrder.items || [],
     notes:
       savedOrder.notes && savedOrder.notes.length > 0
@@ -1721,6 +2039,12 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
       customer_note: savedOrder.customer_note || null,
       attribution: savedOrder.attribution || {},
       cancel_reason: savedOrder.cancel_reason || null,
+      is_paused: ["shipped", "delivered", "cancelled", "returned"].includes(dbStatus)
+        ? false
+        : Boolean(savedOrder.is_paused),
+      sending_date: normalizeSendingDate(savedOrder.sending_date),
+      pause_reason: savedOrder.pause_reason ? savedOrder.pause_reason.trim() : null,
+      is_urgent: Boolean(savedOrder.is_urgent),
     };
 
     const { data: dbData, error: dbErr } = await client

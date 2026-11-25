@@ -27,6 +27,10 @@ import {
   X,
   Link2,
   Loader2,
+  Flame,
+  PauseCircle,
+  PlayCircle,
+  CalendarClock,
 } from "lucide-react";
 import {
   searchInquiryByRefCodeAction,
@@ -85,6 +89,14 @@ import {
   getOrderAdvancePaid,
   getOrderAmountPaidAfterDelivery,
 } from "@/lib/order-payment-utils";
+import {
+  formatSendingDateDisplay,
+  getDhakaTodayIsoDate,
+  normalizeSendingDate,
+} from "@/lib/order-dispatch";
+import { addDays, format as formatDateFns } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { DHAKA_TIMEZONE } from "@/lib/admin-format";
 import {
   orderFormSchema,
   orderCustomerSchema,
@@ -573,6 +585,10 @@ export function OrderFormDialog({
       order_date: mode === "edit" && order?.date
         ? toDatetimeLocalString(order.date)
         : toDatetimeLocalString(new Date()),
+      is_paused: mode === "edit" ? Boolean(order?.is_paused) : false,
+      sending_date: mode === "edit" ? (normalizeSendingDate(order?.sending_date) || "") : "",
+      pause_reason: mode === "edit" ? (order?.pause_reason || "") : "",
+      is_urgent: mode === "edit" ? Boolean(order?.is_urgent) : false,
       items: (mode === "edit" && order?.items ? order.items.map((it) => ({ ...it })) : []) as OrderItem[],
     },
     onSubmitInvalid: ({ formApi }) => {
@@ -749,6 +765,12 @@ export function OrderFormDialog({
             })(),
             courier_name: valid.courier_name || "",
             cancel_reason: valid.cancel_reason || "",
+            is_paused: ["shipped", "delivered", "partially_delivered", "cancelled", "returned"].includes(valid.status)
+              ? false
+              : Boolean(valid.is_paused),
+            sending_date: normalizeSendingDate(valid.sending_date),
+            pause_reason: valid.pause_reason ? valid.pause_reason.trim() : null,
+            is_urgent: Boolean(valid.is_urgent),
             items: valid.items as OrderItem[],
             notes: (() => {
               const finalNotes: OrderNote[] = notesList.filter((n) => n.type !== "customer");
@@ -895,6 +917,12 @@ export function OrderFormDialog({
             customer_note: finalCustomerNote,
             courier_name: valid.courier_name || "",
             cancel_reason: valid.cancel_reason || "",
+            is_paused: ["shipped", "delivered", "partially_delivered", "cancelled", "returned"].includes(valid.status)
+              ? false
+              : Boolean(valid.is_paused),
+            sending_date: normalizeSendingDate(valid.sending_date),
+            pause_reason: valid.pause_reason ? valid.pause_reason.trim() : null,
+            is_urgent: Boolean(valid.is_urgent),
             date: valid.order_date
               ? fromDatetimeLocalString(valid.order_date)
               : (order.date || nowStr),
@@ -1018,6 +1046,10 @@ export function OrderFormDialog({
           courier_name: sanitizeCourierName(order.courier_name),
           cancel_reason: order.cancel_reason || "",
           order_date: toDatetimeLocalString(order.date || new Date()),
+          is_paused: Boolean(order.is_paused),
+          sending_date: normalizeSendingDate(order.sending_date) || "",
+          pause_reason: order.pause_reason || "",
+          is_urgent: Boolean(order.is_urgent),
           items: order.items
             ? order.items.map((it) => ({
                 ...it,
@@ -1055,6 +1087,10 @@ export function OrderFormDialog({
           courier_name: "",
           cancel_reason: "",
           order_date: toDatetimeLocalString(new Date()),
+          is_paused: false,
+          sending_date: "",
+          pause_reason: "",
+          is_urgent: false,
           items: [],
         });
       }
@@ -2141,6 +2177,9 @@ export function OrderFormDialog({
                             if (!val) return;
                             const newStatus = val as Order["status"];
                             field.handleChange(newStatus);
+                            if (["shipped", "delivered", "partially_delivered", "cancelled", "returned"].includes(newStatus)) {
+                              form.setFieldValue("is_paused", false);
+                            }
                             const isNextDelivered = isOrderDeliveredStatus(newStatus);
                             const itemsList = form.state.values.items || [];
                             const sub = itemsList.reduce((sum, it) => sum + it.line_total, 0);
@@ -2288,6 +2327,200 @@ export function OrderFormDialog({
                     )}
                   </form.Field>
                 </div>
+
+                {/* Priority, Pause & Specific Sending Date */}
+                <form.Subscribe
+                  selector={(state) => ({
+                    status: state.values.status,
+                    isUrgent: Boolean(state.values.is_urgent),
+                    isPaused: Boolean(state.values.is_paused),
+                    sendingDate: state.values.sending_date || "",
+                  })}
+                >
+                  {({ status, isUrgent, isPaused, sendingDate }) => {
+                    const isFinalized = ["shipped", "delivered", "partially_delivered", "cancelled", "returned"].includes(status);
+                    const todayKey = getDhakaTodayIsoDate();
+                    const nowDhaka = toZonedTime(new Date(), DHAKA_TIMEZONE);
+                    const tomorrowKey = formatDateFns(addDays(nowDhaka, 1), "yyyy-MM-dd");
+                    const plus3Key = formatDateFns(addDays(nowDhaka, 3), "yyyy-MM-dd");
+                    const normSend = normalizeSendingDate(sendingDate);
+
+                    return (
+                      <div className="p-3.5 rounded-xl bg-muted/25 border border-border/80 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <CalendarClock className="h-3.5 w-3.5 text-amber-600" />
+                            Dispatch Priority &amp; Specific Sending Date
+                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isUrgent && (
+                              <Badge className="bg-rose-600 text-white text-[10px] px-2 py-0.5 gap-1">
+                                <Flame className="h-3 w-3" />
+                                URGENT PARCEL
+                              </Badge>
+                            )}
+                            {isPaused && !isFinalized && (
+                              <Badge
+                                variant="outline"
+                                className="bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-400 text-[10px] px-2 py-0.5 gap-1"
+                              >
+                                <PauseCircle className="h-3 w-3" />
+                                {normSend ? `Paused until ${formatSendingDateDisplay(normSend)}` : "Paused"}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+                          {/* Urgent Priority Switch */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Parcel Priority</Label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => form.setFieldValue("is_urgent", false)}
+                                className={cn(
+                                  "h-9 px-2.5 rounded-lg border text-xs font-medium transition-all cursor-pointer",
+                                  !isUrgent
+                                    ? "bg-background border-amber-600 text-foreground font-semibold shadow-2xs"
+                                    : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                Normal
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => form.setFieldValue("is_urgent", true)}
+                                className={cn(
+                                  "h-9 px-2.5 rounded-lg border text-xs font-medium inline-flex items-center justify-center gap-1 transition-all cursor-pointer",
+                                  isUrgent
+                                    ? "bg-rose-600 border-rose-700 text-white font-bold shadow-xs"
+                                    : "bg-background border-border text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                )}
+                              >
+                                <Flame className="h-3.5 w-3.5" />
+                                Urgent
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Pause Toggle */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Hold / Pause Order</Label>
+                            <button
+                              type="button"
+                              disabled={isFinalized}
+                              onClick={() => form.setFieldValue("is_paused", !isPaused)}
+                              className={cn(
+                                "w-full h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all",
+                                isFinalized
+                                  ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+                                  : isPaused
+                                  ? "bg-amber-600 border-amber-700 text-white cursor-pointer shadow-xs"
+                                  : "bg-background border-border text-foreground hover:bg-muted/60 cursor-pointer"
+                              )}
+                            >
+                              {isPaused && !isFinalized ? (
+                                <>
+                                  <PauseCircle className="h-3.5 w-3.5" />
+                                  Paused (Click to Resume)
+                                </>
+                              ) : (
+                                <>
+                                  <PlayCircle className="h-3.5 w-3.5 text-emerald-600" />
+                                  {isFinalized ? `Active (${status})` : "Active (Click to Pause)"}
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Specific Sending Date */}
+                          <form.Field name="sending_date">
+                            {(field) => (
+                              <FormFieldItem>
+                                <div className="flex items-center justify-between">
+                                  <FormFieldLabel htmlFor="order_form_sending_date" className="text-xs text-muted-foreground">
+                                    Specific Sending Date
+                                  </FormFieldLabel>
+                                  {field.state.value && (
+                                    <button
+                                      type="button"
+                                      onClick={() => field.handleChange("")}
+                                      className="text-[11px] text-muted-foreground hover:text-destructive cursor-pointer"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                                <Input
+                                  id="order_form_sending_date"
+                                  type="date"
+                                  value={field.state.value || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.handleChange(val);
+                                    if (val && val > todayKey && !isFinalized) {
+                                      form.setFieldValue("is_paused", true);
+                                    }
+                                  }}
+                                  className="h-9 text-xs font-mono bg-background"
+                                />
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => field.handleChange(todayKey)}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border bg-background hover:bg-muted cursor-pointer"
+                                  >
+                                    Today
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      field.handleChange(tomorrowKey);
+                                      if (!isFinalized) form.setFieldValue("is_paused", true);
+                                    }}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border bg-background hover:bg-muted cursor-pointer"
+                                  >
+                                    Tomorrow
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      field.handleChange(plus3Key);
+                                      if (!isFinalized) form.setFieldValue("is_paused", true);
+                                    }}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border bg-background hover:bg-muted cursor-pointer"
+                                  >
+                                    +3 Days
+                                  </button>
+                                </div>
+                              </FormFieldItem>
+                            )}
+                          </form.Field>
+                        </div>
+
+                        {isPaused && !isFinalized && (
+                          <form.Field name="pause_reason">
+                            {(field) => (
+                              <FormFieldItem>
+                                <FormFieldLabel htmlFor="order_form_pause_reason" className="text-xs">
+                                  Pause Reason / Customer Instruction (Optional)
+                                </FormFieldLabel>
+                                <Input
+                                  id="order_form_pause_reason"
+                                  value={field.state.value || ""}
+                                  onChange={(e) => field.handleChange(e.target.value)}
+                                  placeholder="e.g. Customer out of Dhaka until 28 Nov, asked to dispatch later..."
+                                  className="h-8 text-xs bg-background"
+                                />
+                              </FormFieldItem>
+                            )}
+                          </form.Field>
+                        )}
+                      </div>
+                    );
+                  }}
+                </form.Subscribe>
 
                 {/* Conditional Cancellation / Return Reason */}
                 <form.Subscribe selector={(state) => state.values.status}>

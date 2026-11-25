@@ -29,6 +29,10 @@ import {
   AlertTriangle,
   Copy,
   Check,
+  Flame,
+  PauseCircle,
+  PlayCircle,
+  CalendarClock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -60,6 +64,12 @@ import {
   cancelOrderWithReasonAction,
   addStaffNoteAction,
 } from "@/actions/order-ops";
+import { updateOrderDispatchSettingsAction } from "@/actions/orders";
+import { DispatchScheduleDialog } from "@/components/admin/orders/dispatch-schedule-dialog";
+import {
+  formatSendingDateDisplay,
+  getOrderDispatchHoldState,
+} from "@/lib/order-dispatch";
 import { updateShipmentStatusAction } from "@/actions/shipment-ops";
 import { ORDER_CANCELLATION_REASONS } from "@/types/order";
 import { cn } from "@/lib/utils";
@@ -142,6 +152,8 @@ export function OrderDetailView({
   const [payOpen, setPayOpen] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const [isUpdatingDispatch, setIsUpdatingDispatch] = React.useState(false);
   const [copiedPhone, setCopiedPhone] = React.useState(false);
   const copiedPhoneTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -185,6 +197,56 @@ export function OrderDetailView({
     order.status !== "returned" &&
     order.status !== "delivered" &&
     order.fulfillment_status !== "fulfilled";
+  const isFinalizedForPause = ["shipped", "delivered", "cancelled", "returned"].includes(
+    order.status
+  );
+  const dispatchHold = getOrderDispatchHoldState({
+    status: order.status,
+    is_paused: order.is_paused,
+    sending_date: order.sending_date,
+  });
+
+  const handleToggleUrgent = async () => {
+    try {
+      setIsUpdatingDispatch(true);
+      const res = await updateOrderDispatchSettingsAction({
+        orderId: order.id,
+        isUrgent: !order.is_urgent,
+      });
+      if (res.success) {
+        toast.success(order.is_urgent ? "Removed URGENT flag" : "Marked as URGENT parcel");
+        router.refresh();
+      } else {
+        toast.error(res.error || "Failed to update priority");
+      }
+    } finally {
+      setIsUpdatingDispatch(false);
+    }
+  };
+
+  const handleSaveSchedule = async (values: {
+    isPaused: boolean;
+    sendingDate: string | null;
+    pauseReason: string | null;
+    isUrgent: boolean;
+  }) => {
+    try {
+      setIsUpdatingDispatch(true);
+      const res = await updateOrderDispatchSettingsAction({
+        orderId: order.id,
+        ...values,
+      });
+      if (res.success) {
+        toast.success("Dispatch schedule and priority updated");
+        setScheduleOpen(false);
+        router.refresh();
+      } else {
+        toast.error(res.error || "Failed to update schedule");
+      }
+    } finally {
+      setIsUpdatingDispatch(false);
+    }
+  };
 
   const handleConfirm = async () => {
     try {
@@ -202,6 +264,14 @@ export function OrderDetailView({
   };
 
   const handleProcess = async () => {
+    if (
+      dispatchHold.held &&
+      !window.confirm(
+        `Warning: This order is currently held (${dispatchHold.label}). Do you want to override the pause and move it to Processing?`
+      )
+    ) {
+      return;
+    }
     try {
       setIsUpdatingStatus(true);
       const res = await processOrderAction(order.id);
@@ -285,7 +355,7 @@ export function OrderDetailView({
               Orders
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base sm:text-lg font-bold font-mono tracking-tight text-foreground">
               {order.order_number}
             </h1>
@@ -295,6 +365,24 @@ export function OrderDetailView({
             <Badge variant="outline" className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", paymentBadge.className)}>
               {paymentBadge.label}
             </Badge>
+            {order.is_urgent && (
+              <Badge className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white gap-1">
+                <Flame className="h-3 w-3" />
+                URGENT
+              </Badge>
+            )}
+            {dispatchHold.held && (
+              <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-400 gap-1">
+                <PauseCircle className="h-3 w-3" />
+                {dispatchHold.label}
+              </Badge>
+            )}
+            {!dispatchHold.held && order.sending_date && (
+              <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-300 gap-1">
+                <CalendarClock className="h-3 w-3" />
+                Send: {formatSendingDateDisplay(order.sending_date)}
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -328,11 +416,51 @@ export function OrderDetailView({
             <Button
               size="sm"
               className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
-              onClick={() => setShipOpen(true)}
+              onClick={() => {
+                if (
+                  dispatchHold.held &&
+                  !window.confirm(
+                    `Warning: This order is currently held (${dispatchHold.label}). Do you still want to ship it early?`
+                  )
+                ) {
+                  return;
+                }
+                setShipOpen(true);
+              }}
             >
               <Truck className="h-3.5 w-3.5" />
               Ship Items
             </Button>
+          )}
+
+          {!isFinalizedForPause && (
+            <>
+              <Button
+                size="sm"
+                variant={order.is_urgent ? "default" : "outline"}
+                className={cn(
+                  "h-8 text-xs gap-1 cursor-pointer",
+                  order.is_urgent
+                    ? "bg-rose-600 hover:bg-rose-700 text-white"
+                    : "border-rose-300 text-rose-700 hover:bg-rose-50 dark:text-rose-400"
+                )}
+                disabled={isUpdatingDispatch}
+                onClick={handleToggleUrgent}
+              >
+                <Flame className="h-3.5 w-3.5" />
+                {order.is_urgent ? "Urgent On" : "Mark Urgent"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-amber-300 text-amber-800 dark:text-amber-300 hover:bg-amber-50 gap-1 cursor-pointer"
+                disabled={isUpdatingDispatch}
+                onClick={() => setScheduleOpen(true)}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                {dispatchHold.held ? "Paused / Edit Date" : "Pause / Send Date"}
+              </Button>
+            </>
           )}
 
           {balanceDue > 0 && (
@@ -382,6 +510,50 @@ export function OrderDetailView({
       </div>
 
       {/* Main Two-Column Layout */}
+      {dispatchHold.held && (
+        <div className="rounded-xl border border-amber-400 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <p className="font-bold flex items-center gap-1.5">
+              <PauseCircle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Order On Hold: {dispatchHold.label}</span>
+            </p>
+            {order.pause_reason && (
+              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                Reason: {order.pause_reason}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isUpdatingDispatch}
+              onClick={() =>
+                handleSaveSchedule({
+                  isPaused: false,
+                  sendingDate: order.sending_date || null,
+                  pauseReason: null,
+                  isUrgent: Boolean(order.is_urgent),
+                })
+              }
+              className="h-7 text-xs bg-background border-amber-400 cursor-pointer"
+            >
+              <PlayCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+              Resume Order
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isUpdatingDispatch}
+              onClick={() => setScheduleOpen(true)}
+              className="h-7 text-xs bg-background border-amber-400 cursor-pointer"
+            >
+              Edit Schedule
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column (Items, Shipments, Timeline, Notes) */}
         <div className="lg:col-span-2 space-y-4">
@@ -874,6 +1046,18 @@ export function OrderDetailView({
         variant="destructive"
         presetReasons={ORDER_CANCELLATION_REASONS}
         onConfirm={handleCancel}
+      />
+
+      <DispatchScheduleDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        orderNumbers={[order.order_number]}
+        initialPaused={Boolean(order.is_paused)}
+        initialSendingDate={order.sending_date || null}
+        initialPauseReason={order.pause_reason || ""}
+        initialUrgent={Boolean(order.is_urgent)}
+        isSubmitting={isUpdatingDispatch}
+        onConfirm={handleSaveSchedule}
       />
     </div>
   );

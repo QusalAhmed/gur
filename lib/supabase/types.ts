@@ -323,6 +323,11 @@ export interface DbOrder {
   printed_at?: string | null;
   printed_courier_snapshot?: any;
   reprint_required?: boolean;
+  is_paused?: boolean;
+  sending_date?: string | null;
+  paused_at?: string | null;
+  pause_reason?: string | null;
+  is_urgent?: boolean;
   channel: string;
   created_at: string;
   updated_at: string;

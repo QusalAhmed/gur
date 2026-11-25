@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { isValidUuid } from "@/lib/security";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import { resolveProductImageAltTexts } from "@/lib/product-image-alt";
 import type { DbProduct } from "@/lib/supabase/types";
 import type { UiProductItem, UiProductVariantItem } from "@/lib/supabase/api";
 
@@ -39,6 +40,7 @@ export interface SaveProductImageInput {
   id?: string;
   storage_path: string;
   alt_text?: string;
+  alt_text_bn?: string;
   is_primary: boolean;
   sort_order?: number;
 }
@@ -608,15 +610,27 @@ export async function saveProductAction(params: SaveProductInput): Promise<SaveP
     // 6. Upsert Images
     if (params.images && params.images.length > 0) {
       let primaryAssigned = false;
+      let galleryNumber = 2;
       for (let i = 0; i < params.images.length; i++) {
         const img = params.images[i];
         const isPrimary = !primaryAssigned && (img.is_primary || i === 0);
         if (isPrimary) primaryAssigned = true;
 
+        const imageNumber = isPrimary ? 1 : galleryNumber++;
+        const { alt_text, alt_text_bn } = resolveProductImageAltTexts({
+          productName: params.product.name,
+          productNameBn: params.product.nameBn,
+          altText: img.alt_text,
+          altTextBn: img.alt_text_bn,
+          isPrimary,
+          imageNumber,
+        });
+
         const imagePayload = {
           product_id: productId,
           storage_path: img.storage_path,
-          alt_text: img.alt_text || null,
+          alt_text,
+          alt_text_bn,
           is_primary: isPrimary,
           sort_order: img.sort_order ?? i,
         };

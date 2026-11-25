@@ -89,6 +89,7 @@ interface FormImage {
   storage_path: string;
   public_url?: string;
   alt_text?: string;
+  alt_text_bn?: string;
   is_primary: boolean;
   sort_order: number;
   isNew?: boolean;
@@ -238,6 +239,7 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
         path: img.storage_path,
         name: img.alt_text || img.storage_path.split("/").pop() || `Product Photo ${idx + 1}`,
         altText: img.alt_text || "",
+        altTextBn: img.alt_text_bn || "",
         isPrimary: img.is_primary ?? idx === 0,
         sortOrder: img.sort_order ?? idx,
         status: "success" as const,
@@ -253,7 +255,8 @@ export function ProductForm({ initialData, mode }: ProductFormProps) {
       id: img.id && !img.id.startsWith("local-") && !img.id.startsWith("gallery-") ? img.id : undefined,
       storage_path: img.path || img.url,
       public_url: img.url,
-      alt_text: img.altText || img.name || name || "Product image",
+      alt_text: img.altText?.trim() || undefined,
+      alt_text_bn: img.altTextBn?.trim() || undefined,
       is_primary: idx === 0 || img.isPrimary === true,
       sort_order: idx,
       isNew: !img.id || img.id.startsWith("local-") || img.id.startsWith("gallery-"),

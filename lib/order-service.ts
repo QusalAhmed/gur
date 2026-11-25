@@ -11,6 +11,7 @@ import {
   isOrderDeliveredStatus,
 } from "@/lib/order-payment-utils";
 import { reconcileOrderPaymentsInLedger } from "@/lib/order-payment-sync";
+import { normalizeSendingDate, formatSendingDateDisplay } from "@/lib/order-dispatch";
 import type { Order, OrderNote, OrderNoteType } from "@/types/order";
 
 export function parseDbNoteToDomainInternal(
@@ -112,6 +113,23 @@ export async function persistOrderUpdateInternal(
     ? Math.max(0, Number(updatedOrder.amount_paid) || 0)
     : 0;
 
+  const normalizedSendingDate =
+    updatedOrder.sending_date !== undefined
+      ? normalizeSendingDate(updatedOrder.sending_date)
+      : undefined;
+  const shouldAutoClearPause = ["shipped", "delivered", "cancelled", "returned"].includes(dbStatus);
+  const resolvedIsPaused = shouldAutoClearPause
+    ? false
+    : updatedOrder.is_paused !== undefined
+    ? Boolean(updatedOrder.is_paused)
+    : undefined;
+
+  const { data: prevDispatchState } = await client
+    .from("orders")
+    .select("id, is_paused, sending_date, is_urgent")
+    .eq("order_number", orderId)
+    .maybeSingle();
+
   const updatePayload: Record<string, any> = {
     customer_name: updatedOrder.customer ? updatedOrder.customer.trim() : null,
     customer_phone: normalizedPhone,
@@ -131,6 +149,10 @@ export async function persistOrderUpdateInternal(
     amount_paid: amountPaid,
     customer_note: updatedOrder.customer_note || null,
     ...(updatedOrder.date ? { placed_at: updatedOrder.date } : {}),
+    ...(resolvedIsPaused !== undefined ? { is_paused: resolvedIsPaused } : {}),
+    ...(normalizedSendingDate !== undefined ? { sending_date: normalizedSendingDate } : {}),
+    ...(updatedOrder.pause_reason !== undefined ? { pause_reason: updatedOrder.pause_reason ? updatedOrder.pause_reason.trim() : null } : {}),
+    ...(updatedOrder.is_urgent !== undefined ? { is_urgent: Boolean(updatedOrder.is_urgent) } : {}),
     ...(updatedOrder.attribution ? { attribution: updatedOrder.attribution } : {}),
     cancel_reason: updatedOrder.cancel_reason || null,
     shipping_method_name: sanitizeCourierName(updatedOrder.courier_name) || null,
@@ -167,7 +189,7 @@ export async function persistOrderUpdateInternal(
     .from("orders")
     .update(updatePayload)
     .eq("order_number", orderId)
-    .select("id, status, delivered_at, advance_paid, amount_paid");
+    .select("id, status, delivered_at, advance_paid, amount_paid, is_paused, sending_date, paused_at, pause_reason, is_urgent");
 
   if (updateErr) {
     console.error("[OrderService] Supabase update error:", updateErr);
@@ -175,16 +197,83 @@ export async function persistOrderUpdateInternal(
   }
 
   let orderUuid = updatedDbOrders?.[0]?.id;
-  let dbRowInfo: { id: any; status: any; delivered_at: any; advance_paid: any; amount_paid: any } | undefined =
-    updatedDbOrders?.[0];
+  let dbRowInfo:
+    | {
+        id: any;
+        status: any;
+        delivered_at: any;
+        advance_paid: any;
+        amount_paid: any;
+        is_paused?: boolean;
+        sending_date?: string | null;
+        paused_at?: string | null;
+        pause_reason?: string | null;
+        is_urgent?: boolean;
+      }
+    | undefined = updatedDbOrders?.[0];
   if (!orderUuid) {
     const { data: existingOrder } = await client
       .from("orders")
-      .select("id, status, delivered_at, advance_paid, amount_paid")
+      .select("id, status, delivered_at, advance_paid, amount_paid, is_paused, sending_date, paused_at, pause_reason, is_urgent")
       .eq("order_number", orderId)
       .maybeSingle();
     orderUuid = existingOrder?.id;
     dbRowInfo = existingOrder || undefined;
+  }
+
+  // Record timeline events when pause, sending_date, or urgency changes
+  if (orderUuid && prevDispatchState && dbRowInfo) {
+    try {
+      const dispatchEvents: Array<{ order_id: string; event_type: string; message: string }> = [];
+      const prevPaused = Boolean(prevDispatchState.is_paused);
+      const nextPaused = Boolean(dbRowInfo.is_paused);
+      const prevSend = normalizeSendingDate(prevDispatchState.sending_date);
+      const nextSend = normalizeSendingDate(dbRowInfo.sending_date);
+      const prevUrgent = Boolean(prevDispatchState.is_urgent);
+      const nextUrgent = Boolean(dbRowInfo.is_urgent);
+
+      if (prevPaused !== nextPaused) {
+        if (nextPaused) {
+          const dateSuffix = nextSend ? ` (Send on ${formatSendingDateDisplay(nextSend)})` : "";
+          const reasonSuffix = dbRowInfo.pause_reason ? ` — ${dbRowInfo.pause_reason}` : "";
+          dispatchEvents.push({
+            order_id: orderUuid,
+            event_type: "order_paused",
+            message: `Order paused by ${authorName}${dateSuffix}${reasonSuffix}`,
+          });
+        } else {
+          dispatchEvents.push({
+            order_id: orderUuid,
+            event_type: "order_resumed",
+            message: `Order resumed by ${authorName}`,
+          });
+        }
+      } else if (prevSend !== nextSend) {
+        dispatchEvents.push({
+          order_id: orderUuid,
+          event_type: "sending_date_updated",
+          message: nextSend
+            ? `Sending date set to ${formatSendingDateDisplay(nextSend)} by ${authorName}`
+            : `Scheduled sending date cleared by ${authorName}`,
+        });
+      }
+
+      if (prevUrgent !== nextUrgent) {
+        dispatchEvents.push({
+          order_id: orderUuid,
+          event_type: "priority_changed",
+          message: nextUrgent
+            ? `Marked as URGENT parcel by ${authorName}`
+            : `Priority changed to Normal by ${authorName}`,
+        });
+      }
+
+      if (dispatchEvents.length > 0) {
+        await client.from("order_events").insert(dispatchEvents);
+      }
+    } catch (evErr) {
+      console.warn("[OrderService] Could not log dispatch event:", evErr);
+    }
   }
 
   if (orderUuid) {
@@ -349,6 +438,11 @@ export async function persistOrderUpdateInternal(
     delivered_at: dbRowInfo?.delivered_at,
     amount_paid: amountPaid,
   });
+  resultOrder.is_paused = Boolean(dbRowInfo?.is_paused);
+  resultOrder.sending_date = dbRowInfo?.sending_date ? String(dbRowInfo.sending_date).slice(0, 10) : null;
+  resultOrder.paused_at = dbRowInfo?.paused_at || null;
+  resultOrder.pause_reason = dbRowInfo?.pause_reason || null;
+  resultOrder.is_urgent = Boolean(dbRowInfo?.is_urgent);
 
   if (["confirmed", "processing", "shipped", "delivered", "partially_delivered"].includes(dbStatus)) {
     triggerCapiPurchaseInternal(orderId).catch(() => {});

@@ -399,6 +399,10 @@ export const orderFormSchema = z
     packaging_note: z.string().max(1000, "Packaging note must not exceed 1000 characters").optional().default(""),
     cancel_reason: z.string().optional().default(""),
     order_date: z.string().optional().default(""),
+    is_paused: z.boolean().optional().default(false),
+    sending_date: z.string().nullable().optional().default(""),
+    pause_reason: z.string().max(500, "Pause reason must not exceed 500 characters").nullable().optional().default(""),
+    is_urgent: z.boolean().optional().default(false),
     items: z.array(orderItemSchema).default([]),
   })
   .superRefine((data, ctx) => {

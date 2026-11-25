@@ -356,9 +356,13 @@ export function ImageUploader({
   };
 
   // Handle Alt Text Update
-  const handleUpdateAltText = (targetItem: UploadedImage, altText: string) => {
+  const handleUpdateAltText = (
+    targetItem: UploadedImage,
+    altText: string,
+    field: "altText" | "altTextBn" = "altText"
+  ) => {
     const updated = items.map((item) =>
-      item.id === targetItem.id ? { ...item, altText } : item
+      item.id === targetItem.id ? { ...item, [field]: altText } : item
     );
     updateItems(updated);
   };

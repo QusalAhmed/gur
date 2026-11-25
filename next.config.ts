@@ -1,4 +1,6 @@
+import os from "node:os";
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { buildCspHeader } from "./lib/security";
 
 // Force config reload for updated CSP allowances (YouTube, Vimeo, Clarity: tag.clarity.ms)
@@ -15,6 +17,29 @@ const imagekitHost = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT
 
 const isProd = process.env.NODE_ENV === "production";
 
+/**
+ * Collects local loopback and host network interface IPv4 addresses for `allowedDevOrigins`
+ * so cross-origin requests from LAN/loopback URLs (e.g. mobile testing) work in `next dev` only.
+ */
+function getAllowedDevOrigins(): string[] {
+  const origins = new Set<string>(["127.0.0.1", "[::1]"]);
+
+  for (const entries of Object.values(os.networkInterfaces())) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (
+        entry.family === "IPv4" &&
+        entry.address &&
+        !entry.address.startsWith("169.254.")
+      ) {
+        origins.add(entry.address);
+      }
+    }
+  }
+
+  return Array.from(origins);
+}
+
 function resolveCspHeader(): string {
   return buildCspHeader({
     nodeEnv: process.env.NODE_ENV,
@@ -25,11 +50,15 @@ function resolveCspHeader(): string {
   });
 }
 
-const nextConfig: NextConfig = {
+export default function createNextConfig(phase: string): NextConfig {
+  const isDevServer = phase === PHASE_DEVELOPMENT_SERVER;
+
+  return {
     /* config options here */
     poweredByHeader: false,
     cacheComponents: true,
     partialPrefetching: true,
+    ...(isDevServer ? { allowedDevOrigins: getAllowedDevOrigins() } : {}),
     turbopack: {
         rules: {
             "*.css": {
@@ -160,6 +189,5 @@ const nextConfig: NextConfig = {
         },
       ];
     },
-};
-
-export default nextConfig;
+  };
+}
