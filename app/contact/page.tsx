@@ -19,6 +19,8 @@ import { PhoneHelpForm } from "@/components/storefront/phone-help-form";
 import { CopyPhoneButton } from "@/components/storefront/copy-phone-button";
 import { ContactChannelLink } from "@/components/storefront/contact-channel-link";
 import { getStorefrontProductsAction } from "@/actions/storefront-products";
+import { resolveStorefrontMessengerBaseUrl } from "@/lib/messenger";
+import { resolveStorefrontImoUrl } from "@/lib/imo";
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
@@ -50,6 +52,8 @@ export default async function ContactPage() {
       storeName: "",
       storeSubtitle: "",
       logoUrl: "",
+      messengerUrl: undefined as string | undefined,
+      imoUrl: undefined as string | undefined,
       products: [],
     })),
   ]);
@@ -57,6 +61,8 @@ export default async function ContactPage() {
   const hotline = storefrontData.hotline || seo.supportPhone || "01843557389";
   const storeName = storefrontData.storeName || seo.storeNameEn || seo.storeName || "Gramayon";
   const logoUrl = storefrontData.logoUrl || seo.logoUrl || "";
+  const messengerBaseUrl = resolveStorefrontMessengerBaseUrl(storefrontData.messengerUrl);
+  const imoBaseUrl = resolveStorefrontImoUrl(storefrontData.imoUrl);
   const rawPhone = hotline.replace(/[^0-9]/g, "");
 
   const contactFaqs = [
@@ -128,7 +134,15 @@ export default async function ContactPage() {
         </div>
 
         {/* 4-Grid of Direct Contact Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${
+            messengerBaseUrl && imoBaseUrl
+              ? "lg:grid-cols-5"
+              : messengerBaseUrl || imoBaseUrl
+                ? "lg:grid-cols-4"
+                : "lg:grid-cols-3"
+          } gap-4 sm:gap-5`}
+        >
           {/* 1. Direct Phone Call */}
           <div className="p-5 rounded-2xl bg-white dark:bg-stone-900/90 border-2 border-emerald-500/30 hover:border-emerald-500 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
             <div className="space-y-3">
@@ -197,35 +211,71 @@ export default async function ContactPage() {
           </div>
 
           {/* 3. Facebook Messenger */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900/90 border-2 border-amber-300/60 dark:border-stone-800 hover:border-[#0084FF] shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center font-bold shadow-xs">
-                <MessageCircle className="w-6 h-6" />
+          {messengerBaseUrl && (
+            <div className="p-5 rounded-2xl bg-white dark:bg-stone-900/90 border-2 border-amber-300/60 dark:border-stone-800 hover:border-[#0084FF] shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center font-bold shadow-xs">
+                  <MessageCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-stone-900 dark:text-stone-100">
+                    Facebook মেসেঞ্জার
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                    ফেসবুক পেজে ইনবক্স করে বিস্তারিত জানুন
+                  </p>
+                </div>
+                <div className="text-xs text-stone-600 dark:text-stone-300 font-medium">
+                  ইনবক্সে সার্বক্ষণিক সহায়তা
+                </div>
               </div>
-              <div>
-                <h3 className="font-extrabold text-sm sm:text-base text-stone-900 dark:text-stone-100">
-                  Facebook মেসেঞ্জার
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                  ফেসবুক পেজে ইনবক্স করে বিস্তারিত জানুন
-                </p>
-              </div>
-              <div className="text-xs text-stone-600 dark:text-stone-300 font-medium">
-                ইনবক্সে সার্বক্ষণিক সহায়তা
-              </div>
-            </div>
 
-            <ContactChannelLink
-              channel="messenger"
-              href={process.env.NEXT_PUBLIC_MESSENGER_URL || "https://m.me/"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center justify-center gap-2 bg-[#0084FF] hover:bg-[#0072db] text-white font-bold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-sm transition-all"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>মেসেঞ্জারে চ্যাট</span>
-            </ContactChannelLink>
-          </div>
+              <ContactChannelLink
+                channel="messenger"
+                href={messengerBaseUrl}
+                prefillInquiryRef
+                lang="bn"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center justify-center gap-2 bg-[#0084FF] hover:bg-[#0072db] text-white font-bold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-sm transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>মেসেঞ্জারে চ্যাট</span>
+              </ContactChannelLink>
+            </div>
+          )}
+
+          {/* 3b. IMO */}
+          {imoBaseUrl && (
+            <div className="p-5 rounded-2xl bg-white dark:bg-stone-900/90 border-2 border-amber-300/60 dark:border-stone-800 hover:border-sky-500 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center font-black text-sm shadow-xs">
+                  imo
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-stone-900 dark:text-stone-100">
+                    IMO চ্যাট
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                    ফ্রি কল ও চ্যাটে সরাসরি অর্ডার করুন
+                  </p>
+                </div>
+                <div className="text-xs text-stone-600 dark:text-stone-300 font-medium">
+                  সার্বক্ষণিক সহায়তা
+                </div>
+              </div>
+
+              <a
+                href={imoBaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-sm transition-all"
+              >
+                <span className="font-black text-xs">imo</span>
+                <span>IMO-তে চ্যাট</span>
+              </a>
+            </div>
+          )}
 
           {/* 4. SMS Booking */}
           <div className="p-5 rounded-2xl bg-white dark:bg-stone-900/90 border-2 border-amber-300/60 dark:border-stone-800 hover:border-amber-600 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">

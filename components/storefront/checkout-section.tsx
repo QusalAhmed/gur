@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -411,6 +412,7 @@ const columns = useMemo<ColumnDef<CartItem, any>[]>(
             <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
               <Image
                 src={item.image || "/images/products/blackstrap-drum.jpg"}
+                loader={isImageKitUrl(item.image) ? imageKitLoader : undefined}
                 alt={name}
                 fill
                 className="object-cover"

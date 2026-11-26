@@ -9,7 +9,6 @@ import { ProductCardSkeleton } from "./product-card-skeleton";
 import dynamic from "next/dynamic";
 import { IntroSection } from "./intro-section";
 import { WhyBuyFromUs } from "./why-buy-from-us";
-import { ContactSection } from "./contact-section";
 import { MobileDock } from "./mobile-dock";
 import { trackContact } from "@/lib/facebook-pixel";
 import { claritySetTag } from "@/lib/clarity";
@@ -22,13 +21,50 @@ import {
   CartItem,
 } from "@/lib/redux/slices/cart-slice";
 import { useStorefrontIntro } from "@/hooks/use-storefront-intro";
-import { buildImageKitUrl } from "@/lib/imagekit/url";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import type { DeliveryChargeConfig } from "@/lib/delivery-charge";
+
+function CheckoutSectionSkeleton({
+  sectionRef,
+}: {
+  sectionRef?: React.RefObject<HTMLElement | null>;
+}) {
+  return (
+    <section
+      ref={sectionRef}
+      id="checkout"
+      data-section-index="checkout"
+      className="h-[100vh] min-h-[100vh] max-h-[100vh] w-full snap-start snap-always shrink-0 flex flex-col pt-3.5 sm:pt-16 pb-16 sm:pb-8 px-3 sm:px-6 md:px-12 relative overflow-y-auto bg-[#faf8f5] dark:bg-[#141210] text-stone-900 dark:text-stone-100 select-none"
+    >
+      <div className="relative z-10 w-full max-w-5xl mx-auto flex-1 my-2 sm:my-3">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6 items-start">
+          <div className="lg:col-span-5 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/90 dark:border-stone-800 p-4 sm:p-5 shadow-xs space-y-3 animate-pulse">
+            <div className="h-6 w-40 bg-stone-200/80 dark:bg-stone-800 rounded-md" />
+            <div className="h-20 w-full bg-stone-100 dark:bg-stone-800/70 rounded-xl" />
+            <div className="h-14 w-full bg-stone-100 dark:bg-stone-800/70 rounded-xl" />
+          </div>
+          <div className="lg:col-span-7 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/90 dark:border-stone-800 p-4 sm:p-5 shadow-xs space-y-3.5 animate-pulse">
+            <div className="h-6 w-48 bg-stone-200/80 dark:bg-stone-800 rounded-md" />
+            <div className="h-11 w-full bg-stone-100 dark:bg-stone-800/70 rounded-xl" />
+            <div className="h-11 w-full bg-stone-100 dark:bg-stone-800/70 rounded-xl" />
+            <div className="h-20 w-full bg-stone-100 dark:bg-stone-800/70 rounded-xl" />
+            <div className="h-12 w-full bg-amber-200/50 dark:bg-stone-800 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 // Code-split heavy interactive sections & modals to reduce initial mobile bundle size
 const CheckoutSection = dynamic(
   () => import("./checkout-section").then((mod) => mod.CheckoutSection),
-  { ssr: true }
+  { ssr: false, loading: () => <CheckoutSectionSkeleton /> }
+);
+
+const ContactSection = dynamic(
+  () => import("./contact-section").then((mod) => mod.ContactSection),
+  { ssr: false }
 );
 
 const CartSheet = dynamic(
@@ -45,6 +81,7 @@ interface ProductShowcaseProps {
   storeSubtitle?: string;
   logoUrl?: string;
   messengerUrl?: string;
+  imoUrl?: string;
   isLoading?: boolean;
   featuredIdentifier?: string;
   initialVariantId?: string;
@@ -59,6 +96,7 @@ export function ProductShowcase({
   storeSubtitle,
   logoUrl,
   messengerUrl,
+  imoUrl,
   isLoading = false,
   featuredIdentifier,
   initialVariantId,
@@ -91,10 +129,50 @@ export function ProductShowcase({
     return 0;
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const checkoutSentinelRef = useRef<HTMLElement>(null);
   const activeSectionRef = useRef(activeSectionIndex);
   useEffect(() => {
     activeSectionRef.current = activeSectionIndex;
   }, [activeSectionIndex]);
+
+  const [shouldLoadCheckout, setShouldLoadCheckout] = useState(false);
+
+  // Defer CheckoutSection JS loading/hydration until user approaches it or triggers checkout/contact
+  useEffect(() => {
+    if (shouldLoadCheckout) return;
+
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash === "#checkout" || hash === "#contact" || hash === "#live-stock-section") {
+        setShouldLoadCheckout(true);
+        return;
+      }
+    }
+
+    if (activeSectionIndex >= checkoutSectionIndex) {
+      setShouldLoadCheckout(true);
+      return;
+    }
+
+    const el = checkoutSentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setShouldLoadCheckout(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoadCheckout(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shouldLoadCheckout, activeSectionIndex, checkoutSectionIndex]);
 
   const t = STOREFRONT_TEXT[lang];
   const displayStoreName = storeName || t.storeName;
@@ -141,6 +219,9 @@ export function ProductShowcase({
 
   // Smooth scroll to a specific section (0: Overview, 1..N: Products, N+1: Checkout)
   const scrollToSection = (sectionIndex: number) => {
+    if (sectionIndex >= checkoutSectionIndex) {
+      setShouldLoadCheckout(true);
+    }
     const container = containerRef.current;
     if (!container) return;
     const targetEl = container.children[sectionIndex] as HTMLElement | null;
@@ -162,6 +243,9 @@ export function ProductShowcase({
 
   // Smooth scroll to an element inside Section 0 (e.g. Why Buy From Us) or Contact Section
   const handleScrollToElement = (elementId: string) => {
+    if (elementId === "contact" || elementId === "checkout" || elementId === "live-stock-section") {
+      setShouldLoadCheckout(true);
+    }
     const targetEl = document.getElementById(elementId);
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -427,11 +511,12 @@ export function ProductShowcase({
           {logoUrl ? (
             <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center">
               <Image
-                src={buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })}
+                src={logoUrl}
+                loader={isImageKitUrl(logoUrl) ? imageKitLoader : undefined}
                 alt={displayStoreName}
                 width={40}
                 height={40}
-                loading="lazy"
+                loading="eager"
                 decoding="async"
                 className="w-full h-full object-contain"
               />
@@ -662,6 +747,7 @@ export function ProductShowcase({
             storeName={displayStoreName}
             storeSubtitle={storeSubtitle}
             logoUrl={logoUrl}
+            preloadLogo={!autoScrollToProduct && !featuredIdentifier}
             isActive={activeSectionIndex === 0}
             isStandaloneSection={false}
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
@@ -718,30 +804,35 @@ export function ProductShowcase({
               lang={lang}
               isActive={activeSectionIndex === productsStartIndex + idx}
               pauseViewTracking={isTourActive}
-              priority={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
+              preload={Boolean(autoScrollToProduct || featuredIdentifier) && idx === 0}
               initialVariantId={idx === 0 ? initialVariantId : undefined}
             />
           ))
         )}
 
         {/* Section checkoutSectionIndex: Full-Screen Cart Summary, Checkout & Contact under same scrolling area */}
-        <CheckoutSection
-          lang={lang}
-          hotline={defaultHotline}
-          onScrollToProducts={() => scrollToSection(productsStartIndex)}
-          deliveryConfig={deliveryConfig}
-        >
-          {/* Contact & Customer Support Form (placed below order form under the same scrolling section) */}
-          <ContactSection
+        {shouldLoadCheckout ? (
+          <CheckoutSection
             lang={lang}
             hotline={defaultHotline}
-            storeName={storeName}
-            messengerUrl={messengerUrl}
-            isStandaloneSection={false}
             onScrollToProducts={() => scrollToSection(productsStartIndex)}
-            onScrollToWhyBuy={() => handleScrollToElement("why-buy-from-us")}
-          />
-        </CheckoutSection>
+            deliveryConfig={deliveryConfig}
+          >
+            {/* Contact & Customer Support Form (placed below order form under the same scrolling section) */}
+            <ContactSection
+              lang={lang}
+              hotline={defaultHotline}
+              storeName={storeName}
+              messengerUrl={messengerUrl}
+              imoUrl={imoUrl}
+              isStandaloneSection={false}
+              onScrollToProducts={() => scrollToSection(productsStartIndex)}
+              onScrollToWhyBuy={() => handleScrollToElement("why-buy-from-us")}
+            />
+          </CheckoutSection>
+        ) : (
+          <CheckoutSectionSkeleton sectionRef={checkoutSentinelRef} />
+        )}
       </main>
 
       {/* Mobile Floating Island Dock (Eye-catching frosted pill on mobile phones) */}

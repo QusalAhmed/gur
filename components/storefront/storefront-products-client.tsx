@@ -77,6 +77,8 @@ export function StorefrontProductsClient({
         storeName={data?.storeName ?? "Gramayon"}
         storeSubtitle={data?.storeSubtitle}
         logoUrl={data?.logoUrl || "/admin-icon/icon-192.png"}
+        messengerUrl={data?.messengerUrl}
+          imoUrl={data?.imoUrl}
         isLoading={isLoading}
         featuredIdentifier={effectiveFeaturedId}
         initialVariantId={effectiveVariantId}

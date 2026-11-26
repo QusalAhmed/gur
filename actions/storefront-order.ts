@@ -1,5 +1,6 @@
 "use server";
 
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { revalidateTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeBdPhone, toLocalBdPhone } from "@/lib/phone";
@@ -9,6 +10,8 @@ import { createNotificationInternal } from "@/lib/notifications-service";
 import { clampInt, isValidUuid, safePublicErrorMessage } from "@/lib/security";
 import { enqueueAndDispatch } from "@/lib/outbox";
 import { calculateAuthoritativeDeliveryCharge, getCachedDeliveryConfig } from "@/lib/delivery-charge";
+
+const tracer = trace.getTracer("gramayon");
 
 export interface StorefrontOrderItem {
   productId: string;
@@ -369,9 +372,11 @@ export async function placeStorefrontOrderAction(
     };
   }
 
-  return withPhoneLock(normalizedPhone, async () => {
-    try {
-      const targetStatus: "incomplete_order" | "pending" = payload.status || "pending";
+  return withPhoneLock(normalizedPhone, () =>
+    tracer.startActiveSpan("order.placeStorefrontOrder", async (span): Promise<StorefrontOrderResult> => {
+      try {
+        const targetStatus: "incomplete_order" | "pending" = payload.status || "pending";
+        span.setAttribute("order.target_status", targetStatus);
 
       const client = getSupabaseAdmin();
       const catalogPricing = await getCatalogPricingData(client);
@@ -1272,14 +1277,22 @@ export async function placeStorefrontOrderAction(
         deliveryZone: payload.deliveryZone,
         eventId: payload.eventId,
       };
-    } catch (err: any) {
-      console.error("Unexpected error in placeStorefrontOrderAction:", err);
-      return {
-        success: false,
-        error: safePublicErrorMessage("একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।"),
-      };
-    }
-  });
+      } catch (err: any) {
+        if (err instanceof Error) span.recordException(err);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        console.error("Unexpected error in placeStorefrontOrderAction:", err);
+        return {
+          success: false,
+          error: safePublicErrorMessage("একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।"),
+        };
+      } finally {
+        span.end();
+      }
+    })
+  );
 }
 
 /**

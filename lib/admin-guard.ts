@@ -1,3 +1,4 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -8,6 +9,8 @@ import {
   canRoleAccessPath,
   isValidAdminRole,
 } from "@/lib/admin-permissions";
+
+const tracer = trace.getTracer("gramayon");
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,8 +41,9 @@ export function getActorUuid(session: StaffSession | null | undefined): string |
  * active staff membership against staff_members / env root credentials.
  */
 export async function getStaffSession(): Promise<StaffSession | null> {
-  try {
-    const adminClient = getSupabaseAdmin();
+  return tracer.startActiveSpan("admin.getStaffSession", async (span): Promise<StaffSession | null> => {
+    try {
+      const adminClient = getSupabaseAdmin();
 
     // 1. Check Supabase Auth session via SSR cookies
     const supabase = await createClient();
@@ -131,12 +135,20 @@ export async function getStaffSession(): Promise<StaffSession | null> {
       }
     }
 
-    return null;
-  } catch (err: unknown) {
-    unstable_rethrow(err);
-    console.error("Error verifying staff session:", err);
-    return null;
-  }
+      return null;
+    } catch (err: unknown) {
+      unstable_rethrow(err);
+      if (err instanceof Error) span.recordException(err);
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      console.error("Error verifying staff session:", err);
+      return null;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 /**

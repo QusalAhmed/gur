@@ -144,15 +144,22 @@ export function parseOrderItemWeightKg(item: {
   return 1 * qty;
 }
 
+export interface UseLiveStockOptions {
+  enabled?: boolean;
+}
+
 /**
  * Hook that computes live current and future available stock in real time.
  * - Current stock is ALWAYS 0.
  * - Future production per day is read from site settings (default 50 kg).
  * - Total unfulfilled active orders (pending, confirmed, processing) are deducted sequentially.
  * - If tomorrow's available stock is 0, continues projecting forward until available stock > 0.
- * - Supabase Realtime listens to live changes on the `orders` table.
  */
-export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState {
+export function useLiveStock(
+  initialDailyCapacity: number = 50,
+  options?: UseLiveStockOptions
+): LiveStockState {
+  const enabled = options?.enabled ?? true;
   const [dailyProductionKg, setDailyProductionKg] = useState<number>(initialDailyCapacity);
   const [totalActiveOrdersKg, setTotalActiveOrdersKg] = useState<number>(0);
   const [activeOrderCount, setActiveOrderCount] = useState<number>(0);
@@ -166,10 +173,15 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
 
   const isMountedRef = useRef<boolean>(true);
+  const hasFetchedInitialRef = useRef<boolean>(false);
 
-  // Set client-side date safely after mount to avoid prerender/SSR non-determinism
+  // Track mount status & set client-side date safely after mount to avoid prerender/SSR non-determinism
   useEffect(() => {
+    isMountedRef.current = true;
     setCurrentDate(new Date());
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Fetch production setting and aggregated active order volume via Server Action
@@ -238,15 +250,12 @@ export function useLiveStock(initialDailyCapacity: number = 50): LiveStockState 
     }
   }, []);
 
-  // Initial fetch on mount (no continuous polling or focus refetching)
+  // Trigger initial fetch only when enabled (e.g. near viewport; no continuous polling or focus listeners)
   useEffect(() => {
-    isMountedRef.current = true;
+    if (!enabled || hasFetchedInitialRef.current) return;
+    hasFetchedInitialRef.current = true;
     fetchData(false);
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchData]);
+  }, [enabled, fetchData]);
 
   // Frontend calculation: project availability day-by-day
   const { projections, nextAvailableDay } = useMemo(() => {

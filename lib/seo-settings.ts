@@ -22,6 +22,7 @@ export interface ResolvedSeoSettings {
   email: string;
   address: string;
   logoUrl: string;
+  faviconUrl: string;
   defaultTitle: string;
   titleTemplate: string;
   defaultDescription: string;
@@ -149,6 +150,7 @@ function resolveSeoSettingsFromMap(
   const email = cleanString(rawMap.get("store.email"));
   const address = cleanString(rawMap.get("store.address")) || "বাঘা, রাজশাহী, বাংলাদেশ";
   const logoUrl = resolveAbsoluteMediaUrl(cleanString(rawMap.get("store.logo_url")), siteUrl);
+  const faviconUrl = resolveAbsoluteMediaUrl(cleanString(rawMap.get("store.favicon_url")), siteUrl);
 
   const defaultTitle = cleanString(rawMap.get("seo.default_title")) || DEFAULT_TITLE;
   const rawTemplate = cleanString(rawMap.get("seo.title_template"));
@@ -188,6 +190,7 @@ function resolveSeoSettingsFromMap(
     email,
     address,
     logoUrl,
+    faviconUrl,
     defaultTitle,
     titleTemplate,
     defaultDescription,

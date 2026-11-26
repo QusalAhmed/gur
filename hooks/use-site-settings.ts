@@ -7,6 +7,8 @@ import {
   getPublicSiteSettingsAction,
   SiteSettingsMap,
 } from "@/actions/settings";
+import { DEFAULT_MESSENGER_URL, sanitizeMessengerUrl } from "@/lib/messenger";
+import { DEFAULT_IMO_URL, sanitizeImoUrl } from "@/lib/imo";
 
 export interface ParsedSiteSettings {
   raw: SiteSettingsMap;
@@ -15,6 +17,8 @@ export interface ParsedSiteSettings {
   currency: string;
   currencySymbol: string;
   supportPhone: string;
+  messengerUrl: string;
+  imoUrl: string;
   whatsapp: string;
   email: string;
   address: string;
@@ -46,6 +50,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsMap = {
   "store.name_bn": "গ্রামায়ন",
   "store.currency": "BDT",
   "store.support_phone": "+880 1700-000001",
+  "store.messenger_url": DEFAULT_MESSENGER_URL,
+  "store.imo_url": DEFAULT_IMO_URL,
   "store.whatsapp": "+880 1711-234567",
   "store.email": "billing@molassesstore.com",
   "store.address": "24/B Industrial Area, Tejgaon Industrial Area, Dhaka-1208, Bangladesh",
@@ -80,6 +86,16 @@ export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSett
       ? "£"
       : "৳";
 
+  const messengerUrl =
+    raw["store.messenger_url"] !== undefined
+      ? sanitizeMessengerUrl(raw["store.messenger_url"])
+      : DEFAULT_MESSENGER_URL;
+
+  const imoUrl =
+    raw["store.imo_url"] !== undefined
+      ? sanitizeImoUrl(raw["store.imo_url"])
+      : DEFAULT_IMO_URL;
+
   return {
     raw: merged,
     storeName: String(merged["store.name"] || DEFAULT_SITE_SETTINGS["store.name"]),
@@ -87,6 +103,8 @@ export function parseSettingsMap(raw: SiteSettingsMap = {}): Omit<ParsedSiteSett
     currency,
     currencySymbol,
     supportPhone: String(merged["store.support_phone"] || DEFAULT_SITE_SETTINGS["store.support_phone"]),
+    messengerUrl,
+    imoUrl,
     whatsapp: String(merged["store.whatsapp"] || DEFAULT_SITE_SETTINGS["store.whatsapp"]),
     email: String(merged["store.email"] || DEFAULT_SITE_SETTINGS["store.email"]),
     address: String(merged["store.address"] || DEFAULT_SITE_SETTINGS["store.address"]),

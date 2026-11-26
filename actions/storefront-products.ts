@@ -1,5 +1,6 @@
 "use server";
 
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { cacheLife, cacheTag } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
@@ -7,6 +8,10 @@ import type { StorefrontProduct } from "@/components/storefront/product-card";
 import { DeliveryChargeConfig, DEFAULT_DELIVERY_CONFIG } from "@/lib/delivery-charge";
 import type { PublicLiveStockStatsResult } from "@/lib/storefront-public-data";
 import { getCachedPublicLiveStockStats } from "@/lib/storefront-cache";
+import { DEFAULT_MESSENGER_URL, sanitizeMessengerUrl } from "@/lib/messenger";
+import { DEFAULT_IMO_URL, sanitizeImoUrl } from "@/lib/imo";
+
+const tracer = trace.getTracer("gramayon");
 
 export type { PublicLiveStockStatsResult };
 
@@ -16,6 +21,8 @@ export interface StorefrontDataResult {
   storeName: string;
   storeSubtitle: string;
   logoUrl?: string;
+  messengerUrl?: string;
+  imoUrl?: string;
   deliveryConfig: DeliveryChargeConfig;
 }
 
@@ -35,12 +42,20 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
     expire: 1800,
   });
 
-  const client = getSupabaseAdmin();
+  return tracer.startActiveSpan("storefront.getProducts", async (span) => {
+    try {
+      const client = getSupabaseAdmin();
 
   let hotline = "01843557389";
   let storeName = "Gramayon";
   let storeSubtitle = "আমার নিজের বাসায় তৈরী গুড়, গলাকাটা দাম মুক্ত";
   let logoUrl: string | undefined = undefined;
+  let messengerUrl =
+    sanitizeMessengerUrl(process.env.NEXT_PUBLIC_MESSENGER_URL) ||
+    DEFAULT_MESSENGER_URL;
+  let imoUrl =
+    sanitizeImoUrl(process.env.NEXT_PUBLIC_IMO_URL) ||
+    DEFAULT_IMO_URL;
   const deliveryConfig: DeliveryChargeConfig = { ...DEFAULT_DELIVERY_CONFIG };
 
   try {
@@ -50,6 +65,8 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
       .eq("is_public", true)
       .in("key", [
         "store.support_phone",
+        "store.messenger_url",
+        "store.imo_url",
         "store.name_bn",
         "store.name",
         "store.subtitle",
@@ -69,6 +86,8 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         const val = row.value;
         const cleanVal = String(val || "").replace(/^["']|["']$/g, "").trim();
         if (row.key === "store.support_phone" && cleanVal) hotline = cleanVal;
+        if (row.key === "store.messenger_url") messengerUrl = sanitizeMessengerUrl(val);
+        if (row.key === "store.imo_url") imoUrl = sanitizeImoUrl(val);
         if (row.key === "store.name" && cleanVal) nameEn = cleanVal;
         if (row.key === "store.name_bn" && cleanVal) nameBn = cleanVal;
         if (row.key === "store.subtitle" && cleanVal) storeSubtitle = cleanVal;
@@ -278,18 +297,31 @@ export async function getStorefrontProductsAction(): Promise<StorefrontDataResul
         })
         .filter((p): p is any => p !== null);
     }
-  } catch (err) {
-    console.error("Error fetching real products from Supabase DB in actions/storefront-products.ts:", err);
-  }
+      } catch (err) {
+        console.error("Error fetching real products from Supabase DB in actions/storefront-products.ts:", err);
+      }
 
-  return {
-    products: realProducts,
-    hotline,
-    storeName,
-    storeSubtitle,
-    logoUrl,
-    deliveryConfig,
-  };
+      span.setAttribute("products.count", realProducts.length);
+      return {
+        products: realProducts,
+        hotline,
+        storeName,
+        storeSubtitle,
+        logoUrl,
+        messengerUrl,
+        deliveryConfig,
+      };
+    } catch (error) {
+      if (error instanceof Error) span.recordException(error);
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 /**

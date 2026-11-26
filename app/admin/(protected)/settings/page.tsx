@@ -54,6 +54,8 @@ import {
 import { testBrevoConnectionAction } from "@/actions/brevo";
 import { checkSmsBalanceAction, sendTestSmsAction } from "@/actions/sms";
 import { SITE_SETTINGS_QUERY_KEY } from "@/hooks/use-site-settings";
+import { DEFAULT_MESSENGER_URL, normalizeMessengerUrl } from "@/lib/messenger";
+import { DEFAULT_IMO_URL, normalizeImoUrl } from "@/lib/imo";
 import { OutboxMonitor } from "@/components/admin/outbox-monitor";
 import {
   SeoSettingsTab,
@@ -68,6 +70,10 @@ export default function SettingsPage() {
   const [storeNameBn, setStoreNameBn] = React.useState("মোলাসেস স্টোর বাংলাদেশ");
   const [currency, setCurrency] = React.useState("BDT");
   const [supportPhone, setSupportPhone] = React.useState("+880 1700-000001");
+  const [messengerUrl, setMessengerUrl] = React.useState(DEFAULT_MESSENGER_URL);
+  const [messengerUrlError, setMessengerUrlError] = React.useState<string | null>(null);
+  const [imoUrl, setImoUrl] = React.useState(DEFAULT_IMO_URL);
+  const [imoUrlError, setImoUrlError] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState("billing@molassesstore.com");
   const [address, setAddress] = React.useState(
     "24/B Industrial Area, Tejgaon Industrial Area, Dhaka-1208, Bangladesh"
@@ -199,6 +205,14 @@ export default function SettingsPage() {
         if (data["store.name_bn"] !== undefined) setStoreNameBn(String(data["store.name_bn"]));
         if (data["store.currency"] !== undefined) setCurrency(String(data["store.currency"]));
         if (data["store.support_phone"] !== undefined) setSupportPhone(String(data["store.support_phone"]));
+        if (data["store.messenger_url"] !== undefined) {
+          setMessengerUrl(String(data["store.messenger_url"] ?? "").replace(/^"|"$/g, ""));
+          setMessengerUrlError(null);
+        }
+        if (data["store.imo_url"] !== undefined) {
+          setImoUrl(String(data["store.imo_url"] ?? "").replace(/^"|"$/g, ""));
+          setImoUrlError(null);
+        }
         if (data["store.email"] !== undefined) setEmail(String(data["store.email"]));
         if (data["store.address"] !== undefined) setAddress(String(data["store.address"]));
         if (data["store.timezone"] !== undefined) setTimezone(String(data["store.timezone"]));
@@ -393,11 +407,36 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveMessage(null);
     try {
+      const messengerCheck = normalizeMessengerUrl(messengerUrl);
+      if (!messengerCheck.isValid) {
+        const msg =
+          "Invalid Messenger URL. Enter a valid m.me/..., https://... link, or Facebook Page ID (or leave blank to hide).";
+        setMessengerUrlError(msg);
+        toast.error(msg);
+        setSaving(false);
+        return;
+      }
+      setMessengerUrlError(null);
+      setMessengerUrl(messengerCheck.normalized);
+
+      const imoCheck = normalizeImoUrl(imoUrl);
+      if (!imoCheck.isValid) {
+        const msg = "Enter a valid https://... IMO link (or leave blank to hide).";
+        setImoUrlError(msg);
+        toast.error(msg);
+        setSaving(false);
+        return;
+      }
+      setImoUrlError(null);
+      setImoUrl(imoCheck.normalized);
+
       const payload = {
         "store.name": storeName,
         "store.name_bn": storeNameBn,
         "store.currency": currency,
         "store.support_phone": supportPhone,
+        "store.messenger_url": messengerCheck.normalized,
+        "store.imo_url": imoCheck.normalized,
         "store.email": email,
         "store.address": address,
         "store.timezone": timezone,
@@ -758,6 +797,79 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <label htmlFor="store-messenger-url" className="text-xs font-semibold">
+                      Messenger Chat URL
+                    </label>
+                    <Input
+                      id="store-messenger-url"
+                      value={messengerUrl}
+                      onChange={(e) => {
+                        setMessengerUrl(e.target.value);
+                        if (messengerUrlError) setMessengerUrlError(null);
+                      }}
+                      onBlur={() => {
+                        const res = normalizeMessengerUrl(messengerUrl);
+                        if (res.isValid) {
+                          setMessengerUrl(res.normalized);
+                          setMessengerUrlError(null);
+                        } else {
+                          setMessengerUrlError(
+                            "Enter a valid m.me/..., https://... link, or Page ID (or leave blank to hide)."
+                          );
+                        }
+                      }}
+                      placeholder="https://m.me/1469306489588846"
+                      className={`font-mono text-xs ${
+                        messengerUrlError ? "border-rose-500 focus-visible:ring-rose-500" : ""
+                      }`}
+                    />
+                    {messengerUrlError ? (
+                      <p className="text-[11px] text-rose-600">{messengerUrlError}</p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        Accepts full URL, m.me/..., or Page ID. Leave blank to hide Messenger chat buttons.
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                      <label htmlFor="store-imo-url" className="text-xs font-semibold">
+                        IMO Chat URL
+                      </label>
+                      <Input
+                        id="store-imo-url"
+                        value={imoUrl}
+                        onChange={(e) => {
+                          setImoUrl(e.target.value);
+                          if (imoUrlError) setImoUrlError(null);
+                        }}
+                        onBlur={() => {
+                          const res = normalizeImoUrl(imoUrl);
+                          if (res.isValid) {
+                            setImoUrl(res.normalized);
+                            setImoUrlError(null);
+                          } else {
+                            setImoUrlError(
+                              "Enter a valid https://... IMO link (or leave blank to hide)."
+                            );
+                          }
+                        }}
+                        placeholder="https://s.imoim.net/H1lfS1"
+                        className={`font-mono text-xs ${
+                          imoUrlError ? "border-rose-500 focus-visible:ring-rose-500" : ""
+                        }`}
+                      />
+                      {imoUrlError ? (
+                        <p className="text-[11px] text-rose-600">{imoUrlError}</p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          Enter your IMO share/invite link. Leave blank to hide IMO chat buttons.
+                        </p>
+                      )}
+                    </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Official Invoicing Email</label>
                     <Input
                       type="email"
@@ -766,15 +878,14 @@ export default function SettingsPage() {
                       placeholder="billing@molassesstore.com"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold">Headquarters Physical Address</label>
-                  <Input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Physical address for invoices and business records"
-                  />
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">Headquarters Physical Address</label>
+                    <Input
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Physical address for invoices and business records"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3 pt-2">

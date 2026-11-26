@@ -113,6 +113,8 @@ export interface Order {
   courier_invoice?: string;
   courier_delivery_charge?: number | null;
   courier_payload_snapshot?: Record<string, any> | null;
+  brand_name?: string;
+  brand_logo_url?: string;
   printed_at?: string | null;
   printed_courier_snapshot?: Record<string, any> | null;
   reprint_required?: boolean;

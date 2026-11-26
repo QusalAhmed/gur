@@ -43,12 +43,14 @@ export function StoreProvider({ children }: StoreProviderProps) {
     }
 
     // 2. Subscribe to store changes to persist cart items
+    let prevItems: CartItem[] | null = null;
     let prevItemsJson = "";
     const unsubscribe = store.subscribe(() => {
       try {
         const state = store.getState();
         // Only persist if the cart has finished initial hydration
-        if (state.cart.isHydrated) {
+        if (state.cart.isHydrated && state.cart.items !== prevItems) {
+          prevItems = state.cart.items;
           const currentItemsJson = JSON.stringify(state.cart.items);
           if (currentItemsJson !== prevItemsJson) {
             prevItemsJson = currentItemsJson;

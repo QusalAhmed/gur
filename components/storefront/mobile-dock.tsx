@@ -12,7 +12,7 @@ import {
   openCart,
 } from "@/lib/redux/slices/cart-slice";
 import { trackContact } from "@/lib/facebook-pixel";
-import { buildImageKitUrl } from "@/lib/imagekit/url";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 
 export interface MobileDockProps {
   lang: StorefrontLang;
@@ -176,10 +176,12 @@ export function MobileDock({
                   }`}
                 >
                   <Image
-                    src={buildImageKitUrl(logoUrl, { width: 48, height: 48, quality: 80, format: "auto" })}
+                    src={logoUrl}
+                    loader={isImageKitUrl(logoUrl) ? imageKitLoader : undefined}
                     alt={displayName}
                     width={24}
                     height={24}
+                    loading="eager"
                     className="w-full h-full object-contain"
                   />
                 </div>

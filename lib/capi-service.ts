@@ -1,3 +1,4 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { cookies, headers } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { inngest } from "@/lib/inngest/client";
@@ -10,6 +11,31 @@ import {
   type CapiUserData,
   type CapiContentItem,
 } from "@/lib/facebook-capi";
+
+const tracer = trace.getTracer("gramayon");
+
+async function withCapiDispatchSpan<T extends { success: boolean }>(
+  eventName: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  return tracer.startActiveSpan("capi.dispatchEvents", async (span) => {
+    span.setAttribute("capi.event_name", eventName);
+    try {
+      const result = await operation();
+      span.setAttribute("capi.success", result.success);
+      return result;
+    } catch (error) {
+      if (error instanceof Error) span.recordException(error);
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
 
 export interface CatalogIdLookupParams {
   productId?: string | null;
@@ -206,35 +232,37 @@ export async function dispatchCapiEventWithQueue(
   event: CapiEventParams,
   options?: { testEventCode?: string }
 ): Promise<{ success: boolean; eventId?: string; queued?: boolean; error?: string }> {
-  const resolvedEventId =
-    (event.eventId && String(event.eventId).trim()) ||
-    ((event as any).event_id && String((event as any).event_id).trim()) ||
-    ((event as any).eventID && String((event as any).eventID).trim()) ||
-    (event.customData?.event_id && String(event.customData.event_id).trim()) ||
-    `evt_${String(event.eventName || "event").toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  return withCapiDispatchSpan(event.eventName || "unknown", async () => {
+    const resolvedEventId =
+      (event.eventId && String(event.eventId).trim()) ||
+      ((event as any).event_id && String((event as any).event_id).trim()) ||
+      ((event as any).eventID && String((event as any).eventID).trim()) ||
+      (event.customData?.event_id && String(event.customData.event_id).trim()) ||
+      `evt_${String(event.eventName || "event").toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 
-  event.eventId = resolvedEventId;
-  if (event.customData && !event.customData.event_id) {
-    event.customData.event_id = resolvedEventId;
-  }
+    event.eventId = resolvedEventId;
+    if (event.customData && !event.customData.event_id) {
+      event.customData.event_id = resolvedEventId;
+    }
 
-  try {
-    await inngest.send({
-      name: "meta.capi.event",
-      data: {
-        event,
-        testEventCode: options?.testEventCode,
-      },
-      id: `capi-${event.eventName.toLowerCase()}-${resolvedEventId}`,
-    });
-    return { success: true, eventId: resolvedEventId, queued: true };
-  } catch (queueErr) {
-    console.warn(
-      "[Facebook CAPI] Inngest queue dispatch failed, falling back to direct send:",
-      queueErr
-    );
-    return await sendCapiEvents([event], options);
-  }
+    try {
+      await inngest.send({
+        name: "meta.capi.event",
+        data: {
+          event,
+          testEventCode: options?.testEventCode,
+        },
+        id: `capi-${event.eventName.toLowerCase()}-${resolvedEventId}`,
+      });
+      return { success: true, eventId: resolvedEventId, queued: true };
+    } catch (queueErr) {
+      console.warn(
+        "[Facebook CAPI] Inngest queue dispatch failed, falling back to direct send:",
+        queueErr
+      );
+      return await sendCapiEvents([event], options);
+    }
+  });
 }
 
 export function sanitizeMetaEventUrl(rawUrl?: string): string | undefined {
@@ -1183,24 +1211,26 @@ export async function triggerCapiPurchaseInternal(
       actionSource = "phone_call";
     }
 
-    const capiResult = await sendCapiEvents([
-      {
-        eventName: "Purchase",
-        eventId,
-        eventSourceUrl: metaTracking.event_source_url || undefined,
-        actionSource,
-        userData,
-        customData: {
-          content_ids: contentIds,
-          content_type: "product",
-          contents,
-          num_items: totalQuantity,
-          value: safeValue,
-          currency,
-          order_id: orderRow.order_number || orderRow.id,
+    const capiResult = await withCapiDispatchSpan("Purchase", () =>
+      sendCapiEvents([
+        {
+          eventName: "Purchase",
+          eventId,
+          eventSourceUrl: metaTracking.event_source_url || undefined,
+          actionSource,
+          userData,
+          customData: {
+            content_ids: contentIds,
+            content_type: "product",
+            contents,
+            num_items: totalQuantity,
+            value: safeValue,
+            currency,
+            order_id: orderRow.order_number || orderRow.id,
+          },
         },
-      },
-    ]);
+      ])
+    );
 
     const nowIso = new Date().toISOString();
     const updatedMetaTracking = {

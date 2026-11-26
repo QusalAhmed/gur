@@ -103,6 +103,7 @@ export default function createNextConfig(phase: string): NextConfig {
     },
     experimental: {
         agentUpgrade: "security",
+        optimizePackageImports: ["motion"],
     },
     async headers() {
       const cspHeader = resolveCspHeader();

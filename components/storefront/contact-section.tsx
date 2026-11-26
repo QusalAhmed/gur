@@ -20,6 +20,12 @@ import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { PhoneHelpForm } from "./phone-help-form";
 import { LiveStockSection } from "./live-stock-section";
 import { getOrGenerateInquiryRefCode, trackContact } from "@/lib/facebook-pixel";
+import {
+  buildInquiryGreetingText,
+  buildMessengerChatUrl,
+  resolveStorefrontMessengerBaseUrl,
+} from "@/lib/messenger";
+import { resolveStorefrontImoUrl } from "@/lib/imo";
 
 interface ContactSectionProps {
   lang?: StorefrontLang;
@@ -27,6 +33,7 @@ interface ContactSectionProps {
   storeName?: string;
   address?: string;
   messengerUrl?: string;
+  imoUrl?: string;
   isStandaloneSection?: boolean;
   onScrollToProducts?: () => void;
   onScrollToWhyBuy?: () => void;
@@ -39,6 +46,7 @@ export function ContactSection({
   storeName,
   address = "বাঘা, রাজশাহী",
   messengerUrl,
+  imoUrl,
   isStandaloneSection = true,
   onScrollToProducts,
   onScrollToWhyBuy,
@@ -58,10 +66,15 @@ export function ContactSection({
     };
   }, []);
 
-  const finalMessengerUrl =
-    messengerUrl ||
-    process.env.NEXT_PUBLIC_MESSENGER_URL ||
-    "https://m.me/";
+  const resolvedMessengerBaseUrl = resolveStorefrontMessengerBaseUrl(messengerUrl);
+  const finalMessengerUrl = resolvedMessengerBaseUrl
+    ? buildMessengerChatUrl(resolvedMessengerBaseUrl, {
+        lang,
+        refCode: inquiryRef || undefined,
+      })
+    : "";
+
+  const resolvedImoUrl = resolveStorefrontImoUrl(imoUrl);
 
   const rawPhone = hotline.replace(/[^0-9]/g, "");
   // International format for WhatsApp & IMO (+880 for BD)
@@ -146,9 +159,7 @@ export function ContactSection({
 
   // Pre-filled greetings with optional visitor inquiry tracking token
   const whatsappMsg = encodeURIComponent(
-    lang === "bn"
-      ? `আসসালামু আলাইকুম, আমি খাঁটি গুড় কিনতে চাই এবং বিস্তারিত জানতে চাই। ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
-      : `Hello, I would like to order pure artisanal jaggery / know more. ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
+    buildInquiryGreetingText(lang, inquiryRef || undefined)
   );
 
   const smsMsg = encodeURIComponent(
@@ -157,10 +168,23 @@ export function ContactSection({
       : `Hello, I would like to order molasses. ${inquiryRef ? `[Ref: ${inquiryRef}]` : ""}`
   );
 
-  const handleContactClick = (channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms") => {
+  const handleContactClick = (
+    channel: "phone" | "whatsapp" | "messenger" | "imo" | "sms",
+    e?: React.MouseEvent<HTMLAnchorElement>
+  ) => {
+    const activeRefCode = inquiryRef || getOrGenerateInquiryRefCode("W");
+    if (!inquiryRef) {
+      setInquiryRef(activeRefCode);
+    }
+    if (channel === "messenger" && e && resolvedMessengerBaseUrl) {
+      e.currentTarget.href = buildMessengerChatUrl(resolvedMessengerBaseUrl, {
+        lang,
+        refCode: activeRefCode,
+      });
+    }
     trackContact({
       channel,
-      refCode: inquiryRef || undefined,
+      refCode: activeRefCode,
       customData: {
         hotline,
         storeName: displayName,
@@ -327,7 +351,13 @@ export function ContactSection({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: false, amount: "some" }}
           transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5"
+          className={`grid grid-cols-2 ${
+            finalMessengerUrl && resolvedImoUrl
+              ? "sm:grid-cols-4"
+              : finalMessengerUrl || resolvedImoUrl
+                ? "sm:grid-cols-3"
+                : "sm:grid-cols-2"
+          } gap-2 sm:gap-2.5`}
         >
           {/* WhatsApp */}
           <a
@@ -358,41 +388,51 @@ export function ContactSection({
           </a>
 
           {/* Facebook Messenger */}
-          <a
-            href={finalMessengerUrl}
-            onClick={() => handleContactClick("messenger")}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`${t.messengerTitle} - ${t.messengerChatBtn}`}
-            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2 touch-manipulation"
-          >
-            <div className="flex items-center gap-2.5 min-w-0 w-full">
-              <div className="w-9 h-9 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center shrink-0">
-                <svg
-                  className="w-5 h-5 fill-current"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.2 5.42 3.16 7.15V22l3.03-1.67c1.17.33 2.44.52 3.81.52 5.64 0 10-4.13 10-9.7S17.64 2 12 2zm1.06 13.06l-2.58-2.75-5.04 2.75 5.54-5.88 2.65 2.75 4.97-2.75-5.54 5.88z" />
-                </svg>
+          {finalMessengerUrl && (
+            <a
+              href={finalMessengerUrl}
+              onClick={(e) => handleContactClick("messenger", e)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${t.messengerTitle} - ${t.messengerChatBtn}`}
+              className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-[#0084FF] dark:hover:border-[#0084FF] rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2 touch-manipulation"
+            >
+              <div className="flex items-center gap-2.5 min-w-0 w-full">
+                <div className="w-9 h-9 rounded-xl bg-[#0084FF]/15 text-[#0084FF] flex items-center justify-center shrink-0">
+                  <svg
+                    className="w-5 h-5 fill-current"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.2 5.42 3.16 7.15V22l3.03-1.67c1.17.33 2.44.52 3.81.52 5.64 0 10-4.13 10-9.7S17.64 2 12 2zm1.06 13.06l-2.58-2.75-5.04 2.75 5.54-5.88 2.65 2.75 4.97-2.75-5.54 5.88z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 text-left">
+                  <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
+                    {t.messengerTitle}
+                  </span>
+                  <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
+                    {lang === "bn" ? "ইনবক্সে অর্ডার" : "Inbox & Order"}
+                  </span>
+                </div>
               </div>
-              <div className="min-w-0 text-left">
-                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
-                  {t.messengerTitle}
-                </span>
-                <span className="block text-xs sm:text-sm text-stone-600 dark:text-stone-400 truncate">
-                  {lang === "bn" ? "ইনবক্সে অর্ডার" : "Inbox & Order"}
-                </span>
-              </div>
-            </div>
-            <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1">
-              <span>{t.messengerChatBtn}</span>
-              <ExternalLink className="w-3 h-3" aria-hidden="true" />
-            </span>
-          </a>
+              <span className="inline-flex items-center justify-center gap-1 bg-[#0084FF] hover:bg-[#0074e0] text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1">
+                <span>{t.messengerChatBtn}</span>
+                <ExternalLink className="w-3 h-3" aria-hidden="true" />
+              </span>
+            </a>
+          )}
 
           {/* IMO */}
-          <div className="bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2">
+          {resolvedImoUrl && (
+          <a
+            href={resolvedImoUrl}
+            onClick={() => handleContactClick("imo")}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
+            className="group bg-white dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-xl p-2.5 sm:p-3 shadow-xs transition-colors flex flex-col items-start justify-between gap-2 touch-manipulation"
+          >
             <div className="flex items-center gap-2.5 min-w-0 w-full">
               <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 font-bold text-xs" aria-hidden="true">
                 imo
@@ -406,15 +446,12 @@ export function ContactSection({
                 </span>
               </div>
             </div>
-            <a
-              href={`imo://call?phone=${intlPhone}`}
-              onClick={() => handleContactClick("imo")}
-              aria-label={`${t.imoTitle} - ${t.imoLaunchBtn}`}
-              className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1"
-            >
+            <span className="inline-flex items-center justify-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-xs transition-colors touch-manipulation w-full mt-1">
               <span>{t.imoLaunchBtn}</span>
-            </a>
-          </div>
+              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+            </span>
+          </a>
+          )}
 
           {/* SMS */}
           <a

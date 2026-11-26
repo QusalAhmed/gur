@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import { Plus, Minus, Check, ChevronDown, Boxes, ShoppingBag, ArrowRight } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -132,7 +133,7 @@ interface ProductCardProps {
   lang: StorefrontLang;
   isActive?: boolean;
   pauseViewTracking?: boolean;
-  priority?: boolean;
+  preload?: boolean;
   initialVariantId?: string;
 }
 
@@ -143,7 +144,7 @@ export function ProductCard({
   lang,
   isActive,
   pauseViewTracking = false,
-  priority = false,
+  preload = false,
   initialVariantId,
 }: ProductCardProps) {
   const t = STOREFRONT_TEXT[lang];
@@ -535,45 +536,11 @@ export function ProductCard({
     }
   };
 
-  // Fly-to-bag animation states and refs
-  const [flyingItems, setFlyingItems] = useState<{ id: number; dx: number }[]>([]);
-  const [isBagAnimating, setIsBagAnimating] = useState(false);
-  const bagRef = useRef<HTMLDivElement>(null);
-  const plusRef = useRef<HTMLButtonElement>(null);
-  const flyingIdRef = useRef(0);
-
-  const triggerFlyAnimation = () => {
-    let dx = -150;
-    if (bagRef.current && plusRef.current) {
-      const bagRect = bagRef.current.getBoundingClientRect();
-      const plusRect = plusRef.current.getBoundingClientRect();
-      dx = (bagRect.left + bagRect.width / 2) - (plusRect.left + plusRect.width / 2);
-    }
-    const newId = ++flyingIdRef.current;
-    setFlyingItems((prev) => [...prev, { id: newId, dx }]);
-
-    setTimeout(() => {
-      setIsBagAnimating(true);
-    }, 720);
-
-    setTimeout(() => {
-      setIsBagAnimating(false);
-    }, 1450);
-
-    setTimeout(() => {
-      setFlyingItems((prev) => prev.filter((item) => item.id !== newId));
-    }, 1000);
-  };
-
   const handleAddQuantityWithAnimation = () => {
-    triggerFlyAnimation();
     handleSetUnit(currentUnit + 1);
   };
 
   const handlePresetClick = (preset: number) => {
-    if (preset > currentUnit) {
-      triggerFlyAnimation();
-    }
     handleSetUnit(preset);
   };
 
@@ -673,9 +640,10 @@ export function ProductCard({
                         <div className="relative w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
                           <Image
                             src={imgSrc}
+                            loader={isImageKitUrl(imgSrc) ? imageKitLoader : undefined}
                             alt={`${displayName} - ${imgIdx + 1}`}
                             fill
-                            priority={priority && imgIdx === 0}
+                            preload={preload && imgIdx === 0}
                             className="object-cover"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                           />
@@ -722,9 +690,10 @@ export function ProductCard({
               <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 bg-stone-100 dark:bg-stone-800 shadow-sm">
                 <Image
                   src={product.image}
+                  loader={isImageKitUrl(product.image) ? imageKitLoader : undefined}
                   alt={displayName}
                   fill
-                  priority={priority}
+                  preload={preload}
                   className="object-cover"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 512px"
                 />
@@ -998,7 +967,7 @@ export function ProductCard({
 
                     {/* Middle: Large Quantity Display & Instruction Text */}
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-1 min-w-0">
-                      <div ref={bagRef} className="relative flex items-center justify-center">
+                      <div className="relative flex items-center justify-center">
                         {/* Large Quantity Box with SlidingNumber */}
                         <div
                           className={`px-4 sm:px-5 py-0.5 rounded-lg border transition-colors flex items-center justify-center min-w-[54px] sm:min-w-[64px] ${
@@ -1018,7 +987,6 @@ export function ProductCard({
 
                     {/* Right: Plus Button */}
                     <button
-                      ref={plusRef}
                       data-tour={index === 0 ? "product-plus-btn" : undefined}
                       type="button"
                       onClick={handleAddQuantityWithAnimation}

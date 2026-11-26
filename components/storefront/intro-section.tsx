@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT } from "@/lib/storefront-i18n";
 import { RollingNumber } from "@/components/storefront/rolling-number";
-import { buildImageKitUrl } from "@/lib/imagekit/url";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import { ViewProductsButton } from "./view-products-button";
 
 interface IntroSectionProps {
@@ -21,6 +21,7 @@ interface IntroSectionProps {
   storeName?: string;
   storeSubtitle?: string;
   logoUrl?: string;
+  preloadLogo?: boolean;
   isActive?: boolean;
   isStandaloneSection?: boolean;
   onScrollToProducts?: () => void;
@@ -33,6 +34,7 @@ export function IntroSection({
   storeName,
   storeSubtitle,
   logoUrl,
+  preloadLogo,
   isActive = true,
   isStandaloneSection = true,
   onScrollToProducts,
@@ -42,10 +44,7 @@ export function IntroSection({
   const t = STOREFRONT_TEXT[lang];
   const displayName = storeName || t.introHeroTitle;
   const displaySubtitle = storeSubtitle || t.introHeroSubtitle;
-
-  const optimizedLogoUrl = logoUrl
-    ? buildImageKitUrl(logoUrl, { width: 256, height: 256, quality: 85, format: "auto" })
-    : "";
+  const shouldPreloadLogo = preloadLogo ?? isStandaloneSection;
 
   const handleScrollToProducts = () => {
     if (onScrollToProducts) {
@@ -121,15 +120,16 @@ export function IntroSection({
       {/* Brand Header */}
       <div className="text-center px-2">
         {/* Logo centered above brand name */}
-        {optimizedLogoUrl && (
+        {logoUrl && (
           <div className="flex justify-center -mb-2 sm:-mb-3 md:-mb-4">
             <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 shrink-0 flex items-center justify-center">
               <Image
-                src={optimizedLogoUrl}
+                src={logoUrl}
+                loader={isImageKitUrl(logoUrl) ? imageKitLoader : undefined}
                 alt={displayName}
                 width={128}
                 height={128}
-                loading="lazy"
+                {...(shouldPreloadLogo ? { preload: true } : { loading: "eager" })}
                 decoding="async"
                 className="w-full h-full object-contain"
               />

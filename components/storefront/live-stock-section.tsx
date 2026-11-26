@@ -28,6 +28,29 @@ export function LiveStockSection({
 }: LiveStockSectionProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { amount: 0.15, once: true });
+  const [shouldFetchLiveStock, setShouldFetchLiveStock] = useState(false);
+
+  useEffect(() => {
+    if (shouldFetchLiveStock) return;
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setShouldFetchLiveStock(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldFetchLiveStock(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shouldFetchLiveStock]);
 
   const {
     todayStockKg,
@@ -41,7 +64,7 @@ export function LiveStockSection({
     isRefetching,
     lastUpdatedAt,
     refresh,
-  } = useLiveStock(50);
+  } = useLiveStock(50, { enabled: shouldFetchLiveStock });
 
   const isBn = lang === "bn";
 

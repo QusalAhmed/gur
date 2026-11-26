@@ -6,7 +6,6 @@ import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { StoreProvider } from "@/components/providers/store-provider";
 import { Toaster } from "sonner";
-import { BrandFavicon } from "@/components/brand-favicon";
 import { FacebookPixelTracker } from "@/components/providers/facebook-pixel-tracker";
 import { InAppBrowserPrompt } from "@/components/in-app-browser-prompt";
 import { FB_PIXEL_ID } from "@/lib/facebook-pixel";
@@ -24,7 +23,7 @@ const roboto = Roboto({
 const anekBangla = Anek_Bangla({
   variable: "--font-anek-bangla",
   subsets: ["bengali"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -50,6 +49,14 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: seo.defaultDescription,
     ...(seo.keywords.length > 0 ? { keywords: seo.keywords } : {}),
+    ...(seo.faviconUrl
+      ? {
+          icons: {
+            icon: seo.faviconUrl,
+            shortcut: seo.faviconUrl,
+          },
+        }
+      : {}),
     robots: {
       index: seo.allowIndexing,
       follow: seo.allowIndexing,
@@ -98,7 +105,7 @@ export default function RootLayout({
         {safeFbPixelId && (
           <Script
             id="fb-pixel"
-            strategy="beforeInteractive"
+            strategy="afterInteractive"
             dangerouslySetInnerHTML={{
               __html: `
                 !function(f,b,e,v,n,t,s)
@@ -129,7 +136,6 @@ export default function RootLayout({
         )}
         <StoreProvider>
           <QueryProvider>
-            <BrandFavicon />
             <FacebookPixelTracker />
             {children}
             <InAppBrowserPrompt />

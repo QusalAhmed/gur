@@ -24,6 +24,7 @@ import {
 } from "@/lib/supabase/api";
 import { sanitizeCourierName } from "@/lib/validations/order";
 import { resolveCdnImageUrl } from "@/lib/imagekit/url";
+import { getCachedSeoSettings } from "@/lib/seo-settings";
 import {
   validateOrderStatusTransition,
   parseDatabaseError,
@@ -209,18 +210,88 @@ async function enrichOrderItemsWithImages(client: any, orderData: any) {
   ) {
     return;
   }
-  const prodIds = orderData.order_items
-    .map((it: any) => it.product_id)
-    .filter((id: any) => Boolean(id));
-
-  if (prodIds.length === 0) return;
 
   try {
+    // 1. Backfill missing product_id via variant_id when available
+    const missingProdVariantIds = Array.from(
+      new Set(
+        orderData.order_items
+          .filter((it: any) => !it.product_id && it.variant_id)
+          .map((it: any) => String(it.variant_id))
+      )
+    );
+
+    if (missingProdVariantIds.length > 0) {
+      const { data: varRows } = await client
+        .from("product_variants")
+        .select("id, product_id")
+        .in("id", missingProdVariantIds);
+
+      if (varRows && varRows.length > 0) {
+        const varToProd = new Map<string, string>();
+        for (const v of varRows) {
+          if (v.id && v.product_id) {
+            varToProd.set(String(v.id), String(v.product_id));
+          }
+        }
+        for (const it of orderData.order_items) {
+          if (!it.product_id && it.variant_id) {
+            const matchedProd = varToProd.get(String(it.variant_id));
+            if (matchedProd) {
+              it.product_id = matchedProd;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Backfill missing product_id via product_name matching for legacy/manual orders
+    const itemsWithoutProdId = orderData.order_items.filter(
+      (it: any) => !it.product_id && it.product_name
+    );
+
+    if (itemsWithoutProdId.length > 0) {
+      const { data: catalogProds } = await client
+        .from("products")
+        .select("id, name, name_bn");
+
+      if (catalogProds && catalogProds.length > 0) {
+        for (const it of itemsWithoutProdId) {
+          const cleanName = String(it.product_name || "").trim().toLowerCase();
+          if (!cleanName) continue;
+          const match = catalogProds.find((p: any) => {
+            const pName = String(p.name || "").trim().toLowerCase();
+            const pNameBn = String(p.name_bn || "").trim().toLowerCase();
+            return (
+              pName === cleanName ||
+              pNameBn === cleanName ||
+              (pName && cleanName.includes(pName)) ||
+              (pNameBn && cleanName.includes(pNameBn))
+            );
+          });
+          if (match?.id) {
+            it.product_id = match.id;
+          }
+        }
+      }
+    }
+
+    const prodIds = Array.from(
+      new Set(
+        orderData.order_items
+          .map((it: any) => it.product_id)
+          .filter((id: any) => Boolean(id))
+      )
+    );
+
+    if (prodIds.length === 0) return;
+
     const { data: imgRows } = await client
       .from("product_images")
-      .select("product_id, storage_path, is_primary")
+      .select("product_id, storage_path, is_primary, sort_order")
       .in("product_id", prodIds)
-      .order("is_primary", { ascending: false });
+      .order("is_primary", { ascending: false })
+      .order("sort_order", { ascending: true });
 
     if (imgRows && imgRows.length > 0) {
       const imgMap = new Map<string, string>();
@@ -816,9 +887,12 @@ export async function getPublicOrderAction(
   await enrichOrderItemsWithCombos(client, [data]);
   await enrichOrderItemsWithImages(client, data);
 
+  const seo = await getCachedSeoSettings().catch(() => null);
   const formatted = formatDbOrderRecord(data);
   return {
     ...formatted,
+    brand_name: seo?.storeName || undefined,
+    brand_logo_url: seo?.logoUrl || undefined,
     notes: [],
     attribution: undefined,
     cancel_reason: undefined,

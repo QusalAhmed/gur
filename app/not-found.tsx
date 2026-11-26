@@ -34,7 +34,7 @@ export default async function NotFound() {
                 src="/images/404-canva.png"
                 alt="404 - পৃষ্ঠাটি পাওয়া যায়নি (Page Not Found)"
                 fill
-                priority
+                preload
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 512px, 640px"
                 className="object-cover transition-transform duration-500 group-hover:scale-102"
               />

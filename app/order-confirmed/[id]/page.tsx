@@ -30,7 +30,7 @@ import {
 import { formatStorePrice, toBnNumber, formatStoreItemUnit } from "@/lib/storefront-i18n";
 import { markReturningCustomer } from "@/lib/storefront-intro";
 import { useOrder } from "@/hooks/use-order";
-import { useStorefrontProducts } from "@/hooks/use-storefront-products";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import type { OrderItem } from "@/types/order";
 import { getClientFbpAndFbc, trackPurchase } from "@/lib/facebook-pixel";
 import { enrichOrderMetaTrackingAction } from "@/actions/facebook-capi";
@@ -287,41 +287,14 @@ function OrderConfirmedContent() {
     }
   };
 
-  // Fetch real products from server for authentic real product pictures
-  const { data: storefrontData } = useStorefrontProducts();
-  const catalogProducts = storefrontData?.products ?? [];
-  const brandName = storefrontData?.storeName || "Gramayon";
-  const brandLogoUrl = storefrontData?.logoUrl || "/admin-icon/icon-192.png";
+  // Resolve store branding and item images directly from the server order query
+  const brandName = order?.brand_name || "Gramayon";
+  const brandLogoUrl = order?.brand_logo_url || "/admin-icon/icon-192.png";
 
   const resolveRealProductImage = (item: OrderItem): string => {
-    // 1. Direct image returned from order item on server
     if (item.image && typeof item.image === "string" && item.image.trim()) {
       return item.image;
     }
-
-    // 2. Look up product in server catalog by product_id
-    if (item.product_id && catalogProducts.length > 0) {
-      const match = catalogProducts.find((p) => p.id === item.product_id);
-      if (match?.image) return match.image;
-    }
-
-    // 3. Look up product in server catalog by product_name / product_name_bn
-    if (item.product_name && catalogProducts.length > 0) {
-      const cleanItemName = item.product_name.trim().toLowerCase();
-      const match = catalogProducts.find((p) => {
-        const pName = p.name.toLowerCase();
-        const pNameBn = p.nameBn?.toLowerCase() || "";
-        return (
-          pName === cleanItemName ||
-          pNameBn === cleanItemName ||
-          cleanItemName.includes(pName) ||
-          (pNameBn && cleanItemName.includes(pNameBn))
-        );
-      });
-      if (match?.image) return match.image;
-    }
-
-    // 4. Default fallback image
     return getItemImage(item.product_name, item.variant_name);
   };
   
@@ -700,6 +673,7 @@ function OrderConfirmedContent() {
                                   <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
                                     <Image
                                       src={itemImg}
+                                      loader={isImageKitUrl(itemImg) ? imageKitLoader : undefined}
                                       alt={item.product_name || "খেজুরের গুড়"}
                                       fill
                                       className="object-cover"

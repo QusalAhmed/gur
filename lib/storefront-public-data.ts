@@ -1,4 +1,7 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+const tracer = trace.getTracer("gramayon");
 
 export interface PublicLiveStockStatsResult {
   dailyProductionKg: number | null;
@@ -105,7 +108,9 @@ export async function fetchPublicSiteSettings(
 export async function fetchPublicLiveStockStats(
   options?: { throwOnError?: boolean }
 ): Promise<PublicLiveStockStatsResult> {
-  const fetchedAt = Date.now();
+  return tracer.startActiveSpan("storefront.getLiveStock", async (span) => {
+    try {
+      const fetchedAt = Date.now();
   const client = getSupabaseAdmin();
   const [settingsRes, ordersRes] = await Promise.all([
     client
@@ -179,12 +184,24 @@ export async function fetchPublicLiveStockStats(
     }
   }
 
-  return {
-    dailyProductionKg,
-    simulatedDemandEnabled,
-    simulatedDemandKg,
-    totalActiveOrdersKg: Math.round(totalWeight * 10) / 10,
-    activeOrderCount,
-    fetchedAt,
-  };
+      span.setAttribute("stock.active_order_count", activeOrderCount);
+      return {
+        dailyProductionKg,
+        simulatedDemandEnabled,
+        simulatedDemandKg,
+        totalActiveOrdersKg: Math.round(totalWeight * 10) / 10,
+        activeOrderCount,
+        fetchedAt,
+      };
+    } catch (error) {
+      if (error instanceof Error) span.recordException(error);
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }

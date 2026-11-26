@@ -219,7 +219,10 @@ export function useStorefrontIntro({
 
       if (resolvedSteps.length === 0 || cancelled) return;
 
-      const { default: introJs } = await import("intro.js");
+      const [{ default: introJs }] = await Promise.all([
+        import("intro.js"),
+        import("intro.js/introjs.css"),
+      ]);
       if (cancelled) return;
       if (productInteractedRef.current || !shouldShowProductIntro()) return;
 

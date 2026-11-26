@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import { motion } from "motion/react";
 import { ShoppingBag, Truck, ShieldCheck, CheckCircle2, Package } from "lucide-react";
 import type { ParcelTrackingData } from "@/types/tracking";
@@ -90,6 +91,7 @@ export function OrderCartDetailsCard({
                         <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-amber-100 dark:bg-stone-800 shrink-0 border border-amber-300/80 dark:border-stone-700 shadow-xs">
                           <Image
                             src={item.image || "/images/products/date-palm-patali.jpg"}
+                            loader={isImageKitUrl(item.image) ? imageKitLoader : undefined}
                             alt={item.productName}
                             fill
                             className="object-cover"

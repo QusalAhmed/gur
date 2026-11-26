@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck } from "lucide-react";
 import { StorefrontLang, STOREFRONT_TEXT, formatStorePrice, formatStoreItemUnit } from "@/lib/storefront-i18n";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -172,6 +173,7 @@ export function CartSheet({ lang, onProceedToCheckout, deliveryConfig }: CartShe
                         <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-amber-100/60 dark:bg-stone-800 border border-amber-200 dark:border-stone-700 shrink-0 shadow-sm">
                           <Image
                             src={item.image}
+                            loader={isImageKitUrl(item.image) ? imageKitLoader : undefined}
                             alt={itemTitle}
                             fill
                             className="object-cover"

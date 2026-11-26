@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertStaffRole } from "@/lib/admin-guard";
 import { invalidateDeliveryConfigCache } from "@/lib/delivery-charge";
 import { fetchPublicSiteSettings, isSecretSettingKey } from "@/lib/storefront-public-data";
+import { normalizeMessengerUrl } from "@/lib/messenger";
+import { normalizeImoUrl } from "@/lib/imo";
 
 export interface SiteSettingsMap {
   // Store Profile
@@ -13,6 +15,8 @@ export interface SiteSettingsMap {
   "store.subtitle"?: string;
   "store.currency"?: string;
   "store.support_phone"?: string;
+  "store.messenger_url"?: string;
+  "store.imo_url"?: string;
   "store.whatsapp"?: string;
   "store.email"?: string;
   "store.address"?: string;
@@ -125,6 +129,8 @@ const PUBLIC_SETTING_KEYS = new Set([
   "store.subtitle",
   "store.currency",
   "store.support_phone",
+  "store.messenger_url",
+  "store.imo_url",
   "store.whatsapp",
   "store.email",
   "store.address",
@@ -284,10 +290,37 @@ export async function updateSiteSettingsAction(
       return { success: true, message: "No changes to save" };
     }
 
+    const sanitizedEntries: Array<[string, any]> = [];
+    for (const [key, value] of entries) {
+      if (key === "store.messenger_url" && value !== undefined) {
+        const { normalized, isValid } = normalizeMessengerUrl(value);
+        if (!isValid) {
+          return {
+            success: false,
+            error:
+              "Invalid Messenger URL. Enter a valid m.me/..., https://... link, or Facebook Page ID (or leave blank to hide).",
+          };
+        }
+        sanitizedEntries.push([key, normalized]);
+      } else if (key === "store.imo_url" && value !== undefined) {
+        const { normalized, isValid } = normalizeImoUrl(value);
+        if (!isValid) {
+          return {
+            success: false,
+            error:
+              "Invalid IMO URL. Enter a valid https://... link (or leave blank to hide).",
+          };
+        }
+        sanitizedEntries.push([key, normalized]);
+      } else {
+        sanitizedEntries.push([key, value]);
+      }
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
     const now = new Date().toISOString();
 
-    const updates = entries
+    const updates = sanitizedEntries
       .filter(([key, value]) => {
         if (isSecretSettingKey(key) && isMaskedSecretPlaceholder(value)) {
           return false;
@@ -334,7 +367,7 @@ export async function updateSiteSettingsAction(
     revalidatePath("/sitemap.xml");
 
     // If simulated demand settings were updated, notify Inngest to dynamically adapt immediately
-    const hasSimulatedDemandChange = entries.some(([key]) =>
+    const hasSimulatedDemandChange = sanitizedEntries.some(([key]) =>
       key.startsWith("inventory.simulated_demand")
     );
     if (hasSimulatedDemandChange) {

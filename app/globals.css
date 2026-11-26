@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "intro.js/introjs.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -53,10 +52,8 @@
 }
 
 :root {
-  --font-roboto: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-geist-sans: var(--font-roboto);
   --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --font-anek-bangla: "Anek Bangla", "Noto Sans Bengali", sans-serif;
   --font-bangla: var(--font-anek-bangla), "Anek Bangla", "Noto Sans Bengali", sans-serif;
   --font-english: var(--font-roboto);
   --background: oklch(1 0 0);

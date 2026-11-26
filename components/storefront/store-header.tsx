@@ -12,7 +12,7 @@ import {
 import { CartSheet } from "./cart-sheet";
 import { trackContact } from "@/lib/facebook-pixel";
 
-import { buildImageKitUrl } from "@/lib/imagekit/url";
+import { imageKitLoader, isImageKitUrl } from "@/lib/imagekit/loader";
 
 interface StoreHeaderProps {
   storeName?: string;
@@ -58,14 +58,12 @@ export function StoreHeader({
           >
             <div className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center overflow-hidden shadow-xs shrink-0">
               <Image
-                src={
-                  logoUrl
-                    ? buildImageKitUrl(logoUrl, { width: 80, height: 80, quality: 80, format: "auto" })
-                    : "/admin-icon/icon-192.png"
-                }
+                src={logoUrl || "/admin-icon/icon-192.png"}
+                loader={logoUrl && isImageKitUrl(logoUrl) ? imageKitLoader : undefined}
                 alt={storeName}
                 width={32}
                 height={32}
+                loading="eager"
                 className="w-full h-full object-contain p-0.5"
               />
             </div>
