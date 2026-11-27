@@ -3383,20 +3383,29 @@ export async function getCatalogProductsAction(): Promise<CatalogProduct[]> {
   const client = getSupabaseAdmin();
 
   try {
-    const [prodRes, varRes, catRes, imgRes] = await Promise.all([
+    const [prodRes, varRes, catRes, imgRes, invRes, comboRes] = await Promise.all([
       client
         .from("products")
-        .select("id, name, slug, category_id")
+        .select("id, name, name_bn, slug, category_id, sort_order")
         .order("sort_order", { ascending: true }),
       client
         .from("product_variants")
-        .select("id, product_id, sku, name, price, stock_status, pack_type")
-        .eq("is_active", true),
+        .select(
+          "id, product_id, sku, name, name_bn, price, stock_status, pack_type, weight_grams, is_combo, sort_order, low_stock_threshold"
+        )
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
       client.from("categories").select("id, name"),
       client
         .from("product_images")
         .select("id, product_id, storage_path, is_primary, sort_order")
         .order("sort_order", { ascending: true }),
+      client
+        .from("inventory_levels")
+        .select("variant_id, on_hand, reserved, available"),
+      client
+        .from("combo_items")
+        .select("combo_variant_id, component_variant_id, quantity"),
     ]);
 
     if (varRes.error || !varRes.data || varRes.data.length === 0) {
@@ -3425,23 +3434,112 @@ export async function getCatalogProductsAction(): Promise<CatalogProduct[]> {
       }
     }
 
-    return varRes.data.map((v: any) => {
+    const inventoryMap = new Map<string, number>();
+    if (!invRes.error && Array.isArray(invRes.data)) {
+      for (const inv of invRes.data) {
+        if (!inv?.variant_id) continue;
+        const avail = Number(
+          inv.available ?? Number(inv.on_hand || 0) - Number(inv.reserved || 0)
+        );
+        if (Number.isFinite(avail)) {
+          inventoryMap.set(
+            inv.variant_id,
+            (inventoryMap.get(inv.variant_id) ?? 0) + avail
+          );
+        }
+      }
+    }
+
+    const comboComponentsMap = new Map<
+      string,
+      Array<{ component_variant_id: string; quantity: number }>
+    >();
+    if (!comboRes.error && Array.isArray(comboRes.data)) {
+      for (const row of comboRes.data) {
+        if (!row?.combo_variant_id || !row?.component_variant_id) continue;
+        const list = comboComponentsMap.get(row.combo_variant_id) ?? [];
+        list.push({
+          component_variant_id: row.component_variant_id,
+          quantity: Math.max(1, Number(row.quantity) || 1),
+        });
+        comboComponentsMap.set(row.combo_variant_id, list);
+      }
+    }
+
+    const sortedVariants = [...varRes.data].sort((a: any, b: any) => {
+      const prodOrderA = productMap.get(a.product_id)?.sort_order ?? 9999;
+      const prodOrderB = productMap.get(b.product_id)?.sort_order ?? 9999;
+      if (prodOrderA !== prodOrderB) return prodOrderA - prodOrderB;
+      return (a.sort_order ?? 9999) - (b.sort_order ?? 9999);
+    });
+
+    return sortedVariants.map((v: any) => {
       const prod = productMap.get(v.product_id);
       const catName = prod?.category_id
         ? categoryMap.get(prod.category_id) || "Molasses"
         : "Pure Molasses";
+
+      let availableQty: number | null = null;
+      const comboComps = comboComponentsMap.get(v.id);
+      if (Boolean(v.is_combo) && comboComps && comboComps.length > 0) {
+        const hasAnyTrackedComponent = comboComps.some((c) =>
+          inventoryMap.has(c.component_variant_id)
+        );
+        if (hasAnyTrackedComponent) {
+          availableQty = Math.min(
+            ...comboComps.map((c) =>
+              Math.floor(
+                Math.max(0, inventoryMap.get(c.component_variant_id) ?? 0) /
+                  c.quantity
+              )
+            )
+          );
+        }
+      } else if (inventoryMap.has(v.id)) {
+        availableQty = Math.max(0, Math.floor(inventoryMap.get(v.id)!));
+      }
+
+      const rawStatus = String(v.stock_status || "in_stock").toLowerCase();
+      const threshold = Math.max(1, Number(v.low_stock_threshold) || 5);
+      let effectiveStatus = rawStatus;
+      if (availableQty !== null && rawStatus !== "backorder") {
+        if (availableQty <= 0) {
+          effectiveStatus = "out_of_stock";
+        } else if (availableQty <= threshold || rawStatus === "low_stock") {
+          effectiveStatus = "low_stock";
+        } else {
+          effectiveStatus = "in_stock";
+        }
+      }
+
+      const stockDisplay =
+        effectiveStatus === "out_of_stock"
+          ? "Out of Stock"
+          : effectiveStatus === "backorder"
+            ? "Backorder"
+            : effectiveStatus === "low_stock"
+              ? availableQty !== null
+                ? `Low Stock (${availableQty})`
+                : "Low Stock"
+              : availableQty !== null
+                ? `${availableQty} in stock`
+                : "In Stock";
+
       return {
         variant_id: v.id,
         product_id: v.product_id,
         sku: v.sku,
         product_name: prod ? prod.name : "Pure Cane Molasses",
+        product_name_bn: prod?.name_bn ?? null,
         variant_name: v.name,
+        variant_name_bn: v.name_bn ?? null,
         category: catName,
         unit_price: Number(v.price) || 0,
-        stock:
-          v.stock_status === "in_stock"
-            ? "In Stock"
-            : String(v.stock_status || "").replace("_", " "),
+        stock: stockDisplay,
+        stock_status: effectiveStatus,
+        available_qty: availableQty,
+        weight_grams: typeof v.weight_grams === "number" ? v.weight_grams : null,
+        is_combo: Boolean(v.is_combo),
         image:
           imageMap.get(v.product_id) || "/images/products/raw-sugarcane-drum.jpg",
         pack_type: v.pack_type || "jar",

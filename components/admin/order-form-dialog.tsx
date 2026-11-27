@@ -13,8 +13,6 @@ import {
   RefreshCw,
   PackageCheck,
   PackagePlus,
-  CheckSquare,
-  Square,
   Check,
   Database,
   CreditCard,
@@ -53,6 +51,7 @@ import {
 } from "@/actions/orders";
 import { DistrictCombobox } from "@/components/admin/district-combobox";
 import { SteadfastDeliveryRecordBadge } from "@/components/admin/steadfast-delivery-record-badge";
+import { ProductPickerModal } from "@/components/admin/orders/product-picker-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -366,11 +365,6 @@ export function OrderFormDialog({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   // Product Selection Modal state (internal to this dialog)
   const [isProductModalOpen, setIsProductModalOpen] = React.useState(false);
-  const [selectedModalProducts, setSelectedModalProducts] = React.useState<
-    Record<string, { quantity: number; unit_price: number }>
-  >({});
-  const [productSearchQuery, setProductSearchQuery] = React.useState("");
-  const [packageTypeFilter, setPackageTypeFilter] = React.useState<string>("all");
   const pendingNoteRef = React.useRef<{ text: string; type: OrderNoteType }>({
     text: "",
     type: "internal",
@@ -1167,79 +1161,6 @@ export function OrderFormDialog({
     [form, geoDivisions, geoDistricts, showToast]
   );
 
-  // Group available catalog products by parent product
-  const groupedCatalogProducts = React.useMemo(() => {
-    const groups: {
-      product_id: string;
-      product_name: string;
-      category: string;
-      image: string;
-      variants: CatalogProduct[];
-    }[] = [];
-    const groupMap = new Map<string, (typeof groups)[number]>();
-
-    availableCatalogProducts.forEach((p) => {
-      const key = p.product_id || p.product_name;
-      let group = groupMap.get(key);
-      if (!group) {
-        group = {
-          product_id: key,
-          product_name: p.product_name,
-          category: p.category,
-          image: p.image,
-          variants: [],
-        };
-        groupMap.set(key, group);
-        groups.push(group);
-      }
-      group.variants.push(p);
-    });
-
-    return groups;
-  }, [availableCatalogProducts]);
-
-  // Smart-filtered grouped catalog products for product selection modal
-  const filteredGroupedProducts = React.useMemo(() => {
-    const q = productSearchQuery.toLowerCase().trim();
-    const pkg = packageTypeFilter.toLowerCase();
-
-    const results: typeof groupedCatalogProducts = [];
-
-    groupedCatalogProducts.forEach((group) => {
-      const productNameMatch = q ? group.product_name.toLowerCase().includes(q) : false;
-      const categoryMatch = q ? group.category.toLowerCase().includes(q) : false;
-
-      const matchingVariants = group.variants.filter((v) => {
-        if (pkg !== "all") {
-          const vPkg = detectItemPackageType(v.variant_name, v.pack_type).toLowerCase();
-          if (vPkg !== pkg) return false;
-        }
-
-        if (!q) return true;
-        if (productNameMatch || categoryMatch) return true;
-
-        return (
-          v.variant_name.toLowerCase().includes(q) ||
-          v.sku.toLowerCase().includes(q)
-        );
-      });
-
-      if (matchingVariants.length > 0) {
-        results.push({
-          ...group,
-          variants: matchingVariants,
-        });
-      }
-    });
-
-    return results;
-  }, [groupedCatalogProducts, productSearchQuery, packageTypeFilter]);
-
-  // Flat list of currently visible/filtered variants for bulk selection
-  const filteredCatalogProducts = React.useMemo(() => {
-    return filteredGroupedProducts.flatMap((g) => g.variants);
-  }, [filteredGroupedProducts]);
-
   // Memoized shallow selectors to prevent unnecessary re-rendering across the form tree
   const partialPaymentSelector = React.useMemo(
     () =>
@@ -1281,139 +1202,26 @@ export function OrderFormDialog({
 
   // Open Product Selection Modal
   const handleOpenProductModal = () => {
-    setSelectedModalProducts({});
-    setProductSearchQuery("");
-    setPackageTypeFilter("all");
     setIsProductModalOpen(true);
   };
 
-  // Toggle selection button in modal
-  const handleToggleProductSelection = (sku: string) => {
-    const prod = availableCatalogProducts.find((p) => p.sku === sku);
-    if (!prod) return;
-
-    setSelectedModalProducts((prev) => {
-      const next = { ...prev };
-      if (next[sku] && next[sku].quantity > 0) {
-        delete next[sku];
-      } else {
-        next[sku] = {
-          quantity: 1,
-          unit_price: prod.unit_price,
-        };
-      }
-      return next;
-    });
-  };
-
-  // Set quantity in product selection modal
-  const handleSetModalProductQty = (sku: string, newQty: number) => {
-    const prod = availableCatalogProducts.find((p) => p.sku === sku);
-    if (!prod) return;
-
-    setSelectedModalProducts((prev) => {
-      const next = { ...prev };
-      const safeQty = Math.max(0, Math.floor(newQty));
-      if (safeQty === 0) {
-        delete next[sku];
-      } else {
-        const existingPrice = prev[sku]?.unit_price ?? prod.unit_price;
-        next[sku] = {
-          quantity: safeQty,
-          unit_price: existingPrice,
-        };
-      }
-      return next;
-    });
-  };
-
-  // Update unit price in modal (auto-selects with quantity 1 if currently unselected)
-  const handleUpdateModalProductPrice = (sku: string, newPrice: number) => {
-    const price = Math.max(0, newPrice);
-    setSelectedModalProducts((prev) => {
-      const existing = prev[sku];
-      return {
-        ...prev,
-        [sku]: {
-          quantity: existing && existing.quantity > 0 ? existing.quantity : 1,
-          unit_price: price,
-        },
-      };
-    });
-  };
-
-  // Select all filtered products in modal
-  const handleSelectAllFiltered = () => {
-    const next = { ...selectedModalProducts };
-    filteredCatalogProducts.forEach((prod) => {
-      if (!next[prod.sku] || next[prod.sku].quantity <= 0) {
-        next[prod.sku] = { quantity: 1, unit_price: prod.unit_price };
-      }
-    });
-    setSelectedModalProducts(next);
-  };
-
-  // Clear modal selections
-  const handleClearSelection = () => {
-    setSelectedModalProducts({});
-  };
-
-  // Batch confirm adding selected products to order form
-  const handleConfirmAddProducts = () => {
-    const entries = Object.entries(selectedModalProducts);
-    if (entries.length === 0) {
-      if (showToast) {
-        showToast("Please select at least one product.", "destructive");
-      }
-      return;
-    }
-
-    const itemsToAdd: OrderItem[] = entries.map(([sku, config]) => {
-      const prod = availableCatalogProducts.find((p) => p.sku === sku)!;
-      const quantity = Math.max(1, config.quantity);
-      const unit_price = Math.max(0, config.unit_price);
-      return {
-        id: `item-${Date.now()}-${sku}-${Math.random().toString(36).substring(2, 6)}`,
-        sku: prod.sku,
-        product_name: prod.product_name,
-        variant_name: prod.variant_name,
-        package_type: detectItemPackageType(prod.variant_name, prod.pack_type),
-        quantity,
-        unit_price,
-        line_total: quantity * unit_price,
-        variant_id: prod.variant_id,
-        product_id: prod.product_id,
-      };
-    });
-
-    const currentItems = form.getFieldValue("items") || [];
-    const merged = [...currentItems];
-    itemsToAdd.forEach((newItem) => {
-      const existingIdx = merged.findIndex(
-        (it) => it.sku === newItem.sku && it.unit_price === newItem.unit_price
-      );
-      if (existingIdx >= 0) {
-        const q = merged[existingIdx].quantity + newItem.quantity;
-        merged[existingIdx] = {
-          ...merged[existingIdx],
-          quantity: q,
-          line_total: q * merged[existingIdx].unit_price,
-        };
-      } else {
-        merged.push(newItem);
-      }
-    });
-
-    form.setFieldValue("items", merged);
+  // Apply synced cart items from ProductPickerModal back into order form
+  const handleApplyModalProducts = (updatedItems: OrderItem[]) => {
+    const prevCount = (form.getFieldValue("items") || []).length;
+    form.setFieldValue("items", updatedItems);
     try {
       form.validateField("items", "change");
     } catch {
       // Ignore
     }
     if (showToast) {
-      showToast(`Added ${itemsToAdd.length} product(s) to order`, "success");
+      showToast(
+        prevCount > 0 || updatedItems.length === 0
+          ? `Order items updated (${updatedItems.length})`
+          : `Added ${updatedItems.length} product(s) to order`,
+        "success"
+      );
     }
-    setIsProductModalOpen(false);
   };
 
   // Line item helpers
@@ -3861,366 +3669,18 @@ export function OrderFormDialog({
         </DialogContent>
       </Dialog>
 
-      {/* PRODUCT SELECTION MODAL (SHARED FOR CATALOG BROWSING) */}
-      <Dialog open={isProductModalOpen} onOpenChange={setIsProductModalOpen}>
-        <DialogContent
-          id="dialog-content-product-selection"
-          overlayClassName="z-[55]"
-          className="z-[60] w-screen h-[100dvh] max-w-none max-h-none rounded-none md:rounded-xl md:w-[70vw] md:max-w-[70vw] md:h-[95vh] md:max-h-[95vh] lg:w-[80vw] lg:max-w-[80vw] lg:h-[95vh] lg:max-h-[95vh] overflow-hidden flex flex-col p-3 sm:p-4 md:p-6"
-        >
-          {(() => {
-            const selectedEntries = Object.entries(selectedModalProducts).filter(
-              ([, cfg]) => cfg.quantity > 0
-            );
-            const selectedCount = selectedEntries.length;
-            const totalUnits = selectedEntries.reduce((sum, [, cfg]) => sum + cfg.quantity, 0);
-            const combinedTotal = selectedEntries.reduce(
-              (sum, [, cfg]) => sum + cfg.quantity * cfg.unit_price,
-              0
-            );
-
-            return (
-              <>
-                <DialogHeader className="border-b pb-3 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <DialogTitle className="flex items-center gap-2 text-lg">
-                      <PackageCheck className="h-5 w-5 text-amber-600" />
-                      Select Products & Quantities
-                    </DialogTitle>
-                    {selectedCount > 0 && (
-                      <Badge className="bg-amber-600 text-white font-mono text-xs">
-                        {selectedCount} selected ({totalUnits} units)
-                      </Badge>
-                    )}
-                  </div>
-                  <DialogDescription>
-                    Browse products, select variations, adjust unit prices and quantities for this order. Setting quantity or price automatically selects the variation.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-3 py-3 flex-1 overflow-hidden flex flex-col min-h-0">
-                  {/* Search and Bulk Selection Controls */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
-                    <div className="relative flex-1 min-w-0">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="product-search-input"
-                        placeholder="Search products by name, variant, category, or SKU..."
-                        value={productSearchQuery}
-                        onChange={(e) => setProductSearchQuery(e.target.value)}
-                        className="pl-8 h-9 text-xs"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Select
-                        value={packageTypeFilter}
-                        onValueChange={(val) => {
-                          if (val) setPackageTypeFilter(val);
-                        }}
-                      >
-                        <SelectTrigger id="modal-package-type-filter" className="h-9 text-xs font-medium w-32 bg-background">
-                          <SelectValue placeholder="All Packaging" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[70]">
-                          <SelectItem value="all">All Packaging</SelectItem>
-                          <SelectItem value="jar">Jar</SelectItem>
-                          <SelectItem value="foil">Foil</SelectItem>
-                          <SelectItem value="bottle">Bottle</SelectItem>
-                          <SelectItem value="box">Box</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        id="btn-modal-select-all"
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSelectAllFiltered}
-                        className="h-9 text-xs cursor-pointer"
-                      >
-                        <CheckSquare className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                        Select All Filtered
-                      </Button>
-                      {selectedCount > 0 && (
-                        <Button
-                          id="btn-modal-clear"
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleClearSelection}
-                          className="h-9 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                        >
-                          Clear All
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Header labels */}
-                  <div className="hidden sm:flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 shrink-0">
-                    <div className="flex-1">Product Details & Stock</div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="w-28 text-right">Price</span>
-                      <span className="w-28 text-center">Quantity</span>
-                      <span className="w-20 text-right">Subtotal</span>
-                    </div>
-                  </div>
-
-                  {/* Grouped Product Cards List */}
-                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0 pb-4">
-                    {filteredGroupedProducts.length === 0 ? (
-                      <div className="p-8 text-center border border-dashed rounded-xl bg-muted/20 space-y-2">
-                        <PackageCheck className="h-8 w-8 text-muted-foreground mx-auto" />
-                        <p className="text-sm font-medium text-foreground">No Products Found</p>
-                        <p className="text-xs text-muted-foreground">
-                          No catalog products match your search query &quot;{productSearchQuery}&quot;.
-                        </p>
-                      </div>
-                    ) : (
-                      filteredGroupedProducts.map((group) => {
-                        const groupSelectedVariants = group.variants.filter(
-                          (v) => (selectedModalProducts[v.sku]?.quantity ?? 0) > 0
-                        );
-                        const groupSelectedCount = groupSelectedVariants.length;
-
-                        return (
-                          <div
-                            key={group.product_id}
-                            className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs transition-all"
-                          >
-                            {/* Parent Product Header: Image BEFORE Product Name, Category & Variant Count */}
-                            <div className="flex items-center justify-between gap-3 p-2.5 sm:p-3 bg-muted/30 border-b border-border/60">
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className="relative w-11 h-11 sm:w-13 sm:h-13 rounded-lg overflow-hidden border bg-background shrink-0 shadow-xs">
-                                  <img
-                                    src={group.image}
-                                    alt={group.product_name}
-                                    className="w-full h-full object-cover object-center"
-                                    onError={(e) => {
-                                      (e.target as HTMLElement).style.display = "none";
-                                    }}
-                                  />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                    <h4 className="font-semibold text-sm sm:text-base text-foreground leading-tight">
-                                      {group.product_name}
-                                    </h4>
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[10px] py-0 px-1.5 h-4.5 font-medium shrink-0"
-                                    >
-                                      {group.category}
-                                    </Badge>
-                                    {groupSelectedCount > 0 && (
-                                      <Badge
-                                        className="bg-amber-600/90 text-white text-[10px] py-0 px-1.5 h-4.5 font-mono shrink-0"
-                                      >
-                                        {groupSelectedCount} {groupSelectedCount === 1 ? "variant" : "variants"} selected
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    {group.variants.length} {group.variants.length === 1 ? "variation" : "variations"}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Variations List Nested Underneath */}
-                            <div className="divide-y divide-border/40">
-                              {group.variants.map((variant) => {
-                                const selectedConfig = selectedModalProducts[variant.sku];
-                                const isSelected = Boolean(selectedConfig && selectedConfig.quantity > 0);
-                                const currentQty = selectedConfig?.quantity ?? 0;
-                                const currentPrice = selectedConfig?.unit_price ?? variant.unit_price;
-                                const lineTotal = currentQty * currentPrice;
-
-                                return (
-                                  <div
-                                    key={variant.sku}
-                                    id={`catalog-product-row-${variant.sku}`}
-                                    className={cn(
-                                      "flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 sm:px-3.5 sm:py-2.5 transition-colors gap-2.5 sm:gap-3",
-                                      isSelected
-                                        ? "bg-amber-500/10 dark:bg-amber-500/15"
-                                        : "hover:bg-muted/30"
-                                    )}
-                                  >
-                                    {/* Left: Checkbox + Variant info */}
-                                    <div className="flex items-center gap-2.5 min-w-0 flex-1 w-full sm:w-auto">
-                                      <Button
-                                        type="button"
-                                        id={`btn-select-product-${variant.sku}`}
-                                        variant={isSelected ? "default" : "outline"}
-                                        size="icon-xs"
-                                        onClick={() => handleToggleProductSelection(variant.sku)}
-                                        className={cn(
-                                          "w-6 h-6 sm:w-7 sm:h-7 rounded-lg shrink-0 transition-all cursor-pointer",
-                                          isSelected
-                                            ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs border-amber-600"
-                                            : "hover:border-amber-500 hover:bg-amber-500/10 text-muted-foreground border-border/80"
-                                        )}
-                                        title={isSelected ? "Deselect variation (sets qty to 0)" : "Select variation (sets qty to 1)"}
-                                      >
-                                        {isSelected ? (
-                                          <Check className="h-3.5 w-3.5 stroke-[3]" />
-                                        ) : (
-                                          <Square className="h-3 w-3 text-muted-foreground/60" />
-                                        )}
-                                      </Button>
-
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                          <span className="font-semibold text-xs sm:text-sm text-foreground">
-                                            {variant.variant_name}
-                                          </span>
-                                          <span className="font-mono text-[11px] text-muted-foreground/80">SKU: {variant.sku}</span>
-                                          <Badge
-                                            variant="outline"
-                                            className="text-[10px] h-4 py-0 px-1.5 font-medium bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                                          >
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                                            {variant.stock}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Right: Unit Price (Always Editable) + Qty Stepper + Line Subtotal */}
-                                    <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-border/40">
-                                      <div className="text-left sm:text-right min-w-[105px]">
-                                        <div className="flex items-center sm:justify-end gap-1">
-                                          <span className="text-[11px] text-muted-foreground">Price:</span>
-                                          <div className="flex items-center gap-0.5">
-                                            <span className="font-mono font-bold text-xs text-amber-700 dark:text-amber-400">৳</span>
-                                            <Input
-                                              id={`input-product-price-${variant.sku}`}
-                                              type="number"
-                                              min="0"
-                                              value={currentPrice}
-                                              onChange={(e) =>
-                                                handleUpdateModalProductPrice(variant.sku, Math.max(0, Number(e.target.value) || 0))
-                                              }
-                                              className="h-7 w-20 text-xs px-1.5 py-0 font-mono font-semibold"
-                                              title="Adjust unit price for this order"
-                                            />
-                                          </div>
-                                        </div>
-                                        {currentPrice !== variant.unit_price && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateModalProductPrice(variant.sku, variant.unit_price)}
-                                            className="text-[10px] text-amber-600 hover:underline block sm:text-right mt-0.5 cursor-pointer"
-                                          >
-                                            Reset (৳ {variant.unit_price.toLocaleString()})
-                                          </button>
-                                        )}
-                                      </div>
-
-                                      {/* Quantity Stepper */}
-                                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 bg-background/80 p-0.5 sm:p-1 rounded-lg border">
-                                        <Button
-                                          type="button"
-                                          id={`btn-qty-minus-${variant.sku}`}
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="h-6.5 w-6.5 sm:h-7 sm:w-7 text-muted-foreground hover:text-foreground cursor-pointer"
-                                          onClick={() => handleSetModalProductQty(variant.sku, currentQty - 1)}
-                                          disabled={currentQty === 0}
-                                          title={currentQty === 1 ? "Reduce to 0 (deselects variant)" : "Decrease quantity"}
-                                        >
-                                          <Minus className="h-3.5 w-3.5" />
-                                        </Button>
-
-                                        <Input
-                                          id={`input-product-qty-${variant.sku}`}
-                                          type="number"
-                                          min="0"
-                                          value={currentQty === 0 ? "0" : currentQty}
-                                          onChange={(e) => {
-                                            const val = Number(e.target.value);
-                                            handleSetModalProductQty(variant.sku, isNaN(val) ? 0 : Math.max(0, val));
-                                          }}
-                                          className={cn(
-                                            "h-6.5 w-11 sm:h-7 sm:w-12 text-center font-bold font-mono text-xs px-1 border-0 focus-visible:ring-1",
-                                            isSelected ? "text-foreground font-black" : "text-muted-foreground"
-                                          )}
-                                        />
-
-                                        <Button
-                                          type="button"
-                                          id={`btn-qty-plus-${variant.sku}`}
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="h-6.5 w-6.5 sm:h-7 sm:w-7 text-muted-foreground hover:text-amber-600 cursor-pointer"
-                                          onClick={() => handleSetModalProductQty(variant.sku, currentQty + 1)}
-                                          title={currentQty === 0 ? "Add 1 (selects variant)" : "Increase quantity"}
-                                        >
-                                          <Plus className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </div>
-
-                                      {/* Subtotal */}
-                                      <div className="w-18 sm:w-20 text-right font-mono font-bold text-xs shrink-0">
-                                        {isSelected ? (
-                                          <span className="text-amber-700 dark:text-amber-400">
-                                            ৳ {lineTotal.toLocaleString()}
-                                          </span>
-                                        ) : (
-                                          <span className="text-muted-foreground/40">—</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                <DialogFooter className="pt-4 pb-2 sm:pb-3 border-t shrink-0 flex flex-row items-center justify-between gap-2">
-                  <div className="text-left text-xs text-muted-foreground">
-                    {selectedCount > 0 ? (
-                      <span>
-                        Total: <strong className="font-mono text-foreground font-bold">৳ {combinedTotal.toLocaleString()}</strong> ({selectedCount} variations, {totalUnits} units)
-                      </span>
-                    ) : (
-                      <span>Select products or set quantity to add</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsProductModalOpen(false)}
-                      className="cursor-pointer"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      id="btn-confirm-add-product"
-                      type="button"
-                      size="sm"
-                      onClick={handleConfirmAddProducts}
-                      disabled={selectedCount === 0}
-                      className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4 mr-1.5" />
-                      Add to Order ({selectedCount})
-                    </Button>
-                  </div>
-                </DialogFooter>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      {/* PRODUCT SELECTION MODAL (2-COLUMN SPLIT POS BROWSER & CART) */}
+      <form.Subscribe selector={(state) => state.values.items}>
+        {(formItems) => (
+          <ProductPickerModal
+            open={isProductModalOpen}
+            onOpenChange={setIsProductModalOpen}
+            catalogProducts={availableCatalogProducts}
+            currentItems={Array.isArray(formItems) ? formItems : []}
+            onApplyItems={handleApplyModalProducts}
+          />
+        )}
+      </form.Subscribe>
     </>
   );
 }

@@ -133,15 +133,23 @@ export interface Order {
   other_orders?: Order[];
 }
 
+export type CatalogStockStatus = "in_stock" | "low_stock" | "out_of_stock" | "backorder";
+
 export interface CatalogProduct {
   variant_id?: string;
   product_id?: string;
   sku: string;
   product_name: string;
+  product_name_bn?: string | null;
   variant_name: string;
+  variant_name_bn?: string | null;
   category: string;
   unit_price: number;
   stock: string;
+  stock_status?: CatalogStockStatus | string;
+  available_qty?: number | null;
+  weight_grams?: number | null;
+  is_combo?: boolean;
   image: string;
   pack_type?: string;
 }
