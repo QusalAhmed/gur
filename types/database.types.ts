@@ -3324,63 +3324,13 @@ export type Database = {
         Args: { p_order_id: string; p_reason?: string }
         Returns: undefined
       }
-      cleanup_old_notifications: { Args: never; Returns: number }
-      get_order_by_token: { Args: { p_token: string }; Returns: Json }
       get_order_courier_print_diff: {
         Args: { p_current: Json; p_printed: Json }
         Returns: Json
       }
-      lot_lookup: {
-        Args: { p_lot_code: string }
-        Returns: {
-          ash_pct: number
-          best_before: string
-          brix: number
-          density_kg_per_l: number
-          lot_code: string
-          moisture_pct: number
-          ph: number
-          produced_on: string
-          product_name: string
-          product_name_bn: string
-          product_slug: string
-          status: Database["public"]["Enums"]["batch_status"]
-          tested_on: string
-          total_sugar_pct: number
-        }[]
-      }
       mark_orders_as_printed: {
         Args: { p_order_numbers: string[] }
         Returns: number
-      }
-      place_order: {
-        Args: {
-          p_attribution?: Json
-          p_billing_address?: Json
-          p_business_id?: string
-          p_channel?: string
-          p_coupon_code?: string
-          p_customer: Json
-          p_customer_note?: string
-          p_for_user?: string
-          p_items: Json
-          p_payment_method?: Database["public"]["Enums"]["payment_method"]
-          p_price_overrides?: Json
-          p_quote_request_id?: string
-          p_shipping_address: Json
-          p_shipping_method_id: string
-        }
-        Returns: Json
-      }
-      preview_cart: {
-        Args: {
-          p_business_id?: string
-          p_coupon_code?: string
-          p_district_id?: number
-          p_items: Json
-          p_shipping_method_id?: string
-        }
-        Returns: Json
       }
       process_storefront_order: {
         Args: {
@@ -3396,46 +3346,6 @@ export type Database = {
           p_order_id?: string
           p_status?: string
         }
-        Returns: Json
-      }
-      search_products: {
-        Args: { p_limit?: number; p_offset?: number; p_query: string }
-        Returns: {
-          category_id: string | null
-          category_name: string | null
-          category_name_bn: string | null
-          category_slug: string | null
-          certifications: string[] | null
-          grade: string | null
-          id: string | null
-          image_path: string | null
-          in_stock: boolean | null
-          is_featured: boolean | null
-          name: string | null
-          name_bn: string | null
-          price_from: number | null
-          published_at: string | null
-          rating_avg: number | null
-          rating_count: number | null
-          slug: string | null
-          sort_order: number | null
-          summary: string | null
-          summary_bn: string | null
-          uses: Database["public"]["Enums"]["product_use"][] | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "product_cards"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      set_order_items: {
-        Args: { p_items: Json; p_order_id: string; p_price_overrides?: Json }
-        Returns: Json
-      }
-      track_order: {
-        Args: { p_order_number: string; p_phone: string }
         Returns: Json
       }
     }

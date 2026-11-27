@@ -9,6 +9,7 @@ import type {
   OrderNote,
   OrderNoteType,
 } from "@/types/order";
+import { resolveEffectiveOrderStatus } from "@/types/order";
 import { formatDateTime } from "@/lib/utils";
 import {
   parseDatabaseError,
@@ -387,7 +388,7 @@ export function formatDbOrderRecord(data: any): Order {
       recipient_name: recipName,
       phone: shipPhone,
     },
-    status: (data.status as any) || "pending",
+    status: resolveEffectiveOrderStatus(data.status, rawEvents),
     payment: (data.payment_status as any) || "unpaid",
     fulfillment: (data.fulfillment_status as any) || "unfulfilled",
     method: (data.payment_method as any) || "cod",
@@ -500,5 +501,6 @@ export function formatDbOrderRecord(data: any): Order {
     isFromDb: true,
     public_token: data.public_token,
     attribution: data.attribution || null,
+    ...(Array.isArray(data.other_orders) ? { other_orders: data.other_orders } : {}),
   };
 }

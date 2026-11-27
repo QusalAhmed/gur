@@ -10,6 +10,7 @@ import {
   getBdPhoneQueryVariants,
   type CustomerLookupResult,
 } from "@/lib/customer-autofill";
+import { resolveEffectiveOrderStatus } from "@/types/order";
 
 export type { CustomerLookupResult };
 
@@ -139,7 +140,7 @@ export async function searchCustomerByPhoneAction(
         supabase
           .from("orders")
           .select(
-            "id, order_number, status, grand_total, placed_at, created_at, customer_name, customer_phone, customer_alternative_phone, shipping_phone, customer_email, shipping_address"
+            "id, order_number, status, grand_total, placed_at, created_at, customer_name, customer_phone, customer_alternative_phone, shipping_phone, customer_email, shipping_address, order_events(event_type, to_value, message)"
           )
           .in("customer_phone", phoneQuery.variants)
           .order("placed_at", { ascending: false })
@@ -230,6 +231,7 @@ export async function searchCustomerByPhoneAction(
       profileAddresses,
       orders: (ordersRes.data || []).map((o: any) => ({
         ...o,
+        status: resolveEffectiveOrderStatus(o.status, o.order_events),
         shipping_address:
           o.shipping_address &&
           typeof o.shipping_address === "object" &&

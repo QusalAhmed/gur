@@ -194,7 +194,8 @@ import {
   isFieldRequiredForStatus,
   validateWithZod,
 } from "@/lib/validations/order";
-import { getOtherOrderInsight, resolveOtherOrdersForDisplay, ORDER_CANCELLATION_REASONS, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
+import { PreviousOrdersTag } from "@/components/admin/previous-orders-tag";
+import { resolveOtherOrdersForDisplay, ORDER_CANCELLATION_REASONS, type OrderItem, type OrderNote, type OrderEvent, type Order, type CatalogProduct, type OrderNoteType } from "@/types/order";
 export type { OrderItem, OrderNote, OrderEvent, Order, CatalogProduct, OrderNoteType } from "@/types/order";
 
 const availableCatalogProducts: CatalogProduct[] = [
@@ -2574,68 +2575,11 @@ export function OrdersClient() {
                 </span>
               </div>
 
-              {/* Requirement: if other order is found shows specific details like:
-                  1. other order: delivered, note: old customer
-                  2. other order: returned, note: returned order and so on */}
               {displayOtherOrders.length > 0 && (
-                <div className="pt-1 space-y-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
-                      Other Orders ({displayOtherOrders.length})
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    {displayOtherOrders.slice(0, 3).map((other) => {
-                      const fullOrder =
-                        orders.find(
-                          (o) =>
-                            o.id === other.id ||
-                            o.order_number === other.id ||
-                            (other.order_number && (o.id === other.order_number || o.order_number === other.order_number)) ||
-                            (other.uuid && (o.uuid === other.uuid || o.db_id === other.uuid || o.id === other.uuid))
-                        ) || other;
-                      const insight = getOtherOrderInsight(fullOrder.status);
-
-                      return (
-                        <div key={other.id} className="leading-tight">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenView(fullOrder);
-                            }}
-                            title={`Click to view other order ${fullOrder.id} (${insight.statusText}, note: ${insight.note})`}
-                            className={cn(
-                              "w-full text-left inline-flex flex-col gap-0.5 px-2 py-1 rounded border transition-all hover:scale-[1.01] hover:shadow-xs cursor-pointer",
-                              insight.badgeStyle
-                            )}
-                          >
-                            <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                              <span className={cn("h-2 w-2 rounded-full shrink-0", insight.dotColor)} />
-                              <span className="hover:underline">{fullOrder.id}</span>
-                              {(fullOrder.date || other.date) && (
-                                <span className="font-sans font-normal text-[10px] opacity-75">
-                                  • {formatDateTime(fullOrder.date || other.date)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] font-sans leading-tight">
-                              <span className="opacity-75">other order: </span>
-                              <span className="font-semibold">{insight.statusText}</span>
-                              <span className="opacity-75">, note: </span>
-                              <span className="font-bold underline decoration-dotted">{insight.note}</span>
-                            </div>
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {displayOtherOrders.length > 3 && (
-                      <span className="text-[10px] font-mono text-muted-foreground font-semibold pl-1">
-                        +{displayOtherOrders.length - 3} more other order(s)
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <PreviousOrdersTag
+                  otherOrders={displayOtherOrders}
+                  onSelectOrder={handleOpenView}
+                />
               )}
             </div>
           );

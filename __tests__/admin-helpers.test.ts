@@ -3,7 +3,13 @@ import { formatBDT, normalizeBDPhone, toBengaliDigits, formatUOM } from "@/lib/a
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { mapDatabaseError } from "@/lib/admin-errors";
 import { canRoleAccessPath, canAssignRole, AdminRole } from "@/lib/admin-permissions";
-import { resolveOtherOrdersForDisplay, Order } from "@/types/order";
+import {
+  resolveOtherOrdersForDisplay,
+  resolveEffectiveOrderStatus,
+  getOtherOrderInsight,
+  summarizeOtherOrders,
+  Order,
+} from "@/types/order";
 
 describe("Admin Formatter Helpers", () => {
   it("formats BDT currency correctly with ৳ and Indian thousands separators", () => {
@@ -207,6 +213,73 @@ describe("resolveOtherOrdersForDisplay Deduplication", () => {
     const result = resolveOtherOrdersForDisplay(orderWithSelfInAttribution, loadedOrders);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("MOL-2611-01008");
+  });
+
+  it("recovers attribution entries missing id without falsely dropping them as self UUID", () => {
+    const orderFromMigration20261123: Partial<Order> = {
+      id: "MOL-2611-02000",
+      order_number: "MOL-2611-02000",
+      uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      phone: "+8801714690382",
+      attribution: {
+        other_order_numbers: ["MOL-2611-01900"],
+        other_orders: [
+          {
+            order_number: "MOL-2611-01900",
+            status: "cancelled",
+            grand_total: 650,
+            created_at: "2026-11-20T10:00:00Z",
+          },
+        ],
+      },
+    };
+
+    const result = resolveOtherOrdersForDisplay(orderFromMigration20261123, []);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("MOL-2611-01900");
+    expect(result[0].status).toBe("cancelled");
+  });
+
+  it("merges live DB other_orders across delivered, partially_delivered, and cancelled statuses", () => {
+    const current: Partial<Order> = {
+      id: "MOL-2611-03000",
+      order_number: "MOL-2611-03000",
+      uuid: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      phone: "+8801714690382",
+      other_orders: [
+        { id: "MOL-2611-02500", order_number: "MOL-2611-02500", status: "delivered", date: "2026-11-10T10:00:00Z", grand_total: 1000 } as Order,
+        { id: "MOL-2611-02600", order_number: "MOL-2611-02600", status: "partially_delivered", date: "2026-11-15T10:00:00Z", grand_total: 800 } as Order,
+        { id: "MOL-2611-02700", order_number: "MOL-2611-02700", status: "cancelled", date: "2026-11-20T10:00:00Z", grand_total: 500 } as Order,
+      ],
+    };
+
+    const result = resolveOtherOrdersForDisplay(current, []);
+    expect(result.map((r) => r.id)).toEqual(["MOL-2611-02700", "MOL-2611-02600", "MOL-2611-02500"]);
+
+    const summary = summarizeOtherOrders(result);
+    expect(summary.count).toBe(3);
+    expect(summary.triggerLabel).toBe("Prev (3) · 1 Delivered, 1 Partial Deliv., +1");
+    expect(summary.primaryInsight.shortLabel).toBe("Cancelled");
+  });
+
+  it("resolves partially_delivered status from events and insight metadata", () => {
+    expect(
+      resolveEffectiveOrderStatus("delivered", [
+        { event_type: "courier_status_partial_delivered", to_value: "delivered" },
+      ])
+    ).toBe("partially_delivered");
+    expect(
+      resolveEffectiveOrderStatus("delivered", [
+        { event_type: "status_changed", to_value: "partially_delivered" },
+      ])
+    ).toBe("partially_delivered");
+    expect(resolveEffectiveOrderStatus("delivered", [])).toBe("delivered");
+    expect(getOtherOrderInsight("partially_delivered").shortLabel).toBe("Partial Deliv.");
+
+    const singleDelivered = summarizeOtherOrders([
+      { id: "MOL-1", status: "delivered" } as Order,
+    ]);
+    expect(singleDelivered.triggerLabel).toBe("Old Customer · Delivered");
   });
 });
 

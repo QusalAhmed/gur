@@ -122,6 +122,7 @@ import { useOrder } from "@/hooks/use-order";
 import {
   getOtherOrderInsight,
   resolveOtherOrdersForDisplay,
+  summarizeOtherOrders,
   type Order,
   type OrderItem,
   type OrderNote,
@@ -216,10 +217,10 @@ export function OrderDetailsSheet({
   isStatusPending = false,
   isNotePending = false,
 }: OrderDetailsSheetProps) {
-  // TanStack Query to get and cache the single order
+  // TanStack Query to get and cache the single order (only hydrate initialData for full DB orders)
   const { data: fetchedOrder } = useOrder(propOrder?.id, {
     enabled: open && Boolean(propOrder?.id),
-    initialData: propOrder,
+    initialData: propOrder?.isFromDb ? propOrder : undefined,
     staleTime: 1000 * 15,
   });
 
@@ -1135,46 +1136,83 @@ export function OrderDetailsSheet({
                   )}
 
                   {/* Other orders for this customer phone */}
-                  {otherOrdersForSheet.length > 0 && (
-                    <div className="pt-2.5 border-t border-dashed mt-2.5 space-y-1.5">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                        <PackageCheck className="h-3.5 w-3.5 text-amber-600" />
-                        <span>Other Orders ({otherOrdersForSheet.length})</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {otherOrdersForSheet.map((other) => {
-                          const insight = getOtherOrderInsight(other.status);
-                          return (
-                            <button
-                              key={other.id}
-                              type="button"
-                              onClick={() => onSelectOrder?.(other)}
-                              className={cn(
-                                "w-full text-left p-2 rounded-lg border text-xs flex flex-col gap-0.5 hover:shadow-xs transition-all cursor-pointer",
-                                insight.badgeStyle
-                              )}
-                            >
-                              <div className="flex items-center justify-between font-mono font-bold">
-                                <span className="flex items-center gap-1.5">
-                                  <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", insight.dotColor)} />
-                                  <span>{other.id}</span>
-                                </span>
-                                {other.date && (
-                                  <span className="font-sans text-[11px] font-normal opacity-75">{formatDateTime(other.date)}</span>
+                  {otherOrdersForSheet.length > 0 && (() => {
+                    const otherSummary = summarizeOtherOrders(otherOrdersForSheet);
+                    return (
+                      <div className="pt-2.5 border-t border-dashed mt-2.5 space-y-2">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                              <PackageCheck className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                              <span>Previous Orders ({otherSummary.count})</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {otherSummary.breakdown.map((item) => (
+                              <span
+                                key={item.status}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold",
+                                  item.insight.badgeStyle
                                 )}
-                              </div>
-                              <div className="text-[11px] font-sans">
-                                <span className="opacity-75">other order: </span>
-                                <span className="font-semibold">{insight.statusText}</span>
-                                <span className="opacity-75">, note: </span>
-                                <span className="font-bold underline decoration-dotted">{insight.note}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
+                              >
+                                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", item.insight.dotColor)} />
+                                <span>
+                                  {item.count} {item.insight.shortLabel}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {otherOrdersForSheet.map((other) => {
+                            const insight = getOtherOrderInsight(other.status);
+                            const totalVal = Number(other.grand_total) || 0;
+                            return (
+                              <button
+                                key={other.uuid || other.id}
+                                type="button"
+                                onClick={() => onSelectOrder?.(other)}
+                                className="w-full text-left p-2 rounded-lg border bg-background/70 hover:bg-muted/50 text-xs flex flex-col gap-1 hover:shadow-xs transition-all cursor-pointer group"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span className={cn("h-2 w-2 rounded-full shrink-0", insight.dotColor)} />
+                                    <span className="font-mono font-bold text-foreground group-hover:text-amber-700 dark:group-hover:text-amber-400 truncate">
+                                      {other.id}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center px-1.5 py-0 rounded border text-[10px] font-semibold shrink-0",
+                                        insight.badgeStyle
+                                      )}
+                                    >
+                                      {insight.shortLabel}
+                                    </span>
+                                  </span>
+                                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground pl-3.5">
+                                  <span className="inline-flex items-center gap-1 truncate">
+                                    <Clock className="h-3 w-3 shrink-0 opacity-70" />
+                                    <span className="truncate">
+                                      {other.date ? formatDateTime(other.date) : "Date unavailable"}
+                                    </span>
+                                  </span>
+                                  {totalVal > 0 && (
+                                    <span className="font-mono font-semibold text-foreground shrink-0">
+                                      ৳ {totalVal.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>

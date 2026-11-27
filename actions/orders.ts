@@ -12,8 +12,12 @@ import {
   sanitizePostgrestFilterTerm,
 } from "@/lib/security";
 import { timingSafeTokenEqual } from "@/lib/server-security";
-import { normalizeBdPhone } from "@/lib/phone";
-import { cleanCustomerEmail, cleanCustomerName } from "@/lib/customer-autofill";
+import { normalizeBdPhone, parseBdPhone } from "@/lib/phone";
+import {
+  cleanCustomerEmail,
+  cleanCustomerName,
+  getBdPhoneQueryVariants,
+} from "@/lib/customer-autofill";
 import { formatDateTime } from "@/lib/utils";
 import {
   formatDbOrderRecord,
@@ -57,12 +61,13 @@ import {
   sortOrdersForPrint,
 } from "@/lib/order-dispatch";
 import type { DbGeoDivision, DbGeoDistrict } from "@/lib/supabase/types";
-import type {
-  CatalogProduct,
-  Order,
-  OrderEvent,
-  OrderNote,
-  OrderNoteType,
+import {
+  resolveEffectiveOrderStatus,
+  type CatalogProduct,
+  type Order,
+  type OrderEvent,
+  type OrderNote,
+  type OrderNoteType,
 } from "@/types/order";
 
 export interface GetOrdersParams {
@@ -508,6 +513,153 @@ async function convertStorefrontInquiryForOrderInternal(
   return converted;
 }
 
+function getCanonicalPhoneMatchKey(
+  customerPhone?: string | null,
+  shippingPhone?: string | null,
+  addressPhone?: string | null
+): { key: string; variants: string[] } | null {
+  const primaryRaw =
+    (customerPhone || "").trim() ||
+    (shippingPhone || "").trim() ||
+    (addressPhone || "").trim();
+  if (!primaryRaw) return null;
+
+  const bdVariants = getBdPhoneQueryVariants(primaryRaw);
+  if (bdVariants) {
+    return { key: bdVariants.normalized, variants: bdVariants.variants };
+  }
+
+  const parsed = parseBdPhone(primaryRaw);
+  if (parsed.isValid) {
+    return { key: parsed.normalized, variants: [parsed.normalized, parsed.local] };
+  }
+
+  const digits = primaryRaw.replace(/\D/g, "");
+  if (digits.length < 7) return null;
+  return {
+    key: digits.length >= 10 ? digits.slice(-10) : digits,
+    variants: [primaryRaw],
+  };
+}
+
+/**
+ * Batch-enriches formatted orders with all live sibling orders from the database
+ * across every status (including delivered, partially_delivered, cancelled, returned, etc.)
+ * and all dates, keyed by normalized customer_phone (falling back to shipping_phone if empty).
+ */
+async function attachOtherOrdersFromDb(
+  client: any,
+  rawOrders: any[],
+  orders: Order[]
+): Promise<void> {
+  if (!orders || orders.length === 0) return;
+
+  try {
+    const allVariantsSet = new Set<string>();
+    const orderMatchKeys: Array<string | null> = [];
+
+    for (let i = 0; i < orders.length; i++) {
+      const raw = rawOrders[i];
+      const ord = orders[i];
+      const custPhone = raw?.customer_phone ?? ord?.phone;
+      const shipPhone = raw?.shipping_phone ?? ord?.shipping_phone;
+      const addrPhone = raw?.shipping_address?.phone ?? ord?.address?.phone;
+      const matchInfo = getCanonicalPhoneMatchKey(custPhone, shipPhone, addrPhone);
+      if (matchInfo) {
+        orderMatchKeys.push(matchInfo.key);
+        for (const v of matchInfo.variants) {
+          allVariantsSet.add(v);
+        }
+      } else {
+        orderMatchKeys.push(null);
+      }
+    }
+
+    const allVariants = Array.from(allVariantsSet);
+    if (allVariants.length === 0) return;
+
+    const selectCols =
+      "id, order_number, status, payment_status, grand_total, amount_paid, placed_at, created_at, customer_phone, shipping_phone, customer_name, order_events(event_type, to_value, message)";
+
+    const results = await Promise.all([
+      client
+        .from("orders")
+        .select(selectCols)
+        .in("customer_phone", allVariants)
+        .order("placed_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(500),
+      client
+        .from("orders")
+        .select(selectCols)
+        .or("customer_phone.is.null,customer_phone.eq.")
+        .in("shipping_phone", allVariants)
+        .order("placed_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+    const siblingMap = new Map<string, Order[]>();
+    const seenSiblingIds = new Set<string>();
+
+    for (const res of results) {
+      if (res?.error || !Array.isArray(res?.data)) continue;
+      for (const row of res.data) {
+        if (!row || !row.id || seenSiblingIds.has(String(row.id))) continue;
+        seenSiblingIds.add(String(row.id));
+
+        const rowMatch = getCanonicalPhoneMatchKey(row.customer_phone, row.shipping_phone);
+        if (!rowMatch) continue;
+
+        const effectiveStatus = resolveEffectiveOrderStatus(row.status, row.order_events);
+        const orderNum = row.order_number || row.id;
+        const list = siblingMap.get(rowMatch.key) || [];
+        list.push({
+          id: orderNum,
+          order_number: orderNum,
+          uuid: row.id,
+          db_id: row.id,
+          status: effectiveStatus,
+          payment: (row.payment_status as Order["payment"]) || "unpaid",
+          fulfillment: "unfulfilled",
+          method: "cod",
+          channel: "web",
+          subtotal: Number(row.grand_total) || 0,
+          discount_total: 0,
+          shipping_total: 0,
+          grand_total: Number(row.grand_total) || 0,
+          amount_paid: Number(row.amount_paid) || 0,
+          currency: "BDT",
+          date: row.placed_at || row.created_at || "",
+          customer: row.customer_name || "",
+          phone: row.customer_phone || row.shipping_phone || "",
+          email: "",
+          address: { division: "", district: "", address_line: "" },
+          items: [],
+          notes: [],
+          events: [],
+        });
+        siblingMap.set(rowMatch.key, list);
+      }
+    }
+
+    for (let i = 0; i < orders.length; i++) {
+      const key = orderMatchKeys[i];
+      if (!key) continue;
+      const ord = orders[i];
+      const candidates = siblingMap.get(key) || [];
+      ord.other_orders = candidates.filter((cand) => {
+        if (ord.uuid && cand.uuid && cand.uuid === ord.uuid) return false;
+        if (ord.db_id && cand.db_id && cand.db_id === ord.db_id) return false;
+        if (ord.order_number && cand.order_number && cand.order_number === ord.order_number) return false;
+        if (ord.id && (cand.id === ord.id || cand.order_number === ord.id)) return false;
+        return true;
+      });
+    }
+  } catch (err) {
+    console.warn("[attachOtherOrdersFromDb] Could not resolve sibling orders:", err);
+  }
+}
+
 /**
  * Server Action: Fetches a paginated slice of orders matching the given filter,
  * search term, and sort order, along with global status counts and revenue metrics.
@@ -555,6 +707,18 @@ export async function getOrdersAction(
 
   const client = getSupabaseAdmin();
 
+  let partialDeliveredOrderIds: string[] | null = null;
+  if (status === "partially_delivered") {
+    const { data: partialEvents } = await client
+      .from("order_events")
+      .select("order_id")
+      .or("event_type.eq.courier_status_partial_delivered,to_value.eq.partially_delivered")
+      .limit(1000);
+    partialDeliveredOrderIds = Array.from(
+      new Set((partialEvents || []).map((e: any) => e.order_id).filter(Boolean))
+    );
+  }
+
   const buildQuery = (selectString: string) => {
     let q = client.from("orders").select(selectString, { count: "exact" });
 
@@ -562,6 +726,12 @@ export async function getOrdersAction(
       q = q.eq("reprint_required", true).not("status", "in", '("cancelled","returned")');
     } else if (status === "paused") {
       q = q.eq("is_paused", true).not("status", "in", '("shipped","delivered","cancelled","returned")');
+    } else if (status === "partially_delivered") {
+      if (!partialDeliveredOrderIds || partialDeliveredOrderIds.length === 0) {
+        q = q.in("id", ["00000000-0000-0000-0000-000000000000"]);
+      } else {
+        q = q.eq("status", "delivered").in("id", partialDeliveredOrderIds);
+      }
     } else if (status && status !== "all") {
       q = q.eq("status", status);
     }
@@ -697,6 +867,7 @@ export async function getOrdersAction(
   await enrichOrderItemsWithCombos(client, rawOrders);
 
   const orders: Order[] = rawOrders.map((row: any) => formatDbOrderRecord(row));
+  await attachOtherOrdersFromDb(client, rawOrders, orders);
 
   const initialStatusCounts: StatusCounts = {
     all: 0,
@@ -806,13 +977,17 @@ export async function getOrderAction(idOrNumber: string): Promise<Order | null> 
     }
     await enrichOrderItemsWithCombos(client, [fallbackRes.data]);
     await enrichOrderItemsWithImages(client, fallbackRes.data);
-    return formatDbOrderRecord(fallbackRes.data);
+    const formattedFallback = formatDbOrderRecord(fallbackRes.data);
+    await attachOtherOrdersFromDb(client, [fallbackRes.data], [formattedFallback]);
+    return formattedFallback;
   }
 
   if (!data) return null;
   await enrichOrderItemsWithCombos(client, [data]);
   await enrichOrderItemsWithImages(client, data);
-  return formatDbOrderRecord(data);
+  const formatted = formatDbOrderRecord(data);
+  await attachOtherOrdersFromDb(client, [data], [formatted]);
+  return formatted;
 }
 
 /**
@@ -2281,6 +2456,20 @@ export async function createAdminOrderAction(savedOrder: Order): Promise<Order> 
         }
       } catch (noteInsErr) {
         console.warn("Notice inserting notes into order_notes:", noteInsErr);
+      }
+    }
+
+    if (orderDbId && savedOrder.status === "partially_delivered") {
+      try {
+        await client.from("order_events").insert({
+          order_id: orderDbId,
+          event_type: "status_changed",
+          to_value: "partially_delivered",
+          message: "Order created (partially delivered)",
+          actor_id: getActorUuid(session),
+        });
+      } catch (evErr) {
+        console.warn("Could not log partial delivery event for manual order:", evErr);
       }
     }
 
