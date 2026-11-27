@@ -669,19 +669,25 @@ export function ProductCard({
                   <CarouselNext className="-right-4 sm:-right-5 h-8 w-8 sm:h-9 sm:w-9 bg-white/95 dark:bg-stone-850/95 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 shadow-sm touch-manipulation hover:bg-stone-100" />
                 </Carousel>
                 {/* Dot Indicators */}
-                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 bg-stone-900/60 dark:bg-black/60 px-2.5 py-1 rounded-full">
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center z-20 px-1.5 before:pointer-events-none before:content-[''] before:absolute before:inset-x-0 before:inset-y-1.5 before:rounded-full before:bg-stone-900/60 dark:before:bg-black/60 before:-z-10">
                   {Array.from({ length: totalSlides }).map((_, dotIdx) => (
                     <button
                       key={dotIdx}
                       type="button"
                       onClick={() => carouselApi?.scrollTo(dotIdx)}
-                      className={`h-1.5 rounded-full transition-all touch-manipulation ${
-                        currentSlide === dotIdx
-                          ? "w-4 bg-amber-400"
-                          : "w-1.5 bg-white/60 hover:bg-white/90"
-                      }`}
+                      className="group flex h-7 w-7 shrink-0 items-center justify-center rounded-full touch-manipulation cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                       aria-label={`Go to slide ${dotIdx + 1}`}
-                    />
+                      aria-current={currentSlide === dotIdx ? "true" : undefined}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 rounded-full transition-all ${
+                          currentSlide === dotIdx
+                            ? "w-4 bg-amber-400"
+                            : "w-1.5 bg-white/60 group-hover:bg-white/90"
+                        }`}
+                      />
+                    </button>
                   ))}
                 </div>
               </div>
