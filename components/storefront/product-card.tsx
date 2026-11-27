@@ -775,7 +775,7 @@ export function ProductCard({
                         <span className="truncate">{lang === "bn" ? selectedVariant.nameBn || selectedVariant.name : selectedVariant.name}</span>
                         <span className="flex items-center gap-1.5 ml-2 shrink-0">
                           {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > selectedVariant.price && (
-                            <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
+                            <span className="line-through text-stone-600 dark:text-stone-400 text-xs font-semibold">
                               {formatStorePrice(selectedVariant.compareAtPrice, lang)}
                             </span>
                           )}
@@ -800,7 +800,7 @@ export function ProductCard({
                             <span className="font-semibold truncate">{title}</span>
                             <span className="flex items-center gap-1.5 shrink-0">
                               {v.compareAtPrice && v.compareAtPrice > v.price && (
-                                <span className="line-through text-stone-400 dark:text-stone-500 text-xs font-semibold">
+                                <span className="line-through text-stone-600 dark:text-stone-400 text-xs font-semibold">
                                   {formatStorePrice(v.compareAtPrice, lang)}
                                 </span>
                               )}
@@ -867,7 +867,7 @@ export function ProductCard({
               <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1.5 px-1">
                 {/* Unit Price (only shown for single-variant products) */}
                 {sortedVariants.length <= 1 && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800/80 dark:text-amber-400 font-bold">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-amber-800 dark:text-amber-400 font-bold">
                     <span className="text-stone-600 dark:text-stone-400 font-semibold">
                       {displayUnit > 0
                         ? lang === "bn"
@@ -892,7 +892,7 @@ export function ProductCard({
                       </span>
                     )}
                     {selectedVariant.compareAtPrice && selectedVariant.compareAtPrice > unitPrice && (
-                      <span className="line-through text-stone-400 dark:text-stone-500 text-xs sm:text-sm font-semibold ml-1">
+                      <span className="line-through text-stone-600 dark:text-stone-400 text-xs sm:text-sm font-semibold ml-1">
                         {formatStorePrice(selectedVariant.compareAtPrice, lang)}
                       </span>
                     )}
@@ -1031,13 +1031,13 @@ export function ProductCard({
               <motion.div
                 animate={{ y: [0, 4, 0] }}
                 transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-amber-800/80 dark:text-amber-400/80 cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-400 cursor-pointer"
               >
                 <span>{t.scrollHint}</span>
                 <ChevronDown className="w-3.5 h-3.5" />
               </motion.div>
             ) : (
-              <div className="text-xs sm:text-sm text-amber-900/70 dark:text-amber-400/70 font-medium">
+              <div className="text-xs sm:text-sm text-amber-900 dark:text-amber-400 font-medium">
                 {t.guaranteeBadge}
               </div>
             )}

@@ -1220,7 +1220,7 @@ return (
     )}
 
     {/* Footer Support Guarantee Note */}
-    <div className="relative z-10 w-full text-center py-3 text-[11px] sm:text-xs text-amber-900/70 dark:text-amber-400/70 font-semibold flex items-center justify-center gap-1.5">
+    <div className="relative z-10 w-full text-center py-3 text-[11px] sm:text-xs text-amber-900 dark:text-amber-400 font-semibold flex items-center justify-center gap-1.5">
       <Leaf className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
       <span>
         {lang === "bn"
